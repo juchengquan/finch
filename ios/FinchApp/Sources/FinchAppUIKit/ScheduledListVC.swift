@@ -179,7 +179,10 @@ final class ScheduledListVC: UIViewController {
                         amountsForRange: { from, through in
                             amounts.filter { $0.key >= from && $0.key <= through }
                         },
-                        format: { self.store.displayExactBase($0) })
+                        format: { self.store.displayExactBase($0) },
+                        // Privacy mode hides the figures and draws presence dots
+                        // instead; AccountDetailVC passes the same flag.
+                        masked: self.store.privacyMode)
                         .environmentObject(self.store)
                 }
 
