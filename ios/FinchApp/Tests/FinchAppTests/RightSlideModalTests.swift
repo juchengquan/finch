@@ -68,6 +68,33 @@ final class RightSlideModalTests: XCTestCase {
         return try XCTUnwrap(animator, "no dismiss animator")
     }
 
+    // MARK: - Presenting: the push parallax
+
+    private func presentAnimator() throws -> UIViewControllerAnimatedTransitioning {
+        let animator = RightSlideModal.SlideTransition.shared
+            .animationController(forPresented: UIViewController(),
+                                 presenting: UIViewController(),
+                                 source: UIViewController())
+        return try XCTUnwrap(animator, "no present animator")
+    }
+
+    /// The page underneath must drift left as the ledger comes in — that sideways
+    /// movement is what makes a slide read as a PUSH rather than a card sliding over
+    /// a static background. `RightSlideDrill`, which every other drill in the app
+    /// uses, shifts it by 8% of the width; without this the ledger looked wrong next
+    /// to them even once the black hole was fixed.
+    func test_present_parallaxesThePageUnderneath() throws {
+        let ctx = makeContext()
+        let expected = CGAffineTransform(translationX: -ctx.container.bounds.width * 0.08, y: 0)
+
+        try presentAnimator().animateTransition(using: ctx)
+
+        // Read inside the animation: UIView.animate applies the end state to the
+        // model layer synchronously, so the transform is already set here.
+        XCTAssertEqual(ctx.fromView.transform, expected,
+                       "no parallax on the page underneath — the ledger slides over a static page")
+    }
+
     func test_dismiss_putsThePresenterBackBeforeSlidingAway() throws {
         let ctx = makeContext()
         try dismissAnimator().animateTransition(using: ctx)

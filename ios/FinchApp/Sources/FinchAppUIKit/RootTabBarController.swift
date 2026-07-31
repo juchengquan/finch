@@ -179,10 +179,48 @@ final class RootTabBarController: UITabBarController {
     /// deep link, the tab intercept), and a presentation nobody holds a reference to
     /// cannot be closed by any of them.
     private weak var ledgerNav: UIViewController?
+    /// The ledger when it is PUSHED onto a tab's stack rather than presented.
+    private weak var pushedLedger: LedgersVC?
 
+    /// The selected tab's navigation controller, when it has one. `TabChromeVC` holds
+    /// its content as a child, so a wrapped tab is reached through `children`.
+    private var selectedTabNav: UINavigationController? {
+        if let nav = selectedViewController as? UINavigationController { return nav }
+        return selectedViewController?.children.first as? UINavigationController
+    }
+
+    /// PUSH the ledger when the tab has a stack; fall back to the modal when it does not.
+    ///
+    /// **Why push is the right answer.** `RightSlideModal` imitates a push, and next to
+    /// the real thing the imitation reads wrong — the drills on this tab are actual
+    /// `UINavigationController` pushes, with Apple's curve, the leading-edge shadow, the
+    /// dimming and the interactive swipe-back. Matching all of that by hand is a losing
+    /// game; being the same component is free. This is the endgame `RightSlideModal`'s
+    /// own comment describes, now reachable because four of the five tabs are native.
+    ///
+    /// **Why it is safe to push again.** Both slide-modals exist to dodge the iOS 26
+    /// resume shadow, which needs a HOSTED SwiftUI scroll view at navigation depth
+    /// (reproducer B). `LedgersVC` and `LedgerDetailVC` are native collection views
+    /// since #648, and converting the screen is exactly what #643 measured as the fix.
+    ///
+    /// The modal stays for Insights, which is still a hosted root with no stack to push
+    /// onto, and for the whole app while the flag is off.
     private func presentLedgers() {
-        guard ledgerNav == nil else { return }   // single slot, as the SwiftUI cover had
+        guard ledgerNav == nil, pushedLedger == nil else { return }   // single slot, as the cover had
         let vc = LedgersVC()
+
+        if let nav = selectedTabNav {
+            // No custom chevron: a push supplies its own back item, labelled with the
+            // previous screen's title, plus the interactive swipe-back.
+            vc.onPoppedFromStack = { [weak self] in
+                self?.pushedLedger = nil
+                self?.router.showLedger = false
+            }
+            pushedLedger = vc
+            nav.pushViewController(vc, animated: true)
+            return
+        }
+
         vc.navigationItem.leftBarButtonItem = UIBarButtonItem(
             image: UIImage(systemName: "chevron.left"),
             primaryAction: UIAction { [weak self] _ in self?.router.showLedger = false })
@@ -192,6 +230,19 @@ final class RootTabBarController: UITabBarController {
     }
 
     private func dismissLedgers() {
+        if let vc = pushedLedger {
+            pushedLedger = nil
+            // Pop to the ledger's parent — `popToViewController` rather than
+            // `popViewController` so a ledger DETAIL open at the time goes too.
+            if let nav = vc.navigationController,
+               let below = nav.viewControllers.firstIndex(of: vc).map({ $0 - 1 }),
+               below >= 0 {
+                nav.popToViewController(nav.viewControllers[below], animated: true)
+            } else {
+                vc.navigationController?.popViewController(animated: true)
+            }
+            return
+        }
         guard let nav = ledgerNav else { return }
         ledgerNav = nil
         nav.dismiss(animated: true)

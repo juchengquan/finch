@@ -31,6 +31,13 @@ final class LedgersVC: UIViewController {
     /// controller, and because the list never needs to read the value back — only the
     /// highlight does, and that comes through `selectedID`.
     private let onSelect: ((String) -> Void)?
+    /// Fires when this screen leaves a navigation stack — the back button or the
+    /// interactive swipe-back. When the ledger is PUSHED onto a tab's stack (rather
+    /// than presented as a modal) nothing else tells the shell it closed, so
+    /// `router.showLedger` would stay true and the corner control would do nothing on
+    /// the next tap. The nav controller's delegate slot is already taken by
+    /// `TabChromeVC`, which is why this is a callback and not a second delegate.
+    var onPoppedFromStack: (() -> Void)?
     /// The row to show as selected, when a split view owns the selection.
     var selectedID: String? {
         didSet { guard selectedID != oldValue else { return }; applySnapshot() }
@@ -49,6 +56,11 @@ final class LedgersVC: UIViewController {
 
     /// Ledger by id, so the diffable ids stay `Hashable` strings.
     private var ledgerByID: [String: Ledger] = [:]
+
+    override func didMove(toParent parent: UIViewController?) {
+        super.didMove(toParent: parent)
+        if parent == nil { onPoppedFromStack?() }
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
