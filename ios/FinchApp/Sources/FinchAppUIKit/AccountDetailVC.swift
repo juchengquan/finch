@@ -180,7 +180,14 @@ final class AccountDetailVC: UIViewController {
             config.trailingSwipeActionsConfigurationProvider = { [weak self] ip in
                 self?.swipe(at: ip)?.trailing
             }
-            return NSCollectionLayoutSection.list(using: config, layoutEnvironment: env)
+            let section = NSCollectionLayoutSection.list(using: config, layoutEnvironment: env)
+            // The picker is the first section and sits right under the search bar.
+            // An insetGrouped list opens with a ~35pt top inset meant to separate a
+            // first section from a large title — and this screen has no large title
+            // (the bar carries name-over-balance instead), so that space just read as
+            // a hole. Matches the gap on All Transactions.
+            if kind == .modePicker { section.contentInsets.top = 0 }
+            return section
         }
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         collectionView.delegate = self

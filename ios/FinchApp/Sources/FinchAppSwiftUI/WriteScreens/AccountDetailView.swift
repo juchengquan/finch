@@ -68,6 +68,14 @@ struct AccountDetailView: View {
                 transactionsSection(account)
             }
         }
+        #if os(iOS)
+        // A List opens with a top inset sized to sit under a LARGE title. This
+        // screen's title is inline (name over balance, in the bar), so that inset
+        // just read as a hole between the search field and the mode picker — about
+        // 40pt more than the same picker has on All Transactions, which does have a
+        // large title. Zero it so the two screens open the same way.
+        .contentMargins(.top, 0, for: .scrollContent)
+        #endif
         .errorAlert($errorMessage)
         .navigationTitle(account.name ?? "Account")
         .navigationBarTitleDisplayMode(.inline)
