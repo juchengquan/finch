@@ -20,23 +20,9 @@ struct FinchApp: App {
         // The "Use system size" toggle is gone; seed the slider for anyone
         // upgrading from it BEFORE the first frame reads the preference.
         TextSize.migrateLegacySystemPreference(systemStep: TextSize.currentSystemStep)
-        #if DEBUG
-        // Testing aid (DEBUG only — never in release): launch with
-        // `-initialTab <accounts|activity|budgets|insights|scheduled|settings|ledger>`
-        // to open straight to that tab (`ledger` resolves to the top-left corner
-        // push, not a bar slot), so simulator screenshots / UI checks can
-        // reach a non-default tab. Foundation maps `-key value` launch args into
-        // UserDefaults' argument domain.
-        if let raw = UserDefaults.standard.string(forKey: "initialTab"),
-           let tab = AppTab(rawValue: raw) {
-            DeepLinkRouter.shared.selectedTab = tab
-        }
-        // `-openAdd YES` opens the Add-transaction sheet on launch (same flag the
-        // finch://add deep link sets) so sim screenshots can reach the sheet.
-        if UserDefaults.standard.bool(forKey: "openAdd") {
-            DeepLinkRouter.shared.showAddTransaction = true
-        }
-        #endif
+        // The DEBUG launch flags (`-initialTab`, `-openAdd`) used to live here and were
+        // therefore macOS-only — this file is excluded from the iOS target. They now sit
+        // with the rest of them in `LaunchSequence`, which both entry points call.
     }
 
     var body: some Scene {

@@ -117,9 +117,12 @@ Prefer jumping straight to the target over tapping through the UI:
 
 - **Deep link:** `xcrun simctl openurl <UDID> "finch://add"` (also
   `finch://add?account=<id>`). This is the only external route the app exposes.
-- **DEBUG-only launch args** (`FinchApp.swift init()`):
+- **DEBUG-only launch args** (`LaunchSequence.run`):
   `xcrun simctl launch <UDID> com.juchengquan.finch -openAdd YES`, and
-  `-initialTab <tab>`.
+  `-initialTab <tab>`. They parse in `LaunchSequence` because it is the one launch
+  path BOTH entry points call — iOS boots from `UIKitShell`'s scene delegate, and
+  `FinchApp.swift` is excluded from the iOS target, so flags parsed in the SwiftUI
+  `App.init` silently do nothing on iOS.
 - On iPhone (compact) the bottom bar is **Accounts · Activity · Budgets ·
   Insights · More**; Settings and Scheduled live under **More** (the system tab
   overflow).

@@ -146,6 +146,35 @@ class NavigationUITests: XCTestCase {
             destination: app.staticTexts["This cycle"],
             "Budgets→Detail")
     }
+
+    // MARK: - The DEBUG navigation launch flag
+
+    /// `-initialTab` is how a sim check reaches a non-default tab without tapping.
+    ///
+    /// It shipped BROKEN on iOS and nothing noticed: it was parsed in the SwiftUI
+    /// `App.init`, and `FinchApp.swift` is excluded from the iOS target, so the flag
+    /// worked on macOS and silently did nothing on the platform it exists to drive.
+    /// It now parses in `LaunchSequence.run` with the other launch flags, which both
+    /// entry points call — this test is what keeps it there.
+    ///
+    /// Asserts the tab's SELECTED state rather than a screen marker, so it says the
+    /// same thing in both navigation modes.
+    func testInitialTabLaunchFlagSelectsThatTab() throws {
+        let defaultTab = app.tabBars.buttons["Accounts"]
+        XCTAssertTrue(defaultTab.waitForExistence(timeout: 30), "[\(mode)] tab bar never appeared")
+        XCTAssertTrue(defaultTab.isSelected, "[\(mode)] launch tab should be Accounts without the flag")
+
+        app.terminate()
+        var args = ["-resetStore", "YES", "-disableNotifications", "YES", "-initialTab", "budgets"]
+        if uikitActivity { args += ["-uikitActivity", "YES"] }
+        app.launchArguments = args
+        app.launch()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 30), "[\(mode)] app did not relaunch")
+
+        let flagged = app.tabBars.buttons["Budgets"]
+        XCTAssertTrue(flagged.waitForExistence(timeout: 30), "[\(mode)] tab bar never appeared after relaunch")
+        XCTAssertTrue(flagged.isSelected, "[\(mode)] -initialTab budgets did not select the Budgets tab")
+    }
 }
 
 /// Every test above, re-run against the converted UIKit screens.
