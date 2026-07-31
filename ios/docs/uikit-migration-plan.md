@@ -297,8 +297,8 @@ more given what Phase 2's conversions actually cost.
 4. **Accounts** — last, and by far the biggest. `AccountsTab` is 742 lines: collapsible
    groups, search, drag reorder, swipe actions on two edges, context menus. Budget it
    like `CategoriesVC`, not like `TagsVC`.
-5. **Scheduled** — parked, not next. It was attempted first (it looks smallest at 329
-   lines) and is blocked on a scroll regression; see below.
+5. **Scheduled** — attempted first (it looks smallest at 329 lines) and was blocked on
+   a scroll regression that turned out to be `TabChromeVC`, not the screen; see below.
 
 **The detail column is nearly free** for 2, 3 and 4: `BudgetDetailVC`,
 `TxListDetailVC` and `AccountDetailVC` were built in Phase 2 and take an id in their
@@ -339,8 +339,47 @@ multi-select and while the ledger cover is up, and seeds from the page's
   is SwiftUI, so `TabChromeVC` has nothing to wrap: merged alone it is dead code, and
   its guard test (`TabChromeUITests`) would go green against a *hosted* root, proving
   nothing. It belongs in the same PR as the first fully native root.
+  **Vindicated the first time it was tried:** wrapped around a real native list it
+  swallowed every touch and the tab would not scroll at all (see the Scheduled block).
+  Merged on its own it would have shipped broken, under a green test.
 
-##### The Scheduled block — what is known, so it is not re-derived
+##### RESOLVED 2026-08-01 — it was `TabChromeVC`, not the pager
+
+The diagnosis below is **wrong**. It is kept because the way it went wrong is the
+lesson.
+
+**`TabChromeVC` swallowed every touch on the tab.** Its passthrough asked "did a
+*descendant* claim this, rather than the hosting view's own background?" — but
+`_UIHostingView.hitTest` returns the hosting view ITSELF for any point inside its
+bounds. Logging the hit chain gave the identical view for a swipe on empty space and
+for a tap on the FAB, so identity could never discriminate, and `.allowsHitTesting(false)`
+on the backdrop does not change it either. Nothing underneath the chrome could scroll,
+on any converted tab.
+
+It surfaced on Budgets, where the symptom was the whole list refusing to move rather
+than "the calendar is stuck". Fixing it there fixed Scheduled with no change to
+`ScheduledListVC` at all. The button now publishes its own rect (`FABFrameKey`) and the
+passthrough tests geometry.
+
+Why it read as a calendar-only, pager-shaped bug: every observation on this screen was
+made *through* that broken chrome, and calendar mode was simply the branch being looked
+at. `MonthCashCalendar`'s `.page TabView` was never involved. The `.frame(height: 420)`
+added to "leave a strip to drag from" was compensating for the wrong cause and is gone —
+unbounded, the grid self-sizes to 359.3pt against the SwiftUI control's 359.4, and both
+gestures work: a vertical pan scrolls the page, a horizontal one pages the month.
+
+**The rule this cost.** *Build the control and compare* was applied to the screen —
+SwiftUI Scheduled against native Scheduled — but never to the CONTAINER. The control
+proved "my change broke it", and the search then stayed inside the calendar code, which
+is the one place the bug was not. Bisect the container as well as the content: bypassing
+`TabChromeVC` for a single build answers it in minutes, and would have four attempts
+earlier.
+
+The "does it contain a scroll view?" rule still stands on its own merits — a hosted
+`List` really would collapse, and `ScheduledCalendarView` really does return one. It
+just was not what jammed this page.
+
+##### The Scheduled block — the original diagnosis, kept as a record of how it misled
 
 The code (`ScheduledListVC`, `TabChromeVC`, `TabChromeUITests`) lives on
 `feat/ios-uikit-scheduled`, from the **closed** PR #652. List mode, the iPad column and
