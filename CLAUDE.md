@@ -372,6 +372,17 @@ hand edits belong in `scripts/zh-manual.json` (which pins terminology to the web
 
 ## Conventions
 
+- **How a feature gets built here.** Brainstorm → design → implementation plan →
+  execution (one task at a time, reviewed between) → PR to `feat/frontend` → the user merges
+  → delete the worktree and branch. Each feature gets its **own `git worktree` off
+  `origin/feat/frontend`** (e.g. `/tmp/finch-<slug>`): the user edits the main tree
+  concurrently, so never `git stash` or `git checkout` there. **No `Co-Authored-By`
+  trailer** in commits. Build **both** `FinchApp` (iOS) and `FinchMac` (macOS) before
+  opening a PR — a macOS-only break passes the iOS build.
+  *(Design/plan documents used to be committed under `plans/ios-macos/<date>-<feature>-{design,plan}.md`.
+  That stopped: 246 of them accumulated describing shipped work, none referenced from
+  anywhere, all still claiming "pending implementation". Rationale belongs in a doc comment
+  at the point of use, where it stays true.)*
 - **SwiftUI-first** (`ios/swiftui-vs-uikit.md`): build every screen in SwiftUI (~99% is). Drop to
   UIKit/AppKit only when SwiftUI genuinely can't express it, and bridge the **smallest** piece
   behind a `Representable` in `Common/`. Only 4 sanctioned UIKit/AppKit touches today

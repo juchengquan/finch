@@ -4,8 +4,8 @@ import FinchCore
 /// Adjust an account's balance to a target value — posts an `adjustment`
 /// entry for the difference via the engine's `adjustAccountBalance`. Reached
 /// from the account detail's ⋯ menu (relocated out of the Add sheet, where it
-/// occupied a 5th transaction type despite being account maintenance; spec
-/// `2026-07-17-adjust-balance-relocation-design.md`). Locked to one account.
+/// occupied a 5th transaction type despite being account maintenance).
+/// Locked to one account.
 struct AdjustBalanceSheet: View {
     @EnvironmentObject private var store: FinchStore
     @Environment(\.dismiss) private var dismiss
