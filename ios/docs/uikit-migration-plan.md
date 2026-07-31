@@ -348,7 +348,20 @@ more given what Phase 2's conversions actually cost.
    `ScheduledCalendarView` failed on returning a `List`; `MonthCashCalendar` looks like
    a leaf and is not. Two defects, one root cause.
 
-   **Checked: `AccountDetailVC` configures it IDENTICALLY** — the same bare
+   **CORRECTION — verified on the simulator: `AccountDetailVC`'s calendar DOES scroll.**
+   (Switched an account to Calendar, swiped, screenshots differ.) So the code
+   comparison below was misleading and the "already-shipped bug" conclusion was WRONG.
+   The configurations really are identical; the difference is LAYOUT. On account detail
+   the balance card and mode picker sit above the grid and rows sit below, so a swipe
+   has somewhere to land outside the pager. On Scheduled the calendar fills the whole
+   viewport, so every touch starts inside the `.page TabView` and it takes them all.
+   **The fix is therefore to bound the hosted calendar's height** so the collection view
+   always keeps a pannable area — not to fight the gesture.
+
+   Lesson, twice over in one screen: reason from the SIMULATOR, not from reading two
+   call sites and concluding they must behave the same.
+
+   (Original, now-superseded note: `AccountDetailVC` configures it identically — the same bare
    `UIHostingConfiguration { MonthCashCalendar(...) }`, no margins, no gesture handling,
    nothing that could let the pan through. So this is almost certainly a **bug already
    shipped in `AccountDetailVC`'s calendar mode**, not a new Scheduled bug; it went
@@ -358,7 +371,7 @@ more given what Phase 2's conversions actually cost.
    Verify by switching an account detail to Calendar and trying to scroll. If it is
    stuck too, fix it once for both — the pager's vertical pan has to be let through
    (a `simultaneousGesture`, or bounding the hosted cell's height so the collection
-   view keeps a pannable area outside it) rather than patched per screen.
+   view keeps a pannable area outside it) rather than patched per screen.)
    Check every "leaf" the same way before hosting it: `MonthCashCalendar` genuinely is
    one, which is why `AccountDetailVC` gets away with hosting it.
 3. **Budgets** — `BudgetDetailVC` already exists for the detail side.
