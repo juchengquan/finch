@@ -611,7 +611,7 @@ Account detail. Neither is guessed.
       one** (content sits ~52pt higher). The nav bar sets `prefersLargeTitles`,
       but the hosted stack-less root ends up inline. Cosmetic, affects Accounts
       and Budgets, and worth deciding before more tabs convert.
-- [ ] **The floating add button is still absent on every converted PUSHED screen.**
+- [x] **The floating add button was absent on every converted PUSHED screen.**
       Measured: SwiftUI has `Add Transaction` at `y=764 h=56` on the account
       detail; the converted screen has no such element. Cause: the shell applies
       `.addTransactionFAB()` to the hosted tab *root*
@@ -629,6 +629,27 @@ Account detail. Neither is guessed.
       plus an `AddTxContextProviding` protocol the top view controller
       implements to replace the SwiftUI preference. Both converted screens keep
       their toolbar `+`, so nothing is unreachable meanwhile.
+
+      **FIXED** in `fix/ios-uikit-pushed-fab`, and in two halves — the second only
+      became visible once the first was done:
+
+      - *The button.* Every converted tab with a FAB is now wrapped in `TabChromeVC`,
+        exactly as #658 wrapped Budgets, so the chrome sits above the whole navigation
+        controller and survives pushes. `StacklessTabRoot` stops applying
+        `.addTransactionFAB()` so the hosted root and the chrome don't stack two.
+      - *The seeding.* #658's FAB came back opening an **unseeded** sheet: it reads
+        `AddTxContextKey` from `TabChromeOverlay`'s `Color.clear` tree, which publishes
+        nothing. Pushed screens now state their subject through `AddTxFABProviding`,
+        `TabChromeVC` follows the nav stack, and the overlay republishes it as the same
+        preference. Measured before the fix: the `+` on the Health budget gave a sheet
+        with Account and Category blank, where hosted gave `Account, Credit Card` /
+        `Category, Pharmacy`.
+
+      Guarded by `testFloatingAddButtonSurvivesAccountDrill` / `…BudgetDrill`, which
+      assert existence in both modes and seeding in uikit. Note for whoever writes the
+      next one: query by IDENTIFIER — a screen's toolbar `+` shares the `Add Transaction`
+      label, `BEGINSWITH "Account"` also matches the *Accounts tab-bar button*, and a
+      cover keeps the tab root's FAB in the tree behind it.
 - [ ] **Converted rows sit 9pt lower**: the "Transactions" header is at
       `y=289.7` vs SwiftUI's `280.7`, and the first row at `330.0` vs `321.0`.
       Consistent offset, so it is a top-inset or picker-height difference, not a

@@ -637,4 +637,14 @@ private struct CycleSummaryBlock: View {
         }
     }
 }
+/// Seeds the shell's floating `+` with this budget's first account and category —
+/// the same pair `BudgetDetailView` publishes as a preference. `budget` is nil only
+/// while the row is being deleted, where an unseeded sheet is the right fallback.
+extension BudgetDetailVC: AddTxFABProviding {
+    var addTxContext: AddTxContext {
+        AddTxContext(accountId: budget?.accountIds.first,
+                     categoryId: budget?.categoryIds.first)
+    }
+}
+
 #endif

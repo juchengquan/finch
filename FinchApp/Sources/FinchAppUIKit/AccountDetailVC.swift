@@ -754,4 +754,14 @@ extension AccountDetailVC: QLPreviewControllerDataSource {
     }
 }
 
+/// Seeds the shell's floating `+` with this account, matching the screen's own
+/// toolbar `+`. The SwiftUI screen publishes the same value as an `AddTxContextKey`
+/// preference; a pushed UIKit screen has no view tree to publish from, so it states
+/// it here and `TabChromeVC` republishes it into the hosted FAB.
+///
+/// In this file, not a shared one: `accountId` is `private`, which is file-scoped.
+extension AccountDetailVC: AddTxFABProviding {
+    var addTxContext: AddTxContext { AddTxContext(accountId: accountId) }
+}
+
 #endif

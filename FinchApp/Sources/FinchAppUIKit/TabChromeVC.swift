@@ -1,6 +1,7 @@
 #if os(iOS)
 import UIKit
 import SwiftUI
+import Combine
 import FinchCore
 
 /// Gives a NATIVE tab root the chrome that hosted roots get from the `TabChrome`
@@ -25,6 +26,11 @@ final class TabChromeVC: UIViewController {
     private let appTab: AppTab   // NOT `tab`: UIViewController.tab is UITab? on iOS 18+
     private let store: FinchStore
     private let router: DeepLinkRouter
+    /// What the NATIVE screen on top currently is, republished into the hosted
+    /// SwiftUI chrome. See `NativeChromeState`.
+    private let native = NativeChromeState()
+    /// Subscription to the current top screen; replaced on every push and pop.
+    private var topScreen: AnyCancellable?
 
     init(content: UIViewController, tab: AppTab, store: FinchStore, router: DeepLinkRouter) {
         self.content = content
@@ -51,6 +57,7 @@ final class TabChromeVC: UIViewController {
 
         let chrome = UIHostingController(rootView: TabChromeOverlay(
             tab: appTab,
+            native: native,
             onFABFrame: { [weak passthrough] rect in passthrough?.fabFrame = rect })
             .environmentObject(store)
             .environmentObject(router)
@@ -63,6 +70,36 @@ final class TabChromeVC: UIViewController {
         passthrough.addSubview(chrome.view)
         view.addSubview(passthrough)
         chrome.didMove(toParent: self)
+
+        // Follow the native stack so the FAB knows which screen it is floating over.
+        if let nav = content as? UINavigationController {
+            nav.delegate = self
+            refreshNative()
+        }
+    }
+
+    /// Read the top screen's `AddTxFABProviding` values into `native`, and re-subscribe
+    /// to that screen's change signal.
+    ///
+    /// Without this the hosted FAB reads an `AddTxContextKey` preference from a tree
+    /// that is just `Color.clear`, so it always saw the empty default and opened an
+    /// UNSEEDED sheet on every pushed screen — the SwiftUI path seeds it from the
+    /// page, so that was a parity regression, verified on the simulator (Account and
+    /// Category both blank when opened from a budget's detail).
+    private func refreshNative() {
+        let nav = content as? UINavigationController
+        let provider = nav?.topViewController as? AddTxFABProviding
+        topScreen = provider?.addTxFABStateDidChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in self?.syncNative() }
+        syncNative()
+    }
+
+    private func syncNative() {
+        let nav = content as? UINavigationController
+        let provider = nav?.topViewController as? AddTxFABProviding
+        native.context = provider?.addTxContext ?? AddTxContext()
+        native.selecting = provider?.hidesAddTxFAB ?? false
     }
 
     /// The tab bar reads this off the container, so it has to forward.
@@ -96,9 +133,32 @@ final class TabChromeVC: UIViewController {
     }
 }
 
+extension TabChromeVC: UINavigationControllerDelegate {
+    func navigationController(_ navigationController: UINavigationController,
+                              didShow viewController: UIViewController,
+                              animated: Bool) {
+        refreshNative()
+    }
+}
+
+/// The native top screen's contribution to the hosted chrome.
+///
+/// SwiftUI screens publish `AddTxContextKey` and `SelectionActiveKey` up their view
+/// tree. A pushed `UIViewController` has no such tree, so it states the same two
+/// things through `AddTxFABProviding` and `TabChromeOverlay` republishes them as the
+/// very same preferences — the FAB itself is untouched and keeps one set of rules.
+@MainActor
+final class NativeChromeState: ObservableObject {
+    @Published var context = AddTxContext()
+    @Published var selecting = false
+}
+
 /// The chrome itself, in SwiftUI, so both hosts run the same code.
 private struct TabChromeOverlay: View {
     let tab: AppTab
+    /// The native top screen's context + multi-select state, republished below as the
+    /// preferences the FAB already reads.
+    @ObservedObject var native: NativeChromeState
     /// Reports the FAB's window rect up to `PassthroughView`, which needs it to decide
     /// which touches are the button's and which belong to the list underneath.
     let onFABFrame: (CGRect) -> Void
@@ -111,7 +171,14 @@ private struct TabChromeOverlay: View {
             if tab == .settings {
                 Color.clear
             } else {
-                Color.clear.addTransactionFAB()
+                // Republish what the native screen told us as the preferences the FAB
+                // reads, so a pushed UIViewController seeds and hides the button exactly
+                // as a SwiftUI page does. Without these the FAB sees only the empty
+                // defaults of this `Color.clear` tree.
+                Color.clear
+                    .preference(key: AddTxContextKey.self, value: native.context)
+                    .preference(key: SelectionActiveKey.self, value: native.selecting)
+                    .addTransactionFAB()
             }
         }
         .onPreferenceChange(FABFrameKey.self) { rect in onFABFrame(rect) }

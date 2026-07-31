@@ -68,10 +68,17 @@ final class RootTabBarController: UITabBarController {
                 let nav = UINavigationController(rootViewController: ScheduledListVC())
                 nav.navigationBar.prefersLargeTitles = true
                 vc = TabChromeVC(content: nav, tab: tab, store: store, router: router)
+            } else if Self.uikitNavTabs.contains(tab) {
+                // Same treatment Budgets gets: the chrome is hosted OVER the whole
+                // navigation controller, so the FAB floats above pushed screens instead
+                // of being covered by them (§2c). Settings never has a FAB, so it needs
+                // no chrome container.
+                let nav = navigationTab(tab)
+                vc = tab == .settings
+                    ? nav
+                    : TabChromeVC(content: nav, tab: tab, store: store, router: router)
             } else {
-                vc = Self.uikitNavTabs.contains(tab)
-                    ? navigationTab(tab)
-                    : hostedRoot(tab)
+                vc = hostedRoot(tab)
             }
             vc.tabBarItem = UITabBarItem(title: tab.title,
                                          image: UIImage(systemName: tab.icon),
@@ -101,7 +108,7 @@ final class RootTabBarController: UITabBarController {
     /// A tab backed by a real `UINavigationController`, with the SwiftUI root
     /// rendered stack-less and the native-route seam installed so its drills push
     /// converted view controllers.
-    private func navigationTab(_ tab: AppTab) -> UIViewController {
+    private func navigationTab(_ tab: AppTab) -> UINavigationController {
         let nav = UINavigationController()
         let root = UIHostingController(rootView:
             StacklessTabRoot(tab: tab)
@@ -326,7 +333,7 @@ extension RootTabBarController: UIAdaptivePresentationControllerDelegate {
 private struct StacklessTabRoot: View {
     let tab: AppTab
     var body: some View {
-        stackless.modifier(TabChrome(tab: tab))
+        stackless.modifier(TabChrome(tab: tab, appliesFAB: false))
     }
 
     @ViewBuilder private var stackless: some View {
@@ -361,12 +368,15 @@ private struct TabRootHost: View {
 /// simply absent.
 private struct TabChrome: ViewModifier {
     let tab: AppTab
+    /// False for a converted tab, whose `TabChromeVC` hosts the FAB over the whole
+    /// navigation controller. Two FABs would otherwise stack on the tab root.
+    var appliesFAB = true
     @EnvironmentObject private var store: FinchStore
     @EnvironmentObject private var router: DeepLinkRouter
 
     func body(content: Content) -> some View {
         Group {
-            if tab == .settings {
+            if tab == .settings || !appliesFAB {
                 content
             } else {
                 content.addTransactionFAB()

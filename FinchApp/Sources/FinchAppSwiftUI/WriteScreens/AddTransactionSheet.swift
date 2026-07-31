@@ -300,11 +300,16 @@ struct AddTransactionSheet: View {
         Section {
             SearchablePickerRow(title: "Account", glyph: .account,
                 options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
+                // A UI test reads this row to prove the FAB seeded the sheet. Without an
+                // identifier the query also matches the "Accounts" tab-bar button and the
+                // budget detail's own Account row sitting behind the sheet.
+                .accessibilityIdentifier("addtx.account")
             amountField
             CategoryPickerRow(title: "Category", glyph: .category, categories: categories(for: k), selection: $categoryId,
                 splitSummary: splitSummaryText(categoryNames: (pendingSplits ?? []).map { store.categoryName($0.categoryId) ?? "Uncategorized" }),
                 splitEnabled: (DecimalInput.parse(amount) ?? 0) != 0,
                 onSplit: k == .refund ? nil : { showingSplit = true })
+                .accessibilityIdentifier("addtx.category")
             FieldRow(glyph: .date, title: "Date", showsDefaultTrailing: false) {
                 DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
                     .labelsHidden()
@@ -345,6 +350,10 @@ struct AddTransactionSheet: View {
         Section {
             SearchablePickerRow(title: "Account", glyph: .account,
                 options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
+                // A UI test reads this row to prove the FAB seeded the sheet. Without an
+                // identifier the query also matches the "Accounts" tab-bar button and the
+                // budget detail's own Account row sitting behind the sheet.
+                .accessibilityIdentifier("addtx.account")
             // numbersAndPunctuation allows a leading minus (e.g. a credit-card balance).
             FieldRow(glyph: .amount, title: "New balance") {
                 TextField("0.00", text: $targetBalance)

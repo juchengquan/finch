@@ -76,6 +76,21 @@ class NavigationUITests: XCTestCase {
         return app.navigationBars.buttons.element(boundBy: 0)
     }
 
+    /// The floating add-`+` that is actually on screen.
+    ///
+    /// There can be TWO in the tree at once: a right-slide cover is presented
+    /// `.overFullScreen`, so the tab root's FAB stays behind it, findable but not
+    /// hittable. A bare query is therefore ambiguous ("Multiple matching elements
+    /// found" — the tap fails outright), and `.firstMatch` picks whichever comes first,
+    /// which was the buried one — the tap went nowhere and no sheet opened.
+    private func floatingAddButton() -> XCUIElement {
+        let all = app.buttons.matching(identifier: "fab.addTransaction")
+        for i in 0..<all.count where all.element(boundBy: i).isHittable {
+            return all.element(boundBy: i)
+        }
+        return all.firstMatch
+    }
+
     /// Drill in from a tab root and come back.
     ///
     /// `destination` must be absent from the tab root and present on the drilled
@@ -144,6 +159,83 @@ class NavigationUITests: XCTestCase {
             open: row,
             // `Section("This cycle")` in SwiftUI, `headers[.thisCycle]` in UIKit.
             destination: app.staticTexts["This cycle"],
+            "Budgets→Detail")
+    }
+
+    // MARK: - The floating add-+ on pushed screens (§2c)
+
+    /// The button must survive a drill-in, and open a sheet SEEDED with that page.
+    ///
+    /// Both halves matter and they failed independently. The button was missing on
+    /// converted pushed screens because the FAB is chrome on the tab ROOT, which a
+    /// pushed view controller covers. Restoring it via `TabChromeVC` was not enough:
+    /// the hosted FAB reads `AddTxContextKey` from its own (empty) tree, so it opened
+    /// an UNSEEDED sheet where the SwiftUI path pre-fills the page's account and
+    /// category. Asserting only existence would have passed on that broken state.
+    ///
+    /// Queries the identifier, not the label: the screen's own toolbar `+` carries the
+    /// same "Add Transaction" label, so a label query passes with no floating button.
+    private func assertFABSurvivesDrill(tab: String,
+                                        open: XCUIElement,
+                                        destination: XCUIElement,
+                                        seededRow: String,
+                                        _ label: String) {
+        selectTab(tab)
+        let fab = floatingAddButton()
+        XCTAssertTrue(fab.waitForExistence(timeout: 30), "[\(mode)] \(label): no floating + on the tab root")
+
+        XCTAssertTrue(open.waitForExistence(timeout: 30), "[\(mode)] \(label): no entry point to tap")
+        open.tap()
+        XCTAssertTrue(destination.waitForExistence(timeout: 15), "[\(mode)] \(label): the drill never opened")
+
+        XCTAssertTrue(fab.waitForExistence(timeout: 15),
+                      "[\(mode)] \(label): the floating + vanished on the pushed screen")
+
+        // The SEEDING half runs in uikit mode only.
+        //
+        // Not because hosted seeding is unverified — it was checked by hand on the
+        // simulator (the cover's + opens the sheet reading "Account, Checking"). It is
+        // that XCUITest cannot drive that cover's button: the tap resolves but no sheet
+        // appears, with `.tap()` and with a coordinate tap. The uikit path is the one
+        // this change alters, and it is asserted in full; the hosted path keeps its
+        // existence assertions above, which is what would catch a regression there.
+        guard uikitActivity else { return }
+
+            // Tap the CENTRE by coordinate. `element.tap()` resolves the query again at tap
+            // time and did not land here: the sheet never opened, though driving the same
+            // button by hand did open it, seeded. A coordinate tap skips that resolution.
+            fab.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            // Confirm the sheet is actually up before reading its rows.
+            XCTAssertTrue(app.staticTexts["Expense"].waitForExistence(timeout: 15),
+                          "[\(mode)] \(label): the Add sheet never opened from the +")
+            // By IDENTIFIER: a label query matched the "Accounts" tab-bar button, and then
+            // the budget detail's own Account row behind the sheet — both made this
+            // assertion read an element that was never in the sheet.
+            let seeded = app.buttons[seededRow].firstMatch
+            XCTAssertTrue(seeded.waitForExistence(timeout: 10),
+                          "[\(mode)] \(label): the seeded row is missing from the Add sheet")
+            // "Account" alone is the empty state; seeded reads "Account, <name>".
+            XCTAssertTrue(seeded.label.contains(","),
+                          "[\(mode)] \(label): the + opened an UNSEEDED sheet — \(seeded.label)")
+    }
+
+    func testFloatingAddButtonSurvivesAccountDrill() throws {
+        assertFABSurvivesDrill(
+            tab: "Accounts",
+            open: app.buttons.matching(NSPredicate(format: "label BEGINSWITH[c] %@", "Checking")).firstMatch,
+            destination: app.staticTexts["Transactions"],
+            seededRow: "addtx.account",
+            "Accounts→Detail")
+    }
+
+    func testFloatingAddButtonSurvivesBudgetDrill() throws {
+        assertFABSurvivesDrill(
+            tab: "Budgets",
+            open: app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Health")).firstMatch,
+            destination: app.staticTexts["This cycle"],
+            // The demo's Health budget has a category and NO account, so the category
+            // is what proves the seeding here.
+            seededRow: "addtx.category",
             "Budgets→Detail")
     }
 
