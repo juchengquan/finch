@@ -1,4 +1,5 @@
 import Foundation
+import FinchCore   // AppGroup, for the -resetStore wipe
 
 /// The app's launch chores, in one place, because there are two entry points.
 ///
@@ -22,6 +23,17 @@ enum LaunchSequence {
     static func run(store: FinchStore, router: DeepLinkRouter, gate: BiometricGate) async {
         #if DEBUG
         LaunchTiming.begin()
+
+        // UI-test launch flags. They live HERE, above `bootstrap()`, for two reasons:
+        // the wipe must happen before the database is opened (bootstrap is what opens
+        // it — `FinchStore.init` is empty), and both entry points must honour them.
+        // Putting them in the SwiftUI `App.init` is what made them dead code on iOS.
+        if UserDefaults.standard.bool(forKey: "resetStore") {
+            wipeLiveStateForTesting(store)
+        }
+        let disableNotifications = UserDefaults.standard.bool(forKey: "disableNotifications")
+        #else
+        let disableNotifications = false
         #endif
 
         store.isHydrating = true
@@ -62,17 +74,48 @@ enum LaunchSequence {
             }
         }
 
-        // Phase 6.2: notifications
+        // Phase 6.2: notifications. `configure` is always wired — it only installs the
+        // delegate — but the prompt and the planner are skipped under
+        // `-disableNotifications YES`: the demo seed dates transactions at
+        // `store.today`, so the planner fires a budget alert immediately and the system
+        // banner covers the accessibility tree a UI test is reading.
         NotificationService.shared.configure(store: store, router: router)
-        await NotificationService.shared.requestPermissionIfNeeded()
-        // `refresh()` plans budget/spend alerts from `store.txns` — await the deferred
-        // projection or it plans from an empty list and schedules nothing. Detached so
-        // it doesn't stall the trailing chores by ~600ms.
-        Task { await store.awaitTxnsReady(); await NotificationService.shared.refresh() }
+        if !disableNotifications {
+            await NotificationService.shared.requestPermissionIfNeeded()
+            // `refresh()` plans budget/spend alerts from `store.txns` — await the
+            // deferred projection or it plans from an empty list and schedules nothing.
+            // Detached so it doesn't stall the trailing chores by ~600ms.
+            Task { await store.awaitTxnsReady(); await NotificationService.shared.refresh() }
+        }
 
         AutoBackupManager.shared.configure(store: store)      // Phase 5
         ICloudSync.shared.start()                             // Phase 5: iCloud Drive sync
         await CloudKitSyncCoordinator.shared.start()          // Phase 8: row-level sync (scaffold; inert without an iCloud account)
         PendingAttachmentImporter.importPending(into: store)  // Phase 6.5: import shared receipts
     }
+
+    #if DEBUG
+    /// Wipe the persistent live DB and App Group scratch, for `-resetStore YES` only.
+    ///
+    /// UI tests launch a SEPARATE host-app process, which does NOT load `XCTestCase` —
+    /// so `FinchStore.isRunningTests` is false there and `liveDBURL` points at the real
+    /// Application Support database, not the temp-dir one that protects unit tests.
+    /// Without this a UI-test run would seed and mutate a development simulator's own
+    /// data.
+    ///
+    /// The paths are DERIVED from `store.liveDBURL` rather than rebuilt by hand. A
+    /// hand-mirrored copy of that path is silently wrong the day `liveDBURL` changes,
+    /// and "silently wrong" here means wiping the wrong directory or wiping nothing.
+    private static func wipeLiveStateForTesting(_ store: FinchStore) {
+        let fm = FileManager.default
+        let db = store.liveDBURL
+        // WAL mode keeps committed frames in the sidecars; removing only the main file
+        // leaves them to be replayed into the "fresh" database on the next open.
+        for suffix in ["", "-wal", "-shm"] {
+            try? fm.removeItem(at: URL(fileURLWithPath: db.path + suffix))
+        }
+        try? fm.removeItem(at: AppGroup.widgetSnapshotURL)
+        try? fm.removeItem(at: AppGroup.containerURL.appendingPathComponent("pending_attachments"))
+    }
+    #endif
 }
