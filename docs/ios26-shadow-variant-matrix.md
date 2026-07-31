@@ -267,23 +267,3 @@ stop declaring its own — a real refactor across the drill pages.
 restructure (18/19) is a project to unwind. Re-run this lab when iOS 26.6 / 27
 lands: if Apple fixes the scroll-edge re-converge, the right move is to delete
 the workaround and go back to plain `NavigationStack` pushes.
-
----
-
-## Corrections to `ios26-liquid-glass-artifacts.md`
-
-1. **"Device-only — invisible on the simulator to the eye" is wrong.** The
-   shadow reproduces on the simulator and is clearly visible to a human;
-   variant 0 was confirmed there. What is true is that it cannot be *captured*
-   (see Method). This mattered: the old claim is why earlier rounds burned
-   device cycles they did not need.
-2. **The root cause line — "only pushes on the main tab-bar `NavigationStack`
-   shadow" — is wrong in both directions.** Variant 3 shadows on a stack that is
-   not the tab's, and variant 8 is a clean push. The accurate statement is the
-   two-family rule above.
-3. **"Root vs pushed" is the wrong framing.** Variant 20 is a root and shadows.
-   The trigger is the push transition.
-
-The "sharpened rule" — a push *inside* a cover is clean — **survives** and is
-independently confirmed here (variant 8), so the shipped Ledger and Settings
-flows are sound.

@@ -397,3 +397,23 @@ hand edits belong in `scripts/zh-manual.json` (which pins terminology to the web
   `App.init` is dead code on iOS), or the `finch://add` deep link. Bundle id `com.juchengquan.finch`.
   (`ios/docs/simulator-ui-driving.md` has the longer recipe: install steps, the `describe-all`
   measuring snippet, and the full AppleScript/TCC post-mortem.)
+
+## Known OS issues (device-only)
+
+- **iOS 26.5 Liquid Glass "resume shadows" under the CHROME** — switching away and back
+  can leave exaggerated drop shadows beneath the glass chrome (nav pills, search field,
+  tab bar, FAB) for ~2s after the normal inactive-gray phase, before fading. **Not our
+  code**: bisect-confirmed on an iPhone 16 Pro Max against Debug AND Release, with the
+  app main-thread idle (Time Profiler, no hangs), and page-dependent in a way that
+  correlates with nothing in source (Accounts/Activity/Settings/Ledger show it;
+  Budgets/Scheduled/Insights don't — structurally near-identical chrome). Explicit
+  `scrollEdgeEffectStyle(.soft)` does NOT help; setting `UIDesignRequiresCompatibility`
+  in Info.plist (pre-glass rendering) removes it entirely, which is the conclusive
+  attribution. Don't burn time re-investigating chrome "shadow glitches" on app-switch
+  until Apple's compositor fixes land; for a local device build the plist key is a
+  livable opt-out (**never commit it** — Apple will drop the key in a future SDK).
+  This was observed on device. Do not read that as "absent on the simulator": the
+  *other* Liquid Glass artifact — the resume shadow on a pushed scroll view — does
+  reproduce on the sim and is plainly visible; what fails there is *capture*, because
+  `simctl` screenshots don't contain the glass layers. See
+  `ios/docs/ios26-liquid-glass-artifacts.md` and `ios/docs/ios26-shadow-variant-matrix.md`.
