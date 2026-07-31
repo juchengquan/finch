@@ -33,10 +33,37 @@ done
 : "${DEVELOPER_DIR:=/Applications/Xcode.app/Contents/Developer}"
 export DEVELOPER_DIR
 
+# --- run-scoped scratch ------------------------------------------------------
+# Every path this script writes is unique to the run: the DerivedData, the export
+# directory and all the logs.
+#
+# These were fixed /tmp paths, shared by every worktree on the machine. Two
+# sessions running this script at once collided three ways: concurrent xcodebuilds
+# fought over the shared DerivedData's build.db ("database is locked", failing legs
+# that had nothing wrong with them), the logs each step greps for its verdict were
+# overwritten by the other run, and — the one that actually misled someone — a
+# failed export left another branch's xliff behind for the i18n guard to parse.
+#
+# The cost is honest: a fresh DerivedData means every run is a COLD build. Set
+# FINCH_CI_DERIVED_DATA to a path of your own to keep it warm across runs — use a
+# per-worktree path, never one shared with another checkout.
+RUN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/finch-ci.XXXXXX")"
+DD="${FINCH_CI_DERIVED_DATA:-$RUN_DIR/dd}"
+# Kept on failure so the full logs survive for inspection; the summary prints the
+# path. Removed on success, and removed when it is empty (a step-0 bail writes
+# nothing), so runs do not accumulate scratch directories.
+cleanup() {
+  if [ "${KEEP_RUN_DIR:-0}" = "1" ] && [ -n "$(ls -A "$RUN_DIR" 2>/dev/null)" ]; then
+    return
+  fi
+  rm -rf "$RUN_DIR"
+}
+trap cleanup EXIT
+
 FAILED=()
 step() { printf '\n\033[1m> %s\033[0m\n' "$1"; }
 pass() { printf '\033[32m  ok  %s\033[0m\n' "$1"; }
-fail() { printf '\033[31m  FAIL  %s\033[0m\n' "$1"; FAILED+=("$1"); }
+fail() { printf '\033[31m  FAIL  %s\033[0m\n' "$1"; FAILED+=("$1"); KEEP_RUN_DIR=1; }
 
 # --- 0. staleness gate -------------------------------------------------------
 step "Base check ($BASE)"
@@ -72,11 +99,11 @@ fi
 
 # --- 2. FinchCore + ParityTests ---------------------------------------------
 step "FinchCore unit tests + ParityTests (swift test)"
-if swift test >/tmp/ci-local-swift.log 2>&1; then
-  pass "$(grep -oE 'Executed [0-9]+ tests' /tmp/ci-local-swift.log | tail -1)"
+if swift test >"$RUN_DIR/swift.log" 2>&1; then
+  pass "$(grep -oE 'Executed [0-9]+ tests' "$RUN_DIR/swift.log" | tail -1)"
 else
   fail "swift test"
-  grep -E "error:|failed" /tmp/ci-local-swift.log | head -5
+  grep -E "error:|failed" "$RUN_DIR/swift.log" | head -5
 fi
 
 # --- 3. project + simulator --------------------------------------------------
@@ -91,13 +118,13 @@ echo "  simulator: ${SIM:-<none found>}"
 # --- 4. FinchApp build + test ------------------------------------------------
 step "Build + test FinchApp"
 if xcodebuild test -project FinchApp.xcodeproj -scheme FinchApp \
-     -destination "platform=iOS Simulator,name=$SIM" -derivedDataPath /tmp/dd-cilocal \
+     -destination "platform=iOS Simulator,name=$SIM" -derivedDataPath "$DD" \
      -skipPackagePluginValidation -skipMacroValidation \
-     COMPILER_INDEX_STORE_ENABLE=NO >/tmp/ci-local-app.log 2>&1; then
-  pass "$(grep -oE 'Executed [0-9]+ tests' /tmp/ci-local-app.log | tail -1)"
+     COMPILER_INDEX_STORE_ENABLE=NO >"$RUN_DIR/app.log" 2>&1; then
+  pass "$(grep -oE 'Executed [0-9]+ tests' "$RUN_DIR/app.log" | tail -1)"
 else
   fail "FinchApp build/test"
-  grep -E "error:|failed" /tmp/ci-local-app.log | head -8
+  grep -E "error:|failed" "$RUN_DIR/app.log" | head -8
 fi
 
 # --- 5. i18n guard 2: extracted keys current ---------------------------------
@@ -118,15 +145,14 @@ else
 fi
 
 step "i18n - extracted keys are current"
-LOC_DIR="$(mktemp -d "${TMPDIR:-/tmp}/finch-loc.XXXXXX")"
-KEYS_FRESH="$LOC_DIR/keys-fresh.json"
-trap 'rm -rf "$LOC_DIR"' EXIT
+LOC_DIR="$RUN_DIR/loc"
+KEYS_FRESH="$RUN_DIR/keys-fresh.json"
 if xcodebuild -exportLocalizations -project FinchApp.xcodeproj -scheme FinchApp \
      -localizationPath "$LOC_DIR" -exportLanguage zh-Hans \
-     -derivedDataPath /tmp/dd-cilocal -quiet \
+     -derivedDataPath "$DD" -quiet \
      -skipPackagePluginValidation -skipMacroValidation \
-     COMPILER_INDEX_STORE_ENABLE=NO >/tmp/ci-local-loc.log 2>&1 \
-   && bun run scripts/xliff-keys.ts "$LOC_DIR" > "$KEYS_FRESH" 2>>/tmp/ci-local-loc.log; then
+     COMPILER_INDEX_STORE_ENABLE=NO >"$RUN_DIR/loc.log" 2>&1 \
+   && bun run scripts/xliff-keys.ts "$LOC_DIR" > "$KEYS_FRESH" 2>>"$RUN_DIR/loc.log"; then
   if python3 "$REPO/ios/scripts/ci-local-keydiff.py" "$KEYS_FRESH"; then
     pass "key set matches"
   else
@@ -136,29 +162,29 @@ else
   fail "exportLocalizations"
   # `xliff-keys:` catches this script's own diagnostics (stale/missing xliff),
   # which do not say "error:" and were otherwise swallowed.
-  grep -E "error:|^xliff-keys:|^  " /tmp/ci-local-loc.log | head -8
+  grep -E "error:|^xliff-keys:|^  " "$RUN_DIR/loc.log" | head -8
 fi
 
 # --- 6. the other platforms --------------------------------------------------
 step "Build FinchMac (macOS)"
 if xcodebuild build -project FinchApp.xcodeproj -scheme FinchMac -destination 'platform=macOS' \
-     CODE_SIGNING_ALLOWED=NO -derivedDataPath /tmp/dd-cilocal -quiet \
+     CODE_SIGNING_ALLOWED=NO -derivedDataPath "$DD" -quiet \
      -skipPackagePluginValidation -skipMacroValidation \
-     COMPILER_INDEX_STORE_ENABLE=NO >/tmp/ci-local-mac.log 2>&1; then
+     COMPILER_INDEX_STORE_ENABLE=NO >"$RUN_DIR/mac.log" 2>&1; then
   pass "FinchMac"
 else
-  fail "FinchMac"; grep -E "error:" /tmp/ci-local-mac.log | head -5
+  fail "FinchMac"; grep -E "error:" "$RUN_DIR/mac.log" | head -5
 fi
 
 step "Build FinchWatch (watchOS)"
 if xcodebuild build -project FinchApp.xcodeproj -scheme FinchWatch \
      -destination 'generic/platform=watchOS' CODE_SIGNING_ALLOWED=NO \
-     -derivedDataPath /tmp/dd-cilocal -quiet \
+     -derivedDataPath "$DD" -quiet \
      -skipPackagePluginValidation -skipMacroValidation \
-     COMPILER_INDEX_STORE_ENABLE=NO >/tmp/ci-local-watch.log 2>&1; then
+     COMPILER_INDEX_STORE_ENABLE=NO >"$RUN_DIR/watch.log" 2>&1; then
   pass "FinchWatch"
 else
-  fail "FinchWatch"; grep -E "error:" /tmp/ci-local-watch.log | head -5
+  fail "FinchWatch"; grep -E "error:" "$RUN_DIR/watch.log" | head -5
 fi
 
 # --- 7. frontend job (opt-in) ------------------------------------------------
@@ -166,10 +192,10 @@ if [ "$RUN_ALL" = "1" ]; then
   cd "$REPO/frontend" || exit 1
   for t in typecheck lint check:naming test build; do
     step "frontend: bun run $t"
-    if bun run "$t" >/tmp/ci-local-fe.log 2>&1; then
+    if bun run "$t" >"$RUN_DIR/frontend.log" 2>&1; then
       pass "$t"
     else
-      fail "frontend $t"; tail -8 /tmp/ci-local-fe.log
+      fail "frontend $t"; tail -8 "$RUN_DIR/frontend.log"
     fi
   done
 fi
@@ -192,4 +218,7 @@ if [ ${#FAILED[@]} -eq 0 ]; then
 fi
 printf '\033[31m%d failed:\033[0m\n' "${#FAILED[@]}"
 printf '  - %s\n' "${FAILED[@]}"
+# The excerpts above are the first few matching lines; the full logs are what you
+# actually need when a build fails. They are kept ONLY on failure (see cleanup).
+printf '\nfull logs: %s\n' "$RUN_DIR"
 exit 1
