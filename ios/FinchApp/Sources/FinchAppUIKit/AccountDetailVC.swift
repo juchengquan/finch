@@ -267,19 +267,12 @@ final class AccountDetailVC: UIViewController {
             }
 
             guard let tx = self.txByID[id] else { return }
-            var cfg = cell.defaultContentConfiguration()
-            // Same labelling rule as the SwiftUI TxRow: the category is the title.
-            cfg.text = self.store.categoryName(tx.category) ?? String(localized: "Uncategorized")
-            cfg.secondaryText = tx.date
-            cell.contentConfiguration = cfg
-
-            // The amount, privacy-aware — same helper the SwiftUI row uses, so the
-            // money rules are not reimplemented.
-            let amount = UILabel()
-            amount.text = self.store.displayMoneyBase(tx.amount)
-            amount.font = .preferredFont(forTextStyle: .body)
-            amount.textColor = tx.amount < 0 ? .label : .systemGreen
-            cell.accessories = [.customView(configuration: .init(customView: amount, placement: .trailing()))]
+            // The SwiftUI row itself, hosted — it draws the amount and the running
+            // balance, so no trailing accessory here. See TxRowCell for why this is
+            // hosted rather than rebuilt.
+            TxRowCell.configure(cell, tx: tx, store: self.store,
+                                onPreviewReceipt: { [weak self] in self?.previewReceipt($0) })
+            cell.accessories = []
         }
 
         let header = UICollectionView.SupplementaryRegistration<UICollectionViewListCell>(

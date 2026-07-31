@@ -60,6 +60,8 @@ final class ActivityFeedVC: UIViewController {
     private static let calendarID = "__calendar__"
 
     private var searchQuery = ""
+    /// Rows that print their own date — see TxRowCell.dateShownIDs.
+    private var dateShownIDs: Set<String> = []
     /// The app's own sort enum, reused — it carries `sorted(_:)`, so ordering is
     /// literally the same code the SwiftUI screen ran.
     private var sort: TxSort = .dateDesc
@@ -213,19 +215,16 @@ final class ActivityFeedVC: UIViewController {
                 return
             }
             guard let tx = self.txByID[id] else { return }
-            var cfg = cell.defaultContentConfiguration()
-            // Same rule as the SwiftUI TxRow: category is the title, date beneath.
-            cfg.text = self.store.categoryName(tx.category) ?? String(localized: "Uncategorized")
-            cfg.secondaryText = tx.date
-            cell.contentConfiguration = cfg
-
-            let amount = UILabel()
-            amount.text = self.store.displayMoneyBase(tx.amount)
-            amount.font = .preferredFont(forTextStyle: .body)
-            amount.textColor = tx.amount < 0 ? .label : .systemGreen
-            var accessories: [UICellAccessory] = [
-                .customView(configuration: .init(customView: amount, placement: .trailing()))
-            ]
+            // The SwiftUI row itself, hosted — it draws the amount, so no trailing
+            // accessory. `showRunningBalance: false` because this feed mixes accounts
+            // and a running balance only reads sensibly within one; `showDate` prints
+            // the date once per day-run, as the SwiftUI feed does.
+            TxRowCell.configure(cell, tx: tx, store: self.store,
+                                showDate: self.dateShownIDs.contains(tx.id),
+                                showRunningBalance: false,
+                                onPreviewReceipt: self.isSelecting ? nil
+                                    : { [weak self] in self?.previewReceipt($0) })
+            var accessories: [UICellAccessory] = []
             if self.isSelecting {
                 // Multi-select: a leading tick, driven by our own `selected` set so
                 // the same rows can also be tapped to open in normal mode.
@@ -327,6 +326,9 @@ final class ActivityFeedVC: UIViewController {
         let confirmed = txns.filter { $0.pending != true }
         hasMore = confirmed.count > visibleCount
         let page = Array(confirmed.prefix(visibleCount))
+        // Must be set BEFORE the cells configure — they read it to decide whether to
+        // print a date, and a stale set prints the date on the wrong rows.
+        dateShownIDs = TxRowCell.dateShownIDs(pending: pending, ordered: page)
 
         var snap = NSDiffableDataSourceSnapshot<SectionID, String>()
         var headers: [SectionID: HeaderContent] = [:]

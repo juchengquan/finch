@@ -82,9 +82,18 @@ on Account detail. Accessibility differs too: SwiftUI rows surface as `Button`
 with a composed label ("Expense, Groceries, Jul 29 · 12:00"), the UIKit ones as
 `StaticText` ("Groceries, 2026-07-29").
 
-Fixing it means a custom `UIContentConfiguration` matching `TxRow`, not a height
-tweak — `defaultContentConfiguration` has no knob that reaches 52pt while
-keeping two lines.
+**FIXED the same day.** Not by a custom `UIContentConfiguration` — by *hosting
+`TxRow` itself* (`TxRowCell`). It is a leaf view, and the migration's rule is
+that hosting leaves is fine; it is hosting a screen's *scroll view* that brings
+the resume shadow back. Re-measured after: **52.0pt pitch, exactly matching**,
+and the content gaps closed for free because it is literally the same view.
+A UIKit reimplementation would have been a few hundred lines that then drift
+from the original every time a row gains a feature — and the Mac keeps rendering
+that original, so the drift is certain rather than hypothetical.
+
+`UIHostingConfiguration`'s default margins are wider than a `List` row's, so the
+row still sat tall until `.margins(.vertical, 7)`. Measure after hosting, don't
+assume.
 
 ```bash
 # print every labelled element with its frame
