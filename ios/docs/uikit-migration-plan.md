@@ -309,8 +309,17 @@ more given what Phase 2's conversions actually cost.
    FAB and the focused-tx sheet — is a SwiftUI `ViewModifier` (`TabChrome`) applied to
    hosted roots. A native `UINavigationController` tab root gets none of it, so
    swapping the root in loses the FAB, which is a visible regression.
-   **Write a UIKit tab-chrome equivalent FIRST**, then convert the roots. Doing it in
-   the other order leaves each converted tab missing its FAB.
+   **RESOLVED same day — `TabChromeVC`.** A container that puts the native content in
+   a child and hosts the real `AddTransactionFAB` + focused-tx sheet over it behind a
+   passthrough view, so touches reach the collection view everywhere except the button.
+   The chrome is HOSTED, not rebuilt: the FAB honours `finch.fab.enabled`, the
+   left/right position preference, hides during multi-select and while the ledger cover
+   is up, and seeds from the page's `AddTxContext` — a UIKit copy of all that would
+   drift from the Mac's. Reuse it for every remaining tab root; it takes
+   `(content:tab:store:router:)`.
+
+   Trap: name the stored property `appTab`, not `tab` — `UIViewController.tab` is
+   `UITab?` on iOS 18+ and the override fails to compile.
 3. **Budgets** — `BudgetDetailVC` already exists for the detail side.
 4. **Accounts** — last, and by far the biggest. `AccountsTab` is ~570 lines: collapsible
    groups, search, drag reorder, swipe actions on two edges, context menus. Budget it

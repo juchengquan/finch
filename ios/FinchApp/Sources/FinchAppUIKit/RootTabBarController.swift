@@ -43,9 +43,20 @@ final class RootTabBarController: UITabBarController {
             // UINavigationController, and its SwiftUI root renders WITHOUT its own
             // NavigationStack (ownsNavigationStack: false) so the bars do not
             // double. Unconverted tabs stay as bare hosted roots.
-            let vc = Self.uikitNavTabs.contains(tab)
-                ? navigationTab(tab)
-                : hostedRoot(tab)
+            // Scheduled is native at BOTH widths: the same ScheduledListVC is the
+            // compact tab root here and the iPad supplementary column in SplitShellVC,
+            // which is what stops the two from drifting. TabChromeVC gives it the FAB
+            // and the focused-tx sheet a hosted root gets for free.
+            let vc: UIViewController
+            if tab == .scheduled {
+                let nav = UINavigationController(rootViewController: ScheduledListVC())
+                nav.navigationBar.prefersLargeTitles = true
+                vc = TabChromeVC(content: nav, tab: tab, store: store, router: router)
+            } else {
+                vc = Self.uikitNavTabs.contains(tab)
+                    ? navigationTab(tab)
+                    : hostedRoot(tab)
+            }
             vc.tabBarItem = UITabBarItem(title: tab.title,
                                          image: UIImage(systemName: tab.icon),
                                          tag: slots.firstIndex(of: tab) ?? 0)
