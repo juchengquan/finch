@@ -49,6 +49,26 @@ enum TextSize {
         step(forCategory: UIApplication.shared.preferredContentSizeCategory)
     }
 
+    /// A step as a UIKit content-size category — the inverse of `step(forCategory:)`.
+    ///
+    /// The iOS shell applies this as a WINDOW-LEVEL trait override, which is what
+    /// carries the preference to UIKit labels, to converted screens pushed onto a
+    /// nav controller, to presented covers, and to hosted SwiftUI alike. Attaching a
+    /// SwiftUI `dynamicTypeSize` modifier per host instead reaches only that host —
+    /// which is how Appearance & Language, every converted VC, and the `-legacyShell`
+    /// shell all ended up ignoring the setting.
+    static func category(forStep step: Int) -> UIContentSizeCategory {
+        switch min(max(step, 0), steps.count - 1) {
+        case 0:  return .extraSmall
+        case 1:  return .small
+        case 2:  return .medium
+        case 3:  return .large
+        case 4:  return .extraLarge
+        case 5:  return .extraExtraLarge
+        default: return .extraExtraExtraLarge
+        }
+    }
+
     /// Accessibility categories clamp to the largest step the slider can express —
     /// the slider does not reach them (see the type comment).
     static func step(forCategory category: UIContentSizeCategory) -> Int {

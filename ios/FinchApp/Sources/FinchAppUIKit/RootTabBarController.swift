@@ -56,12 +56,13 @@ final class RootTabBarController: UITabBarController {
 
     /// Each tab root is still SwiftUI. The environment objects and the app-wide
     /// section spacing that `AdaptiveShell` applied must be re-attached here —
-    /// hosting controllers do not inherit them.
+    /// hosting controllers do not inherit them. (Text size is NOT re-attached: it is
+    /// a window-level trait override in `MainSceneDelegate`, which every host
+    /// inherits — see `applyTextSizePreference`.)
     private func hostedRoot(_ tab: AppTab) -> UIViewController {
         let host = UIHostingController(rootView:
             TabRootHost(tab: tab)
                 .finchSectionSpacing()
-                .modifier(AppTextSize())
                 .environmentObject(store)
                 .environmentObject(router)
                 .environmentObject(BiometricGate.shared)
@@ -78,7 +79,6 @@ final class RootTabBarController: UITabBarController {
         let root = UIHostingController(rootView:
             StacklessTabRoot(tab: tab)
                 .finchSectionSpacing()
-                .modifier(AppTextSize())
                 .environmentObject(store)
                 .environmentObject(router)
                 .environmentObject(BiometricGate.shared)
@@ -368,11 +368,7 @@ private struct TabChrome: ViewModifier {
 }
 
 
-/// The text-size preference the SwiftUI root applied once at the top. Hosting
-/// controllers do not inherit it, so every hosted root re-applies it.
-struct AppTextSize: ViewModifier {
-    @AppStorage(TextSize.stepKey) private var step = TextSize.defaultStep
-    func body(content: Content) -> some View {
-        content.modifier(TextSizeModifier(step: step))
-    }
-}
+// `AppTextSize` used to live here — a per-host SwiftUI modifier re-attached at each
+// hosted root. It reached only those roots, so converted screens, presented covers
+// and `-legacyShell` all ignored the setting. Replaced by the window trait override
+// in `MainSceneDelegate.applyTextSizePreference`.

@@ -24,6 +24,22 @@ final class TextSizeTests: XCTestCase {
         // Unknown / unspecified categories fall back rather than crash.
         XCTAssertEqual(TextSize.step(forCategory: .unspecified), TextSize.defaultStep)
     }
+
+    /// `category(forStep:)` drives the window trait override, so a step must survive
+    /// the round trip — otherwise the shell renders a different size than the slider
+    /// shows.
+    func test_categoryForStep_roundTripsEveryStep() {
+        for step in 0..<TextSize.steps.count {
+            XCTAssertEqual(TextSize.step(forCategory: TextSize.category(forStep: step)), step,
+                           "step \(step) did not survive the category round trip")
+        }
+        XCTAssertEqual(TextSize.category(forStep: 0), .extraSmall)
+        XCTAssertEqual(TextSize.category(forStep: 3), .large)
+        XCTAssertEqual(TextSize.category(forStep: 6), .extraExtraExtraLarge)
+        // Out-of-range stored values clamp rather than trap.
+        XCTAssertEqual(TextSize.category(forStep: -5), .extraSmall)
+        XCTAssertEqual(TextSize.category(forStep: 99), .extraExtraExtraLarge)
+    }
     #endif
 
     // MARK: Migration off the removed "Use system size" toggle

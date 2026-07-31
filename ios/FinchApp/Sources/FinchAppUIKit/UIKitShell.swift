@@ -52,7 +52,7 @@ final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
 
         let w = UIWindow(windowScene: windowScene)
         w.rootViewController = Self.makeRoot(for: w)
-        applyAppearancePreference(to: w)
+        applyWindowPreferences(to: w)
         w.makeKeyAndVisible()
         window = w
 
@@ -175,7 +175,7 @@ final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
         let w = UIWindow(windowScene: scene)
         w.windowLevel = .alert + 1        // above every sheet and alert
         w.rootViewController = UIHostingController(rootView: LockView().environmentObject(gate))
-        applyAppearancePreference(to: w)
+        applyWindowPreferences(to: w)
         w.makeKeyAndVisible()
         lockWindow = w
     }
@@ -229,17 +229,25 @@ final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
         host.didMove(toParent: root)
     }
 
-    /// The appearance preference is live in SwiftUI (`preferredColorScheme` reads
-    /// `@AppStorage`); here it must be re-applied when the setting changes.
+    /// The appearance and text-size preferences are live in SwiftUI (`preferredColorScheme`
+    /// / `dynamicTypeSize` read `@AppStorage`); here they must be re-applied when the
+    /// setting changes.
     private func observeAppearance() {
         NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self, let w = self.window else { return }
-                self.applyAppearancePreference(to: w)
-                self.lockWindow.map { self.applyAppearancePreference(to: $0) }
+                self.applyWindowPreferences(to: w)
+                self.lockWindow.map { self.applyWindowPreferences(to: $0) }
             }
             .store(in: &cancellables)
+    }
+
+    /// Both window-wide display preferences, applied together because they are set
+    /// and re-applied at exactly the same points.
+    private func applyWindowPreferences(to window: UIWindow) {
+        applyAppearancePreference(to: window)
+        applyTextSizePreference(to: window)
     }
 
     /// `preferredColorScheme` in SwiftUI; `overrideUserInterfaceStyle` here.
@@ -250,6 +258,28 @@ final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
         case .dark:  window.overrideUserInterfaceStyle = .dark
         default:     window.overrideUserInterfaceStyle = .unspecified
         }
+    }
+
+    /// `dynamicTypeSize` in SwiftUI; a WINDOW-LEVEL trait override here.
+    ///
+    /// This is deliberately the window and not each host. The preference used to be a
+    /// SwiftUI modifier re-attached at `RootTabBarController`'s hosted roots and
+    /// `SplitShellVC`'s columns, which meant it reached those roots and nothing else:
+    /// converted screens pushed onto a nav controller render UIKit labels straight from
+    /// the trait collection, the Appearance & Language cover is presented outside those
+    /// hosts, and `-legacyShell` never applied it at all — so all three silently
+    /// followed the OS instead. A window trait override cascades to every one of them,
+    /// including hosted SwiftUI, which maps the trait back into `dynamicTypeSize`.
+    private func applyTextSizePreference(to window: UIWindow) {
+        let defaults = UserDefaults.standard
+        // `integer(forKey:)` rather than `object(forKey:) as? Int` so a value injected
+        // through the launch-argument domain (which arrives as a String) still applies
+        // — that is how this gets driven on the simulator. The presence check keeps an
+        // absent key on `defaultStep` instead of `integer`'s 0, which is `.xSmall`.
+        let step = defaults.object(forKey: TextSize.stepKey) != nil
+            ? defaults.integer(forKey: TextSize.stepKey)
+            : TextSize.defaultStep
+        window.traitOverrides.preferredContentSizeCategory = TextSize.category(forStep: step)
     }
 }
 
