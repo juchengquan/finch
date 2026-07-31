@@ -8,6 +8,8 @@ struct LineChart: View {
     let yLabel: String
     /// Formats a value for VoiceOver — see `BarChart.format`.
     let format: (Double) -> String
+    /// Privacy mode — see `BarChart.masked`.
+    let masked: Bool
 
     struct DataPoint: Identifiable, Equatable {
         let id = UUID()
@@ -24,5 +26,6 @@ struct LineChart: View {
                 .accessibilityValue(Text(format(point.y)))
         }
         .chartXAxis { AxisMarks(values: .automatic(desiredCount: 5)) { _ in AxisGridLine(); AxisValueLabel() } }
+        .maskedYAxis(masked)
     }
 }

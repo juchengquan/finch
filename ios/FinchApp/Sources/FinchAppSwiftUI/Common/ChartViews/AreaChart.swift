@@ -10,6 +10,8 @@ struct AreaChart: View {
     /// call sites today; the parameter is required so the first one to adopt it
     /// inherits the safe behaviour rather than copying the old raw formatting.
     let format: (Double) -> String
+    /// Privacy mode — see `BarChart.masked`.
+    let masked: Bool
 
     struct DataPoint: Identifiable, Equatable {
         let id = UUID()
@@ -27,5 +29,6 @@ struct AreaChart: View {
                 .accessibilityLabel(Text(point.x))
                 .accessibilityValue(Text(format(point.y)))
         }
+        .maskedYAxis(masked)
     }
 }

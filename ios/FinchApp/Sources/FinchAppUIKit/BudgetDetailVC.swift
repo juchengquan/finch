@@ -177,7 +177,7 @@ final class BudgetDetailVC: UIViewController {
                                            value: p.used,
                                            color: (p.over ? Color.red : Color.green)
                                                .opacity(Self.barOpacity(p, selected: selected)))
-                    }, xLabel: "Cycle", yLabel: "Spent", format: self.store.displayMoneyBase,
+                    }, xLabel: "Cycle", yLabel: "Spent", format: self.store.displayMoneyBase, masked: self.store.privacyMode,
                        referenceLine: budget.amount,
                        onBarTap: { [weak self] i in
                         guard let self, i < points.count else { return }

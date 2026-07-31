@@ -10,6 +10,9 @@ struct BarChart: View {
     /// has to decide — these are money in the ledger's base currency, and the old
     /// `String(format: "%.0f", …)` spoke them unconverted and unmasked.
     let format: (Double) -> String
+    /// Privacy mode: masks the y-axis tick labels, which otherwise print the
+    /// exact scale the bars are drawn against. See `MaskedYAxis`.
+    let masked: Bool
     /// Optional dashed horizontal rule (e.g. a budget cap) drawn across the bars.
     var referenceLine: Double? = nil
     /// Tap a bar (its x-band) → the bar's index in `data`. Requires unique
@@ -37,6 +40,7 @@ struct BarChart: View {
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
             }
         }
+        .maskedYAxis(masked)
         .chartOverlay { proxy in
             if let onBarTap {
                 GeometryReader { geo in
