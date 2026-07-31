@@ -88,6 +88,10 @@ final class ActivityFeedVC: UIViewController {
     private var previewURL: URL?
     @AppStorage("finch.feed.groupByMonth") private var groupByMonth = true
     private var cancellables = Set<AnyCancellable>()
+    /// Pings `TabChromeVC` when multi-select toggles, so the hosted floating `+`
+    /// gets out of the bulk-action bar's way. The SwiftUI screen did this with a
+    /// `SelectionActiveKey` preference, which a UIKit screen cannot publish.
+    private let fabState = PassthroughSubject<Void, Never>()
 
     private var collectionView: UICollectionView!
     private var dataSource: UICollectionViewDiffableDataSource<SectionID, String>!
@@ -516,6 +520,7 @@ final class ActivityFeedVC: UIViewController {
         selected.removeAll()
         configureToolbar()
         applySnapshot()
+        fabState.send()
     }
 
     private func bulkConfirm() {
@@ -745,4 +750,12 @@ private struct FilterSheetHost: View {
             .onChange(of: filter) { _, new in onChange(new) }
     }
 }
+/// The converted feed hides the floating `+` during multi-select, where the
+/// bulk-action bar occupies the same corner. The SwiftUI screen publishes
+/// `SelectionActiveKey`; this is the native equivalent.
+extension ActivityFeedVC: AddTxFABProviding {
+    var hidesAddTxFAB: Bool { isSelecting }
+    var addTxFABStateDidChange: AnyPublisher<Void, Never> { fabState.eraseToAnyPublisher() }
+}
+
 #endif

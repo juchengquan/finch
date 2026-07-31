@@ -241,6 +241,9 @@ struct AddTransactionFAB: ViewModifier {
                         .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
                 }
                 .accessibilityLabel("Add Transaction")
+                // Distinguishes the floating button from a screen's toolbar `+`,
+                // which carries the same label. UI tests assert on this.
+                .accessibilityIdentifier("fab.addTransaction")
                 // Publishes the button's own rect so a UIKit host can pass every touch
                 // that is NOT on it through to the native content underneath — see
                 // FABFrameKey. Measured before the paddings, so it is the 56×56 button.
