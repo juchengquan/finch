@@ -101,10 +101,15 @@ else
 fi
 
 # --- 5. i18n guard 2: extracted keys current ---------------------------------
-# Export to the path xliff-keys.ts reads, exactly as CI does. Compares the KEY
-# SET (what matters is whether a string is missing, not byte-identical
-# formatting) and keeps the fresh extraction in /tmp, so a failure never mutates
-# your working tree.
+# Compares the KEY SET (what matters is whether a string is missing, not
+# byte-identical formatting) and keeps the fresh extraction in a run-scoped temp
+# dir, so a failure never mutates your working tree.
+#
+# The export goes to a RUN-SCOPED directory, not a fixed one. It used to go to
+# /tmp/finch-loc, which every worktree on the machine shared: when two sessions
+# ran this script at once, one export died on the DerivedData lock and
+# xliff-keys.ts parsed the xliff the other branch had left there, reporting keys
+# as missing that were present. `mktemp -d` makes that collision impossible.
 step "i18n - UIKit strings are localized"
 if python3 "$REPO/ios/scripts/uikit-strings-guard.py"; then
   pass "no bare UIKit strings"
@@ -113,21 +118,25 @@ else
 fi
 
 step "i18n - extracted keys are current"
-rm -rf /tmp/finch-loc
+LOC_DIR="$(mktemp -d "${TMPDIR:-/tmp}/finch-loc.XXXXXX")"
+KEYS_FRESH="$LOC_DIR/keys-fresh.json"
+trap 'rm -rf "$LOC_DIR"' EXIT
 if xcodebuild -exportLocalizations -project FinchApp.xcodeproj -scheme FinchApp \
-     -localizationPath /tmp/finch-loc -exportLanguage zh-Hans \
+     -localizationPath "$LOC_DIR" -exportLanguage zh-Hans \
      -derivedDataPath /tmp/dd-cilocal -quiet \
      -skipPackagePluginValidation -skipMacroValidation \
      COMPILER_INDEX_STORE_ENABLE=NO >/tmp/ci-local-loc.log 2>&1 \
-   && bun run scripts/xliff-keys.ts > /tmp/keys-fresh.json 2>/dev/null; then
-  if python3 "$REPO/ios/scripts/ci-local-keydiff.py"; then
+   && bun run scripts/xliff-keys.ts "$LOC_DIR" > "$KEYS_FRESH" 2>>/tmp/ci-local-loc.log; then
+  if python3 "$REPO/ios/scripts/ci-local-keydiff.py" "$KEYS_FRESH"; then
     pass "key set matches"
   else
     fail "extracted-keys.json out of date"
   fi
 else
   fail "exportLocalizations"
-  grep -E "error:" /tmp/ci-local-loc.log | head -5
+  # `xliff-keys:` catches this script's own diagnostics (stale/missing xliff),
+  # which do not say "error:" and were otherwise swallowed.
+  grep -E "error:|^xliff-keys:|^  " /tmp/ci-local-loc.log | head -8
 fi
 
 # --- 6. the other platforms --------------------------------------------------
