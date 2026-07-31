@@ -6,6 +6,10 @@ struct BarChart: View {
     let data: [DataPoint]
     let xLabel: String
     let yLabel: String
+    /// Formats a value for VoiceOver. Required, not defaulted, so every call site
+    /// has to decide — these are money in the ledger's base currency, and the old
+    /// `String(format: "%.0f", …)` spoke them unconverted and unmasked.
+    let format: (Double) -> String
     /// Optional dashed horizontal rule (e.g. a budget cap) drawn across the bars.
     var referenceLine: Double? = nil
     /// Tap a bar (its x-band) → the bar's index in `data`. Requires unique
@@ -25,7 +29,7 @@ struct BarChart: View {
                 BarMark(x: .value(xLabel, point.label), y: .value(yLabel, point.value))
                     .foregroundStyle(point.color)
                     .accessibilityLabel(Text(point.label))
-                    .accessibilityValue(Text(String(format: "%.0f", point.value)))
+                    .accessibilityValue(Text(format(point.value)))
             }
             if let referenceLine {
                 RuleMark(y: .value(yLabel, referenceLine))

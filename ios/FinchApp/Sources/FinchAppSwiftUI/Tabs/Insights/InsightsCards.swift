@@ -104,7 +104,7 @@ struct MonthlySpendingCard: View {
         let pts = Selectors.monthlySpending(store.txns, store.activeLedgerId, endMonth, months)
         Card(title: "Monthly spending") {
             BarChart(data: pts.map { BarChart.DataPoint(label: $0.m, value: $0.v, color: .blue) },
-                     xLabel: "Month", yLabel: "Spent")
+                     xLabel: "Month", yLabel: "Spent", format: store.displayMoneyBase)
                 .frame(height: 180)
         }
     }
@@ -118,7 +118,7 @@ struct NetWorthCard: View {
         let pts = Selectors.netWorthByMonth(store.txns, store.accounts, store.activeLedgerId, endMonth, months)
         Card(title: "Net worth") {
             LineChart(data: pts.map { LineChart.DataPoint(x: $0.m, y: $0.v) },
-                      xLabel: "Month", yLabel: "Net worth")
+                      xLabel: "Month", yLabel: "Net worth", format: store.displayMoneyBase)
                 .frame(height: 180)
         }
     }
@@ -138,7 +138,8 @@ struct CategoryBreakdownCard: View {
             if data.isEmpty {
                 Text("No spending this month").font(.caption).foregroundStyle(.secondary)
             } else {
-                Donut(data: data, centerLabel: "This month").frame(height: 200)
+                Donut(data: data, centerLabel: "This month", format: store.displayMoneyBase)
+                    .frame(height: 200)
             }
         }
     }
@@ -324,7 +325,7 @@ struct CashflowCard: View {
                 Text("No data").font(.caption).foregroundStyle(.secondary)
             } else {
                 LineChart(data: pts.map { LineChart.DataPoint(x: $0.m, y: $0.inc - $0.exp) },
-                          xLabel: "Month", yLabel: "Net")
+                          xLabel: "Month", yLabel: "Net", format: store.displayMoneyBase)
                     .frame(height: 160)
             }
         }
