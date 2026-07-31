@@ -378,8 +378,12 @@ final class AccountDetailVC: UIViewController {
 
         var snap = NSDiffableDataSourceSnapshot<SectionID, String>()
         var headers: [SectionID: HeaderContent] = [:]
-        snap.appendSections([.balance])
-        snap.appendItems([Self.balanceID], toSection: .balance)
+        // On iOS 26 the balance lives in the navigation bar's subtitle instead — see
+        // updateTitleView — so the row would just repeat it.
+        if #unavailable(iOS 26.0) {
+            snap.appendSections([.balance])
+            snap.appendItems([Self.balanceID], toSection: .balance)
+        }
         snap.appendSections([.modePicker])
         snap.appendItems([Self.modePickerID], toSection: .modePicker)
 
@@ -480,6 +484,41 @@ final class AccountDetailVC: UIViewController {
     private func updateTitleView() {
         guard let account else { return }
         title = account.name ?? String(localized: "Account")
+        // iOS 26 added `subtitle` / `largeSubtitle` (+ their view variants) to
+        // UINavigationItem, so the balance can finally sit WITH the name in the bar
+        // and still keep a collapsing large title. That was impossible before: a
+        // custom `titleView` and a large title cannot share the bar, which is why
+        // the balance was moved into a content row in the first place. On 26+ the
+        // row is dropped (see applySnapshot) and the bar carries it instead; below
+        // 26 nothing changes.
+        if #available(iOS 26.0, *) {
+            // Both slots are filled: `subtitleView` is what actually renders here,
+            // because a subtitle puts this bar in its compact presentation; the
+            // large slot is set too so the balance survives if the bar ever expands.
+            navigationItem.subtitleView = balanceBarView(account, compact: true)
+            navigationItem.largeSubtitleView = balanceBarView(account, compact: false)
+        }
+    }
+
+    /// Balance + reconcile seal as a bar subtitle. Two instances are built because a
+    /// view cannot occupy both the collapsed and expanded slots at once.
+    private func balanceBarView(_ account: AccountRow, compact: Bool) -> UIView {
+        let label = UILabel()
+        label.text = store.displayMoney(account.balance, from: account.currency)
+        label.font = .preferredFont(forTextStyle: compact ? .caption1 : .subheadline)
+        label.textColor = .secondaryLabel
+        label.adjustsFontForContentSizeCategory = true
+        guard let seal = titleSeal(account) else { return label }
+        let mark = UIImageView(image: UIImage(systemName: "checkmark.seal.fill"))
+        mark.tintColor = seal
+        mark.contentMode = .scaleAspectFit
+        mark.preferredSymbolConfiguration = UIImage.SymbolConfiguration(
+            textStyle: compact ? .caption1 : .subheadline)
+        let stack = UIStackView(arrangedSubviews: [label, mark])
+        stack.axis = .horizontal
+        stack.spacing = 4
+        stack.alignment = .center
+        return stack
     }
 
     /// The balance row: amount, with the reconcile seal beside it.
