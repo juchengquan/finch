@@ -183,7 +183,8 @@ struct BudgetDetailView: View {
                                        value: p.used,
                                        color: (p.over ? Color.red : Color.green)
                                            .opacity(barOpacity(p, selected: selected)))
-                }, xLabel: "Cycle", yLabel: "Spent", referenceLine: b.amount,
+                }, xLabel: "Cycle", yLabel: "Spent", format: store.displayMoneyBase, masked: store.privacyMode,
+                   referenceLine: b.amount,
                    onBarTap: { i in
                     guard i < pts.count else { return }
                     let p = pts[i]
