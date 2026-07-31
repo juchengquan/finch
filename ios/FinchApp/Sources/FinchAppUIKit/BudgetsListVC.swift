@@ -179,8 +179,6 @@ final class BudgetsListVC: UIViewController {
         let cell = UICollectionView.CellRegistration<UICollectionViewListCell, String> { [weak self] cell, _, id in
             guard let self else { return }
             cell.accessories = []
-            cell.accessibilityValue = nil
-            cell.accessibilityHint = nil
 
             switch id {
             case Self.summaryID:
@@ -231,7 +229,16 @@ final class BudgetsListVC: UIViewController {
             }
             guard let budget = self.budgetByID[id] else { return }
             cell.contentConfiguration = UIHostingConfiguration {
-                BudgetRowView(budget: budget).environmentObject(self.store)
+                BudgetRowView(budget: budget)
+                    .environmentObject(self.store)
+                    // The SwiftUI row was a `Button`, so VoiceOver read it as ONE element
+                    // ("Health, $72.90 / $100.00, 73%, · 1 days left"). Hosting the same
+                    // view in a cell without this exposes its four texts separately,
+                    // which is four swipes per budget instead of one. Combining here
+                    // rather than setting `cell.accessibilityLabel` keeps the wording
+                    // derived from the row itself, with nothing to drift.
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isButton)
             }
         }
 
@@ -258,11 +265,13 @@ final class BudgetsListVC: UIViewController {
                 Spacer()
                 Text(verbatim: subtotal).foregroundStyle(.secondary)
             }
+            // One element with the collapse state, as the SwiftUI header `Button` was.
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityValue(collapsed ? String(localized: "Collapsed") : String(localized: "Expanded"))
+            .accessibilityHint(collapsed ? String(localized: "Double tap to expand")
+                                         : String(localized: "Double tap to collapse"))
         }
-        cell.accessibilityValue = collapsed ? String(localized: "Collapsed") : String(localized: "Expanded")
-        cell.accessibilityHint = collapsed
-            ? String(localized: "Double tap to expand")
-            : String(localized: "Double tap to collapse")
     }
 
     /// A row in the flat reorder editor: a group header (collapsible, drags as a block)
