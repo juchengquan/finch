@@ -45,6 +45,16 @@ final class ActivityFeedVC: UIViewController {
         case all          // group-by-month off: one flat section
         case empty
         case loadMore
+
+        /// The picker, the chip row and the grid are bare rows in the SwiftUI
+        /// screen — no `Section` header. Reserving header space for them (which a
+        /// uniform `.supplementary` config does) added ~17pt above the picker.
+        var wantsHeader: Bool {
+            switch self {
+            case .modePicker, .savedSearch, .calendar, .loadMore: return false
+            default: return true
+            }
+        }
     }
 
     private enum ViewMode { case list, calendar }
@@ -117,17 +127,24 @@ final class ActivityFeedVC: UIViewController {
     // MARK: Collection view
 
     private func configureCollectionView() {
-        var config = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
-        config.headerMode = .supplementary
-        config.leadingSwipeActionsConfigurationProvider = { [weak self] ip in
-            self?.rowActions(at: ip).map { $0.actions.leading($0.tx) }
+        // Per-section header mode, as AccountDetailVC does — a single
+        // `.list(using:)` config applies `.supplementary` to every section, which
+        // reserves header space above the bare rows. `sectionIDs` is set before each
+        // apply, so the provider can ask what kind of section it is laying out.
+        let layout = UICollectionViewCompositionalLayout { [weak self] index, env in
+            var config = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
+            let kind: SectionID? = self?.sectionIDs.indices.contains(index) == true
+                ? self?.sectionIDs[index] : nil
+            config.headerMode = (kind?.wantsHeader ?? true) ? .supplementary : .none
+            config.leadingSwipeActionsConfigurationProvider = { [weak self] ip in
+                self?.rowActions(at: ip).map { $0.actions.leading($0.tx) }
+            }
+            config.trailingSwipeActionsConfigurationProvider = { [weak self] ip in
+                self?.rowActions(at: ip).map { $0.actions.trailing($0.tx) }
+            }
+            return NSCollectionLayoutSection.list(using: config, layoutEnvironment: env)
         }
-        config.trailingSwipeActionsConfigurationProvider = { [weak self] ip in
-            self?.rowActions(at: ip).map { $0.actions.trailing($0.tx) }
-        }
-        collectionView = UICollectionView(
-            frame: .zero,
-            collectionViewLayout: UICollectionViewCompositionalLayout.list(using: config))
+        collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         collectionView.delegate = self
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(collectionView)

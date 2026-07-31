@@ -121,6 +121,10 @@ struct SettingsAppearanceView: View {
                 Text("The floating + for quickly adding a transaction on iPhone. The toolbar and \u{2318}N ways to add are always available.")
             }
         }
-        .navigationTitle("Appearance & Language")
+        // "Appearance & Language" does not fit a large title — it rendered as
+        // "Appearance & Langua…". The Settings row keeps the full name; the screen
+        // itself only needs the short one. (The UIKit twin does the same via
+        // navigationItem.largeTitle.)
+        .navigationTitle("Appearance")
     }
 }

@@ -257,6 +257,12 @@ final class BudgetDetailVC: UIViewController {
                 var cfg = cell.defaultContentConfiguration()
                 cfg.text = tx.merchant
                 cfg.secondaryText = tx.date
+                // A default list cell is taller than the SwiftUI List row it stands
+                // in for. Tuned against the measured reference: the SwiftUI row is
+                // ~66pt, the untouched default was ~72pt, and 8pt margins overshot
+                // to ~58pt. Same kind of tuning TxRowCell does for the hosted rows.
+                cfg.directionalLayoutMargins.top = 12
+                cfg.directionalLayoutMargins.bottom = 12
                 cell.contentConfiguration = cfg
                 let amount = UILabel()
                 amount.text = self.store.displayMoneyBase(tx.amount)

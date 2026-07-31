@@ -112,21 +112,16 @@ final class AccountDetailVC: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        // Large, collapsing on scroll. The balance moved into a content row (see
-        // applySnapshot) because a large title and a custom `titleView` cannot share
-        // the bar — the bar renders the titleView, so the name would appear twice
-        // while expanded and the large title would have nowhere to collapse to.
-        if #available(iOS 26.0, *) {
-            // Inline, deterministically. The bar carries the balance as a subtitle
-            // (see updateTitleView) and a subtitle puts the bar in its COMPACT
-            // presentation — but `.always` fights that: the screen entered with a
-            // small title and grew to a large one on the first scroll, which is
-            // backwards. `.never` settles it, and matches the SwiftUI screen, which
-            // has always shown name-over-balance inline.
-            navigationItem.largeTitleDisplayMode = .never
-        } else {
-            navigationItem.largeTitleDisplayMode = .always
-        }
+        // Inline, with the balance in a two-line `titleView` (see updateTitleView) —
+        // the same thing the SwiftUI screen has always shown, now on every OS
+        // version rather than only iOS 26.
+        //
+        // The old note here said a large title and a custom titleView cannot share
+        // the bar, which is why the balance had been moved into a content card. True
+        // — but it only bites while the title is LARGE. Inline, the titleView is the
+        // ordinary way to do this and needs no new API, so the iOS 26 subtitle work
+        // is gone along with its availability fork.
+        navigationItem.largeTitleDisplayMode = .never
         configureCollectionView()
         configureDataSource()
         configureSearch()
@@ -391,12 +386,8 @@ final class AccountDetailVC: UIViewController {
 
         var snap = NSDiffableDataSourceSnapshot<SectionID, String>()
         var headers: [SectionID: HeaderContent] = [:]
-        // On iOS 26 the balance lives in the navigation bar's subtitle instead — see
-        // updateTitleView — so the row would just repeat it.
-        if #unavailable(iOS 26.0) {
-            snap.appendSections([.balance])
-            snap.appendItems([Self.balanceID], toSection: .balance)
-        }
+        // No balance row: the bar's titleView carries it (see updateTitleView), so
+        // this would only repeat it.
         snap.appendSections([.modePicker])
         snap.appendItems([Self.modePickerID], toSection: .modePicker)
 
@@ -496,21 +487,17 @@ final class AccountDetailVC: UIViewController {
     /// ("always visible while scrolled") was protecting.
     private func updateTitleView() {
         guard let account else { return }
-        title = account.name ?? String(localized: "Account")
-        // iOS 26 added `subtitle` / `largeSubtitle` (+ their view variants) to
-        // UINavigationItem, so the balance can finally sit WITH the name in the bar
-        // and still keep a collapsing large title. That was impossible before: a
-        // custom `titleView` and a large title cannot share the bar, which is why
-        // the balance was moved into a content row in the first place. On 26+ the
-        // row is dropped (see applySnapshot) and the bar carries it instead; below
-        // 26 nothing changes.
-        if #available(iOS 26.0, *) {
-            // Compact slot only. The large slot was also set at one point, but the
-            // bar is pinned inline (see viewDidLoad) so it never rendered — and
-            // while it did, its stack laid out wrong: the seal drifted to the
-            // middle of the bar instead of sitting beside the amount.
-            navigationItem.subtitleView = balanceBarView(account)
-        }
+        let name = account.name ?? String(localized: "Account")
+        title = name   // still needed: it is what a pushed screen's back button shows
+        let nameLabel = UILabel()
+        nameLabel.text = name
+        nameLabel.font = .preferredFont(forTextStyle: .headline)
+        nameLabel.adjustsFontForContentSizeCategory = true
+        let stack = UIStackView(arrangedSubviews: [nameLabel, balanceBarView(account)])
+        stack.axis = .vertical
+        stack.alignment = .center
+        stack.spacing = 0
+        navigationItem.titleView = stack
     }
 
     /// Balance + reconcile seal as the bar's subtitle.
