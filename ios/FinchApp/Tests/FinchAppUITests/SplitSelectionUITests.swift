@@ -11,23 +11,39 @@ import XCTest
 /// That matters beyond tidiness: Phase 3 is replacing the iPad shell with a
 /// `UISplitViewController`, and "does picking a row still fill the detail column" is the
 /// single behaviour most likely to break in a way nobody notices until they use an iPad.
-/// This is written against the SwiftUI shell so it captures the behaviour BEFORE the
-/// swap, which is the only way it can prove the swap preserved it.
-final class SplitSelectionUITests: XCTestCase {
+/// It was written against the SwiftUI shell so it captured the behaviour BEFORE the
+/// swap, which is the only way it could prove the swap preserved it. The swap has since
+/// happened for the Ledger, Budgets and Scheduled columns, and those converted screens
+/// now SHIP BY DEFAULT — so this class runs twice, like `NavigationUITests`.
+///
+/// **Runs twice.** The base is the shipping default (`-uikitActivity YES`, native
+/// columns); `SplitSelectionHostedUITests` below re-runs everything with `NO`. Both pass
+/// the flag explicitly: inheriting the default would silently drop the hosted path, and
+/// the hosted path is the fallback nobody looks at — exactly the kind of thing that rots
+/// unwatched. `NavigationUITests` covers that fallback on iPhone; this is the only thing
+/// covering it at regular width.
+class SplitSelectionUITests: XCTestCase {
 
     var app: XCUIApplication!
+
+    /// Overridden by `SplitSelectionHostedUITests`. Defaults to what ships.
+    var uikitActivity: Bool { true }
+
+    /// Prefixes assertion messages, so a failure says which implementation broke.
+    var mode: String { uikitActivity ? "uikit" : "hosted" }
 
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchArguments = ["-resetStore", "YES", "-disableNotifications", "YES"]
+        app.launchArguments = ["-resetStore", "YES", "-disableNotifications", "YES",
+                               "-uikitActivity", uikitActivity ? "YES" : "NO"]
         app.launch()
-        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 30), "app did not reach foreground")
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 30), "[\(mode)] app did not reach foreground")
 
         // Regular width only. An iPhone destination has no detail column to fill, and
         // asserting one exists there would fail for the wrong reason.
         let width = app.windows.firstMatch.frame.width
-        try XCTSkipUnless(width >= 700, "regular width only — got \(width)pt")
+        try XCTSkipUnless(width >= 700, "[\(mode)] regular width only — got \(width)pt")
     }
 
     override func tearDownWithError() throws {
@@ -72,20 +88,20 @@ final class SplitSelectionUITests: XCTestCase {
         // column, so its presence proves the column exists and nothing is selected yet.
         let placeholder = app.staticTexts["Select an account"]
         XCTAssertTrue(placeholder.waitForExistence(timeout: 30),
-                      "no detail placeholder — this doesn't look like the split shell")
+                      "[\(mode)] no detail placeholder — this doesn't look like the split shell")
 
         let cell = row(labelled: "Checking")
-        XCTAssertTrue(cell.waitForExistence(timeout: 30), "no 'Checking' row in the list column")
+        XCTAssertTrue(cell.waitForExistence(timeout: 30), "[\(mode)] no 'Checking' row in the list column")
         cell.tap()
 
         XCTAssertTrue(placeholder.waitForNonExistence(timeout: 15),
-                      "placeholder still showing — the selection never reached the detail column")
+                      "[\(mode)] placeholder still showing — the selection never reached the detail column")
         // And the column actually rendered the account, rather than merely going blank.
         XCTAssertTrue(app.staticTexts["Transactions"].waitForExistence(timeout: 15),
-                      "detail column has no Transactions section — it cleared but didn't render the account")
+                      "[\(mode)] detail column has no Transactions section — it cleared but didn't render the account")
 
         let shot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
-        shot.name = "iPad-account-selected"
+        shot.name = "iPad-account-selected-\(mode)"
         shot.lifetime = .keepAlways
         add(shot)
     }
@@ -94,17 +110,24 @@ final class SplitSelectionUITests: XCTestCase {
     /// should come up on its own placeholder, not the previously selected account.
     func testSwitchingSectionResetsTheDetailColumn() throws {
         let cell = row(labelled: "Checking")
-        XCTAssertTrue(cell.waitForExistence(timeout: 30), "no 'Checking' row in the list column")
+        XCTAssertTrue(cell.waitForExistence(timeout: 30), "[\(mode)] no 'Checking' row in the list column")
         cell.tap()
         XCTAssertTrue(app.staticTexts["Select an account"].waitForNonExistence(timeout: 15),
-                      "selection never reached the detail column")
+                      "[\(mode)] selection never reached the detail column")
 
         revealSidebarIfNeeded()
         let target = row(labelled: "Budgets")
-        XCTAssertTrue(target.waitForExistence(timeout: 15), "no Budgets entry in the sidebar")
+        XCTAssertTrue(target.waitForExistence(timeout: 15), "[\(mode)] no Budgets entry in the sidebar")
         target.tap()
 
         XCTAssertTrue(app.staticTexts["Select a budget"].waitForExistence(timeout: 15),
-                      "Budgets didn't come up on its own placeholder — a stale detail carried across")
+                      "[\(mode)] Budgets didn't come up on its own placeholder — a stale detail carried across")
     }
+}
+
+/// Every test above, re-run against the hosted SwiftUI columns — the fallback that
+/// `-uikitActivity NO` selects. One flag, double the coverage, same as
+/// `NavigationUIKitUITests` does for the compact shell.
+final class SplitSelectionHostedUITests: SplitSelectionUITests {
+    override var uikitActivity: Bool { false }
 }
