@@ -289,7 +289,19 @@ more given what Phase 2's conversions actually cost.
 > This pulls Phase 4's tab-root work into 3b rather than leaving it optional, and
 > makes each remaining step far larger than "replace a column". Re-estimate before
 > starting.
-2. **Scheduled** — next simplest.
+2. **Scheduled** — next simplest, but NOT small. Scoped 2026-07-31:
+   `ScheduledTab` is 329 lines + `ScheduledDetailView` 120. It carries a list/calendar
+   mode picker, month-grouped template sections (with an "Ended" group), a detected
+   recurring-charges section, search over names, three distinct empty states, and a
+   no-accounts branch that replaces the whole screen. In selection mode a row — and a
+   calendar occurrence — sets the selection instead of opening the edit sheet.
+
+   **Template to copy: `AccountDetailVC`.** It already solves this exact shape — a
+   hosted mode-picker leaf, `MonthCashCalendar` hosted as a leaf beside a native
+   month-grouped list, and per-section headers via a compositional section provider.
+   Do not design the calendar handling again; lift it.
+
+   `kbSel` is macOS keyboard selection and has no iOS counterpart — drop it.
 3. **Budgets** — `BudgetDetailVC` already exists for the detail side.
 4. **Accounts** — last, and by far the biggest. `AccountsTab` is ~570 lines: collapsible
    groups, search, drag reorder, swipe actions on two edges, context menus. Budget it
