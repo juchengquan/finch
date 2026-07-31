@@ -45,6 +45,16 @@ final class SplitShellVC: UIViewController {
     /// its highlight can follow a selection changed from elsewhere (a deep link, or
     /// the detail column deleting the ledger it was showing).
     private weak var ledgerList: LedgersVC?
+    /// The native budget list, when it is the current supplementary column — held so its
+    /// highlight can follow a selection changed from elsewhere (a `budget:` deep link, or
+    /// a ledger switch clearing it).
+    private weak var budgetList: BudgetsListVC?
+
+    /// Same gate `RootTabBarController.uikitNavTabs` uses, so the compact root and the
+    /// regular-width column convert together or not at all.
+    private static var uikitBudgets: Bool {
+        UserDefaults.standard.bool(forKey: "uikitActivity")
+    }
 
     private enum Arity { case three, two }
 
@@ -91,6 +101,19 @@ final class SplitShellVC: UIViewController {
                 guard let self, self.router.selectedTab == .ledger, let child = self.child else { return }
                 self.ledgerList?.selectedID = id
                 self.installLedgerDetail(into: child)
+            }
+            .store(in: &cancellables)
+
+        // Budget selection changed from somewhere other than the list — a ledger switch
+        // clearing it, or the detail column deleting what it was showing. The hosted
+        // detail column re-reads `selection` on its own; only the native list's highlight
+        // has to be told.
+        selection.$budget
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] id in
+                guard let self, self.router.selectedTab == .budgets else { return }
+                self.budgetList?.selectedID = id
             }
             .store(in: &cancellables)
 
@@ -172,6 +195,24 @@ final class SplitShellVC: UIViewController {
             return
         }
         ledgerList = nil
+        // Budgets is the second column converted (Phase 3b step 2). The SAME
+        // `BudgetsListVC` is the compact tab root, so there is one list serving both
+        // widths rather than a native column beside a hosted iPhone screen. Its detail
+        // stays hosted: at regular width the detail is a sibling COLUMN, not a push, so
+        // a hosted SwiftUI scroll view there cannot shadow.
+        //
+        // Gated on the same `-uikitActivity YES` flag as the tab root, so the app is
+        // never half-converted — flag off means SwiftUI at both widths, which is what
+        // `NavigationUITests` exercises as the control implementation.
+        if tab == .budgets, Self.uikitBudgets {
+            let list = BudgetsListVC(onSelect: { [weak self] id in self?.selection.budget = id })
+            list.selectedID = selection.budget
+            budgetList = list
+            svc.setViewController(UINavigationController(rootViewController: list), for: .supplementary)
+            svc.setViewController(host(SplitDetailColumn(tab: tab, selection: selection)), for: .secondary)
+            return
+        }
+        budgetList = nil
         svc.setViewController(host(SplitListColumn(tab: tab, selection: selection)), for: .supplementary)
         svc.setViewController(host(SplitDetailColumn(tab: tab, selection: selection)), for: .secondary)
     }

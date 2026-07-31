@@ -512,7 +512,11 @@ struct BudgetRowView: View {
 
 /// Add Group — a medium-detent bottom sheet (same element family as Add Budget):
 /// name + the shared 8-swatch palette. Creates via createBudgetGroup.
-private struct AddGroupSheet: View {
+///
+/// Internal rather than private because `BudgetsListVC` presents the same sheet: the
+/// list is UIKit now, but the write form stays SwiftUI so the Mac keeps rendering one
+/// implementation of it.
+struct AddGroupSheet: View {
     @EnvironmentObject private var store: FinchStore
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
