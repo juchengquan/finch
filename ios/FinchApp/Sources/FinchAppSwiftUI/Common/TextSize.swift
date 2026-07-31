@@ -1,10 +1,13 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 /// The in-app Dynamic Type override (Settings › Appearance & Language › Text
-/// size). System mode (default) leaves the environment untouched — including
-/// accessibility sizes; a custom step pins one of the seven standard sizes.
+/// size). One of the seven standard sizes is ALWAYS pinned — there is no
+/// "follow the system" mode, so the OS accessibility sizes (AX1–AX5) are not
+/// adopted inside finch; `.xxxLarge` is the ceiling.
 enum TextSize {
-    static let systemKey = "finch.textSize.system"
     static let stepKey = "finch.textSize.step"
     static let defaultStep = 3   // .large — the iOS default
 
@@ -14,21 +17,89 @@ enum TextSize {
     static func size(forStep step: Int) -> DynamicTypeSize {
         steps[min(max(step, 0), steps.count - 1)]
     }
+
+    // MARK: Migration off the removed "Use system size" toggle
+
+    /// Defaults key of the toggle that used to sit above the slider. Nothing but
+    /// the migration below reads it.
+    static let legacySystemKey = "finch.textSize.system"
+
+    /// Seeds the slider once for anyone upgrading from the toggle.
+    ///
+    /// While the toggle was on — its default — the slider had no effect, so those
+    /// users have no step of their own on record. Dropping them on `defaultStep`
+    /// would visibly SHRINK the app for anyone who had raised their system size,
+    /// so seed from the size they were actually reading. Clearing the legacy key
+    /// is what makes this run at most once.
+    static func migrateLegacySystemPreference(systemStep: Int, defaults: UserDefaults = .standard) {
+        let wasFollowingSystem = defaults.object(forKey: legacySystemKey) as? Bool
+        // Already migrated: the legacy key is gone and a step is on record.
+        if wasFollowingSystem == nil, defaults.object(forKey: stepKey) != nil { return }
+        if wasFollowingSystem ?? true {
+            defaults.set(min(max(systemStep, 0), steps.count - 1), forKey: stepKey)
+        } else if defaults.object(forKey: stepKey) == nil {
+            defaults.set(defaultStep, forKey: stepKey)
+        }
+        defaults.removeObject(forKey: legacySystemKey)
+    }
+
+    #if os(iOS)
+    /// The device's system Dynamic Type setting, as a slider step.
+    @MainActor static var currentSystemStep: Int {
+        step(forCategory: UIApplication.shared.preferredContentSizeCategory)
+    }
+
+    /// A step as a UIKit content-size category — the inverse of `step(forCategory:)`.
+    ///
+    /// The iOS shell applies this as a WINDOW-LEVEL trait override, which is what
+    /// carries the preference to UIKit labels, to converted screens pushed onto a
+    /// nav controller, to presented covers, and to hosted SwiftUI alike. Attaching a
+    /// SwiftUI `dynamicTypeSize` modifier per host instead reaches only that host —
+    /// which is how Appearance & Language, every converted VC, and the `-legacyShell`
+    /// shell all ended up ignoring the setting.
+    static func category(forStep step: Int) -> UIContentSizeCategory {
+        switch min(max(step, 0), steps.count - 1) {
+        case 0:  return .extraSmall
+        case 1:  return .small
+        case 2:  return .medium
+        case 3:  return .large
+        case 4:  return .extraLarge
+        case 5:  return .extraExtraLarge
+        default: return .extraExtraExtraLarge
+        }
+    }
+
+    /// Accessibility categories clamp to the largest step the slider can express —
+    /// the slider does not reach them (see the type comment).
+    static func step(forCategory category: UIContentSizeCategory) -> Int {
+        switch category {
+        case .extraSmall:            return 0
+        case .small:                 return 1
+        case .medium:                return 2
+        case .large:                 return 3
+        case .extraLarge:            return 4
+        case .extraExtraLarge:       return 5
+        case .extraExtraExtraLarge:  return 6
+        default:                     return category.isAccessibilityCategory ? steps.count - 1 : defaultStep
+        }
+    }
+    #else
+    /// macOS has no Dynamic Type setting to inherit.
+    @MainActor static var currentSystemStep: Int { defaultStep }
+    #endif
 }
 
 /// Root modifier. Uses `transformEnvironment` (a SINGLE, always-same view type)
-/// rather than an `if useSystem { … } else { … }` branch: a @ViewBuilder branch
-/// is a `_ConditionalContent` whose two arms have DIFFERENT identity, so toggling
-/// the switch tore down and rebuilt the whole subtree — including the shell's
-/// NavigationStack, which reset its path and popped the user back to the
-/// Settings root. transformEnvironment keeps identity stable. In system mode the
-/// closure leaves the inherited OS value untouched (incl. accessibility sizes).
+/// rather than an `if … else` @ViewBuilder branch: a branch is a
+/// `_ConditionalContent` whose two arms have DIFFERENT identity, so changing the
+/// setting tore down and rebuilt the whole subtree — including the shell's
+/// NavigationStack, which reset its path and popped the user back to the Settings
+/// root. transformEnvironment keeps identity stable.
 struct TextSizeModifier: ViewModifier {
-    let useSystem: Bool
     let step: Int
     func body(content: Content) -> some View {
         content.transformEnvironment(\.dynamicTypeSize) { size in
-            if !useSystem { size = TextSize.size(forStep: step) }
+            size = TextSize.size(forStep: step)
         }
     }
 }

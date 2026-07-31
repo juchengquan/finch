@@ -2847,16 +2847,6 @@
         }
       }
     },
-    "Follows the system Text Size setting.": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "跟随系统文字大小设置。"
-          }
-        }
-      }
-    },
     "Force import (skip audit — iOS only)": {
       "localizations": {
         "zh-Hans": {
@@ -6695,16 +6685,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "已更新 %lld 条汇率"
-          }
-        }
-      }
-    },
-    "Use system size": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "使用系统大小"
           }
         }
       }

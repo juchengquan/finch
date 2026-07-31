@@ -196,11 +196,12 @@ final class SplitShellVC: UIViewController {
     /// Host a column, re-attaching the environment. Hosting controllers do NOT inherit
     /// environment objects from anywhere — the same trap that crashed
     /// `BackupSyncSettingsVC` in Phase 2 — so every hosted column re-declares them.
+    /// (Text size is the exception: it is a window-level trait override, which every
+    /// host DOES inherit — see `MainSceneDelegate.applyTextSizePreference`.)
     private func host(_ view: some View) -> UIViewController {
         UIHostingController(rootView:
             view
                 .finchSectionSpacing()
-                .modifier(AppTextSize())
                 .environmentObject(store)
                 .environmentObject(router)
                 .environmentObject(gate)
