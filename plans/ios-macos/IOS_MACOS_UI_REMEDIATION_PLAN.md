@@ -1,5 +1,11 @@
 # iOS / macOS — UI build-out remediation plan (2026-06-14)
 
+> ## ⚠️ HISTORICAL — a 2026-06-14 plan, delivered
+>
+> Everything prioritized here shipped. See `IOS_MACOS_INDEX.md` §0 for what was built
+> and when. Kept as the record of how the build-out was sequenced, not as open work —
+> the ✅ markers below are partial and were never fully back-filled.
+
 > Closes the gaps in `IOS_MACOS_UI_GAP_AUDIT.md`. Prioritized; Tier 1 first.
 
 ## Framing
