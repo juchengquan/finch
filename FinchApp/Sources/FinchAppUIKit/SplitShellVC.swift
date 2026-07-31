@@ -41,6 +41,10 @@ final class SplitShellVC: UIViewController {
     /// it actually crosses the boundary.
     private var currentArity: Arity?
     private var child: UISplitViewController?
+    /// The native ledger list, when it is the current supplementary column — held so
+    /// its highlight can follow a selection changed from elsewhere (a deep link, or
+    /// the detail column deleting the ledger it was showing).
+    private weak var ledgerList: LedgersVC?
 
     private enum Arity { case three, two }
 
@@ -75,6 +79,19 @@ final class SplitShellVC: UIViewController {
         store.$activeLedgerId
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.selection.clearForLedgerSwitch() }
+            .store(in: &cancellables)
+
+        // Ledger selection drives its detail column. Only meaningful while Ledger is
+        // the visible tab; `installLedgerDetail` no-ops elsewhere because the split
+        // view it targets has already been rebuilt for another tab.
+        selection.$ledger
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] id in
+                guard let self, self.router.selectedTab == .ledger, let child = self.child else { return }
+                self.ledgerList?.selectedID = id
+                self.installLedgerDetail(into: child)
+            }
             .store(in: &cancellables)
 
         // A `tx:` deep link (Spotlight / notification) at regular width selects the
@@ -143,8 +160,37 @@ final class SplitShellVC: UIViewController {
             svc.setViewController(host(TabContentColumn(tab: tab)), for: .secondary)
             return
         }
+        // Ledger is the first column converted (Phase 3b step 1): both its screens are
+        // native, so the column can be too. The rest still host their SwiftUI screens —
+        // that is the point of the seam, one column at a time.
+        if tab == .ledger {
+            let list = LedgersVC(onSelect: { [weak self] id in self?.selection.ledger = id })
+            list.selectedID = selection.ledger
+            ledgerList = list
+            svc.setViewController(UINavigationController(rootViewController: list), for: .supplementary)
+            installLedgerDetail(into: svc)
+            return
+        }
+        ledgerList = nil
         svc.setViewController(host(SplitListColumn(tab: tab, selection: selection)), for: .supplementary)
         svc.setViewController(host(SplitDetailColumn(tab: tab, selection: selection)), for: .secondary)
+    }
+
+    /// The ledger detail column: the selected ledger, or the placeholder.
+    ///
+    /// Swapped imperatively rather than by a SwiftUI `if`, because the column is now a
+    /// real `UIViewController` and a split view holds one per column.
+    private func installLedgerDetail(into svc: UISplitViewController) {
+        if let id = selection.ledger, store.ledgers.contains(where: { $0.id == id }) {
+            svc.setViewController(UINavigationController(rootViewController: LedgerDetailVC(ledgerId: id)),
+                                  for: .secondary)
+        } else {
+            // The same placeholder the SwiftUI column shows — a stale or deleted id
+            // must land here, not on a detail for a ledger that is gone.
+            svc.setViewController(host(DetailPlaceholder(systemImage: "books.vertical",
+                                                         label: "Select a ledger")),
+                                  for: .secondary)
+        }
     }
 
     /// Host a column, re-attaching the environment. Hosting controllers do NOT inherit
