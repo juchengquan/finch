@@ -11,7 +11,7 @@ incremental strangler migration, shipping continuously.
 > |---|---|
 > | **0 — source split** | **Done.** `.swift` counts: `FinchShared` 59 · `FinchAppSwiftUI` 93 · `FinchAppUIKit` 35 (iOS-only). |
 > | **1 — UIKit shell** | **Done, shipping by default on iPhone.** `project.yml` excludes `FinchApp.swift` from the iOS target; the phone boots `@main UIKitAppDelegate`. Not gated. |
-> | **2 — pushed destinations** | **Done, gated behind `-uikitActivity YES`.** 24 `*VC.swift` files. |
+> | **2 — pushed destinations** | **Done, and ON BY DEFAULT.** 24 `*VC.swift` files. The gate flipped from opt-in to opt-out: a plain build gets the converted screens, `-uikitActivity NO` reverts. The switch lives in `UIKitScreens` and is kept — not deleted — because `NavigationUITests` runs its suite once per implementation, and that dual run is the only thing asserting the two stay in step. |
 > | **3a — iPad container** | **Done (#646).** `UIKitShell.makeRoot` returns `SplitShellVC` at regular width and `RootTabBarController` at compact — both UIKit. The two shells no longer differ by framework. |
 > | **3b — native columns + tab roots** | **In progress.** Done: Ledger (#648), Budgets (#658), Scheduled (#660) — each converted at BOTH widths. Remaining: **Activity**, **Accounts**. |
 > | **4 — opportunistic** | Not started; optional by design. |

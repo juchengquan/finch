@@ -24,8 +24,10 @@ final class TabChromeUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
-        // `-uikitActivity YES` is what routes Budgets to its native root; without it
-        // this would test the hosted path and pass for free.
+        // `-uikitActivity YES` is what routes Budgets to its native root. It is the
+        // default now, so this is belt-and-braces rather than load-bearing — but it is
+        // kept explicit so the test still says which implementation it is asserting,
+        // and still targets it if the default ever moves again.
         app.launchArguments = ["-resetStore", "YES", "-disableNotifications", "YES", "-uikitActivity", "YES"]
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 30), "app did not reach foreground")
