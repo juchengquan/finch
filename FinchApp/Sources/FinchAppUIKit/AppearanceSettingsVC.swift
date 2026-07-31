@@ -6,8 +6,8 @@ import FinchCore
 /// Phase 2, screen 15: `SettingsAppearanceView` converted to UIKit.
 ///
 /// A settings FORM rather than a list — eight sections of toggles and pickers over
-/// `@AppStorage`, with two conditional rows (the text-size slider, the FAB position)
-/// and two footers whose text changes with state.
+/// `@AppStorage`, with one conditional row (the FAB position) and one footer whose
+/// text changes with state (the language relaunch nudge).
 ///
 /// Nothing here shadows: the screen is reached through a cover in the SwiftUI shell
 /// and a push here, and it was never a reproducer-B page. This conversion is about
@@ -42,7 +42,6 @@ final class AppearanceSettingsVC: UIViewController {
     }
 
     private static let appearancePickerID = "__appearance__"
-    private static let systemSizeID = "__system_size__"
     private static let sliderID = "__size_slider__"
     private static let sampleID = "__size_sample__"
     private static let languageID = "__language__"
@@ -60,7 +59,6 @@ final class AppearanceSettingsVC: UIViewController {
 
     // MARK: Preference accessors — absent key means the SwiftUI default.
 
-    private var useSystemTextSize: Bool { defaults.object(forKey: TextSize.systemKey) as? Bool ?? true }
     private var textSizeStep: Int { defaults.object(forKey: TextSize.stepKey) as? Int ?? TextSize.defaultStep }
     private var groupByMonth: Bool { defaults.object(forKey: Key.groupByMonth) as? Bool ?? true }
     private var relativeDates: Bool { defaults.object(forKey: Key.relativeDates) as? Bool ?? true }
@@ -125,12 +123,6 @@ final class AppearanceSettingsVC: UIViewController {
                         ForEach(AppearancePreference.allCases) { Text($0.label).tag($0.rawValue) }
                     }
                     .pickerStyle(.segmented)
-                }
-
-            case Self.systemSizeID:
-                self.configureToggleRow(cell, String(localized: "Use system size"),
-                                        isOn: self.useSystemTextSize) { [weak self] on in
-                    self?.write(TextSize.systemKey, on)
                 }
 
             case Self.sliderID:
@@ -239,9 +231,7 @@ final class AppearanceSettingsVC: UIViewController {
             var cfg = view.defaultContentConfiguration()
             switch self.sectionIDs[indexPath.section] {
             case .textSize:
-                cfg.text = self.useSystemTextSize
-                    ? String(localized: "Follows the system Text Size setting.")
-                    : String(localized: "Overrides the system text size inside finch.")
+                cfg.text = String(localized: "Overrides the system text size inside finch.")
             case .language:
                 // Turns orange once the language changed, to nudge the relaunch.
                 cfg.text = self.showRelaunchNote
@@ -308,8 +298,8 @@ final class AppearanceSettingsVC: UIViewController {
     //
     // Every one of these is a UserDefaults write, exactly as @AppStorage did. The
     // snapshot is reapplied afterwards because rows and footers here are derived from
-    // the preference — the slider and the FAB position row appear and disappear, and
-    // two footers change wording.
+    // the preference — the FAB position row appears and disappears, the type sample
+    // has to re-render at the slider's new step, and the language footer rewords.
 
     private func write(_ key: String, _ value: Any) {
         defaults.set(value, forKey: key)
@@ -332,9 +322,7 @@ final class AppearanceSettingsVC: UIViewController {
         snap.appendItems([Self.appearancePickerID], toSection: .theme)
 
         snap.appendSections([.textSize])
-        var sizeItems = [Self.systemSizeID]
-        if !useSystemTextSize { sizeItems += [Self.sliderID, Self.sampleID] }
-        snap.appendItems(sizeItems, toSection: .textSize)
+        snap.appendItems([Self.sliderID, Self.sampleID], toSection: .textSize)
 
         snap.appendSections([.language])
         snap.appendItems([Self.languageID], toSection: .language)
@@ -369,9 +357,8 @@ final class AppearanceSettingsVC: UIViewController {
     }
 
     /// Diffable will not re-render a supplementary view whose section identifier is
-    /// unchanged — the same trap the month headers hit on the account detail. Two of
-    /// these footers change wording (and one changes colour) with the preferences
-    /// above them.
+    /// unchanged — the same trap the month headers hit on the account detail. The
+    /// language footer changes wording and colour once the language is switched.
     private func refreshVisibleFooters() {
         let kind = UICollectionView.elementKindSectionFooter
         for indexPath in collectionView.indexPathsForVisibleSupplementaryElements(ofKind: kind) {
@@ -380,10 +367,6 @@ final class AppearanceSettingsVC: UIViewController {
                   sectionIDs.indices.contains(indexPath.section) else { continue }
             var cfg = view.defaultContentConfiguration()
             switch sectionIDs[indexPath.section] {
-            case .textSize:
-                cfg.text = useSystemTextSize
-                    ? String(localized: "Follows the system Text Size setting.")
-                    : String(localized: "Overrides the system text size inside finch.")
             case .language:
                 cfg.text = showRelaunchNote
                     ? String(localized: "Relaunch finch to apply the new language.")
@@ -402,7 +385,7 @@ extension AppearanceSettingsVC: UICollectionViewDelegate {
     /// SwiftUI's `Toggle` does. The sliders, segmented pickers and pull-down menus
     /// own their own touches and stay unselectable.
     private static let toggleRowIDs: Set<String> = [
-        systemSizeID, groupByMonthID, relativeDatesID, hapticsID, adjustID, fabID,
+        groupByMonthID, relativeDatesID, hapticsID, adjustID, fabID,
     ]
 
     func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {

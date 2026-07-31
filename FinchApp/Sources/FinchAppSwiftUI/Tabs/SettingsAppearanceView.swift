@@ -23,7 +23,6 @@ enum AppLanguage: String, CaseIterable, Identifiable {
 struct SettingsAppearanceView: View {
     @AppStorage("finch.appearance") private var appearanceRaw = AppearancePreference.system.rawValue
     @AppStorage("finch.language") private var languageRaw = AppLanguage.system.rawValue
-    @AppStorage(TextSize.systemKey) private var useSystemTextSize = true
     @AppStorage(TextSize.stepKey) private var textSizeStep = TextSize.defaultStep
     @AppStorage("finch.feed.groupByMonth") private var groupByMonth = true
     @AppStorage("finch.feed.relativeDates") private var relativeDates = true
@@ -43,23 +42,20 @@ struct SettingsAppearanceView: View {
                 .pickerStyle(.segmented)
             }
             Section {
-                Toggle("Use system size", isOn: $useSystemTextSize)
-                if !useSystemTextSize {
-                    HStack(spacing: 12) {
-                        Text("A").font(.footnote).foregroundStyle(.secondary)
-                        Slider(value: Binding(get: { Double(textSizeStep) },
-                                              set: { textSizeStep = Int($0.rounded()) }),
-                               in: 0...Double(TextSize.steps.count - 1), step: 1)
-                            .accessibilityLabel("Text size")
-                        Text("A").font(.title3).foregroundStyle(.secondary)
-                    }
-                    Text("Sample — $1,234.56")
-                        .dynamicTypeSize(TextSize.size(forStep: textSizeStep))
+                HStack(spacing: 12) {
+                    Text("A").font(.footnote).foregroundStyle(.secondary)
+                    Slider(value: Binding(get: { Double(textSizeStep) },
+                                          set: { textSizeStep = Int($0.rounded()) }),
+                           in: 0...Double(TextSize.steps.count - 1), step: 1)
+                        .accessibilityLabel("Text size")
+                    Text("A").font(.title3).foregroundStyle(.secondary)
                 }
+                Text("Sample — $1,234.56")
+                    .dynamicTypeSize(TextSize.size(forStep: textSizeStep))
             } header: {
                 Text("Text size")
             } footer: {
-                Text(useSystemTextSize ? "Follows the system Text Size setting." : "Overrides the system text size inside finch.")
+                Text("Overrides the system text size inside finch.")
             }
             Section {
                 Picker("Language", selection: $languageRaw) {
