@@ -1,0 +1,184 @@
+#if os(iOS)
+import UIKit
+import SwiftUI
+import Combine
+import FinchCore
+
+/// Phase 3: the iPad (regular-width) root, in UIKit.
+///
+/// Phase 1 replaced only the compact branch, so `UIKitShell.makeRoot` handed a wide
+/// window back to the hosted SwiftUI `AdaptiveShell` — meaning iPhone and iPad have
+/// been running *different shells* ever since. Anything verified on one had to be
+/// re-verified on the other. This closes that.
+///
+/// **Behaviour-identical by construction.** The columns are still the same SwiftUI
+/// views, hosted; only the container is UIKit. That is deliberate and mirrors how
+/// Phase 1 was done — change the container, prove it, convert the contents later.
+/// The seam this creates is the point: a column can be swapped for a native
+/// `UIViewController` one at a time, without touching the shell again.
+///
+/// **Why a container rather than one split view.** `SplitViewShell` shows three
+/// columns for the tabs with a real list→detail relationship and two for the
+/// dashboard tabs. `UISplitViewController.style` is fixed at init, and a
+/// triple-column split view has no display mode meaning "primary + secondary, no
+/// supplementary" — the modes run `.oneBesideSecondary` (supplementary + secondary)
+/// through `.twoBesideSecondary` (all three), with no way to drop the middle column
+/// while keeping the sidebar. So the arity change needs a different split view, and
+/// this container swaps between them. The SwiftUI version effectively does the same
+/// thing: its `switch` builds a different `NavigationSplitView` per tab group.
+final class SplitShellVC: UIViewController {
+
+    private let store: FinchStore
+    private let router: DeepLinkRouter
+    private let gate: BiometricGate
+    /// Selection per tab, shared between the supplementary column that writes it and
+    /// the secondary column that reads it. Outlives the split-view swaps, which is why
+    /// it is owned here rather than by either column.
+    private let selection = SplitSelection()
+    private var cancellables = Set<AnyCancellable>()
+
+    /// Which arity the current child was built for, so a tab change only rebuilds when
+    /// it actually crosses the boundary.
+    private var currentArity: Arity?
+    private var child: UISplitViewController?
+
+    private enum Arity { case three, two }
+
+    /// The tabs with a real list→detail relationship. Everything else is a dashboard
+    /// or sheet-based screen that reads better full width — squeezing Insights into a
+    /// middle column would be worse, which is the same call `MasterDetailShell` makes.
+    private static let threeColumnTabs: Set<AppTab> = [.accounts, .budgets, .ledger, .activity, .scheduled]
+
+    init(store: FinchStore, router: DeepLinkRouter, gate: BiometricGate) {
+        self.store = store
+        self.router = router
+        self.gate = gate
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        rebuildIfNeeded(for: router.selectedTab)
+
+        router.$selectedTab
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] tab in self?.rebuildIfNeeded(for: tab) }
+            .store(in: &cancellables)
+
+        // A ledger switch invalidates the per-tab selections — a selected account id
+        // means nothing in another ledger. `ledger` deliberately survives: the ledger
+        // list is global, and "make active" from the detail column must not eject the
+        // selection that triggered it.
+        store.$activeLedgerId
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.selection.clearForLedgerSwitch() }
+            .store(in: &cancellables)
+
+        // A `tx:` deep link (Spotlight / notification) at regular width selects the
+        // transaction in the Activity detail column. Compact shows the edit sheet
+        // instead — see TabBarShell.focusedTx.
+        router.$focusedId
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] id in
+                guard let self, self.router.selectedTab == .activity, let id,
+                      self.store.txns.contains(where: { $0.id == id }) else { return }
+                self.selection.tx = id
+                self.router.focusedId = nil
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Building the split view
+
+    private func rebuildIfNeeded(for tab: AppTab) {
+        let arity: Arity = Self.threeColumnTabs.contains(tab) ? .three : .two
+        // Within an arity the columns are rebuilt in place, so only a boundary
+        // crossing needs a new split view controller.
+        if arity == currentArity, let child {
+            install(columns: tab, into: child, arity: arity)
+            return
+        }
+        currentArity = arity
+
+        child?.willMove(toParent: nil)
+        child?.view.removeFromSuperview()
+        child?.removeFromParent()
+
+        let svc = UISplitViewController(style: arity == .three ? .tripleColumn : .doubleColumn)
+        svc.preferredSplitBehavior = .tile          // `.balanced` in NavigationSplitView terms
+        svc.primaryBackgroundStyle = .sidebar
+        svc.delegate = self
+        // Matches `.navigationSplitViewColumnWidth` on the SwiftUI columns. Without the
+        // supplementary bound, `.tile` gives the list roughly half the content area.
+        svc.minimumPrimaryColumnWidth = 180
+        svc.preferredPrimaryColumnWidth = 220
+        svc.maximumPrimaryColumnWidth = 280
+        if arity == .three {
+            svc.minimumSupplementaryColumnWidth = 300
+            svc.preferredSupplementaryColumnWidth = 340
+            svc.maximumSupplementaryColumnWidth = 420
+        }
+        svc.preferredDisplayMode = SplitDisplayMode.preferred(collapsed: SplitDisplayMode.storedCollapsed,
+                                                             arity: arity == .three ? .three : .two)
+
+        install(columns: tab, into: svc, arity: arity)
+
+        addChild(svc)
+        svc.view.frame = view.bounds
+        svc.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(svc.view)
+        svc.didMove(toParent: self)
+        child = svc
+    }
+
+    /// (Re)populate the columns for `tab`.
+    private func install(columns tab: AppTab, into svc: UISplitViewController, arity: Arity) {
+        svc.setViewController(host(SectionSidebar()), for: .primary)
+
+        guard arity == .three else {
+            // Sidebar │ full-width content, as the SwiftUI two-column branch does.
+            svc.setViewController(host(TabContentColumn(tab: tab)), for: .secondary)
+            return
+        }
+        svc.setViewController(host(SplitListColumn(tab: tab, selection: selection)), for: .supplementary)
+        svc.setViewController(host(SplitDetailColumn(tab: tab, selection: selection)), for: .secondary)
+    }
+
+    /// Host a column, re-attaching the environment. Hosting controllers do NOT inherit
+    /// environment objects from anywhere — the same trap that crashed
+    /// `BackupSyncSettingsVC` in Phase 2 — so every hosted column re-declares them.
+    private func host(_ view: some View) -> UIViewController {
+        UIHostingController(rootView:
+            view
+                .finchSectionSpacing()
+                .modifier(AppTextSize())
+                .environmentObject(store)
+                .environmentObject(router)
+                .environmentObject(gate)
+        )
+    }
+}
+
+// MARK: - Column visibility persistence
+
+extension SplitShellVC: UISplitViewControllerDelegate {
+    /// Record the user's sidebar preference — but only when it is really theirs.
+    ///
+    /// iPadOS auto-collapses columns on rotation to portrait. Persisting every change
+    /// would record that auto-collapse as a preference and pin the sidebar shut, which
+    /// is the trap `PersistedSplitVisibility` was written to avoid; the rule is
+    /// carried over unchanged — persist only while landscape.
+    func splitViewController(_ svc: UISplitViewController,
+                             willChangeTo displayMode: UISplitViewController.DisplayMode) {
+        let landscape = view.bounds.width > view.bounds.height
+        guard landscape, let arity = currentArity else { return }
+        guard let collapsed = SplitDisplayMode.collapsed(from: displayMode,
+                                                         arity: arity == .three ? .three : .two)
+        else { return }
+        SplitDisplayMode.storedCollapsed = collapsed
+    }
+}
+#endif

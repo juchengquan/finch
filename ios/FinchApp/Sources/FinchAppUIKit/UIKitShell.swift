@@ -59,17 +59,24 @@ final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
         handle(connectionOptions: options)
     }
 
-    /// The old shell switched on `horizontalSizeClass`: compact got the tab bar,
-    /// regular got the three-column split. Phase 1 replaced only the compact
-    /// branch, so a wide window must keep the SwiftUI shell — otherwise iPad loses
-    /// its split view and gets the phone layout, which is a real regression, not a
-    /// cosmetic one. Phase 3 replaces this with a UISplitViewController.
+    /// Compact gets the tab bar, regular gets the split view — both UIKit as of
+    /// Phase 3. Until then a wide window fell back to the hosted SwiftUI shell, so
+    /// iPhone and iPad ran different code paths and anything verified on one had to be
+    /// re-verified on the other.
+    ///
+    /// `-legacyShell YES` still returns the whole SwiftUI shell, for either width. It
+    /// is the escape hatch while both exist, and the A/B control for anything that
+    /// looks wrong on iPad.
     private static func makeRoot(for window: UIWindow) -> UIViewController {
-        let wide = window.traitCollection.horizontalSizeClass == .regular
-        if wide || UserDefaults.standard.bool(forKey: "legacyShell") {
+        if UserDefaults.standard.bool(forKey: "legacyShell") {
             return UIHostingController(rootView: AppRootHost())
         }
-        return RootTabBarController()
+        let wide = window.traitCollection.horizontalSizeClass == .regular
+        return wide
+            ? SplitShellVC(store: FinchStore.shared,
+                           router: DeepLinkRouter.shared,
+                           gate: BiometricGate.shared)
+            : RootTabBarController()
     }
 
     /// iPad multitasking changes the size class at runtime (Split View, Slide Over),
