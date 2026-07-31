@@ -348,11 +348,17 @@ more given what Phase 2's conversions actually cost.
    `ScheduledCalendarView` failed on returning a `List`; `MonthCashCalendar` looks like
    a leaf and is not. Two defects, one root cause.
 
-   `AccountDetailVC` hosts the same calendar and is NOT reported as stuck, so either it
-   has the same latent bug unnoticed (its calendar mode may simply have little content
-   below) or something about its section config lets the pan through. **Establish which
-   before fixing** — the answer decides whether this is a Scheduled bug or a shipped
-   `AccountDetailVC` bug too.
+   **Checked: `AccountDetailVC` configures it IDENTICALLY** — the same bare
+   `UIHostingConfiguration { MonthCashCalendar(...) }`, no margins, no gesture handling,
+   nothing that could let the pan through. So this is almost certainly a **bug already
+   shipped in `AccountDetailVC`'s calendar mode**, not a new Scheduled bug; it went
+   unnoticed because that screen's calendar mode has little content below the grid, so
+   there is nothing to scroll TO.
+
+   Verify by switching an account detail to Calendar and trying to scroll. If it is
+   stuck too, fix it once for both — the pager's vertical pan has to be let through
+   (a `simultaneousGesture`, or bounding the hosted cell's height so the collection
+   view keeps a pannable area outside it) rather than patched per screen.
    Check every "leaf" the same way before hosting it: `MonthCashCalendar` genuinely is
    one, which is why `AccountDetailVC` gets away with hosting it.
 3. **Budgets** — `BudgetDetailVC` already exists for the detail side.
