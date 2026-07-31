@@ -5,6 +5,8 @@ import Charts
 struct Donut: View {
     let data: [DataPoint]
     let centerLabel: String
+    /// Formats a value for VoiceOver — see `BarChart.format`.
+    let format: (Double) -> String
 
     struct DataPoint: Identifiable, Equatable {
         let id = UUID()
@@ -22,7 +24,7 @@ struct Donut: View {
                     .foregroundStyle(point.color)
                     .cornerRadius(4)
                     .accessibilityLabel(Text(point.label))
-                    .accessibilityValue(Text(String(format: "%.0f", point.value)))
+                    .accessibilityValue(Text(format(point.value)))
             }
             .chartBackground { _ in
                 Text(centerLabel).font(.caption).foregroundStyle(.secondary)
