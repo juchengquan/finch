@@ -20,6 +20,17 @@ import FinchCore
 @main
 final class UIKitAppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ app: UIApplication,
+                     didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        // The "Use system size" toggle is gone; seed the slider for anyone
+        // upgrading from it BEFORE any scene connects and reads the preference.
+        // THIS is the iOS entry point — `FinchApp.swift` is excluded from the iOS
+        // target (project.yml) and only boots FinchMac, so the mirror of this call
+        // in `FinchApp.init()` runs on macOS alone.
+        TextSize.migrateLegacySystemPreference(systemStep: TextSize.currentSystemStep)
+        return true
+    }
+
+    func application(_ app: UIApplication,
                      configurationForConnecting session: UISceneSession,
                      options: UIScene.ConnectionOptions) -> UISceneConfiguration {
         UISceneConfiguration(name: "Default Configuration", sessionRole: session.role)
