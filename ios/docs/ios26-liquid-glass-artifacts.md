@@ -12,11 +12,9 @@ abandoned along the way.
 > resume, a pushed page and a root page are byte-identical. macOS
 > `screencapture` is TCC-blocked under tmux. Human eyes are the instrument.
 >
-> **CORRECTED 2026-07-29:** the older claim that the artifact is "device-only,
-> invisible on the simulator" is WRONG — it reproduces on the simulator and is
-> plainly visible to a person. Only the *capture* fails. That mistake cost
-> earlier rounds device cycles they did not need. See
-> `ios26-shadow-variant-matrix.md`.
+> The corollary that cost the most: "cannot be captured" is not "does not happen
+> here". The shadow reproduces on the simulator and is plainly visible to a person.
+> See `ios26-shadow-variant-matrix.md` for the 21-variant evidence.
 
 ---
 
@@ -54,34 +52,45 @@ REMOVE if Apple makes the dissolve content-aware / offers an opt-out.
 ## Issue 2 — the resume "shadow"
 
 **Symptom.** Leave finch and return; for ~2–3s a shadow lingers around the
-top bar / search field on a scrolled transaction list. **Device-only** —
-invisible on the simulator to the eye (though a sim video/energy-diff
-shows a faint trace).
+top bar / search field on a scrolled transaction list.
+
+**It reproduces on the SIMULATOR** and is clearly visible to a human — what it
+resists is *capture*. `simctl` screenshots and `recordVideo` read the framebuffer,
+which does not contain the glass layers, so a shadowed page and a clean one come
+out byte-identical. An earlier version of this file called it "device-only,
+invisible on the simulator", and that mistake is why several rounds burned device
+cycles they did not need.
 
 **Root cause.** iOS 26's *adaptive* Liquid Glass scroll-edge effect (`.soft`
 / `.automatic`) re-samples the content under the glass on resume and slowly
-re-converges — that convergence *is* the shadow. **But it only happens on
-PUSHED (non-root) scroll views.** A top-level tab's scroll view (Accounts,
-Budgets) stays clean; a page you *navigate into* (the Activity feed, an
-account's detail) shadows. Bisected on device: it is **not** the content,
-rows, headers, search bar, large title, nav-bar background, or the data —
-it is purely **navigation depth** (root vs pushed).
+re-converges — that convergence *is* the shadow. It is **not** the content, rows,
+headers, search bar, large title, nav-bar background, or the data; that much was
+bisected on device and holds.
 
-**SUPERSEDED 2026-07-29 — see `ios26-shadow-variant-matrix.md`.** A 21-variant
-sweep shows this is wrong in both directions: a push on a stack that is NOT the
-tab's still shadows (a `NavigationStack` wrapping the `TabView`), and a push CAN
-be perfectly clean (inside a cover that contains no `TabView`). "Root vs pushed"
-is also the wrong framing — a UIKit root-replace via `setViewControllers` is a
-root and still shadows, because the trigger is the push TRANSITION, not the depth
-you land at. Clean = either modally presented with no `TabView` inside, or never
-running a push transition at all. The claim below is kept for history:
+**A push shadows because of the push TRANSITION, not because of where it ends up.**
+This is the 21-variant sweep's verdict (`ios26-shadow-variant-matrix.md`) and it
+replaces two earlier framings that were both wrong:
 
-**Sharpened (device-confirmed 2026-07-28).** More precisely: only pushes on the
-**main tab-bar `NavigationStack`** shadow. A **modal cover** — and normal
-`NavigationStack` pushes *inside* a cover — do **not** (verified: a Settings drill
-cover → a category-detail push, scrolled and resumed, stays clean). This is why a
-multi-level flow is fixed by moving only its *entry* off the tab stack into a cover;
-the deeper levels then push natively inside it — no shadow, native swipe-back.
+- ~~"only pushes on the main tab-bar `NavigationStack` shadow"~~ — wrong in both
+  directions. A push on a stack that is *not* the tab's still shadows, and a push
+  *can* be perfectly clean.
+- ~~"root vs pushed"~~ — wrong framing. A UIKit root-replace via
+  `setViewControllers(animated: true)` lands on a genuine root and still shadows,
+  because it runs UIKit's push machinery.
+
+**Only two configurations are clean:**
+
+- **Family A — modally presented, with no `TabView` inside the presentation.**
+  Native pushes work *inside* it. A `TabView` behind the presentation is harmless;
+  one inside it is not.
+- **Family B — never invokes a push transition at all.** The destination is the
+  stack's root, or an overlay. The real tab bar stays.
+
+The **sharpened rule survives**: a push *inside* a cover is clean (device-confirmed
+2026-07-28, independently reconfirmed by the matrix). That is why a multi-level flow
+is fixed by moving only its *entry* off the tab stack into a cover — the deeper
+levels then push natively inside it, with no shadow and native swipe-back, which is
+what the shipped Ledger and Settings flows rely on.
 
 **Proven NOT a data refresh.** Instrumented on resume: **0**
 `reprojectActiveLedger`, **0** Activity `recompute`, **0** view body

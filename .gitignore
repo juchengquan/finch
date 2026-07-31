@@ -156,11 +156,15 @@ vite.config.ts.timestamp-*
 #                  Leading slash = repo root ONLY. A bare `docs/` matches at
 #                  every level, which also swallowed ios/docs/ — that one is
 #                  real documentation and IS tracked.
-#   .superpowers/brainstorm/ — visual-companion mockups (sdd/ stays tracked)
+#   .superpowers/ — agent scratch: brainstorm mockups, and per-run sdd/ task
+#                  briefs/reports/reviews. This USED to say "sdd/ stays tracked",
+#                  which contradicted `.superpowers/sdd/.gitignore` (`*`) — the
+#                  result was 5 of 19 files committed from one 2026-07-17 run and
+#                  the rest not. It is per-run scratch; none of it is tracked.
 .worktrees/
 .claude/
 /docs/
-.superpowers/brainstorm/
+.superpowers/
 
 # python bytecode from ios/scripts helpers
 __pycache__/
