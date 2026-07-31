@@ -359,6 +359,15 @@ more given what Phase 2's conversions actually cost.
    fail vertically). `.frame(height: 420)` only shrank the dead zone and should be
    re-evaluated once the gesture is right; it may not be needed at all.
 
+   **Attempted and FAILED (do not repeat):** walking the cell for `UIScrollView`s whose
+   content fits their bounds and setting `alwaysBounceVertical = false` / `bounces =
+   false`, deferred a runloop so SwiftUI has built the hierarchy. Built fine, changed
+   nothing — a drag on the grid still does not scroll the page. Either the pager's
+   contentSize is taller than its bounds, or SwiftUI re-asserts the flags, or the pan is
+   claimed for a different reason. Next attempt should INSPECT the hosted hierarchy
+   (breakpoint / `recursiveDescription`) before changing anything, rather than guessing
+   at scroll-view flags.
+
    **Run the control build FIRST next time.** Three rounds were spent theorising about
    pagers and content sizes when one build of plain `feat/frontend` answered it
    immediately.
