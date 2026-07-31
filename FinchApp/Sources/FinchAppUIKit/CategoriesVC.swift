@@ -70,7 +70,7 @@ final class CategoriesVC: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = String(localized: "Categories")
-        navigationItem.largeTitleDisplayMode = .never
+        navigationItem.largeTitleDisplayMode = .always
         configureCollectionView()
         configureDataSource()
         configureSearch()
@@ -131,6 +131,11 @@ final class CategoriesVC: UIViewController {
                     }
                     .pickerStyle(.segmented)
                 }
+                // No card behind it — see ActivityFeedVC's mode picker. An
+                // insetGrouped list gives every cell the grouped background, which
+                // the bare SwiftUI picker row doesn't have.
+                .margins(.vertical, 0)
+                cell.backgroundConfiguration = .clear()
                 return
 
             case Self.topLevelID:

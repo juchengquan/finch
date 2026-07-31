@@ -96,7 +96,9 @@ final class TxListDetailVC: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = source.title
-        navigationItem.largeTitleDisplayMode = .never
+        // Large: CategoryDetailView / TagDetailView / CounterpartyDetailView — the
+        // three screens this replaces — all render large titles.
+        navigationItem.largeTitleDisplayMode = .always
         configureCollectionView()
         configureDataSource()
         applySnapshot()

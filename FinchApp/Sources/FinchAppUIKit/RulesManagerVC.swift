@@ -38,7 +38,7 @@ final class RulesManagerVC: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = String(localized: "Rules")
-        navigationItem.largeTitleDisplayMode = .never
+        navigationItem.largeTitleDisplayMode = .always
         configureCollectionView()
         configureDataSource()
         configureToolbar()

@@ -112,11 +112,16 @@ final class AccountDetailVC: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        // Large, collapsing on scroll. The balance moved into a content row (see
-        // applySnapshot) because a large title and a custom `titleView` cannot share
-        // the bar — the bar renders the titleView, so the name would appear twice
-        // while expanded and the large title would have nowhere to collapse to.
-        navigationItem.largeTitleDisplayMode = .always
+        // Inline, with the balance in a two-line `titleView` (see updateTitleView) —
+        // the same thing the SwiftUI screen has always shown, now on every OS
+        // version rather than only iOS 26.
+        //
+        // The old note here said a large title and a custom titleView cannot share
+        // the bar, which is why the balance had been moved into a content card. True
+        // — but it only bites while the title is LARGE. Inline, the titleView is the
+        // ordinary way to do this and needs no new API, so the iOS 26 subtitle work
+        // is gone along with its availability fork.
+        navigationItem.largeTitleDisplayMode = .never
         configureCollectionView()
         configureDataSource()
         configureSearch()
@@ -175,7 +180,14 @@ final class AccountDetailVC: UIViewController {
             config.trailingSwipeActionsConfigurationProvider = { [weak self] ip in
                 self?.swipe(at: ip)?.trailing
             }
-            return NSCollectionLayoutSection.list(using: config, layoutEnvironment: env)
+            let section = NSCollectionLayoutSection.list(using: config, layoutEnvironment: env)
+            // The picker is the first section and sits right under the search bar.
+            // An insetGrouped list opens with a ~35pt top inset meant to separate a
+            // first section from a large title — and this screen has no large title
+            // (the bar carries name-over-balance instead), so that space just read as
+            // a hole. Matches the gap on All Transactions.
+            if kind == .modePicker { section.contentInsets.top = 0 }
+            return section
         }
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         collectionView.delegate = self
@@ -206,6 +218,9 @@ final class AccountDetailVC: UIViewController {
                     }
                     .pickerStyle(.segmented)
                 }
+                // No card behind it — same as ActivityFeedVC's identical picker.
+                .margins(.vertical, 0)
+                cell.backgroundConfiguration = .clear()
                 cell.accessories = []
                 return
             }
@@ -378,8 +393,8 @@ final class AccountDetailVC: UIViewController {
 
         var snap = NSDiffableDataSourceSnapshot<SectionID, String>()
         var headers: [SectionID: HeaderContent] = [:]
-        snap.appendSections([.balance])
-        snap.appendItems([Self.balanceID], toSection: .balance)
+        // No balance row: the bar's titleView carries it (see updateTitleView), so
+        // this would only repeat it.
         snap.appendSections([.modePicker])
         snap.appendItems([Self.modePickerID], toSection: .modePicker)
 
@@ -479,7 +494,37 @@ final class AccountDetailVC: UIViewController {
     /// ("always visible while scrolled") was protecting.
     private func updateTitleView() {
         guard let account else { return }
-        title = account.name ?? String(localized: "Account")
+        let name = account.name ?? String(localized: "Account")
+        title = name   // still needed: it is what a pushed screen's back button shows
+        let nameLabel = UILabel()
+        nameLabel.text = name
+        nameLabel.font = .preferredFont(forTextStyle: .headline)
+        nameLabel.adjustsFontForContentSizeCategory = true
+        let stack = UIStackView(arrangedSubviews: [nameLabel, balanceBarView(account)])
+        stack.axis = .vertical
+        stack.alignment = .center
+        stack.spacing = 0
+        navigationItem.titleView = stack
+    }
+
+    /// Balance + reconcile seal as the bar's subtitle.
+    private func balanceBarView(_ account: AccountRow) -> UIView {
+        let label = UILabel()
+        label.text = store.displayMoney(account.balance, from: account.currency)
+        label.font = .preferredFont(forTextStyle: .caption1)
+        label.textColor = .secondaryLabel
+        label.adjustsFontForContentSizeCategory = true
+        guard let seal = titleSeal(account) else { return label }
+        let mark = UIImageView(image: UIImage(systemName: "checkmark.seal.fill"))
+        mark.tintColor = seal
+        mark.contentMode = .scaleAspectFit
+        mark.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .caption1)
+        mark.setContentHuggingPriority(.required, for: .horizontal)
+        let stack = UIStackView(arrangedSubviews: [label, mark])
+        stack.axis = .horizontal
+        stack.spacing = 4
+        stack.alignment = .center
+        return stack
     }
 
     /// The balance row: amount, with the reconcile seal beside it.

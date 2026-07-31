@@ -98,6 +98,17 @@ final class BudgetDetailVC: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        // Inline, like the account page and like the SwiftUI budget screen: a large
+        // title belongs to a place you navigate TO (Accounts, Budgets, Settings), not
+        // to a thing you opened.
+        //
+        // The account page also pins its figure in the bar as a subtitle, and this
+        // screen deliberately does NOT follow it there. That worked because the
+        // subtitle REPLACED the balance card. This card can't be replaced — it
+        // carries the progress bar, the remaining amount and the cycle range as well
+        // as the figure — so a subtitle would just repeat a number sitting 40pt
+        // below it. Put a figure in the bar only when it lets you delete whatever was
+        // showing it.
         navigationItem.largeTitleDisplayMode = .never
         title = budget?.name
         configureCollectionView()
@@ -246,6 +257,12 @@ final class BudgetDetailVC: UIViewController {
                 var cfg = cell.defaultContentConfiguration()
                 cfg.text = tx.merchant
                 cfg.secondaryText = tx.date
+                // A default list cell is taller than the SwiftUI List row it stands
+                // in for. Tuned against the measured reference: the SwiftUI row is
+                // ~66pt, the untouched default was ~72pt, and 8pt margins overshot
+                // to ~58pt. Same kind of tuning TxRowCell does for the hosted rows.
+                cfg.directionalLayoutMargins.top = 12
+                cfg.directionalLayoutMargins.bottom = 12
                 cell.contentConfiguration = cfg
                 let amount = UILabel()
                 amount.text = self.store.displayMoneyBase(tx.amount)

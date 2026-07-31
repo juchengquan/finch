@@ -48,7 +48,7 @@ final class MerchantsVC: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = String(localized: "Merchants")
-        navigationItem.largeTitleDisplayMode = .never
+        navigationItem.largeTitleDisplayMode = .always
         configureCollectionView()
         configureDataSource()
         configureSearch()

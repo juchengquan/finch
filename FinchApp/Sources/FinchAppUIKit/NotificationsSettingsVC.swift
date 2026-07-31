@@ -27,7 +27,7 @@ final class NotificationsSettingsVC: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = String(localized: "Notifications")
-        navigationItem.largeTitleDisplayMode = .never
+        navigationItem.largeTitleDisplayMode = .always
         configureCollectionView()
         configureDataSource()
         applySnapshot()

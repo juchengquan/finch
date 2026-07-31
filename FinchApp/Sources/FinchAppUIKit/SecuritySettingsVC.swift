@@ -34,7 +34,7 @@ final class SecuritySettingsVC: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = String(localized: "Security")
-        navigationItem.largeTitleDisplayMode = .never
+        navigationItem.largeTitleDisplayMode = .always
         configureCollectionView()
         configureDataSource()
         applySnapshot()
@@ -133,11 +133,7 @@ final class SecuritySettingsVC: UIViewController {
     /// A pull-down menu button, as SwiftUI's default `Picker` renders inside a form.
     private func menuAccessory(value: String, options: [(String, String)],
                                onPick: @escaping (String) -> Void) -> UICellAccessory {
-        let button = UIButton(type: .system)
-        button.setTitle(value, for: .normal)
-        button.setTitleColor(.secondaryLabel, for: .normal)
-        button.titleLabel?.font = .preferredFont(forTextStyle: .body)
-        button.showsMenuAsPrimaryAction = true
+        let button = MenuValueButton.make(value: value)
         button.menu = UIMenu(children: options.map { title, raw in
             UIAction(title: title, state: title == value ? .on : .off) { _ in onPick(raw) }
         })
