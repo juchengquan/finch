@@ -18,7 +18,10 @@ struct PostPrefill: Identifiable {
 /// environment-object-consuming View placed inside it, like this one, inherits
 /// the environment from whatever presented the sheet, same as `ScheduledSheet`
 /// elsewhere in this file's callers.
-private struct ScheduledPostSheetContent: View {
+/// Internal, not private: the UIKit `ScheduledListVC` presents this directly. The
+/// SwiftUI screens still reach it through `.scheduledPostSheet`, so there is one
+/// sheet, not two.
+struct ScheduledPostSheetContent: View {
     @EnvironmentObject private var store: FinchStore
     let prefill: PostPrefill
 

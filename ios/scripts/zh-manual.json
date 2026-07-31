@@ -721,5 +721,7 @@
   "Yearly": "每年",
   "Once": "单次",
   "Trends": "趋势",
-  "Breakdown": "明细"
+  "Breakdown": "明细",
+  "Delete this scheduled item?": "删除此计划项？",
+  "Detected": "检测到"
 }
