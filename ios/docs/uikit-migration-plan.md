@@ -348,7 +348,17 @@ more given what Phase 2's conversions actually cost.
    `ScheduledCalendarView` failed on returning a `List`; `MonthCashCalendar` looks like
    a leaf and is not. Two defects, one root cause.
 
-   **CORRECTION — verified on the simulator: `AccountDetailVC`'s calendar DOES scroll.**
+   **FIXED — `.frame(height: 420)` on the hosted grid.** Unbounded, it self-sizes to
+   fill the viewport, leaving nowhere to begin a scroll, because `MonthCashCalendar` is
+   a `.page TabView` and a pan starting inside it belongs to that pager. Bounding it
+   leaves a strip to drag from. 420 fits the month header + six week rows (360 clipped
+   the header). Verified: swiping the day sections scrolls the page, swiping the grid
+   pages the month — which is what the SwiftUI screen does too.
+   Note the test that misled: a swipe from y=900pt "outside the calendar" appeared to
+   prove the gesture innocent, but y=900 is the TAB BAR on a 956pt screen. Check the
+   swipe start is on the content.
+
+   (Superseded note — verified on the simulator: `AccountDetailVC`'s calendar DOES scroll.
    (Switched an account to Calendar, swiped, screenshots differ.) So the code
    comparison below was misleading and the "already-shipped bug" conclusion was WRONG.
    The configurations really are identical; the difference is LAYOUT. On account detail
@@ -359,7 +369,7 @@ more given what Phase 2's conversions actually cost.
    always keeps a pannable area — not to fight the gesture.
 
    Lesson, twice over in one screen: reason from the SIMULATOR, not from reading two
-   call sites and concluding they must behave the same.
+   call sites and concluding they must behave the same.)
 
    (Original, now-superseded note: `AccountDetailVC` configures it identically — the same bare
    `UIHostingConfiguration { MonthCashCalendar(...) }`, no margins, no gesture handling,

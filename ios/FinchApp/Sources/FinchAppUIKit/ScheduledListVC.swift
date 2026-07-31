@@ -184,6 +184,17 @@ final class ScheduledListVC: UIViewController {
                         // instead; AccountDetailVC passes the same flag.
                         masked: self.store.privacyMode)
                         .environmentObject(self.store)
+                        // A DEFINITE height, and this is load-bearing. Unbounded, the
+                        // hosted grid self-sizes to fill the viewport, leaving nowhere
+                        // to start a scroll: `MonthCashCalendar` is a `.page TabView`,
+                        // so a pan beginning inside it belongs to that pager, not to
+                        // the collection view. Bounding it keeps the day sections
+                        // reachable AND leaves a strip to drag from.
+                        // 420 fits the month header + six week rows; 360 clipped the
+                        // header off. Verified on the simulator — swiping from the day
+                        // sections scrolls, swiping on the grid pages the month, which
+                        // is what the SwiftUI screen does too.
+                        .frame(height: 420)
                 }
 
             case Self.emptyID:
