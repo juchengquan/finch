@@ -86,4 +86,25 @@ final class TabChromeUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Add Transaction"].waitForNonExistence(timeout: 10),
                       "Settings should not offer an add-transaction FAB")
     }
+
+    /// EVERY tab keeps its Ledger corner control, converted or not.
+    ///
+    /// The ledger is reachable only from this button, so a tab that loses it loses the
+    /// ledger entirely — silently, because a missing bar button crashes nothing and
+    /// fails no test. That is what happened: `ScheduledListVC` shipped in #660 without
+    /// one, and the Scheduled tab simply had no way to reach the ledger. The FAB tests
+    /// above exist for the same reason and did not cover this item.
+    ///
+    /// Loops every slot rather than checking one, because the point is that no
+    /// conversion can drop it — including conversions not written yet.
+    func testEveryTabKeepsItsLedgerControl() throws {
+        for tab in ["Accounts", "Budgets", "Scheduled", "Insights", "Settings"] {
+            let button = app.tabBars.buttons[tab]
+            XCTAssertTrue(button.waitForExistence(timeout: 30), "no \(tab) tab")
+            button.tap()
+            XCTAssertTrue(app.buttons["Ledger"].waitForExistence(timeout: 15),
+                          "\(tab) has no Ledger control — the ledger is unreachable from this tab")
+        }
+    }
+
 }
