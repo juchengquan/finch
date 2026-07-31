@@ -229,16 +229,6 @@
         }
       }
     },
-    "%@: %lf": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@：%2$lf"
-          }
-        }
-      }
-    },
     "%lld": {},
     "%lld added": {
       "localizations": {
