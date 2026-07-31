@@ -201,7 +201,8 @@ final class ActivityFeedVC: UIViewController {
                             MonthGrouping.dailyIncomeExpense(
                                 self.filteredTxns().filter { $0.date >= from && $0.date <= through })
                         },
-                        format: { self.store.displayExactBase($0) })
+                        format: { self.store.displayExactBase($0) },
+                        masked: self.store.privacyMode)
                 }
                 cell.accessories = []
                 return
