@@ -161,6 +161,19 @@ final class AccountDetailVC: UIViewController {
                 self.applySnapshot()
             }
             .store(in: &cancellables)
+
+        // Hide-amounts is not one of the slices above, so without this the screen
+        // kept rendering figures after a toggle — the balance in the bar, the row
+        // amounts and the calendar's `masked:` all read the flag when they are
+        // built. `updateTitleView` as well as the snapshot: the balance lives in
+        // the navigation item, which no snapshot touches.
+        store.$privacyMode
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.updateTitleView()
+                self?.applySnapshot()
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: Collection view
