@@ -623,7 +623,10 @@ struct AccountRowView: View {
 
 /// Add Group — a full sheet mirroring Budgets' AddGroupSheet: name + the shared
 /// 8-swatch palette + an account picker. Creates via createAccountGroup.
-private struct AddAccountGroupSheet: View {
+/// Internal rather than private because `AccountsListVC` presents the same sheet: the
+/// list is UIKit now, but the write form stays SwiftUI so the Mac keeps rendering one
+/// implementation of it.
+struct AddAccountGroupSheet: View {
     @EnvironmentObject private var store: FinchStore
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
