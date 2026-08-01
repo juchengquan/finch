@@ -212,7 +212,12 @@ public enum Transactions {
 
     struct AddInput: Decodable {
         let ledgerId: String
-        let accountId: String
+        /// Single-account form. Optional only because `accounts` may carry the
+        /// payment sources instead; exactly one of the two must be present.
+        let accountId: String?
+        /// Split tender: the same purchase paid from several accounts. Each share's
+        /// `amount` is in that account's own currency and they must total `amount`.
+        let accounts: [AccountShare]?
         let amount: Double
         let amountBase: Double?
         let currency: String?
@@ -233,6 +238,11 @@ public enum Transactions {
         /// Absent/false everywhere else, so the double-submit backstop is
         /// unchanged for ordinary saves — see `Entries.NewEntry.allowDuplicate`.
         let allowDuplicate: Bool?
+
+        struct AccountShare: Decodable {
+            let accountId: String
+            let amount: Double
+        }
     }
 
     static func addTransaction(_ db: Database, _ args: Args) throws {
@@ -250,7 +260,52 @@ public enum Transactions {
         let counterpartyId = a.counterpartyId
         let kind = a.kind.flatMap(Entries.Kind.init(rawValue:)) ?? (a.amount > 0 ? Entries.Kind.income : .expense)
 
-        let acctCcy = try String.fetchOne(db, sql: "SELECT currency FROM accounts WHERE id = ?", arguments: [a.accountId]) ?? "USD"
+        // Split tender: one purchase, several payment sources -> ONE entry with an
+        // account leg per source plus a single auto-balanced category leg. Rejected
+        // if the shares don't total the stated amount, so a typo cannot silently
+        // post a different purchase than the one on screen.
+        if let shares = a.accounts, shares.count >= 2 {
+            // Each share is in ITS OWN account's currency, so the shares and the stated
+            // amount only become comparable in the ledger base. A raw sum would add
+            // incomparable units the moment two accounts hold different currencies —
+            // which is supported. A same-currency split converts at one rate and still
+            // reconciles exactly, within the penny tolerance the double rounding needs.
+            let base = try String.fetchOne(db, sql: "SELECT base_currency FROM ledgers WHERE id = ?", arguments: [a.ledgerId]) ?? "USD"
+            var totalBase = 0.0
+            for s in shares {
+                guard let ccy = try String.fetchOne(db, sql: "SELECT currency FROM accounts WHERE id = ?", arguments: [s.accountId]) else {
+                    throw I18nError("error.notFound.account", [:], "Account not found")
+                }
+                totalBase += try Entries.convertToBase(db, s.amount, ccy, base, a.date).amountBase
+            }
+            // With no single account there is no account currency to default to, so an
+            // omitted `currency` means the amount is already in the ledger base. The Add
+            // sheet sends `currency` explicitly for a split.
+            let statedBase = try Entries.convertToBase(db, a.amount, a.currency ?? base, base, a.date).amountBase
+            guard abs(totalBase - statedBase) < 0.005 else {
+                throw I18nError("error.split.accountsMismatch",
+                                ["total": String(format: "%.2f", totalBase), "amount": String(format: "%.2f", statedBase)],
+                                "The account amounts add up to \(totalBase), not \(statedBase)")
+            }
+            let eid = try Entries.postEntry(db, Entries.NewEntry(
+                ledgerId: a.ledgerId, date: a.date, time: a.time, description: a.merchant, kind: kind,
+                status: a.status.flatMap(Entries.Status.init(rawValue:)),
+                legs: shares.map { .account(Entries.AccountLeg(accountId: $0.accountId, amount: $0.amount)) },
+                autoBalance: .category(a.categoryId),
+                notes: (a.note?.isEmpty ?? true) ? nil : a.note,
+                counterpartyId: counterpartyId, refundedEntryId: refundedEntryId,
+                sourceTemplateId: a.sourceTemplateId, occurrenceDate: a.occurrenceDate,
+                skipRules: a.skipRules ?? false, allowDuplicate: a.allowDuplicate ?? false))
+            try Budgets.invalidateForEntry(db, eid)
+            try insertTags(db, entryId: eid, tagIds: a.tagIds)
+            return eid
+        }
+
+        guard let singleAccountId = a.accountId else {
+            throw I18nError("error.split.noAccount", [:], "A transaction needs an account")
+        }
+
+        let acctCcy = try String.fetchOne(db, sql: "SELECT currency FROM accounts WHERE id = ?", arguments: [singleAccountId]) ?? "USD"
         let inputCcy = a.currency ?? acctCcy
         if inputCcy != acctCcy {
             // Foreign-currency entry (web qAddTransaction §5.2): convert the
@@ -262,7 +317,7 @@ public enum Transactions {
             let eid = try Entries.postEntry(db, Entries.NewEntry(
                 ledgerId: a.ledgerId, date: a.date, time: a.time, description: a.merchant, kind: kind,
                 status: a.status.flatMap(Entries.Status.init(rawValue:)),
-                legs: [.account(Entries.AccountLeg(accountId: a.accountId, amount: toAcct.amountBase,
+                legs: [.account(Entries.AccountLeg(accountId: singleAccountId, amount: toAcct.amountBase,
                     amountBase: toBase.amountBase, exchangeRate: toBase.rate,
                     origAmount: a.amount, origCurrency: inputCcy))],
                 autoBalance: .category(a.categoryId),
@@ -276,7 +331,7 @@ public enum Transactions {
         }
 
         let eid = try Entries.postSimple(db, .init(
-            ledgerId: a.ledgerId, accountId: a.accountId, amount: a.amount, date: a.date,
+            ledgerId: a.ledgerId, accountId: singleAccountId, amount: a.amount, date: a.date,
             description: a.merchant, categoryId: a.categoryId, kind: kind, time: a.time,
             notes: (a.note?.isEmpty ?? true) ? nil : a.note,
             status: a.status.flatMap(Entries.Status.init(rawValue:)),

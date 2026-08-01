@@ -726,5 +726,7 @@
   "This month": "本月",
   "Tap + to add an account.": "点按 + 添加账户。",
   "this account": "此账户",
-  "Liabilities": "负债"
+  "Liabilities": "负债",
+  "error.split.accountsMismatch": "账户金额之和必须等于交易金额",
+  "error.split.noAccount": "交易需要一个账户"
 }
