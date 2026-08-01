@@ -29,7 +29,7 @@ struct BudgetDetailView: View {
     var body: some View {
         Group {
             if let budget {
-                let p = Selectors.budgetProgress(budget, store.txns, store.today, store.categoryNodes)
+                let p = Selectors.budgetProgress(budget, store.txns, store.budgetToday, store.categoryNodes)
                 List {
                     Section { progress(budget, p) }
                     historySection(budget)
@@ -119,7 +119,7 @@ struct BudgetDetailView: View {
     }
 
     @ViewBuilder private func transactionsSection(_ b: BudgetRow) -> some View {
-        let txns = Selectors.budgetMatchedTransactions(b, store.txns, store.today, store.categoryNodes)
+        let txns = Selectors.budgetMatchedTransactions(b, store.txns, store.budgetToday, store.categoryNodes)
         let secs = MonthGrouping.sections(txns)
         if txns.isEmpty {
             Section("This cycle") {
