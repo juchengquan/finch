@@ -122,18 +122,23 @@ public enum Entries {
         public var occurrenceDate: String?
         public var timestamp: String?
         public var skipRules: Bool
+        /// Store no dedup hash for this entry, exempting it from the
+        /// double-submit backstop. Set only when the user has been shown the
+        /// possible-duplicate prompt and chose "Add anyway" — see `dedupHash`.
+        public var allowDuplicate: Bool
         public init(id: String? = nil, ledgerId: String, date: String, time: String? = nil,
                     description: String, kind: Kind, status: Status? = nil, legs: [Leg],
                     autoBalance: AutoBalance = .none, notes: String? = nil, counterpartyId: String? = nil,
                     refundedEntryId: String? = nil, sourceTemplateId: String? = nil,
                     occurrenceDate: String? = nil,
-                    timestamp: String? = nil, skipRules: Bool = false) {
+                    timestamp: String? = nil, skipRules: Bool = false, allowDuplicate: Bool = false) {
             self.id = id; self.ledgerId = ledgerId; self.date = date; self.time = time
             self.description = description; self.kind = kind; self.status = status; self.legs = legs
             self.autoBalance = autoBalance; self.notes = notes; self.counterpartyId = counterpartyId
             self.refundedEntryId = refundedEntryId; self.sourceTemplateId = sourceTemplateId
             self.occurrenceDate = occurrenceDate
             self.timestamp = timestamp; self.skipRules = skipRules
+            self.allowDuplicate = allowDuplicate
         }
     }
 
@@ -401,7 +406,8 @@ public enum Entries {
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?)
                 """, arguments: [entryId, e.ledgerId, e.date, e.time, description, kind.rawValue, status.rawValue,
                                  status == .confirmed ? ts : nil, counterpartyId, e.refundedEntryId, e.sourceTemplateId, e.occurrenceDate,
-                                 notes, appliedJson, reviewedAt, dedupHash(e.date, e.time, description, legs), ts, ts])
+                                 notes, appliedJson, reviewedAt,
+                                 e.allowDuplicate ? nil : dedupHash(e.date, e.time, description, legs), ts, ts])
             try insertPostings(db, entryId, legs)
             // Rule-added tags land inside the same SAVEPOINT (the entry row exists).
             for tagId in tagIdsAdd ?? [] {
@@ -438,16 +444,20 @@ public enum Entries {
         /// from a template. Lets the occurrence resolve even when `date` differs.
         public var occurrenceDate: String?
         public var refundedEntryId: String?
+        /// See `NewEntry.allowDuplicate`.
+        public var allowDuplicate: Bool
         public init(ledgerId: String, accountId: String, amount: Double, date: String, description: String,
                     categoryId: String? = nil, kind: Kind? = nil, time: String? = nil, notes: String? = nil,
                     status: Status? = nil, counterpartyId: String? = nil, skipRules: Bool = false, id: String? = nil,
-                    sourceTemplateId: String? = nil, occurrenceDate: String? = nil, refundedEntryId: String? = nil) {
+                    sourceTemplateId: String? = nil, occurrenceDate: String? = nil, refundedEntryId: String? = nil,
+                    allowDuplicate: Bool = false) {
             self.ledgerId = ledgerId; self.accountId = accountId; self.amount = amount; self.date = date
             self.description = description; self.categoryId = categoryId; self.kind = kind; self.time = time
             self.notes = notes; self.status = status; self.counterpartyId = counterpartyId
             self.skipRules = skipRules; self.id = id; self.sourceTemplateId = sourceTemplateId
             self.occurrenceDate = occurrenceDate
             self.refundedEntryId = refundedEntryId
+            self.allowDuplicate = allowDuplicate
         }
     }
 
@@ -461,7 +471,8 @@ public enum Entries {
             kind: kind, status: s.status, legs: [.account(AccountLeg(accountId: s.accountId, amount: s.amount))],
             autoBalance: .category(s.categoryId), notes: s.notes, counterpartyId: s.counterpartyId,
             refundedEntryId: s.refundedEntryId, sourceTemplateId: s.sourceTemplateId,
-            occurrenceDate: s.occurrenceDate, skipRules: s.skipRules))
+            occurrenceDate: s.occurrenceDate, skipRules: s.skipRules,
+            allowDuplicate: s.allowDuplicate))
     }
 
     /// Resolve a client Tx id (a posting id) — or an entry id — to its entry +
