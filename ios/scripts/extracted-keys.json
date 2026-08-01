@@ -37,6 +37,7 @@
   "%lld matched · %lld new",
   "%lld min",
   "%lld more tags",
+  "%lld of %lld couldn't be applied.",
   "%lld over",
   "%lld percent",
   "%lld problems",

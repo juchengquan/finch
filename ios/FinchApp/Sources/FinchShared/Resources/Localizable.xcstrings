@@ -284,6 +284,16 @@
         }
       }
     },
+    "%lld of %lld couldn't be applied.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有 %1$lld 项(共 %2$lld 项)未能应用。"
+          }
+        }
+      }
+    },
     "%lld over": {
       "localizations": {
         "zh-Hans": {

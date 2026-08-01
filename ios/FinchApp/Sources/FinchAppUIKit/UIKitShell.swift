@@ -109,6 +109,10 @@ final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func sceneDidEnterBackground(_ scene: UIScene) {
         gate.didEnterBackground()
+        // The debounced widget / Watch / Spotlight round would otherwise sit unfired
+        // until the next write — and the home screen the user is returning to is
+        // exactly where a stale widget shows.
+        store.flushAmbientSideEffects()
         Task { await AutoBackupManager.shared.backupIfDue() }
     }
 
