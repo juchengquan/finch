@@ -30,7 +30,6 @@ struct EditTransactionSheet: View {
     @State private var categoryId: String
     @State private var amountText: String
     @State private var selectedTags: Set<String>
-    @State private var showingSplit = false
     @State private var errorMessage: String?
     @State private var confirmingDelete = false
     @State private var attachments: [AttachmentRow] = []
@@ -50,9 +49,16 @@ struct EditTransactionSheet: View {
     private var originalNative: Double { txn.nativeAmount ?? txn.amount }
     /// A split transaction owns its categories via legs — hide amount/category here.
     /// `txn` re-read from the LIVE store projection (not the init-time snapshot), so a
-    /// split applied in-session via SplitEditorView reflects here immediately instead of
-    /// leaving the sheet on the stale single-category view.
+    /// split written elsewhere reflects here instead of leaving the sheet on the stale
+    /// single-category view. (Splits made in THIS sheet are staged, not written, until
+    /// save — see `splitAlloc`.)
     private var liveTxn: Tx { store.txns.first(where: { $0.id == txn.id }) ?? txn }
+    /// The staged split. Written by `save()` alongside every other field — never on
+    /// the picker's Confirm — so cancelling the sheet leaves the ledger untouched.
+    @State private var splitAlloc: SplitAllocation
+    /// Deliberately the STORED state, not the staged one: this drives the form's
+    /// shape — a split layout has no Amount field — and flipping it mid-edit would
+    /// remove the very field whose value the split divides.
     private var isSplit: Bool { (liveTxn.splits?.count ?? 0) >= 2 }
     private var refundedSummary: String {
         guard let id = refundedTxId, let t = store.txns.first(where: { $0.id == id }) else { return "Optional" }
@@ -81,6 +87,11 @@ struct EditTransactionSheet: View {
         _refundedTxId = State(initialValue: txn.refundedTransactionId)
         _currencyCode = State(initialValue: txn.currency ?? "")
         _selectedKind = State(initialValue: EditKind(rawValue: txn.kind ?? "") ?? (txn.amount > 0 ? .income : .expense))
+        // Stored splits arrive PINNED via `merging`, so opening the sheet does not
+        // re-divide amounts the user set earlier; repeated categories fold together.
+        _splitAlloc = State(initialValue: .merging(
+            (txn.splits ?? []).map { (categoryId: $0.categoryId, amount: $0.amount) },
+            total: abs(txn.nativeAmount ?? txn.amount)))
     }
 
     /// Simple single-account entries can be re-typed expense/income/refund.
@@ -144,10 +155,14 @@ struct EditTransactionSheet: View {
                     // Still the Category row (not a "Split" abstraction) — its value is the
                     // split's category names; tapping it reopens the split editor.
                     Section {
-                        CategoryPickerRow(title: "Category", glyph: .category, categories: categories, selection: .constant(""),
-                            splitSummary: splitSummaryText(categoryNames: (liveTxn.splits ?? []).map { store.categoryName($0.categoryId) ?? "Uncategorized" }),
-                            splitEnabled: true,
-                            onSplit: { showingSplit = true })
+                        // Binds the real category, not a constant: toggling split off in
+                        // the subpage hands back the surviving (largest) category, and
+                        // save() needs it to name the collapsed transaction.
+                        CategoryPickerRow(title: "Category", glyph: .category, categories: categories, selection: $categoryId,
+                            splitSummary: splitSummaryText(categoryNames: splitAlloc.payload.map { store.categoryName($0.categoryId) ?? "Uncategorized" }),
+                            splitting: $splitAlloc,
+                            currency: txn.currency ?? "")
+                            .accessibilityIdentifier("edittx.category")
                     }
                 } else if let legs = transferLegs {
                     // Transfer legs: a real transfer editor (spec §2). Accounts are
@@ -187,8 +202,10 @@ struct EditTransactionSheet: View {
                             TextField("0.00", text: $amountText).keyboardType(.decimalPad).numericInput($amountText)
                         }
                         CategoryPickerRow(title: "Category", glyph: .category, categories: categories, selection: $categoryId,
-                            splitEnabled: (DecimalInput.parse(amountText) ?? 0) != 0,
-                            onSplit: effectiveKind == "refund" ? nil : { showingSplit = true })
+                            splitSummary: splitSummaryText(categoryNames: splitAlloc.payload.map { store.categoryName($0.categoryId) ?? "Uncategorized" }),
+                            splitting: effectiveKind == "refund" ? nil : $splitAlloc,
+                            currency: currencyCode)
+                            .accessibilityIdentifier("edittx.category")
                         FieldRow(glyph: .date, title: "Date", showsDefaultTrailing: false) {
                             DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
                                 .labelsHidden()
@@ -354,7 +371,10 @@ struct EditTransactionSheet: View {
             } message: { _ in
                 Text("The file is deleted permanently.")
             }
-            .sheet(isPresented: $showingSplit) { SplitEditorView(txn: liveTxn) }
+            .onChange(of: amountText) { _, newValue in
+                // Keep the split dividing the amount actually on screen.
+                splitAlloc.setTotal(abs(DecimalInput.parse(newValue) ?? 0))
+            }
             .quickLookPreview($previewURL)
             .sheet(isPresented: $showingRefundPicker) { RefundSourcePickerView { refundedTxId = $0 } }
             .onAppear {
@@ -438,6 +458,26 @@ struct EditTransactionSheet: View {
                 try store.apply(.createCounterparty, Args(["name": .string(cpName)]))
             }
             try store.apply(.updateTransaction, Args(["id": .string(txn.id), "patch": .object(patch)]))
+            // Splits land in this same save, so cancelling the sheet leaves the ledger
+            // untouched. Ordered AFTER updateTransaction on purpose: the engine
+            // validates the category legs against the account leg's amount, so the new
+            // amount has to be in place before the legs are rebuilt against it.
+            if splitAlloc.payload.count >= 2 {
+                let splitPayload: [JSONValue] = splitAlloc.payload.map { .object([
+                    "categoryId": $0.categoryId.map(JSONValue.string) ?? .null,
+                    "amount": .double($0.amount)]) }
+                try store.apply(.setTransactionSplits,
+                                Args(["id": .string(txn.id), "splits": .array(splitPayload)]))
+            } else if isSplit {
+                // Collapsed back to one category: drop the legs, then name the survivor
+                // (the category patch above is skipped while the stored txn is split).
+                try store.apply(.setTransactionSplits,
+                                Args(["id": .string(txn.id), "splits": .array([])]))
+                if !categoryId.isEmpty {
+                    try store.apply(.updateTransaction, Args(["id": .string(txn.id),
+                        "patch": .object(["category": .string(categoryId)])]))
+                }
+            }
             if selectedTags != Set(txn.tags ?? []) {
                 try store.apply(.setTransactionTags, Args(["id": .string(txn.id),
                     "tagIds": .array(selectedTags.sorted().map { .string($0) })]))
