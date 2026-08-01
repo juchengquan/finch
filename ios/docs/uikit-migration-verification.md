@@ -119,30 +119,10 @@ below is reference; this is the queue.
 - [x] Saved-search chips audited — accessible, and a real (pre-existing, cross-platform)
       delete defect was found and fixed on the way. See §3.
 
-**Flag removal itself (§4).**
-
-Re-checked against the code 2026-08-01. The order below is not arbitrary — item 2
-cannot start until the flags go, and the flags cannot go until item 1 is done.
-
-- [ ] **Everything in §2, §2b and §2c passes. THIS is the gate, and it is big.** A count
-      of the checkboxes: §1 has 11 open and 0 ticked, §2 has 10 open and 0 ticked, and
-      the per-screen sweep §2b–§2s runs to ~100 more. Almost none of it has been walked
-      by a human. Worth knowing before planning the flag removal as a code task — it is
-      overwhelmingly a **manual sweep**, not engineering.
-- [ ] `ActivityFeedView`'s `.rightSlideDrill(...)` entry replaced by the native push,
-      and the SwiftUI screen dropped from the iOS target (`excludes:` in `project.yml`)
-      while `FinchMac` keeps it — likewise `AccountDetailView`.
-      *Status 2026-08-01: not started, and BLOCKED BY THE FLAGS THEMSELVES.* `project.yml`
-      still excludes only `FinchApp.swift`, and both screens are still referenced from
-      `AccountsTab`, `ActivityTab`, `AdaptiveShell` and `SplitColumns`. They cannot be
-      dropped while `-uikitActivity NO` and `-legacyShell YES` exist, because those two
-      fallbacks are precisely what routes back into them. So this item is downstream of
-      deleting the opt-outs, not something to attempt alongside.
-- [x] **The FAB gap in §2c is RESOLVED** — fixed in `fix/ios-uikit-pushed-fab`, in two
-      halves (the button via `TabChromeVC` above the navigation controller, then the
-      touch passthrough). Recorded in full in §2c; this line was simply never ticked.
-- [ ] Re-run §1 afterwards — the tab gains a `UINavigationController`, which changes the
-      shell's structure.
+**Flag removal itself.** Four items, and they are SEQUENCED — see §4, which is the
+only place they are written out. This block used to restate them, and the two copies
+promptly disagreed: the FAB item was ticked here and left open there for weeks. The
+short version is that the gate is a manual sweep, not engineering.
 
 **iPad, now that Phase 3 has shipped (§6).**
 
@@ -849,11 +829,13 @@ switch replaced out from under a touch never completes its gesture, while a drag
       the SwiftUI side lost its row-tap too via `SwitchOnlyToggleStyle`. macOS is
       deliberately unchanged — it draws a checkbox, whose title is part of its hit area
       by AppKit convention. Rules rows still select, because their tap opens the editor.
-- [ ] On a device, confirm tapping the LABEL does nothing on all six, that the switch
-      still flips, and that tapping a *currency* row still opens its rate history
-      rather than toggling tracking.
-- [ ] If hosting is attempted again, the row must remain touch-reachable — verify by
-      actually flipping every toggle, not by reading the code.
+- [x] **DONE on a device 2026-08-01** — tapping the LABEL does nothing on all six, the
+      switch still flips, and a *currency* row still opens its rate history rather than
+      toggling tracking. (§0 recorded this; this copy was left open, which is the same
+      duplication problem §0/§4 had.)
+**Standing caution, not a task:** if hosting is attempted again, the row must remain
+touch-reachable — verify by actually flipping every toggle, not by reading the code. (A
+checkbox here counted as permanently "open" work when nothing is planned.)
 
 ## 2u. Design note: settings toggles cost more in UIKit than they look
 
@@ -953,15 +935,31 @@ VoiceOver on.
 
 ## 4. Before the flag comes off
 
-- [ ] Everything in §2, §2b and §2c passes.
+THE list — §0 points here rather than repeating it. Keeping two copies is what let the
+FAB item sit ticked in one place and open in the other.
+
+Re-checked against the code 2026-08-01. The order below is not arbitrary — item 2
+cannot start until the flags go, and the flags cannot go until item 1 is done.
+
+- [ ] **Everything in §2, §2b and §2c passes. THIS is the gate, and it is big.** A count
+      of the checkboxes: §1 has 11 open and 0 ticked, §2 has 10 open and 0 ticked, and
+      the per-screen sweep §2b–§2s runs to ~100 more. Almost none of it has been walked
+      by a human. Worth knowing before planning the flag removal as a code task — it is
+      overwhelmingly a **manual sweep**, not engineering.
 - [ ] `ActivityFeedView`'s `.rightSlideDrill(...)` entry replaced by the native push,
-      and the SwiftUI screen dropped from the iOS target (`excludes:` in
-      `project.yml`) while `FinchMac` keeps it — likewise `AccountDetailView`,
-      which `AccountsTab` already asks `nativeRoute(.account(id))` for first.
-- [ ] The FAB gap in §2c is resolved (or consciously accepted), since by then
-      every drill destination is a converted push.
-- [ ] Re-run §1 afterwards — the tab gains a `UINavigationController`, which changes
-      the shell's structure.
+      and the SwiftUI screen dropped from the iOS target (`excludes:` in `project.yml`)
+      while `FinchMac` keeps it — likewise `AccountDetailView`.
+      *Status 2026-08-01: not started, and BLOCKED BY THE FLAGS THEMSELVES.* `project.yml`
+      still excludes only `FinchApp.swift`, and both screens are still referenced from
+      `AccountsTab`, `ActivityTab`, `AdaptiveShell` and `SplitColumns`. They cannot be
+      dropped while `-uikitActivity NO` and `-legacyShell YES` exist, because those two
+      fallbacks are precisely what routes back into them. So this item is downstream of
+      deleting the opt-outs, not something to attempt alongside.
+- [x] **The FAB gap in §2c is RESOLVED** — fixed in `fix/ios-uikit-pushed-fab`, in two
+      halves (the button via `TabChromeVC` above the navigation controller, then the
+      touch passthrough). Recorded in full in §2c; this line was simply never ticked.
+- [ ] Re-run §1 afterwards — the tab gains a `UINavigationController`, which changes the
+      shell's structure.
 
 ## 4b. Scope correction — two screens on the Phase 2 list need no conversion
 
@@ -1071,5 +1069,6 @@ Per converted tab, on **both** an iPhone and an iPad:
 
 ## 5. Open questions
 
-- [ ] Nothing currently open here — the iPad items moved to §6 now that Phase 3 is
-      real work rather than a deferred question.
+Nothing currently open here — the iPad items moved to §6 now that Phase 3 is real work
+rather than a deferred question. (Left as prose: an unticked box saying "nothing is
+open" counted itself as open work in every tally of this file.)
