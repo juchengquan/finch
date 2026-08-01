@@ -95,12 +95,14 @@ below is reference; this is the queue.
 
 **Accessibility — raised by the tooling, never investigated (§3).**
 
-- [ ] The mode picker and saved-search chips are invisible to `idb`'s accessibility
-      tree. If an automation tool cannot see them, VoiceOver may not either. Check with
-      Accessibility Inspector and VoiceOver on.
-- [ ] Converted rows announce sensibly, and selection ticks announce their state.
-      (Phase 3b found and fixed this class twice — hosting a SwiftUI row in a cell
-      exposes each text separately unless it is explicitly combined.)
+- [x] Converted rows announce sensibly — swept 2026-08-01, two real defects found and
+      fixed (transaction rows read as fragments; "Confirm all N pending" was not a
+      button). See §3.
+- [ ] Segmented controls (Activity List/Calendar, Appearance Theme) are unlabelled in
+      the accessibility tree — **but equally so in the SwiftUI build**, so it is not a
+      migration defect and does not gate the flag. Needs a real VoiceOver pass to say
+      whether it matters; the fix, if any, belongs on the SwiftUI `Picker`s.
+- [ ] Saved-search chips unaudited — the row only exists once a search is saved.
 
 **Flag removal itself (§4).**
 
@@ -788,13 +790,39 @@ to fix anything.
       (the pushed, scrollable screens). Nothing here argues for reverting what has
       landed and is green.
 
-## 3. Accessibility — a concern raised by the tooling, not yet investigated
+## 3. Accessibility — swept 2026-08-01, two real defects found and fixed
 
-- [ ] The mode picker and saved-search chips are **not visible to `idb`'s
-      accessibility tree**. If an automation tool cannot see them, VoiceOver may
-      struggle too. Check both with the Accessibility Inspector and VoiceOver on.
-- [ ] The converted feed's rows announce sensibly (category, date, amount) and the
-      selection ticks announce their state.
+Method: dump the accessibility tree (`idb ui describe-all`) on each converted screen
+and diff it against the SAME screen with `-uikitActivity NO`. The tree is the data
+VoiceOver speaks, so a missing label or trait there is a real defect. What it cannot
+tell you is reading ORDER or how speech actually sounds — that still wants a human with
+VoiceOver on.
+
+- [x] **FIXED — converted transaction rows read as fragments.** The SwiftUI screens wrap
+      `TxRow` in a `Button`, which aggregates its children into one phrase
+      ("Expense, Groceries, Jul 30 · 12:00, −$58.20"). Hosted in a cell there is no such
+      wrapper, so VoiceOver read type, merchant, tags, date and amount as five separate
+      elements and never announced the row as actionable. Measured: the converted feed
+      exposed **45 elements, 40 of them StaticText, ONE labelled control**; the SwiftUI
+      feed exposed 18, every row a Button. Fixed in `TxRowCell` — which repairs the
+      Activity feed, Account detail and `TxListDetailVC` at once. After: 17 elements,
+      10 buttons, 0 stray text, wording identical to the control.
+- [x] **FIXED — "Confirm all N pending" announced as plain text.** A
+      `defaultContentConfiguration` owns the cell's accessibility, so the row could not
+      be reached as a button. Hosted with the trait, as the SwiftUI `Button` had it.
+- [x] **Verified already correct:** switches announce label + on/off state (`CheckBox`
+      with value, identical in both implementations); collapsible group headers announce
+      Expanded/Collapsed with a hint; account, budget and scheduled rows announce as one
+      combined button.
+- [ ] **NOT a migration defect, still open: segmented controls are unlabelled.** The
+      Activity List/Calendar picker and the Appearance Theme picker both appear as an
+      unlabelled `TabGroup` with no value — **and they do so in the SwiftUI build too**,
+      so this predates the conversion and affects the Mac equally. Whether VoiceOver can
+      still operate them is not something `idb` can answer; it needs Accessibility
+      Inspector or a real VoiceOver pass. If it is a genuine gap, the fix belongs on the
+      SwiftUI `Picker`s, where both platforms get it.
+- [ ] **Saved-search chips: not audited.** The chip row only exists once a search has
+      been saved, and the demo dataset has none. Save one, then re-check.
 
 ## 4. Before the flag comes off
 

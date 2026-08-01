@@ -45,6 +45,22 @@ enum TxRowCell {
                   showDate: showDate,
                   showRunningBalance: showRunningBalance)
                 .environmentObject(store)
+                // ONE VoiceOver element per row, and announced as a button.
+                //
+                // The SwiftUI screens wrap this row in a `Button`, which aggregates its
+                // children — a row there reads as
+                // "Expense, Groceries, Jul 30 · 12:00, −$58.20". Hosted in a cell it has
+                // no such wrapper, so VoiceOver read the type, merchant, tags, date and
+                // amount as five separate elements and never announced the row as
+                // actionable. Measured against a control build: the converted feed
+                // exposed 40 StaticTexts and ONE labelled control, the SwiftUI feed 15
+                // elements of which every row was a Button.
+                //
+                // Safe to combine: nothing inside `TxRow` is independently tappable —
+                // `onPreviewReceipt` is invoked from the cell's swipe/context actions,
+                // not from a control in the row.
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isButton)
         }
         // `UIHostingConfiguration`'s default margins are considerably larger than a
         // SwiftUI `List` row's, which would leave the row tall even with the right
