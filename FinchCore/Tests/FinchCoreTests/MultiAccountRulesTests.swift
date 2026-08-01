@@ -60,4 +60,43 @@ final class MultiAccountRulesTests: XCTestCase {
         XCTAssertEqual(c2, 30, accuracy: 0.001, "30% of the FULL 100, not of the first leg's 60")
         XCTAssertEqual(fxLegs, 0, "no phantom fx residue — a domestic purchase has no exchange-rate remainder")
     }
+
+    /// A rule's `amount` condition must be evaluated against the BASE-currency
+    /// total, not the raw sum of native amounts across legs in different
+    /// currencies (which isn't a quantity in any currency). Here a1 (USD -50) +
+    /// a2 (EUR -50 @ 1.10) sum to a meaningless "-100" in mixed units, but to
+    /// -105 in base (USD). A threshold of 101 distinguishes them: it only fires
+    /// if the engine used the coherent base total.
+    func test_splitsRule_mixedCurrency_matchesBaseTotalNotRawSum() throws {
+        let q = try TestSeed.base()
+        try q.write { db in
+            try db.execute(sql: """
+                INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+                VALUES ('a2','l1','Euro Card','credit_card','EUR',0,1,1,1,datetime('now'),datetime('now'))
+                """)
+            // Seeded rate, not the static fallback, so the base total is exact and
+            // reproducible: 1 EUR = 1.10 USD.
+            try db.execute(sql: "INSERT INTO exchange_rates (date,currency,rate) VALUES ('2026-06-01','EUR',1.10)")
+        }
+        let condition: JSONValue = .object([
+            "field": .string("amount"), "op": .string("gte"), "value": .double(101)])
+        let actions: JSONValue = .array([.object(["type": .string("mark_reviewed")])])
+        try Apply.apply(dbQueue: q, action: "createRule", args: Args([
+            "id": .string("r1"), "ledgerId": .string("l1"), "name": .string("Big spend"),
+            "condition": condition, "actions": actions]))
+        let eid = try q.write { db in
+            try Entries.postEntry(db, Entries.NewEntry(
+                ledgerId: "l1", date: "2026-06-01", time: "12:00",
+                description: "Trip", kind: .expense,
+                legs: [
+                    .account(Entries.AccountLeg(accountId: "a1", amount: -50)),
+                    .account(Entries.AccountLeg(accountId: "a2", amount: -50)),
+                    .category(Entries.CategoryLeg(categoryId: "c1", amountBase: 105)),
+                ]))
+        }
+        let reviewedAt = try q.read { db in
+            try String.fetchOne(db, sql: "SELECT reviewed_at FROM entries WHERE id = ?", arguments: [eid])
+        }
+        XCTAssertNotNil(reviewedAt, "amount condition must match the base-currency total (105), not the raw mixed-currency sum (100)")
+    }
 }
