@@ -223,10 +223,16 @@ function validateShape(kind: EntryKind, legs: ResolvedLeg[], meta: Map<string, {
       break;
     }
     default: // income / expense / refund
-      if (acct.length !== 1) throw new Error(`A ${kind} entry has exactly one account leg`);
+      // One purchase may be paid from SEVERAL accounts (split tender), so the
+      // count is no longer pinned at 1. `legs.length < 2 || acct.length < 1` above
+      // already guarantees at least one account leg, so nothing weaker is needed
+      // here. Invariant I7 never asked for exactly one — see the plan header.
       if (plain.length < 1) throw new Error(`A ${kind} entry needs a category leg`);
       if (equity.some((l) => sysOf(l) !== 'fx')) throw new Error('Equity categories cannot be booked directly');
-      if (kind === 'refund' && acct[0].amount <= 0) throw new Error('A refund must be positive');
+      // EVERY account leg must be positive, not just the first. `acct[0]` was
+      // adequate while there could only be one; with split tender it would wave
+      // through a refund whose second leg is negative.
+      if (kind === 'refund' && acct.some((l) => l.amount <= 0)) throw new Error('A refund must be positive');
   }
 }
 
@@ -287,50 +293,74 @@ export async function postEntry(exec: Exec, e: NewEntry): Promise<{ entryId: str
   if (!e.skipRules && RULED.includes(kind)) {
     const rules = await listActiveRules(exec, e.ledgerId);
     if (rules.length > 0) {
-      const acctLeg = legs.find((l) => l.accountId != null);
-      if (!acctLeg) throw new Error(`A ${kind} entry has exactly one account leg`);
-      const firstCat = legs.find((l) => l.accountId == null);
-      const synthetic: Tx = {
-        id: entryId, merchant: description, category: firstCat?.categoryId ?? null,
-        amount: acctLeg.amountBase, nativeAmount: acctLeg.amount, currency: acctLeg.currency,
-        account: acctLeg.accountId as string, date: e.date, time: e.time ?? undefined,
-        note: notes ?? undefined, pending: status === 'pending', kind: kind as Tx['kind'],
-        ledgerId: e.ledgerId, sourceTemplateId: e.sourceTemplateId ?? undefined,
-        refundedTransactionId: e.refundedEntryId ?? undefined,
-        counterpartyId: counterpartyId ?? undefined, tags: [],
-      };
-      const patch = applyRules(synthetic, rules);
-      if (patch.appliedRuleIds.length > 0) {
-        if (patch.merchant !== undefined) description = patch.merchant;
-        if (patch.note !== undefined) notes = patch.note;
-        if (patch.kind !== undefined && RULED.includes(patch.kind as EntryKind)) kind = patch.kind as EntryKind;
-        if (patch.counterpartyId !== undefined) counterpartyId = patch.counterpartyId;
-        if (patch.categoryId !== undefined) {
-          const cl = legs.find((l) => l.accountId == null);
-          if (cl) cl.categoryId = patch.categoryId;
+      // The rules engine sees ONE synthetic transaction for the whole entry.
+      // Amount is the SUM of every account leg (so a rule matching ">= 100"
+      // fires on a 60 + 40 split tender), and the account is the LARGEST leg
+      // (an account-matching rule has to pick one, and the biggest payer is
+      // the least surprising choice; on a tie the FIRST leg wins). Deriving
+      // either from `legs.find` made a splits rule rebuild the category legs
+      // against one leg's amount, leaving the entry unbalanced and aborting
+      // the seal.
+      const acctLegs = legs.filter((l) => l.accountId != null);
+      const acctTotal = r2(acctLegs.reduce((s, l) => s + l.amount, 0));
+      const acctTotalBase = r2(acctLegs.reduce((s, l) => s + l.amountBase, 0));
+      // Rule conditions match on nativeAmount/currency. Across legs in
+      // different currencies their raw sum is not a quantity in any
+      // currency, so fall back to the ledger base, which is comparable. When
+      // every leg shares a currency — including every single-account entry —
+      // this is exactly the old value.
+      const legCcys = new Set(acctLegs.map((l) => l.currency));
+      const sharedCcy = legCcys.size === 1 ? acctLegs[0]?.currency : undefined;
+      const acctLeg = acctLegs.reduce<ResolvedLeg | undefined>(
+        (best, l) => (best === undefined || Math.abs(l.amountBase) > Math.abs(best.amountBase) ? l : best),
+        undefined,
+      );
+      if (acctLeg) {
+        const firstCat = legs.find((l) => l.accountId == null);
+        const synthetic: Tx = {
+          id: entryId, merchant: description, category: firstCat?.categoryId ?? null,
+          amount: acctTotalBase, nativeAmount: sharedCcy != null ? acctTotal : acctTotalBase,
+          currency: sharedCcy ?? base,
+          account: acctLeg.accountId as string, date: e.date, time: e.time ?? undefined,
+          note: notes ?? undefined, pending: status === 'pending', kind: kind as Tx['kind'],
+          ledgerId: e.ledgerId, sourceTemplateId: e.sourceTemplateId ?? undefined,
+          refundedTransactionId: e.refundedEntryId ?? undefined,
+          counterpartyId: counterpartyId ?? undefined, tags: [],
+        };
+        const patch = applyRules(synthetic, rules);
+        if (patch.appliedRuleIds.length > 0) {
+          if (patch.merchant !== undefined) description = patch.merchant;
+          if (patch.note !== undefined) notes = patch.note;
+          if (patch.kind !== undefined && RULED.includes(patch.kind as EntryKind)) kind = patch.kind as EntryKind;
+          if (patch.counterpartyId !== undefined) counterpartyId = patch.counterpartyId;
+          if (patch.categoryId !== undefined) {
+            const cl = legs.find((l) => l.accountId == null);
+            if (cl) cl.categoryId = patch.categoryId;
+          }
+          if (patch.splits && patch.splits.length >= 2) {
+            // Replace category legs with fraction-derived ones over the TOTAL
+            // of the account legs; last split absorbs the rounding remainder
+            // (insertTxRow's logic, with category legs as the NEGATION of the
+            // leg's share).
+            const ratio = acctTotal !== 0 ? acctTotalBase / acctTotal : 1;
+            for (let i = legs.length - 1; i >= 0; i--) if (legs[i].accountId == null) legs.splice(i, 1);
+            let remaining = acctTotal;
+            // The last split absorbs the rounding remainder in BOTH native and
+            // base space — otherwise r2(-portion × ratio) drift would mint a
+            // phantom sys:fx-gain residue on cross-currency entries.
+            let remainingBase = acctTotalBase;
+            patch.splits.forEach((s, i, arr) => {
+              const portion = i === arr.length - 1 ? r2(remaining) : r2(acctTotal * s.fraction);
+              remaining = r2(remaining - portion);
+              const catBase = i === arr.length - 1 ? r2(-remainingBase) : r2(-portion * ratio);
+              remainingBase = r2(remainingBase + catBase);
+              legs.push(categoryLeg(undefined, s.categoryId, catBase, base, s.description ?? null));
+            });
+          }
+          if (patch.reviewed) reviewedAt = ts;
+          if (patch.tagIdsAdd && patch.tagIdsAdd.length > 0) tagIdsAdd = patch.tagIdsAdd;
+          appliedRuleIds = patch.appliedRuleIds;
         }
-        if (patch.splits && patch.splits.length >= 2) {
-          // Replace category legs with fraction-derived ones over the account
-          // leg; last split absorbs the rounding remainder (insertTxRow's
-          // logic, with category legs as the NEGATION of the leg's share).
-          const ratio = acctLeg.amount !== 0 ? acctLeg.amountBase / acctLeg.amount : 1;
-          for (let i = legs.length - 1; i >= 0; i--) if (legs[i].accountId == null) legs.splice(i, 1);
-          let remaining = acctLeg.amount;
-          // The last split absorbs the rounding remainder in BOTH native and
-          // base space — otherwise r2(-portion × ratio) drift would mint a
-          // phantom sys:fx-gain residue on cross-currency entries.
-          let remainingBase = acctLeg.amountBase;
-          patch.splits.forEach((s, i, arr) => {
-            const portion = i === arr.length - 1 ? r2(remaining) : r2(acctLeg.amount * s.fraction);
-            remaining = r2(remaining - portion);
-            const catBase = i === arr.length - 1 ? r2(-remainingBase) : r2(-portion * ratio);
-            remainingBase = r2(remainingBase + catBase);
-            legs.push(categoryLeg(undefined, s.categoryId, catBase, base, s.description ?? null));
-          });
-        }
-        if (patch.reviewed) reviewedAt = ts;
-        if (patch.tagIdsAdd && patch.tagIdsAdd.length > 0) tagIdsAdd = patch.tagIdsAdd;
-        appliedRuleIds = patch.appliedRuleIds;
       }
     }
   }
@@ -804,7 +834,10 @@ export async function auditLedger(exec: Exec, ledgerId?: string, opts: { checkBa
       (kind === 'opening' && (acct !== 1 || plain > 0 || eqOpen < 1 || eqAdj > 0)) ||
       (kind === 'adjustment' && (acct !== 1 || plain > 0 || eqAdj < 1 || eqOpen > 0)) ||
       (kind === 'refund' && negAcct > 0) ||
-      (['income', 'expense', 'refund'].includes(kind) && (acct !== 1 || plain < 1 || eqOpen + eqAdj > 0));
+      // `acct < 1` not `acct !== 1`: split tender means one purchase may be paid
+      // from several accounts. Mirrors ios/FinchCore/.../Audit.swift — invariant I7
+      // never required a single account leg for income/expense/refund.
+      (['income', 'expense', 'refund'].includes(kind) && (acct < 1 || plain < 1 || eqOpen + eqAdj > 0));
     if (bad) {
       problems.push({
         code: 'kind-shape', entryId: String(r.id),

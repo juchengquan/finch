@@ -210,9 +210,12 @@ export async function enrichLegTxs(exec: Exec, rows: Tx[], entryIds: string[]): 
         }));
     }
 
-    // transferGroupId: entry id when ≥2 account legs
+    // `kind`, not the leg count: since split tender, `acct >= 2` no longer
+    // means transfer. postEntry stamps kind and the audit verifies it, so it
+    // is the authority. Shape agrees — a transfer is the only kind with two
+    // account legs and NO category leg.
     const acctCount = acctCountMap.get(eid) ?? 1;
-    if (acctCount >= 2) tx.transferGroupId = eid;
+    if (tx.kind === 'transfer' && acctCount >= 2) tx.transferGroupId = eid;
 
     // refundedTransactionId: resolve raw entry id → first account-posting id
     if (tx.refundedTransactionId != null) {

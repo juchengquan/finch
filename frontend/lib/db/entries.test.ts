@@ -141,19 +141,23 @@ test('CATEGORIES_UPGRADE re-kinds transfer categories and keeps the parent FK', 
 });
 
 // --- raw-SQL helpers for trigger-level tests (no chokepoint involved) ---
-const rawEntry = (exec: Exec, id: string, kind = 'expense', status = 'confirmed') =>
+// Exported: multi-account.test.ts reuses these to build a shape that
+// validateShape's untouched .transfer branch would reject at write time
+// (exactly two account legs) — the only way to get an illegal shape in
+// front of auditLedger for an invariant that postEntry itself also enforces.
+export const rawEntry = (exec: Exec, id: string, kind = 'expense', status = 'confirmed') =>
   exec(
     `INSERT INTO entries (id,ledger_id,date,description,kind,status,sealed,created_at,updated_at)
      VALUES (?,?,'2026-06-01','raw',?,?,0,datetime('now'),datetime('now'))`,
     [id, 'personal', kind, status],
   );
-const rawLeg = (exec: Exec, id: string, entryId: string, accountId: string | null, categoryId: string | null, amount: number, base = amount, currency = 'SGD') =>
+export const rawLeg = (exec: Exec, id: string, entryId: string, accountId: string | null, categoryId: string | null, amount: number, base = amount, currency = 'SGD') =>
   exec(
     `INSERT INTO postings (id,entry_id,account_id,category_id,amount,currency,amount_base,exchange_rate,sort_order)
      VALUES (?,?,?,?,?,?,?,1,0)`,
     [id, entryId, accountId, categoryId, amount, currency, base],
   );
-const seal = (exec: Exec, id: string) => exec('UPDATE entries SET sealed = 1 WHERE id = ?', [id]);
+export const seal = (exec: Exec, id: string) => exec('UPDATE entries SET sealed = 1 WHERE id = ?', [id]);
 
 test('seal rejects an unbalanced entry', async () => {
   const exec = await newDb();
