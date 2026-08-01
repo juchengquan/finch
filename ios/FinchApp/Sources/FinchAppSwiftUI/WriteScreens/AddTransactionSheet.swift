@@ -61,8 +61,7 @@ struct AddTransactionSheet: View {
     @State private var showingFileImporter = false
     @State private var pickedFileURL: URL?
     @State private var prefillApplied = false             // duplicate-prefill runs once
-    @State private var pendingSplits: [SplitEditorView.DraftSplit]? = nil
-    @State private var showingSplit = false
+    @State private var splitAlloc = SplitAllocation(total: 0)
     @State private var refundedTxId: String? = nil
     @State private var showingRefundPicker = false
     @State private var targetBalance = ""   // adjust-balance: the account's new balance
@@ -212,14 +211,10 @@ struct AddTransactionSheet: View {
                     categoryId = s.categoryId
                 }
             }
-            .onChange(of: amount) { _, _ in pendingSplits = nil }
-            .sheet(isPresented: $showingSplit) {
-                SplitEditorView(
-                    total: abs(DecimalInput.parse(amount) ?? 0),
-                    isIncome: kind == .income,
-                    currency: currencyCode.isEmpty ? currency(of: accountId) : currencyCode,
-                    initialSplits: pendingSplits ?? (categoryId.isEmpty ? nil : [(categoryId: categoryId, amount: abs(DecimalInput.parse(amount) ?? 0))]),
-                    target: .draft(onSave: { pendingSplits = $0 }))
+            .onChange(of: amount) { _, newValue in
+                // Re-divide rather than discard: this used to null the split outright,
+                // so correcting a typo in the amount silently threw the split away.
+                splitAlloc.setTotal(abs(DecimalInput.parse(newValue) ?? 0))
             }
             .sheet(isPresented: $showingRefundPicker) {
                 RefundSourcePickerView { refundedTxId = $0 }
@@ -306,9 +301,9 @@ struct AddTransactionSheet: View {
                 .accessibilityIdentifier("addtx.account")
             amountField
             CategoryPickerRow(title: "Category", glyph: .category, categories: categories(for: k), selection: $categoryId,
-                splitSummary: splitSummaryText(categoryNames: (pendingSplits ?? []).map { store.categoryName($0.categoryId) ?? "Uncategorized" }),
-                splitEnabled: (DecimalInput.parse(amount) ?? 0) != 0,
-                onSplit: k == .refund ? nil : { showingSplit = true })
+                splitSummary: splitSummaryText(categoryNames: splitAlloc.payload.map { store.categoryName($0.categoryId) ?? "Uncategorized" }),
+                splitting: k == .refund ? nil : $splitAlloc,
+                currency: currencyCode.isEmpty ? currency(of: accountId) : currencyCode)
                 .accessibilityIdentifier("addtx.category")
             FieldRow(glyph: .date, title: "Date", showsDefaultTrailing: false) {
                 DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
@@ -413,6 +408,7 @@ struct AddTransactionSheet: View {
             .pickerStyle(.menu).labelsHidden().fixedSize()
         }) {
             TextField("0.00", text: $amount).keyboardType(.decimalPad).numericInput($amount)
+                .accessibilityIdentifier("addtx.amount")
         }
     }
 
@@ -621,8 +617,10 @@ struct AddTransactionSheet: View {
                 }
                 for (k, v) in Self.scheduledLinkArgs(prefill: prefill, posts: postsScheduledOccurrence) { args[k] = v }
                 let eid = try store.applyReturningId(.addTransaction, Args(args))
-                if let eid, let splits = pendingSplits {
-                    let payload: [JSONValue] = splits.map { .object([
+                // Two funded legs or more is a split; anything less is the plain
+                // single category already carried by `category` in the args above.
+                if let eid, splitAlloc.payload.count >= 2 {
+                    let payload: [JSONValue] = splitAlloc.payload.map { .object([
                         "categoryId": $0.categoryId.map(JSONValue.string) ?? .null, "amount": .double($0.amount)]) }
                     try store.apply(.setTransactionSplits, Args(["id": .string(eid), "splits": .array(payload)]))
                 }
