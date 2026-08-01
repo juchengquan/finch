@@ -296,10 +296,18 @@ public enum Entries {
                 && equity.allSatisfy { sysOf($0) == want || sysOf($0) == "fx" }
             if !ok { throw I18nError("error.entry.equityShape", ["kind": kind.rawValue], "An \(kind.rawValue) entry is one account leg against the \(want) equity category") }
         default: // income / expense / refund
-            if acct.count != 1 { throw I18nError("error.entry.oneAccountLeg", ["kind": kind.rawValue], "A \(kind.rawValue) entry has exactly one account leg") }
+            // One purchase may be paid from SEVERAL accounts (split tender), so the
+            // count is no longer pinned at 1. `legs.count < 2 || acct.count < 1` above
+            // already guarantees at least one account leg, so nothing weaker is needed
+            // here. Invariant I7 never asked for exactly one — see the plan header.
             if plain.count < 1 { throw I18nError("error.entry.needCategory", ["kind": kind.rawValue], "A \(kind.rawValue) entry needs a category leg") }
             if equity.contains(where: { sysOf($0) != "fx" }) { throw I18nError("error.entry.noDirectEquity", [:], "Equity categories cannot be booked directly") }
-            if kind == .refund && acct[0].amount <= 0 { throw I18nError("error.refund.positive", [:], "A refund must be positive") }
+            // EVERY account leg must be positive, not just the first. `acct[0]` was
+            // adequate while there could only be one; with split tender it would wave
+            // through a refund whose second leg is negative.
+            if kind == .refund && acct.contains(where: { $0.amount <= 0 }) {
+                throw I18nError("error.refund.positive", [:], "A refund must be positive")
+            }
         }
     }
 
