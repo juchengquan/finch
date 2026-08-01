@@ -26,10 +26,31 @@ struct TxRowActions {
     /// Receipt preview, menu only; nil when the row has no attachment.
     var previewReceipt: ((Tx) -> Void)?
 
+    /// **Why every mutating action closes the swipe BEFORE it mutates.**
+    ///
+    /// These handlers write synchronously: `toggleStatus` reaches the store, the
+    /// store republishes, and the list applies a new snapshot — all inside the
+    /// closure. So the row had already been relocated (confirm/un-confirm moves it
+    /// between the pending bucket and the dated list) by the time `done(true)` asked
+    /// UIKit to close the swipe. The close animation then played on a cell that was
+    /// somewhere else: red and orange action buttons appeared inside "To confirm",
+    /// where they mean nothing, and faded out there over ~300ms.
+    ///
+    /// That is what a device report called "the animation looks ugly", and it is not
+    /// about the row's motion at all — two attempts to animate the MOVE both made it
+    /// worse, because they gave the stray buttons longer on screen. Frame analysis of
+    /// a screen recording is what separated the two (see #702).
+    ///
+    /// `done` first, mutation on the next runloop turn: the swipe closes against the
+    /// row where the user left it, and the data change lands after.
     func leading(_ tx: Tx) -> UISwipeActionsConfiguration {
         let dup = UIContextualAction(style: .normal, title: String(localized: "Duplicate")) { _, _, done in
-            duplicate(tx)
-            done(true)
+            // Close WITHOUT animation, so nothing is still playing when the row
+            // relocates. `done(true)` alone starts a ~300ms close; the mutation then
+            // lands inside that window and the animation finishes at the row's NEW
+            // position, painting action buttons into the section it moved to.
+            UIView.performWithoutAnimation { done(true) }
+            DispatchQueue.main.async { duplicate(tx) }
         }
         dup.image = UIImage(systemName: "plus.square.on.square")
         dup.backgroundColor = .systemIndigo
@@ -39,8 +60,12 @@ struct TxRowActions {
     func trailing(_ tx: Tx) -> UISwipeActionsConfiguration {
         let pending = tx.pending == true
         let status = UIContextualAction(style: .normal, title: statusTitle(pending)) { _, _, done in
-            toggleStatus(tx)
-            done(true)
+            // Close WITHOUT animation, so nothing is still playing when the row
+            // relocates. `done(true)` alone starts a ~300ms close; the mutation then
+            // lands inside that window and the animation finishes at the row's NEW
+            // position, painting action buttons into the section it moved to.
+            UIView.performWithoutAnimation { done(true) }
+            DispatchQueue.main.async { toggleStatus(tx) }
         }
         status.image = UIImage(systemName: pending ? "checkmark.circle" : "clock.badge.questionmark")
         status.backgroundColor = pending ? .systemGreen : .systemOrange
