@@ -49,8 +49,8 @@ struct TxRowActions {
             // relocates. `done(true)` alone starts a ~300ms close; the mutation then
             // lands inside that window and the animation finishes at the row's NEW
             // position, painting action buttons into the section it moved to.
-            UIView.performWithoutAnimation { done(true) }
-            DispatchQueue.main.async { duplicate(tx) }
+            done(true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.swipeCloseDuration) { duplicate(tx) }
         }
         dup.image = UIImage(systemName: "plus.square.on.square")
         dup.backgroundColor = .systemIndigo
@@ -64,8 +64,8 @@ struct TxRowActions {
             // relocates. `done(true)` alone starts a ~300ms close; the mutation then
             // lands inside that window and the animation finishes at the row's NEW
             // position, painting action buttons into the section it moved to.
-            UIView.performWithoutAnimation { done(true) }
-            DispatchQueue.main.async { toggleStatus(tx) }
+            done(true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.swipeCloseDuration) { toggleStatus(tx) }
         }
         status.image = UIImage(systemName: pending ? "checkmark.circle" : "clock.badge.questionmark")
         status.backgroundColor = pending ? .systemGreen : .systemOrange
@@ -104,6 +104,15 @@ struct TxRowActions {
                               attributes: .destructive) { _ in requestDelete(tx) })
         return UIMenu(children: items)
     }
+
+    /// How long UIKit takes to slide a swipe shut. The mutation waits this out so
+    /// the close finishes on the row where the user left it.
+    ///
+    /// Closing INSTANTLY (`performWithoutAnimation`) also stops the buttons
+    /// travelling, but they then vanish in a single frame — which reads as a blink,
+    /// and was reported as one. Every native list slides them shut; the row staying
+    /// put for that third of a second is the animation, not lag.
+    private static let swipeCloseDuration: TimeInterval = 0.33
 
     private func statusTitle(_ pending: Bool) -> String {
         pending ? String(localized: "Confirm") : String(localized: "Set pending")
