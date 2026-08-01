@@ -9,9 +9,12 @@ final class ArgsTests: XCTestCase {
     /// + `mergeCounterparty` + `mergeCounterparties` (native-only) = 80
     /// + `mergeTag` + `mergeTags` (native-only, tag merge) = 82
     /// + `copyCategories` + `copyTags` (native-first, ledger reference copy) = 84
-    /// + `setOpeningBalance` (native-first, post-creation opening edit) = 85.
+    /// + `setOpeningBalance` (native-first, post-creation opening edit) = 85
+    /// + `setCategoryOrder` (native-first — one write per category drag, so a drop
+    ///   that renumbers a sibling group costs ONE reprojection and one round of
+    ///   write side-effects instead of one per moved row) = 86.
     func test_actionCount() {
-        XCTAssertEqual(ActionName.allCases.count, 85)
+        XCTAssertEqual(ActionName.allCases.count, 86)
     }
 
     func test_actionNameRawValues() {

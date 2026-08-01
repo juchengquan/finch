@@ -69,6 +69,7 @@ public enum ActionName: String, Codable, Sendable, CaseIterable {
     case mergeCategory
     case mergeCategories
     case copyCategories   // native-first — no web parity (Ledger reference copy)
+    case setCategoryOrder // native-first — one write for a whole drag (the web has no category reorder)
 
     // --- tags (6) ---
     case createTag

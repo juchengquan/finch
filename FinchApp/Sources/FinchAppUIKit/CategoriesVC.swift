@@ -52,10 +52,9 @@ final class CategoriesVC: UIViewController {
     /// right of this the finger has travelled — see `CategoryDropZone.allowsNesting`.
     private var dragOriginX: CGFloat?
 
-    private enum SectionID: Hashable { case picker, topLevel, rows, empty }
+    private enum SectionID: Hashable { case picker, rows, empty }
 
     private static let pickerID = "__kind_picker__"
-    private static let topLevelID = "__top_level__"
     private static let emptyID = "__empty__"
 
     private var collectionView: UICollectionView!
@@ -145,17 +144,6 @@ final class CategoriesVC: UIViewController {
                 .margins(.top, 0)
                 .margins(.bottom, Metrics.modePickerBottomGap)
                 cell.backgroundConfiguration = .clear()
-                return
-
-            case Self.topLevelID:
-                cell.contentConfiguration = UIHostingConfiguration {
-                    HStack(spacing: 8) {
-                        Image(systemName: "arrow.up.to.line")
-                            .font(.caption).foregroundStyle(.secondary).frame(width: 16)
-                        Text(String(localized: "Top level")).font(.subheadline).foregroundStyle(.secondary)
-                        Spacer()
-                    }
-                }
                 return
 
             case Self.emptyID:
@@ -267,7 +255,7 @@ final class CategoriesVC: UIViewController {
     /// movement + `reorderingHandlers` and can only express linear index moves.
     /// This screen's drop math is three-zone (`CategoryDropZone`) — the middle half
     /// of a row REPARENTS under it — and nesting is not an index move, so adopting
-    /// the system accessory would cost drag-to-nest and the "Top level" un-nest row.
+    /// the system accessory would cost drag-to-nest entirely.
     ///
     /// Hidden from VoiceOver: the drag it advertises has no VoiceOver equivalent
     /// yet (there are no `accessibilityCustomActions` for moving a category), so
@@ -290,10 +278,6 @@ final class CategoriesVC: UIViewController {
         var snap = NSDiffableDataSourceSnapshot<SectionID, String>()
         snap.appendSections([.picker])
         snap.appendItems([Self.pickerID], toSection: .picker)
-        if isReordering {
-            snap.appendSections([.topLevel])
-            snap.appendItems([Self.topLevelID], toSection: .topLevel)
-        }
         if rows.isEmpty {
             snap.appendSections([.empty])
             snap.appendItems([Self.emptyID], toSection: .empty)
@@ -503,14 +487,22 @@ final class CategoriesVC: UIViewController {
     /// Apply moves through the chokepoint, in order. The engine rejects
     /// self/descendant/depth>3 with a localized error; the first throw stops the run
     /// and surfaces it.
+    /// One write for the whole drag.
+    ///
+    /// `CategoryReorder.reorder` renumbers the entire destination sibling group, so a
+    /// drop yields a move per member. Sending each through `updateCategory` meant one
+    /// `store.apply` each — and every apply re-reads the whole active ledger and fires
+    /// the full side-effect set (Spotlight, notifications, widget snapshot + timeline
+    /// reload, auto-backup, CloudKit outbox). A drop inside a group of eight paid that
+    /// eight times, which is why the settle after a drag crawled on device.
     private func applyMoves(_ moves: [CategoryMove]) {
         guard !moves.isEmpty else { return }
         run {
-            for move in moves {
-                var patch: [String: JSONValue] = ["sortOrder": .int(move.sortOrder)]
-                patch["parentId"] = move.parentId.map(JSONValue.string) ?? .null
-                try store.apply(.updateCategory, Args(["id": .string(move.id), "patch": .object(patch)]))
-            }
+            try store.apply(.setCategoryOrder, Args(["moves": .array(moves.map { move in
+                .object(["id": .string(move.id),
+                         "parentId": move.parentId.map(JSONValue.string) ?? .null,
+                         "sortOrder": .int(move.sortOrder)])
+            })]))
         }
     }
 
@@ -654,7 +646,8 @@ extension CategoriesVC: UISearchResultsUpdating {
 //
 // The same three drop zones the SwiftUI screen used: a row's top quarter inserts
 // BEFORE it, its bottom quarter AFTER it, and the middle half nests under it. The
-// "Top level" row un-nests. The zone math reads the drop point against the target
+// A drop joins the TARGET's sibling group, so landing beside a top-level row
+// un-nests. The zone math reads the drop point against the target
 // cell's own frame, which is what `rowHeights` + `location.y / h` did in SwiftUI.
 
 extension CategoriesVC: UICollectionViewDragDelegate {
@@ -739,10 +732,6 @@ extension CategoriesVC: UICollectionViewDropDelegate {
         guard let target = dropTarget(at: session.location(in: collectionView)) else {
             return UICollectionViewDropProposal(operation: .move, intent: .insertAtDestinationIndexPath)
         }
-        // "Top level" is a nest-into target, not a position between rows.
-        guard target.id != Self.topLevelID else {
-            return UICollectionViewDropProposal(operation: .move, intent: .insertIntoDestinationIndexPath)
-        }
         switch target.zone {
         case .before, .after:
             return UICollectionViewDropProposal(operation: .move, intent: .insertAtDestinationIndexPath)
@@ -778,11 +767,6 @@ extension CategoriesVC: UICollectionViewDropDelegate {
 
         guard let target = dropTarget(at: coordinator.session.location(in: cv)) else { return }
 
-        if target.id == Self.topLevelID {
-            if let move = CategoryReorder.reparent(source, under: nil, in: rows) { applyMoves([move]) }
-            settle(coordinator, on: source)
-            return
-        }
         guard flatByID[target.id] != nil, target.id != source else { return }
 
         switch target.zone {
