@@ -19,6 +19,23 @@ import UIKit
 ///
 /// So the switch is created once and then left alone. Only `isOn` and the action are
 /// updated, and `cell.accessories` is reassigned only when there is no switch yet.
+///
+/// THE SWITCH IS THE ONLY HIT TARGET. There used to be a `flip(on:)` here that a screen
+/// called from `didSelectItemAt`, so a tap anywhere on the row flipped the switch — the
+/// theory being that these screens should match SwiftUI's `Toggle`, which makes the whole
+/// row the control. That is reversed as of 2026-08: iOS follows Settings.app instead,
+/// where tapping the text of a switch row does nothing and the row does not even
+/// highlight. A switch already shows its own state and its own hit target, so the extra
+/// invisible target is untidy rather than helpful, and it makes a row look tappable when
+/// it leads nowhere. The SwiftUI screens dropped their row-tap at the same time, via
+/// `SwitchOnlyToggleStyle`; macOS is deliberately untouched, since it draws a checkbox
+/// and AppKit counts a checkbox's title as part of its hit area.
+///
+/// Screens implement this in `collectionView(_:shouldSelectItemAt:)` by not selecting
+/// their switch rows — vetoing selection, rather than selecting and doing nothing, is
+/// what suppresses the grey flash. A row that carries a switch but whose tap does
+/// something ELSE keeps its selection: `RulesManagerVC` is exactly that (each rule row
+/// has an Active switch AND opens the rule editor when tapped).
 enum ToggleAccessory {
 
     /// Tag used to find an already-installed switch on a reused cell.
@@ -55,19 +72,6 @@ enum ToggleAccessory {
         toggle.addAction(UIAction(identifier: actionID) { [weak toggle] _ in
             onChange(toggle?.isOn ?? false)
         }, for: .valueChanged)
-    }
-
-    /// Flip the cell's switch and run its action — for row-level taps.
-    ///
-    /// A UIKit `UISwitch` in an accessory only takes touches on ITSELF, whereas
-    /// SwiftUI's `Toggle` makes the whole row the control. Users trained on the
-    /// SwiftUI screens tap the row and nothing happens, which is what a device test
-    /// surfaced. Screens whose rows are purely a toggle route their selection here;
-    /// screens whose rows navigate (Currencies' currency rows, Rules) must NOT.
-    static func flip(on cell: UICollectionViewListCell) {
-        guard let toggle = cell.viewWithTag(tag) as? UISwitch else { return }
-        toggle.setOn(!toggle.isOn, animated: true)
-        toggle.sendActions(for: .valueChanged)
     }
 
     /// True when this cell already carries a switch, so the caller knows not to wipe

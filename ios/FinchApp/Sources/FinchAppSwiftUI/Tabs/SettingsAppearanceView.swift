@@ -75,8 +75,8 @@ struct SettingsAppearanceView: View {
                     .foregroundStyle(showRelaunchNote ? .orange : .secondary)
             }
             Section {
-                Toggle("Group by month", isOn: $groupByMonth)
-                Toggle("Relative dates", isOn: $relativeDates)
+                Toggle("Group by month", isOn: $groupByMonth).switchOnlyToggles()
+                Toggle("Relative dates", isOn: $relativeDates).switchOnlyToggles()
             } header: {
                 Text("Activity feed")
             } footer: {
@@ -97,18 +97,18 @@ struct SettingsAppearanceView: View {
             }
             #if os(iOS)
             Section {
-                Toggle("Haptic feedback", isOn: $hapticsEnabled)
+                Toggle("Haptic feedback", isOn: $hapticsEnabled).switchOnlyToggles()
             } footer: {
                 Text("A gentle tap on saves, errors, and deletes. Also respects your device's System Haptics setting.")
             }
             #endif
             Section {
-                Toggle("Adjust Balance in Add sheet", isOn: $showAdjustInAddSheet)
+                Toggle("Adjust Balance in Add sheet", isOn: $showAdjustInAddSheet).switchOnlyToggles()
             } footer: {
                 Text("Adds an Adjust Balance type to the Add-transaction sheet. It's always available from an account's \u{22EF} menu.")
             }
             Section {
-                Toggle("Floating add button", isOn: $fabEnabled)
+                Toggle("Floating add button", isOn: $fabEnabled).switchOnlyToggles()
                 if fabEnabled {
                     Picker("Position", selection: $fabPositionRaw) {
                         ForEach(FabPosition.allCases) { Text($0.label).tag($0.rawValue) }

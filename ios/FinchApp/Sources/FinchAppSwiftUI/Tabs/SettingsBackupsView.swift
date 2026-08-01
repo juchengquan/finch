@@ -51,7 +51,7 @@ struct SettingsBackupsView: View {
             Section {
                 Toggle("Back up to a folder", isOn: Binding(
                     get: { icloud.designatedFolderName != nil },
-                    set: { on in if on { pickingFolder = true } else { icloud.clearFolder() } }))
+                    set: { on in if on { pickingFolder = true } else { icloud.clearFolder() } })).switchOnlyToggles()
                 .fileImporter(isPresented: $pickingFolder, allowedContentTypes: [.folder]) { result in
                     if case .success(let url) = result { icloud.setFolder(url) }
                 }

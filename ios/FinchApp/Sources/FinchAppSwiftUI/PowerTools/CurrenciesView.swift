@@ -24,7 +24,7 @@ struct CurrenciesView: View {
     var body: some View {
         List {
             Section {
-                Toggle("Auto-update exchange rates", isOn: autoUpdateBinding)
+                Toggle("Auto-update exchange rates", isOn: autoUpdateBinding).switchOnlyToggles()
                 if let lastUpdated {
                     LabeledContent("Last updated", value: lastUpdated.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppDate.h24Locale)))
                 }

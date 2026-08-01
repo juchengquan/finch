@@ -142,7 +142,7 @@ struct ScheduledSheet: View {
 
                 Section {
                     FieldRow(glyph: .status, title: "Installment plan") {
-                        Toggle("Installment plan", isOn: $installmentEnabled)
+                        Toggle("Installment plan", isOn: $installmentEnabled).switchOnlyToggles()
                     }
                     if installmentEnabled {
                         FieldRow(glyph: .amount, title: "Number of payments") {

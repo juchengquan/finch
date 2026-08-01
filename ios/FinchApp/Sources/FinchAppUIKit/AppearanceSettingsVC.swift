@@ -384,22 +384,12 @@ final class AppearanceSettingsVC: UIViewController {
 }
 
 extension AppearanceSettingsVC: UICollectionViewDelegate {
-    /// Toggle rows are selectable so a tap ANYWHERE on the row flips the switch, as
-    /// SwiftUI's `Toggle` does. The sliders, segmented pickers and pull-down menus
-    /// own their own touches and stay unselectable.
-    private static let toggleRowIDs: Set<String> = [
-        groupByMonthID, relativeDatesID, hapticsID, adjustID, fabID,
-    ]
-
+    /// NOTHING here is row-selectable. Switch rows are flipped by their SWITCH only —
+    /// Settings.app behaviour, see `ToggleAccessory` — and the other controls own their
+    /// own touches. This must stay rather than be deleted: list rows are selectable by
+    /// default, and returning false is also what suppresses the grey selection flash.
     func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
-        guard let id = dataSource.itemIdentifier(for: indexPath) else { return false }
-        return Self.toggleRowIDs.contains(id)
-    }
-
-    func collectionView(_ cv: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        cv.deselectItem(at: indexPath, animated: true)
-        guard let cell = cv.cellForItem(at: indexPath) as? UICollectionViewListCell else { return }
-        ToggleAccessory.flip(on: cell)
+        false
     }
 }
 #endif

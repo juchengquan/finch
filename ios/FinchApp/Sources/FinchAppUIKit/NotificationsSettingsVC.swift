@@ -122,15 +122,12 @@ final class NotificationsSettingsVC: UIViewController {
 extension NotificationsSettingsVC: UICollectionViewDelegate {
     /// A tap anywhere on a kind row flips its switch, matching SwiftUI's `Toggle`.
     /// The denied-permission nudge is not selectable — its `Link` owns its touches.
+    /// NOTHING here is row-selectable. Switch rows are flipped by their SWITCH only —
+    /// Settings.app behaviour, see `ToggleAccessory` — and the other controls own their
+    /// own touches. This must stay rather than be deleted: list rows are selectable by
+    /// default, and returning false is also what suppresses the grey selection flash.
     func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
-        guard let id = dataSource.itemIdentifier(for: indexPath) else { return false }
-        return NotificationKind(rawValue: id) != nil
-    }
-
-    func collectionView(_ cv: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        cv.deselectItem(at: indexPath, animated: true)
-        guard let cell = cv.cellForItem(at: indexPath) as? UICollectionViewListCell else { return }
-        ToggleAccessory.flip(on: cell)
+        false
     }
 }
 #endif
