@@ -136,9 +136,11 @@ struct CategoryBreakdownCard: View {
         }
         Card(title: "Spending by category") {
             if data.isEmpty {
-                Text("No spending this month").font(.caption).foregroundStyle(.secondary)
+                // Name the month rather than say "this month": these cards follow the
+                // newest transaction, so on a quiet day "this month" is last month.
+                Text("No spending in \(monthLabel(month))").font(.caption).foregroundStyle(.secondary)
             } else {
-                Donut(data: data, centerLabel: "This month", format: store.displayMoneyBase)
+                Donut(data: data, centerLabel: monthLabel(month), format: store.displayMoneyBase)
                     .frame(height: 200)
             }
         }
@@ -150,10 +152,11 @@ struct CategoryBreakdownCard: View {
 struct TopMerchantsCard: View {
     @EnvironmentObject private var store: FinchStore
     var body: some View {
-        let rows = Selectors.topMerchants(store.txns, store.activeLedgerId, String(store.today.prefix(7)))
+        let month = String(store.today.prefix(7))
+        let rows = Selectors.topMerchants(store.txns, store.activeLedgerId, month)
         Card(title: "Top merchants") {
             if rows.isEmpty {
-                Text("No spending this month").font(.caption).foregroundStyle(.secondary)
+                Text("No spending in \(monthLabel(month))").font(.caption).foregroundStyle(.secondary)
             } else {
                 VStack(spacing: 6) {
                     StackedBar(slices: Array(rows.enumerated()).map { i, r in
@@ -179,7 +182,7 @@ struct ForecastCard: View {
     var body: some View {
         let month = String(store.today.prefix(7))
         // MTD + run-rate + remaining scheduled (the upcoming-bills term).
-        Card(title: "This month's forecast") {
+        Card(title: "\(monthLabel(month)) forecast") {
             if let f = Selectors.monthForecast(store.txns, store.scheduled, store.activeLedgerId, month, store.today) {
                 VStack(alignment: .leading, spacing: 4) {
                     LabeledContent("Spent so far", value: store.displayMoneyBase(f.mtdSpent))
@@ -337,7 +340,8 @@ struct CashflowCard: View {
 struct SavingsRateCard: View {
     @EnvironmentObject private var store: FinchStore
     var body: some View {
-        let pt = Selectors.monthlyCashflow(store.txns, store.activeLedgerId, String(store.today.prefix(7)), 1).last
+        let month = String(store.today.prefix(7))
+        let pt = Selectors.monthlyCashflow(store.txns, store.activeLedgerId, month, 1).last
         let inc = pt?.inc ?? 0
         let exp = pt?.exp ?? 0
         let rate: Double? = inc > 0 ? (inc - exp) / inc : nil
@@ -349,12 +353,12 @@ struct SavingsRateCard: View {
                          color: rate >= 0 ? .green : .orange) {
                         Text("\(pct)%").font(.caption).fontWeight(.semibold)
                     }
-                    Text(rate >= 0 ? "of income saved this month"
-                                   : "spent more than earned this month")
+                    Text(rate >= 0 ? "of income saved in \(monthLabel(month))"
+                                   : "spent more than earned in \(monthLabel(month))")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             } else {
-                Text("No income this month").font(.caption).foregroundStyle(.secondary)
+                Text("No income in \(monthLabel(month))").font(.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -489,10 +493,11 @@ struct IncomeSankeyCard: View {
     @EnvironmentObject private var store: FinchStore
     var body: some View {
         let cats = store.pickableCategories.map { ColoredCategory(id: $0.id, name: $0.name, color: nil) }
-        let flow = Selectors.incomeCategoryFlow(store.txns, cats, store.activeLedgerId, String(store.today.prefix(7)))
+        let month = String(store.today.prefix(7))
+        let flow = Selectors.incomeCategoryFlow(store.txns, cats, store.activeLedgerId, month)
         Card(title: "Where income goes") {
             if flow.income <= 0 {
-                Text("No income this month").font(.caption).foregroundStyle(.secondary)
+                Text("No income in \(monthLabel(month))").font(.caption).foregroundStyle(.secondary)
             } else {
                 Sankey(total: flow.income, segments: segments(flow))
             }
