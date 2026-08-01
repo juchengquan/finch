@@ -111,4 +111,40 @@ final class MultiAccountAddTests: XCTestCase {
         XCTAssertEqual(legs, 2, "both payment accounts must survive the refusal")
         XCTAssertEqual(total, -100, "…carrying the full amount")
     }
+
+    /// bulkRecategorize has the same LIMIT-1-rebuild hazard as setTransactionSplits:
+    /// a split-tender entry has exactly one category leg (catCount < 2), so the
+    /// existing `catCount >= 2` skip never fires, and the rebuild would silently
+    /// drop every account leg but the one LIMIT 1 fetches. Unlike setTransactionSplits
+    /// (a single caller that can be told no), this is a bulk loop over many ids — it
+    /// must skip the unsafe entry and keep going, not throw.
+    func test_bulkRecategorize_onMultiAccountEntry_isSkippedAndKeepsBothLegs() throws {
+        let q = try seedTwoAccounts()
+        try q.write { db in
+            try db.execute(sql: """
+                INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at)
+                VALUES ('c2','l1',NULL,'Household','expense',1,datetime('now'),datetime('now'))
+                """)
+        }
+        let eid = try Apply.applyReturningId(dbQueue: q, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "amount": .double(-100),
+            "merchant": .string("Market"), "categoryId": .string("c1"),
+            "date": .string("2026-06-01"),
+            "accounts": .array([
+                .object(["accountId": .string("a2"), "amount": .double(-60)]),
+                .object(["accountId": .string("a1"), "amount": .double(-40)]),
+            ])]))!
+
+        try Apply.apply(dbQueue: q, action: "bulkRecategorize", args: Args([
+            "ids": .array([.string(eid)]), "categoryId": .string("c2")]))
+
+        let (legs, total, catId) = try q.read { db in
+            (try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM postings WHERE entry_id = ? AND account_id IS NOT NULL", arguments: [eid]) ?? 0,
+             try Double.fetchOne(db, sql: "SELECT ROUND(SUM(amount_base), 2) FROM postings WHERE entry_id = ? AND account_id IS NOT NULL", arguments: [eid]) ?? 0,
+             try String.fetchOne(db, sql: "SELECT category_id FROM postings WHERE entry_id = ? AND category_id IS NOT NULL", arguments: [eid]))
+        }
+        XCTAssertEqual(legs, 2, "both payment accounts must survive the skip")
+        XCTAssertEqual(total, -100, "…carrying the full amount")
+        XCTAssertEqual(catId, "c1", "the category must be untouched — the whole recategorize was skipped for this entry")
+    }
 }

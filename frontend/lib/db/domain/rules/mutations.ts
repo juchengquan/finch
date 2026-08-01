@@ -124,7 +124,17 @@ export const handlers = {
             'SELECT category_id FROM postings WHERE entry_id = ? AND category_id IS NOT NULL',
             [tx.id],
           );
-          if (catLegs.length < 2) {
+          // A purchase paid from several accounts carries exactly one category leg by
+          // design, so catLegs.length stays < 2 — but the rebuild below still reads a
+          // single account leg (LIMIT 1) and would silently drop every other payment.
+          // Skip just this entry's re-categorization (header fields and tags above/
+          // below still apply); a batch backfill should skip what it cannot safely do,
+          // not abort (mirrored on iOS).
+          const [{ n: acctLegCount }] = await exec(
+            'SELECT COUNT(*) AS n FROM postings WHERE entry_id = ? AND account_id IS NOT NULL',
+            [tx.id],
+          );
+          if (catLegs.length < 2 && Number(acctLegCount) <= 1) {
             const legs: LegInput[] = [
               {
                 id: String(acctLeg.id),
