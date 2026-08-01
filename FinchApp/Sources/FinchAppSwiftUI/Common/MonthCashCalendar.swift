@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The shared month-grid cash calendar: header (tappable month-year wheels +
-/// Today + chevrons), weekday row, and a finger-following 3-page month carousel
+/// Today + chevrons), weekday row, and a finger-following month carousel
 /// whose day cells carry up to two exact amount lines (income green, expense
 /// red; cents only when non-zero). The SEMANTICS of the amounts belong to the
 /// caller — the Scheduled tab feeds scheduled totals, Activity feeds actual
@@ -14,7 +14,7 @@ struct MonthCashCalendar: View {
     /// circle, the Today button, and the year-wheel range.
     let wallToday: String
     /// Per-day cash lines for the inclusive ISO range (called once per rendered
-    /// month page — the carousel renders three).
+    /// month page — the carousel keeps the visible month and its neighbours).
     let amountsForRange: (_ from: String, _ through: String) -> [String: (income: Double, expense: Double)]
     /// Formats a magnitude for a cell line; nil drops the line (privacy mode).
     let format: (Double) -> String?
@@ -23,10 +23,6 @@ struct MonthCashCalendar: View {
     /// deliberately knows nothing about the store.
     let masked: Bool
 
-    /// 3-page carousel position (-1/0/+1 around monthAnchor). A settled swipe
-    /// commits the month and snaps back to 0 without animation (a TabView over
-    /// ALL months would build every page eagerly — the carousel keeps it at 3).
-    @State private var pagerIndex = 0
     @State private var showingMonthYearPicker = false
 
     /// Locale-aware three-letter weekday row ("Sun Mon …"; 周日 周一 … in
@@ -67,30 +63,14 @@ struct MonthCashCalendar: View {
             header
             weekdayRow
             #if os(iOS)
-            // Interactive month paging: prev/current/next are REAL pages in
-            // a .page TabView, so the neighboring month follows the finger
-            // (an after-the-fact .transition can't do that). On settle,
-            // commit the month and snap back to center animation-free.
-            TabView(selection: $pagerIndex) {
-                monthPage(for: month(-1)).tag(-1)
-                monthPage(for: monthAnchor).tag(0)
-                monthPage(for: month(1)).tag(1)
+            // Interactive month paging: the neighboring months are REAL pages, so
+            // they follow the finger (an after-the-fact .transition can't do that).
+            // Each page IS its month — see MonthPager for why the earlier
+            // three-page-window-plus-recentre arrangement cost the animation.
+            MonthPager(anchorIndex: monthIndexBinding, range: pageRange) { index in
+                monthPage(for: Self.date(fromMonthIndex: index))
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
             .frame(height: Self.gridHeight)
-            // Recreate the pager after every commit: the settle's snap-back
-            // left the old pager's in-flight completion alive, and it would
-            // re-emit the selection write on top of the recentered state —
-            // advancing TWO months per swipe/chevron. A fresh pager (new
-            // identity per anchored month) has nothing in flight.
-            .id(Self.monthIndex(monthAnchor))
-            .onChange(of: pagerIndex) { _, idx in
-                guard idx != 0 else { return }
-                monthAnchor = month(idx)
-                var t = Transaction()
-                t.disablesAnimations = true
-                withTransaction(t) { pagerIndex = 0 }
-            }
             #else
             monthPage(for: monthAnchor)
             #endif
@@ -108,6 +88,10 @@ struct MonthCashCalendar: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Month and year")
+            // The label names the CONTROL, which left the anchored month itself
+            // unspoken — VoiceOver read "Month and year, button" wherever you had
+            // paged to. The value carries the month the grid is actually showing.
+            .accessibilityValue(monthLabel)
             .popover(isPresented: $showingMonthYearPicker) { monthYearPicker }
             Spacer()
             // .borderless so each button is its own tap target inside the List
@@ -207,25 +191,50 @@ struct MonthCashCalendar: View {
     /// Week rows a month actually needs (5 for most, 4 or 6 at the extremes).
     static func weekRows(firstWeekday: Int, days: Int) -> Int { (firstWeekday + days + 6) / 7 }
     /// CONSTANT grid height (a 6-week month at 62pt cells + 4pt spacing) so every
-    /// month — and all three carousel pages — render the same height: no layout
+    /// month — and every carousel page — renders the same height: no layout
     /// jump when paging. Months with fewer weeks stretch their rows to fill
     /// (`cellHeight(rows:)`) instead of carrying an empty padded week.
     static let gridHeight: CGFloat = 6 * 62 + 5 * 4
     static func cellHeight(rows: Int) -> CGFloat { (gridHeight - 4 * CGFloat(rows - 1)) / CGFloat(rows) }
 
-    /// Absolute month index (year*12+month, civil calendar) — the pager's
-    /// per-month identity for the `.id` recreation above.
+    /// Absolute month index (year*12+month, civil calendar) — one number per month,
+    /// contiguous across year boundaries. This is the pager's page identity: a page
+    /// knows its own month, so its neighbours are simply ±1.
     static func monthIndex(_ d: Date) -> Int {
         let c = AppDate.civil.dateComponents([.year, .month], from: d)
         return (c.year ?? 2000) * 12 + (c.month ?? 1) - 1
     }
-    /// The anchor month shifted by `off` months.
-    private func month(_ off: Int) -> Date {
-        AppDate.civil.date(byAdding: .month, value: off, to: monthAnchor) ?? monthAnchor
+    /// The anchored month as a page index, written back when a swipe settles. The
+    /// carousel has no month state of its own — `monthAnchor` IS its position, so
+    /// the two cannot drift apart mid-gesture.
+    private var monthIndexBinding: Binding<Int> {
+        Binding(get: { Self.monthIndex(monthAnchor) },
+                set: { monthAnchor = Self.date(fromMonthIndex: $0) })
+    }
+
+    /// Months the carousel can reach: 50 years either side of today. Deliberately
+    /// CONSTANT for a given `wallToday` — a range that grew as you paged would change
+    /// the carousel's contents mid-swipe, which is the class of churn this pager
+    /// exists to avoid. `LazyHStack` builds only the months on screen, so the span
+    /// costs nothing; the bounds widen only for an anchor already outside it (data
+    /// far in the past), where the alternative is a page that cannot be shown.
+    private var pageRange: ClosedRange<Int> {
+        let today = Self.monthIndex(Self.firstOfMonth(forISO: wallToday))
+        let anchor = Self.monthIndex(monthAnchor)
+        return min(today - 600, anchor - 1)...max(today + 600, anchor + 1)
+    }
+
+    /// `monthIndex` inverted — the first of the month that index names.
+    static func date(fromMonthIndex i: Int) -> Date {
+        var c = DateComponents()
+        c.year = i / 12
+        c.month = i % 12 + 1
+        c.day = 1
+        return AppDate.civil.date(from: c) ?? Date()
     }
 
     /// One month's grid, self-contained (fetches its own amounts map) so the
-    /// carousel's prev/next pages render their own real content.
+    /// carousel's neighbouring pages render their own real content.
     private func monthPage(for m: Date) -> some View {
         let year = AppDate.civil.component(.year, from: m)
         let month = AppDate.civil.component(.month, from: m)
@@ -322,14 +331,11 @@ struct MonthCashCalendar: View {
             .frame(width: 6, height: 6)
     }
 
+    /// Chevron step. One assignment on both platforms: on iOS the pager sees a
+    /// ±1 change of anchor and slides to it itself, so the chevrons and a swipe
+    /// share one path to the same animation.
     private func step(_ n: Int) {
-        #if os(iOS)
-        // Animate the carousel to the neighbor; its onChange commits the month
-        // and recreates the pager. (Chevrons get the same slide as a swipe.)
-        withAnimation(.easeInOut(duration: 0.25)) { pagerIndex = n }
-        #else
         guard let d = AppDate.civil.date(byAdding: .month, value: n, to: monthAnchor) else { return }
         monthAnchor = d
-        #endif
     }
 }
