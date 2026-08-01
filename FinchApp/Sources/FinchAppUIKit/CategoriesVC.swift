@@ -716,31 +716,67 @@ extension CategoriesVC: UICollectionViewDropDelegate {
                         dropSessionDidUpdate session: UIDropSession,
                         withDestinationIndexPath destinationIndexPath: IndexPath?) -> UICollectionViewDropProposal {
         guard isReordering else { return UICollectionViewDropProposal(operation: .cancel) }
-        // `.insertIntoDestinationIndexPath` makes UIKit highlight the row under the
-        // finger, which is the feedback the SwiftUI version gave by tinting the row.
-        return UICollectionViewDropProposal(operation: .move, intent: .insertIntoDestinationIndexPath)
+
+        // The INTENT follows the zone, because the two intents are the only way to
+        // ask UIKit for the two different pieces of feedback this screen needs:
+        //
+        //   .insertAtDestinationIndexPath   → the list OPENS A SPACE at the boundary
+        //   .insertIntoDestinationIndexPath → the row under the finger HIGHLIGHTS
+        //
+        // This used to return `.insertInto…` unconditionally — inherited from the
+        // SwiftUI version, which gave its feedback by tinting the row — so no drag
+        // could ever open a gap, whether it was going to nest or to insert between
+        // two rows. Both read as "highlight a row", and where the category would
+        // actually land was left to the imagination.
+        //
+        // Deriving both this and the drop itself from `dropTarget(at:)` is what
+        // keeps the space you see and the position you get from disagreeing.
+        guard let target = dropTarget(at: session.location(in: collectionView)) else {
+            return UICollectionViewDropProposal(operation: .move, intent: .insertAtDestinationIndexPath)
+        }
+        // "Top level" is a nest-into target, not a position between rows.
+        guard target.id != Self.topLevelID else {
+            return UICollectionViewDropProposal(operation: .move, intent: .insertIntoDestinationIndexPath)
+        }
+        switch target.zone {
+        case .before, .after:
+            return UICollectionViewDropProposal(operation: .move, intent: .insertAtDestinationIndexPath)
+        case .into:
+            return UICollectionViewDropProposal(operation: .move, intent: .insertIntoDestinationIndexPath)
+        }
+    }
+
+    /// The row under `point` and which of its three zones the point falls in.
+    ///
+    /// Deliberately shared by `dropSessionDidUpdate` and `performDropWith`: the
+    /// first decides which feedback UIKit shows (a space, or a highlighted row),
+    /// the second decides where the category actually goes. Computing them from
+    /// two copies of this arithmetic is how a gap ends up opening in one place and
+    /// the row landing in another.
+    private func dropTarget(at point: CGPoint) -> (id: String, zone: CategoryDropZone)? {
+        guard let indexPath = collectionView.indexPathForItem(at: point),
+              let id = dataSource.itemIdentifier(for: indexPath) else { return nil }
+        let frame = collectionView.cellForItem(at: indexPath)?.frame ?? .zero
+        return (id, CategoryDropZone.at(pointY: point.y, cellMinY: frame.minY, cellHeight: frame.height))
     }
 
     func collectionView(_ cv: UICollectionView, performDropWith coordinator: UICollectionViewDropCoordinator) {
         guard let source = coordinator.items.first?.dragItem.localObject as? String ?? draggingId else { return }
         let rows = kindRows
-        let point = coordinator.session.location(in: cv)
 
-        guard let indexPath = cv.indexPathForItem(at: point),
-              let targetID = dataSource.itemIdentifier(for: indexPath) else { return }
+        guard let target = dropTarget(at: coordinator.session.location(in: cv)) else { return }
 
-        if targetID == Self.topLevelID {
+        if target.id == Self.topLevelID {
             if let move = CategoryReorder.reparent(source, under: nil, in: rows) { applyMoves([move]) }
             return
         }
-        guard flatByID[targetID] != nil, targetID != source else { return }
+        guard flatByID[target.id] != nil, target.id != source else { return }
 
-        let frame = cv.cellForItem(at: indexPath)?.frame ?? .zero
-        switch CategoryDropZone.at(pointY: point.y, cellMinY: frame.minY, cellHeight: frame.height) {
-        case .before: applyMoves(CategoryReorder.reorder(source, .before, of: targetID, in: rows))
-        case .after:  applyMoves(CategoryReorder.reorder(source, .after, of: targetID, in: rows))
+        switch target.zone {
+        case .before: applyMoves(CategoryReorder.reorder(source, .before, of: target.id, in: rows))
+        case .after:  applyMoves(CategoryReorder.reorder(source, .after, of: target.id, in: rows))
         case .into:
-            if let move = CategoryReorder.reparent(source, under: targetID, in: rows) { applyMoves([move]) }
+            if let move = CategoryReorder.reparent(source, under: target.id, in: rows) { applyMoves([move]) }
         }
     }
 }
