@@ -177,7 +177,15 @@ final class ScheduledListVC: UIViewController {
                         options: [(value: "Calendar", title: String(localized: "Calendar")),
                                   (value: "List", title: String(localized: "List"))])
                 }
-                .margins(.vertical, 4)
+                // Match `ViewModePickerRow`'s own insets (top 0 / bottom 4) and its
+                // `.listRowBackground(Color.clear)`. Without the clear background an
+                // insetGrouped cell wraps the segmented control in a white card the
+                // SwiftUI row does not have — the same thing the Activity, Categories
+                // and account-detail pickers were fixed for; this screen went native
+                // afterwards and missed it.
+                .margins(.top, 0)
+                .margins(.bottom, 4)
+                cell.backgroundConfiguration = .clear()
 
             case Self.calendarID:
                 // The month GRID only. `ScheduledCalendarView` returns a `List`, so
