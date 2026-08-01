@@ -18,10 +18,10 @@ private struct MergePair: Identifiable {
 /// Categories admin — a 3-level tree (inline expand/collapse) with per-category
 /// icon + color, search, create-child, edit, delete (children promote up a
 /// level), and **drag to reparent + reorder** (only in Reorder mode, entered via
-/// ⋯ → Reorder): drop on a row's middle to nest under it, its top quarter to
-/// place the dragged category before it, its bottom quarter to place it after it;
-/// the "Top level" zone un-nests. All through the chokepoint (create / update /
-/// deleteCategory).
+/// ⋯ → Reorder): a drop places the category before or after the target within the
+/// target's OWN sibling group, so dropping beside a top-level row un-nests. Nesting
+/// is gated separately — see `reorderableRow`. All through the chokepoint (create /
+/// update / deleteCategory).
 struct CategoriesView: View {
     @EnvironmentObject private var store: FinchStore
     @State private var kind: CategoryKind = .expense
@@ -42,7 +42,6 @@ struct CategoriesView: View {
     @State private var copyingCategory: CategoryRow?          // row → Copy-to-ledger sheet
 
     @State private var dropTargetId: String?      // row currently targeted by a drag
-    @State private var topLevelTargeted = false
     /// The category folded away for the duration of a drag — see `.onDrag` in
     /// `reorderableRow`. Restored by whichever drop handler accepts the drag.
     @State private var collapsedForDrag: String?
@@ -70,7 +69,6 @@ struct CategoriesView: View {
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             }
-            if isReordering { topLevelDropZone }
             if rows.isEmpty {
                 emptyKindMessage
             } else {
@@ -211,7 +209,7 @@ struct CategoriesView: View {
             }
         } else if isReordering {
             ToolbarItem(placement: .confirmationAction) {
-                Button { isReordering = false; dropTargetId = nil; topLevelTargeted = false } label: { Image(systemName: "checkmark") }
+                Button { isReordering = false; dropTargetId = nil } label: { Image(systemName: "checkmark") }
                     .accessibilityLabel("Done")
                     .confirmCheckmarkStyle()
             }
@@ -229,25 +227,6 @@ struct CategoriesView: View {
                 .accessibilityLabel("More")
             }
         }
-    }
-
-    /// Drop here to move a category to the top level (un-nest).
-    private var topLevelDropZone: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "arrow.up.to.line").font(.caption).foregroundStyle(.secondary).frame(width: 16)
-            Text("Top level").font(.subheadline).foregroundStyle(.secondary)
-            Spacer()
-        }
-        .contentShape(Rectangle())
-        .dropDestination(for: String.self) { items, _ in
-            guard let src = items.first, let m = CategoryReorder.reparent(src, under: nil, in: rows) else {
-                restoreCollapsedForDrag(); return false
-            }
-            applyMoves([m])
-            restoreCollapsedForDrag()
-            return true
-        } isTargeted: { topLevelTargeted = $0 }
-        .listRowBackground(topLevelTargeted ? Color.accentColor.opacity(0.15) : nil)
     }
 
     /// A row in reorder mode, draggable and droppable.
@@ -437,19 +416,20 @@ struct CategoriesView: View {
         ToastCenter.shared.show(added > 0 ? "\(added) added" : "Nothing new to copy")
     }
 
+    /// One write for the whole drag — see `Categories.setOrder`. A move per sibling
+    /// through `updateCategory` meant a full ledger reprojection and the entire write
+    /// side-effect set (Spotlight, notifications, widget, auto-backup, CloudKit
+    /// outbox) for EACH of them.
     private func applyMoves(_ moves: [CategoryMove]) {
         errorMessage = nil
+        guard !moves.isEmpty else { return }
         do {
-            for m in moves {
-                try store.apply(.updateCategory, Args(["id": .string(m.id), "patch": .object(movePatch(m))]))
-            }
+            try store.apply(.setCategoryOrder, Args(["moves": .array(moves.map { m in
+                .object(["id": .string(m.id),
+                         "parentId": m.parentId.map(JSONValue.string) ?? .null,
+                         "sortOrder": .int(m.sortOrder)])
+            })]))
         } catch { errorMessage = i18nMessage(error) }
-    }
-
-    private func movePatch(_ m: CategoryMove) -> [String: JSONValue] {
-        var patch: [String: JSONValue] = ["sortOrder": .int(m.sortOrder)]
-        patch["parentId"] = m.parentId.map(JSONValue.string) ?? .null
-        return patch
     }
 
     private func delete(_ c: CategoryRow) {

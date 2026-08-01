@@ -60,7 +60,8 @@ enum CategoryDropZone: Equatable {
     static let nestingDragThreshold: CGFloat = 32
 
     /// Whether a drag that has travelled `dragDX` horizontally may nest.
-    /// Rightward only — dragging LEFT is not an un-nest gesture here; the
-    /// "Top level" drop row does that job.
+    /// Rightward only. Dragging LEFT is not an un-nest gesture: un-nesting happens
+    /// by dropping beside a shallower row, since a drop always joins the TARGET's
+    /// sibling group — land next to a top-level category and you become top-level.
     static func allowsNesting(dragDX: CGFloat) -> Bool { dragDX >= nestingDragThreshold }
 }
