@@ -389,7 +389,7 @@ async function canonicalState(x: Exec): Promise<Record<string, unknown>> {
     categories: map(await rows('SELECT * FROM categories ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, parent_id: (r) => r.parent_id ?? null, name: (r) => r.name, kind: (r) => r.kind, system: (r) => r.system ?? null, sort_order: (r) => Number(r.sort_order) }),
     counterparties: map(await rows('SELECT * FROM counterparties ORDER BY id'), { id: (r) => r.id, name: (r) => r.name, is_verified: (r) => Number(r.is_verified) }),
     tags: map(await rows('SELECT * FROM tags ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, name: (r) => r.name, color: (r) => r.color ?? null }),
-    budgets: map(await rows('SELECT * FROM budgets ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, group_id: (r) => r.group_id ?? null, name: (r) => r.name, kind: (r) => r.kind, amount: (r) => num(r.amount), saved: (r) => num(r.saved), frequency: (r) => r.frequency, start_date: (r) => r.start_date, end_date: (r) => r.end_date ?? null, is_recurring: (r) => Number(r.is_recurring), rollover: (r) => Number(r.rollover), account_ids: (r) => r.account_ids ?? null, category_ids: (r) => r.category_ids ?? null, warning_pct: (r) => num(r.warning_pct), pending_amount: (r) => num(r.pending_amount) }),
+    budgets: map(await rows('SELECT * FROM budgets ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, group_id: (r) => r.group_id ?? null, name: (r) => r.name, kind: (r) => r.kind, amount: (r) => num(r.amount), saved: (r) => num(r.saved), frequency: (r) => r.frequency, start_date: (r) => r.start_date, start_time: (r) => r.start_time ?? null, end_date: (r) => r.end_date ?? null, end_time: (r) => r.end_time ?? null, is_recurring: (r) => Number(r.is_recurring), rollover: (r) => Number(r.rollover), account_ids: (r) => r.account_ids ?? null, category_ids: (r) => r.category_ids ?? null, warning_pct: (r) => num(r.warning_pct), pending_amount: (r) => num(r.pending_amount) }),
     budget_groups: map(await rows('SELECT * FROM budget_groups ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, name: (r) => r.name, sort_order: (r) => Number(r.sort_order) }),
     holdings: map(await rows('SELECT * FROM holdings ORDER BY id'), { id: (r) => r.id, account_id: (r) => r.account_id, symbol: (r) => r.symbol, shares: (r) => num(r.shares), cost_basis: (r) => num(r.cost_basis), currency: (r) => r.currency, last_price: (r) => num(r.last_price) }),
     exchange_rates: map(await rows('SELECT * FROM exchange_rates ORDER BY date, currency'), { date: (r) => r.date, currency: (r) => r.currency, rate: (r) => num(r.rate), source: (r) => r.source ?? null }),
@@ -431,6 +431,10 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: 2000, merchant: 'Pay', categoryId: 'pay', date: '2026-05-02', kind: 'income', skipRules: true } },
   { action: 'createTransfer', args: { fromAccountId: 'a1', toAccountId: 'a2', fromAmount: 500, date: '2026-05-03' } },
   { action: 'createBudget', args: { id: 'b1', ledgerId: 'personal', name: 'Food', type: 'expense', amount: 300, categoryIds: ['food'], startDate: '2026-01-01' } },
+  // A budget whose cycle turns over at 09:30 rather than midnight — the only
+  // difference from b1, so the fixture pins that start_time survives the write
+  // path and lands in canonical state on both stacks.
+  { action: 'createBudget', args: { id: 'b2', ledgerId: 'personal', name: 'Lunch', type: 'expense', amount: 120, categoryIds: ['food'], startDate: '2026-01-01', startTime: '09:30' } },
   { action: 'createBudgetGroup', args: { id: 'bg1', ledgerId: 'personal', name: 'Essentials' } },
   { action: 'setExchangeRate', args: { date: '2026-05-01', currency: 'EUR', rate: 1.1 } },
   { action: 'setDisplayCurrency', args: { ledgerId: 'personal', currency: 'USD' } },

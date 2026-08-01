@@ -61,6 +61,16 @@ extension Args {
     }
 }
 
+/// HH:mm format check (mirrors the web `/^\d{2}:\d{2}$/`). 24-hour, zero-padded —
+/// the shape every stored `time` column already uses, and the one string comparison
+/// on times relies on.
+func isHM(_ s: String) -> Bool {
+    guard s.count == 5 else { return false }
+    let p = s.split(separator: ":", omittingEmptySubsequences: false)
+    guard p.count == 2, p[0].count == 2, p[1].count == 2 else { return false }
+    return p.allSatisfy { $0.allSatisfy(\.isNumber) }
+}
+
 /// YYYY-MM-DD format check (mirrors the web `/^\d{4}-\d{2}-\d{2}$/`).
 func isYMD(_ s: String) -> Bool {
     guard s.count == 10 else { return false }

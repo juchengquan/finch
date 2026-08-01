@@ -35,6 +35,8 @@ function rowToBudget(r: Record<string, unknown>): BudgetRow {
     carryForward: Number(r.carry_forward ?? 0),
     frequency: String(r.frequency),
     startDate: String(r.start_date),
+    startTime: r.start_time == null ? null : String(r.start_time),
+    endTime: r.end_time == null ? null : String(r.end_time),
     endDate: r.end_date == null ? null : String(r.end_date),
     isRecurring: Number(r.is_recurring ?? 1),
     rollover: Number(r.rollover ?? 0),
@@ -67,9 +69,9 @@ export async function createBudget(exec: Exec, b: NewBudget): Promise<void> {
   await exec(
     `INSERT INTO budgets
        (id, ledger_id, group_id, name, kind, amount, saved, carry_forward,
-        frequency, start_date, end_date, is_recurring, rollover, rollover_limit,
+        frequency, start_date, start_time, end_date, end_time, is_recurring, rollover, rollover_limit,
         account_ids, category_ids, tag_ids, counterparty_ids, warning_pct, created_at, updated_at)
-    VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
+    VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
     [
       b.id,
       b.ledgerId,
@@ -80,7 +82,9 @@ export async function createBudget(exec: Exec, b: NewBudget): Promise<void> {
       b.saved ?? 0,
       b.frequency,
       b.startDate,
+      b.startTime ?? null,
       b.endDate ?? null,
+      b.endTime ?? null,
       b.isRecurring ?? (b.type === 'income' ? 0 : 1),
       b.rollover ?? 0,
       b.rolloverLimit ?? null,
@@ -101,6 +105,8 @@ const BUDGET_PATCH_COLUMNS: Record<keyof BudgetPatch, string> = {
   saved: 'saved',
   frequency: 'frequency',
   startDate: 'start_date',
+  startTime: 'start_time',
+  endTime: 'end_time',
   endDate: 'end_date',
   isRecurring: 'is_recurring',
   rollover: 'rollover',
@@ -165,7 +171,7 @@ export async function clearPendingAmount(exec: Exec, id: string): Promise<void> 
  * carry_forward and rollover_limit (absolute amounts, cycle-agnostic).
  */
 export async function updateBudgetCycle(exec: Exec, id: string, patch: BudgetCyclePatch): Promise<void> {
-  const existing = await exec('SELECT amount, end_date FROM budgets WHERE id = ?', [id]);
+  const existing = await exec('SELECT amount, end_date, end_time FROM budgets WHERE id = ?', [id]);
   if (!existing.length) throw new I18nError(BUDGET_ERROR_CODES.notFound, {}, 'Budget not found');
   const amount = patch.amount ?? Number(existing[0].amount);
   // undefined preserves the existing end_date; explicit null clears it; a
@@ -173,13 +179,16 @@ export async function updateBudgetCycle(exec: Exec, id: string, patch: BudgetCyc
   const endDate = patch.endDate === undefined
     ? (existing[0].end_date == null ? null : String(existing[0].end_date))
     : patch.endDate;
+  const endTime = patch.endTime === undefined
+    ? (existing[0].end_time == null ? null : String(existing[0].end_time))
+    : patch.endTime;
   await exec(
     `UPDATE budgets
-       SET amount = ?, frequency = ?, start_date = ?, end_date = ?,
+       SET amount = ?, frequency = ?, start_date = ?, start_time = ?, end_date = ?, end_time = ?,
            pending_amount = NULL, last_rolled_period = NULL,
            updated_at = datetime('now')
      WHERE id = ?`,
-    [amount, patch.frequency, patch.startDate, endDate, id],
+    [amount, patch.frequency, patch.startDate, patch.startTime ?? null, endDate, endTime, id],
   );
 }
 

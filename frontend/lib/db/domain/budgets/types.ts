@@ -17,7 +17,11 @@ export interface BudgetRow {
   carryForward: number;
   frequency: string;
   startDate: string;
+  /** Time-of-day the cycle turns over (HH:mm). Absent/null = midnight — what
+   *  every budget did before cycles could carry a time. */
+  startTime?: string | null;
   endDate: string | null;
+  endTime?: string | null;
   isRecurring: number;
   rollover: number;
   rolloverLimit: number | null;
@@ -43,7 +47,9 @@ export interface NewBudget {
   saved?: number;
   frequency: string;
   startDate: string;
+  startTime?: string | null;
   endDate?: string | null;
+  endTime?: string | null;
   isRecurring?: number;
   rollover?: number;
   rolloverLimit?: number | null;
@@ -62,7 +68,9 @@ export interface BudgetPatch {
   saved?: number;
   frequency?: string;
   startDate?: string;
+  startTime?: string | null;
   endDate?: string | null;
+  endTime?: string | null;
   isRecurring?: number;
   rollover?: number;
   rolloverLimit?: number | null;
@@ -76,8 +84,11 @@ export interface BudgetPatch {
 export interface BudgetCyclePatch {
   frequency: string;
   startDate: string;
+  /** Time-of-day the cycle turns over, 'HH:mm'. Omitted/null = midnight. */
+  startTime?: string | null;
   /** When omitted, the current `amount` carries over unchanged. */
   amount?: number;
   /** Optional end-date adjustment alongside the cycle change. */
   endDate?: string | null;
+  endTime?: string | null;
 }

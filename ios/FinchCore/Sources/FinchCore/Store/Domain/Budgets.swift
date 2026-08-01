@@ -63,6 +63,7 @@ public enum Budgets {
         struct A: Decodable {
             let id: String?; let ledgerId: String?; let groupId: String?; let name: String; let type: String?
             let amount: Double; let saved: Double?; let frequency: String?; let startDate: String?; let endDate: String?
+            let startTime: String?; let endTime: String?
             let isRecurring: Double?; let rolloverLimit: Double?
             let accountIds: [String]?; let categoryIds: [String]?
             let tagIds: [String]?; let counterpartyIds: [String]?; let warningPct: Double?
@@ -79,11 +80,12 @@ public enum Budgets {
         try Dedup.wrap {
             try db.execute(sql: """
                 INSERT INTO budgets (id, ledger_id, group_id, name, kind, amount, saved, carry_forward,
-                    frequency, start_date, end_date, is_recurring, rollover, rollover_limit,
+                    frequency, start_date, start_time, end_date, end_time, is_recurring, rollover, rollover_limit,
                     account_ids, category_ids, tag_ids, counterparty_ids, warning_pct, created_at, updated_at)
-                VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))
+                VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))
                 """, arguments: [a.id ?? Entries.newId("bgt"), a.ledgerId ?? "personal", a.groupId, name, type,
-                                 a.amount, a.saved ?? 0, a.frequency ?? "monthly", startDate, a.endDate, isRecurring,
+                                 a.amount, a.saved ?? 0, a.frequency ?? "monthly", startDate, a.startTime,
+                                 a.endDate, a.endTime, isRecurring,
                                  rollover, a.rolloverLimit, idsToJson(a.accountIds ?? []), idsToJson(a.categoryIds ?? []),
                                  idsToJson(a.tagIds ?? []), idsToJson(a.counterpartyIds ?? []),
                                  a.warningPct ?? 80])
@@ -92,7 +94,8 @@ public enum Budgets {
 
     private static let cols: [String: String] = [
         "groupId": "group_id", "name": "name", "type": "kind", "amount": "amount", "frequency": "frequency",
-        "startDate": "start_date", "endDate": "end_date", "isRecurring": "is_recurring", "rollover": "rollover",
+        "startDate": "start_date", "startTime": "start_time", "endDate": "end_date", "endTime": "end_time",
+        "isRecurring": "is_recurring", "rollover": "rollover",
         "rolloverLimit": "rollover_limit", "accountIds": "account_ids", "categoryIds": "category_ids",
         "tagIds": "tag_ids", "counterpartyIds": "counterparty_ids", "saved": "saved", "warningPct": "warning_pct",
     ]
@@ -136,17 +139,25 @@ public enum Budgets {
             throw I18nError("error.budget.dateFormat", [:], "startDate must be YYYY-MM-DD")
         }
         if let amt = patch["amount"]?.asDouble, !(amt > 0) { throw I18nError("error.budget.amountGt0", [:], "Budget amount must be greater than 0") }
-        guard let existing = try Row.fetchOne(db, sql: "SELECT amount, end_date FROM budgets WHERE id = ?", arguments: [id]) else {
+        // The turnover time travels with the start date it belongs to; malformed
+        // values are rejected here rather than silently skewing the cycle window,
+        // which is plain "HH:mm" string comparison.
+        if let t = patch["startTime"]?.asString, !isHM(t) {
+            throw I18nError("error.budget.timeFormat", [:], "startTime must be HH:mm")
+        }
+        guard let existing = try Row.fetchOne(db, sql: "SELECT amount, end_date, end_time FROM budgets WHERE id = ?", arguments: [id]) else {
             throw I18nError("error.notFound.budget", [:], "Budget not found")
         }
         let amount = patch["amount"]?.asDouble ?? (existing["amount"] as Double)
         // undefined keeps existing; explicit (incl. null) sets it.
+        let startTime: String? = patch["startTime"]?.asString
         let endDate: String? = patch.keys.contains("endDate") ? patch["endDate"]?.asString : (existing["end_date"] as String?)
+        let endTime: String? = patch.keys.contains("endTime") ? patch["endTime"]?.asString : (existing["end_time"] as String?)
         try db.execute(sql: """
-            UPDATE budgets SET amount = ?, frequency = ?, start_date = ?, end_date = ?,
+            UPDATE budgets SET amount = ?, frequency = ?, start_date = ?, start_time = ?, end_date = ?, end_time = ?,
                 pending_amount = NULL, last_rolled_period = NULL, updated_at = datetime('now')
              WHERE id = ?
-            """, arguments: [amount, frequency, startDate, endDate, id])
+            """, arguments: [amount, frequency, startDate, startTime, endDate, endTime, id])
     }
 
     static func clearPending(_ db: Database, _ args: Args) throws {

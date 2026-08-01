@@ -120,7 +120,7 @@ extension Projection {
         try dbQueue.read { db in
             try Row.fetchAll(db, sql: """
                 SELECT id, ledger_id, group_id, name, kind, amount, saved, carry_forward,
-                       frequency, start_date, end_date, is_recurring, rollover, rollover_limit,
+                       frequency, start_date, start_time, end_date, end_time, is_recurring, rollover, rollover_limit,
                        pending_amount, last_rolled_period, account_ids, category_ids,
                        tag_ids, counterparty_ids, warning_pct
                   FROM budgets WHERE ledger_id = ? ORDER BY created_at
@@ -130,7 +130,8 @@ extension Projection {
                     id: r["id"], ledgerId: r["ledger_id"], groupId: r["group_id"],
                     name: r["name"] ?? "", type: kind == "income" ? "income" : "expense",
                     amount: r["amount"], saved: r["saved"] ?? 0, carryForward: r["carry_forward"] ?? 0,
-                    frequency: r["frequency"], startDate: r["start_date"], endDate: r["end_date"],
+                    frequency: r["frequency"], startDate: r["start_date"], startTime: r["start_time"],
+                    endDate: r["end_date"], endTime: r["end_time"],
                     isRecurring: r["is_recurring"] ?? 1, rollover: r["rollover"] ?? 0,
                     rolloverLimit: r["rollover_limit"], pendingAmount: r["pending_amount"],
                     lastRolledPeriod: r["last_rolled_period"],

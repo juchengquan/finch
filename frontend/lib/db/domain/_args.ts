@@ -97,7 +97,9 @@ export type Args = {
     saved?: number;
     frequency?: string;
     startDate?: string;
+    startTime?: string | null;
     endDate?: string | null;
+    endTime?: string | null;
     isRecurring?: number;
     rollover?: number | boolean;
     rolloverLimit?: number | null;

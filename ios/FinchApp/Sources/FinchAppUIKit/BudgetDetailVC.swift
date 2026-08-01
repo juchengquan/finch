@@ -365,7 +365,8 @@ final class BudgetDetailVC: UIViewController {
 
             if let cycle = selected {
                 let cycleTx = Selectors.budgetMatchedTransactions(
-                    budget, store.txns, from: cycle.from, to: cycle.to, store.categoryNodes)
+                    budget, store.txns, from: cycle.from, to: cycle.to,
+                    fromTime: cycle.fromTime, toTime: cycle.toTime, store.categoryNodes)
                 let sections = MonthGrouping.sections(cycleTx)
                 let sectioned = groupByMonth && sections.count > 1
 
@@ -577,6 +578,15 @@ extension BudgetDetailVC: UICollectionViewDelegate {
 
 /// The cycle-progress block, kept verbatim from `BudgetDetailView` — same layout and,
 /// because the `Text` literals are unchanged, the same string-catalog keys.
+/// "2026-08-01 – 2026-08-31", or with a turnover time the two MOMENTS it runs
+/// between: "2026-08-01 09:30 – 2026-09-01 09:30". Without the times that second
+/// form would read as a cycle a day longer than it is, because a timed window's
+/// `to` is the day it stops ON rather than its last day.
+private func cycleRangeLabel(_ from: String, _ to: String, _ turnover: String?) -> String {
+    guard let t = turnover, !t.isEmpty, t != "00:00" else { return "\(from) – \(to)" }
+    return "\(from) \(t) – \(to) \(t)"
+}
+
 private struct BudgetProgressBlock: View {
     @ObservedObject var store: FinchStore
     let budget: BudgetRow
@@ -603,7 +613,8 @@ private struct BudgetProgressBlock: View {
                     Text("· Rolls over").font(.caption2).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text("\(progress.from) – \(progress.to)").font(.caption2).foregroundStyle(.secondary)
+                Text(cycleRangeLabel(progress.from, progress.to, budget.startTime))
+                    .font(.caption2).foregroundStyle(.secondary)
             }
             if !budget.accountIds.isEmpty {
                 let names = budget.accountIds
@@ -638,7 +649,8 @@ private struct CycleSummaryBlock: View {
                 Text("\(store.displayMoneyBase(cycle.base - cycle.used)) left")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Text("\(cycle.from) – \(cycle.to)").font(.caption2).foregroundStyle(.secondary)
+                Text(cycleRangeLabel(cycle.from, cycle.to, cycle.fromTime))
+                    .font(.caption2).foregroundStyle(.secondary)
             }
         }
     }

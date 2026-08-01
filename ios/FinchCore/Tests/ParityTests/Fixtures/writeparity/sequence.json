@@ -77,6 +77,21 @@
       }
     },
     {
+      "action": "createBudget",
+      "args": {
+        "id": "b2",
+        "ledgerId": "personal",
+        "name": "Lunch",
+        "type": "expense",
+        "amount": 120,
+        "categoryIds": [
+          "food"
+        ],
+        "startDate": "2026-01-01",
+        "startTime": "09:30"
+      }
+    },
+    {
       "action": "createBudgetGroup",
       "args": {
         "id": "bg1",
@@ -1544,7 +1559,29 @@
         "saved": "0.000000",
         "frequency": "monthly",
         "start_date": "2026-01-01",
+        "start_time": null,
         "end_date": null,
+        "end_time": null,
+        "is_recurring": 1,
+        "rollover": 0,
+        "account_ids": null,
+        "category_ids": "[\"food\"]",
+        "warning_pct": "80.000000",
+        "pending_amount": null
+      },
+      {
+        "id": "b2",
+        "ledger_id": "personal",
+        "group_id": null,
+        "name": "Lunch",
+        "kind": "expense",
+        "amount": "120.000000",
+        "saved": "0.000000",
+        "frequency": "monthly",
+        "start_date": "2026-01-01",
+        "start_time": "09:30",
+        "end_date": null,
+        "end_time": null,
         "is_recurring": 1,
         "rollover": 0,
         "account_ids": null,

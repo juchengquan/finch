@@ -1,7 +1,7 @@
 # Date **and time** on every editable date — design
 
 **Date:** 2026-08-01
-**Status:** phase 1 implemented; phases 2–4 designed, not started
+**Status:** phases 1–3 implemented; phase 4 designed, not started
 **Origin:** a device report — "in edit page, there is no way to edit the time. We
 should always keep add/edit to be consistent"
 
@@ -85,14 +85,46 @@ an iOS decision (use a time the user chose) and leaves the NULL case alone. Maki
 postings always carry a time is a **parity decision requiring the web to move too**,
 and is deliberately out of scope here.
 
-## Phase 3 — budget cycles carry a time
+## Phase 3 — budget cycles carry a time (IMPLEMENTED, both stacks)
 
-`budgets` gains `start_time`/`end_time`. This is the phase with teeth:
+`budgets` gains `start_time`/`end_time`. This was the phase with teeth:
 `Selectors.cycleWindow` is entirely `yyyy-MM-dd` string arithmetic, and its
 boundaries (`while e <= now`) become datetime comparisons the moment a time exists.
-Parity fixtures pin the current answers.
 
-Do this one alone, and decide the web's position explicitly before starting.
+**The rule, stated once:** a cycle runs from its start moment to the next start
+moment, **exclusive at the top** — "resets at 09:30 on the 1st". With no time that is
+midnight-to-midnight, which is exactly what every budget did before.
+
+**How the old behaviour was kept byte-identical.** `cycleWindow` early-returns into
+the untimed code the instant `startTime` is nil, so the timed comparison is code the
+existing 364 tests never reach. Everything downstream (`usedInWindow`,
+`budgetMatchedTransactions`) shares one `inWindow` helper rather than two
+hand-matched copies of the boundary rule.
+
+The web moved with it (the parity decision: the web follows iOS), so the fixture
+sequence carries a second budget `b2` that differs from `b1` only by
+`startTime: '09:30'` — the pin that proves the column survives the write path on both
+stacks and lands in canonical state.
+
+**"00:00" is not a time.** The picker always produces one, so a budget saved
+without touching it stores midnight — and midnight IS the untimed behaviour. Both
+engines normalise it back to the untimed branch when reading the window, rather
+than at the write path, so no route into the database can bypass it. Without this
+every budget saved from the sheet would take the timed branch, where `to` means the
+next start day, and report a day it does not have: the "32 days left in a 31-day
+month" report, reintroduced.
+
+**What `to` means, and who had to be told.** In the timed branch `to` is the day the
+cycle STOPS on, not its last day. Three readers assumed the older meaning and were
+corrected: the History chart (its bars would disagree with the figure printed above
+them), the detail page's selected-cycle transaction list, and the days-left
+countdown on both stacks.
+
+**Deliberately left date-granular:** `invalidateRollover`. It compares periods to
+`last_rolled_period` to decide whether a cached rollover must be recomputed, and
+being one cycle early there costs a recompute, not a wrong number. Its input is a
+date with no time, so honouring the turnover would be guesswork dressed as
+precision.
 
 ## Phase 4 — reconcile as-of, and the filter range
 

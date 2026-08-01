@@ -62,9 +62,14 @@ function BudgetCard({
         ? 'bg-warning'
         : 'bg-primary';
   // Ported from iOS: whole days left in the cycle (UTC, floored at 0).
+  //
+  // `p.to` means one of two things. Without a turnover time it is the cycle's LAST
+  // day; with one it is the day the cycle STOPS on, which is the next cycle's first
+  // day — so counting to it would claim a day the budget does not have.
   const daysLeft = Math.max(
     0,
-    Math.ceil((Date.parse(`${p.to}T00:00:00Z`) - Date.parse(`${today.slice(0, 10)}T00:00:00Z`)) / 86_400_000),
+    Math.ceil((Date.parse(`${p.to}T00:00:00Z`) - Date.parse(`${today.slice(0, 10)}T00:00:00Z`)) / 86_400_000)
+      - (p.toTime ? 1 : 0),
   );
   return (
     <Link href={`/budgets/${budget.id}`} className="mb-2 block">
