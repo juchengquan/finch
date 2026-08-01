@@ -43,6 +43,9 @@ struct CategoriesView: View {
 
     @State private var dropTargetId: String?      // row currently targeted by a drag
     @State private var topLevelTargeted = false
+    /// The category folded away for the duration of a drag — see `.onDrag` in
+    /// `reorderableRow`. Restored by whichever drop handler accepts the drag.
+    @State private var collapsedForDrag: String?
     @State private var rowHeights: [String: CGFloat] = [:]   // per-row height for drop-position thirds
     @State private var errorMessage: String?
 
@@ -237,10 +240,75 @@ struct CategoriesView: View {
         }
         .contentShape(Rectangle())
         .dropDestination(for: String.self) { items, _ in
-            guard let src = items.first, let m = CategoryReorder.reparent(src, under: nil, in: rows) else { return false }
-            applyMoves([m]); return true
+            guard let src = items.first, let m = CategoryReorder.reparent(src, under: nil, in: rows) else {
+                restoreCollapsedForDrag(); return false
+            }
+            applyMoves([m])
+            restoreCollapsedForDrag()
+            return true
         } isTargeted: { topLevelTargeted = $0 }
         .listRowBackground(topLevelTargeted ? Color.accentColor.opacity(0.15) : nil)
+    }
+
+    /// A row in reorder mode, draggable and droppable.
+    ///
+    /// **`.onDrag`, not `.draggable`, for one reason: it is the only lift hook.**
+    /// A move rewrites just the dragged row's `parentId`/`sortOrder`, so its children
+    /// point at it and travel with it — but an expanded parent lifts as ONE row while
+    /// its children sit still in the list, which reads as the parent tearing itself
+    /// out of its own group. Folding it on lift makes that one row genuinely *be* the
+    /// group, and hides the descendants that could otherwise be dropped onto (which
+    /// `reorder` would turn into `parentId == sourceId` for the engine to reject).
+    ///
+    /// **SwiftUI has no drag-END callback**, so the restore happens in the drop
+    /// handlers. A drag abandoned mid-air therefore leaves the parent collapsed —
+    /// one chevron tap to reopen, and that chevron is now a 44pt target.
+    @ViewBuilder private func reorderableRow(_ item: FlatCategory, _ counts: [String: Int]) -> some View {
+        let c = item.row
+        rowContent(item, counts)
+            // Capture row height (background GeometryReader doesn't affect
+            // layout or block taps) so the drop handler can map location.y.
+            .background(GeometryReader { proxy in
+                Color.clear
+                    .onAppear { rowHeights[c.id] = proxy.size.height }
+                    .onChange(of: proxy.size.height) { _, h in rowHeights[c.id] = h }
+            })
+            .onDrag {
+                if expanded.contains(c.id) {
+                    expanded.remove(c.id)
+                    collapsedForDrag = c.id
+                }
+                return NSItemProvider(object: c.id as NSString)
+            }
+            .dropDestination(for: String.self) { items, location in
+                guard let src = items.first else { return false }
+                let h = rowHeights[c.id] ?? 44
+                let frac = h > 0 ? location.y / h : 0.5
+                let moves: [CategoryMove]
+                if frac < 0.25 {
+                    moves = CategoryReorder.reorder(src, .before, of: c.id, in: rows)
+                } else if frac > 0.75 {
+                    moves = CategoryReorder.reorder(src, .after, of: c.id, in: rows)
+                } else {
+                    moves = CategoryReorder.reparent(src, under: c.id, in: rows).map { [$0] } ?? []
+                }
+                guard !moves.isEmpty else { restoreCollapsedForDrag(); return false }
+                applyMoves(moves)
+                restoreCollapsedForDrag()
+                return true
+            } isTargeted: { isTargeted in
+                if isTargeted { dropTargetId = c.id }
+                else if dropTargetId == c.id { dropTargetId = nil }
+            }
+            .listRowBackground(dropTargetId == c.id ? Color.accentColor.opacity(0.15) : nil)
+    }
+
+    /// Re-expand whatever `.onDrag` folded away, so the group is visibly intact at
+    /// its new home — and so a move the engine refused gives back the tree you had.
+    private func restoreCollapsedForDrag() {
+        guard let id = collapsedForDrag else { return }
+        expanded.insert(id)
+        collapsedForDrag = nil
     }
 
     @ViewBuilder private func row(_ item: FlatCategory, _ counts: [String: Int]) -> some View {
@@ -248,34 +316,17 @@ struct CategoriesView: View {
         if isSelecting {
             rowContent(item, counts)   // rowContent shows the checkmark + toggles selection
         } else if isReordering {
-            rowContent(item, counts)
-                // Capture row height (background GeometryReader doesn't affect
-                // layout or block taps) so the drop handler can map location.y.
-                .background(GeometryReader { proxy in
-                    Color.clear
-                        .onAppear { rowHeights[c.id] = proxy.size.height }
-                        .onChange(of: proxy.size.height) { _, h in rowHeights[c.id] = h }
-                })
-                .draggable(c.id)
-                .dropDestination(for: String.self) { items, location in
-                    guard let src = items.first else { return false }
-                    let h = rowHeights[c.id] ?? 44
-                    let frac = h > 0 ? location.y / h : 0.5
-                    let moves: [CategoryMove]
-                    if frac < 0.25 {
-                        moves = CategoryReorder.reorder(src, .before, of: c.id, in: rows)
-                    } else if frac > 0.75 {
-                        moves = CategoryReorder.reorder(src, .after, of: c.id, in: rows)
-                    } else {
-                        moves = CategoryReorder.reparent(src, under: c.id, in: rows).map { [$0] } ?? []
-                    }
-                    guard !moves.isEmpty else { return false }
-                    applyMoves(moves); return true
-                } isTargeted: { isTargeted in
-                    if isTargeted { dropTargetId = c.id }
-                    else if dropTargetId == c.id { dropTargetId = nil }
-                }
-                .listRowBackground(dropTargetId == c.id ? Color.accentColor.opacity(0.15) : nil)
+            if search.isEmpty {
+                reorderableRow(item, counts)
+            } else {
+                // No dragging while searching. The visible list is filtered AND
+                // force-expanded, but `CategoryReorder` computes sibling order from
+                // the FULL row list, so a drag here would rearrange something you
+                // cannot see — and the collapse-on-lift below is impossible anyway,
+                // because search overrides `expanded`. The chevron is already inert
+                // during search for the same reason.
+                rowContent(item, counts)
+            }
         } else {
             rowContent(item, counts)
                 .swipeActions(edge: .trailing) {
