@@ -38,6 +38,7 @@ enum ErrorL10n {
         "error.notFound.rule": "未找到规则",
         "error.notFound.template": "未找到模板",
         "error.reconcile.statementBalance": "对账单余额必填",
+        "error.reconcile.timeFormat": "statementTime 必须为 HH:mm 格式",
         "error.required.account": "需要一个账户",
         "error.required.accountName": "账户名称必填",
         "error.required.budgetName": "预算名称必填",

@@ -80,10 +80,23 @@ public enum Transactions {
     /// the gap between the statement balance and the cleared (confirmed + cleared)
     /// posting sum, marking that adjustment cleared.
     static func reconcileAccount(_ db: Database, _ args: Args) throws {
-        struct A: Decodable { let accountId: String; let statementBalance: Double; let statementDate: String?; let postAdjustment: Bool? }
+        struct A: Decodable {
+            let accountId: String; let statementBalance: Double
+            let statementDate: String?; let statementTime: String?; let postAdjustment: Bool?
+        }
         let a = try args.to(A.self)
         if !a.statementBalance.isFinite { throw I18nError("error.reconcile.statementBalance", [:], "Statement balance is required") }
         let statementDate = a.statementDate ?? String(ISO8601DateFormatter().string(from: Date()).prefix(10))
+        // The moment the statement was cut. "00:00" is midnight, which is what a
+        // date-only checkpoint already means — normalised to nil so the stored
+        // value stays byte-identical for everyone who never sets a time.
+        let statementTime: String? = {
+            guard let t = a.statementTime, !t.isEmpty, t != "00:00" else { return nil }
+            return t
+        }()
+        if let t = statementTime, !isHM(t) {
+            throw I18nError("error.reconcile.timeFormat", [:], "statementTime must be HH:mm")
+        }
         if a.postAdjustment == true {
             guard let ledgerId = try String.fetchOne(db, sql: "SELECT ledger_id FROM accounts WHERE id = ?", arguments: [a.accountId]) else {
                 throw I18nError("error.notFound.account", [:], "Account not found")
@@ -93,12 +106,19 @@ public enum Transactions {
                  WHERE p.account_id = ? AND e.status = 'confirmed' AND p.cleared_at IS NOT NULL
                 """, arguments: [a.accountId]) ?? 0)
             let delta = Entries.r2(a.statementBalance - cleared)
-            if abs(delta) >= 0.005, let adjEntryId = try Entries.postAdjustment(db, ledgerId: ledgerId, accountId: a.accountId, delta: delta, date: statementDate, source: "reconcile") {
+            // The adjustment is dated to the statement, so it is timed to it too —
+            // without a time it sinks to the bottom of that day's feed, below
+            // transactions it was posted to account for.
+            if abs(delta) >= 0.005, let adjEntryId = try Entries.postAdjustment(db, ledgerId: ledgerId, accountId: a.accountId, delta: delta, date: statementDate, time: statementTime, source: "reconcile") {
                 try db.execute(sql: "UPDATE postings SET cleared_at = datetime('now') WHERE entry_id = ? AND account_id IS NOT NULL", arguments: [adjEntryId])
             }
         }
+        // The column is `_at`, a moment: it carries the time when there is one. Every
+        // reader already takes `prefix(10)`, so a date-only checkpoint is unchanged
+        // and a timed one degrades to the same date everywhere it is read as a day.
+        let checkpoint = statementTime.map { "\(statementDate) \($0)" } ?? statementDate
         try db.execute(sql: "UPDATE accounts SET last_reconciled_at = ?, last_reconciled_balance = ?, updated_at = datetime('now') WHERE id = ?",
-                       arguments: [statementDate, a.statementBalance, a.accountId])
+                       arguments: [checkpoint, a.statementBalance, a.accountId])
     }
 
     // MARK: removeAttachment

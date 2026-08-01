@@ -1,7 +1,7 @@
 # Date **and time** on every editable date — design
 
 **Date:** 2026-08-01
-**Status:** phases 1–3 implemented; phase 4 designed, not started
+**Status:** phases 1–4 implemented — the audit table below is closed
 **Origin:** a device report — "in edit page, there is no way to edit the time. We
 should always keep add/edit to be consistent"
 
@@ -17,6 +17,9 @@ An audit of every date input in the app, add and edit alike:
 | Budget (start/end) | date | date | no |
 | Reconcile (as of) | date | — | no |
 | Transaction filter (from/to) | date | — | no |
+
+Every row now reads "date + time" in both columns; the table above is the state
+that prompted the work, kept as the record of what was wrong.
 
 Two separate defects hid behind one symptom. Add/edit were consistent *everywhere
 except Scheduled*, and the missing time is a different thing again: transactions
@@ -126,10 +129,35 @@ being one cycle early there costs a recompute, not a wrong number. Its input is 
 date with no time, so honouring the turnover would be guesswork dressed as
 precision.
 
-## Phase 4 — reconcile as-of, and the filter range
+## Phase 4 — reconcile as-of, and the filter range (IMPLEMENTED, both stacks)
 
-Both are read-only consumers rather than stored state, so they benefit from the
-comparison helpers phases 2–3 introduce. Cheapest last.
+Both are read-side consumers rather than new stored state, and both reuse the
+comparison shape phases 2–3 introduced. Three inputs, one rule.
+
+**The feed's from/to.** `ListOptions.from`/`to` still take `yyyy-MM-dd`; a bound
+carrying `HH:mm` compares MOMENTS instead, via the `momentOf(tx)` helper lifted out
+of `inWindow` so both stacks have one definition of "a transaction as an instant".
+The range stays **inclusive at both ends** — deliberately unlike a budget cycle,
+whose top boundary belongs to the next window. A filter range is what the user
+typed: from here to here.
+
+**Reconcile's statement date.** No schema change: `accounts.last_reconciled_at` is
+already an `_at` column, and it now carries `yyyy-MM-dd HH:mm` when a time is given.
+Every reader already truncates to 10 characters (`reconcileStatus` on iOS,
+`daysBetween` on the web), so a timed checkpoint still reads as its day everywhere
+a day is what is wanted. The adjustment the reconcile posts is dated to the
+statement, so it is now timed to it too — the phase-2 reasoning: an untimed posting
+sinks to the bottom of its day, below the transactions it exists to account for.
+
+**A goal's target date** was the last date-only picker, and it needed no new column
+at all: phase 3 added `budgets.end_time` for symmetry, so wiring it was two lines.
+
+**Midnight means unspecified, everywhere.** The picker always produces a time, so
+`00:00` has to mean "no time given" or every one of these would change behaviour for
+users who never touch the time — the filter's upper bound would silently drop the
+closing day, and reconcile would write a different string than before. That rule
+now holds in four places (budget cycles, the filter's two bounds, reconcile), and
+each has a test asserting the midnight case equals the untimed one.
 
 ## Parity — DECIDED: the web follows iOS
 

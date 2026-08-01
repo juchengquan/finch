@@ -49,6 +49,7 @@ export type Args = {
     accountId: string;
     statementBalance: number;
     statementDate?: string;
+    statementTime?: string | null;
     postAdjustment?: boolean;
   };
   bulkRecategorize: { ids: string[]; categoryId: string | null };
