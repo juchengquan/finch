@@ -48,9 +48,6 @@ final class CategoriesVC: UIViewController {
     /// already collapsed or childless, so the restore never expands something the
     /// user had shut.
     private var collapsedForDrag: String?
-    /// Where the current drag was lifted, horizontally. Nesting is gated on how far
-    /// right of this the finger has travelled — see `CategoryDropZone.allowsNesting`.
-    private var dragOriginX: CGFloat?
 
     private enum SectionID: Hashable { case picker, rows, empty }
 
@@ -663,7 +660,6 @@ extension CategoriesVC: UICollectionViewDragDelegate {
               let id = dataSource.itemIdentifier(for: indexPath),
               flatByID[id] != nil else { return [] }
         draggingId = id
-        dragOriginX = session.location(in: cv).x
         let item = UIDragItem(itemProvider: NSItemProvider(object: id as NSString))
         item.localObject = id      // read back synchronously on drop
         return [item]
@@ -693,7 +689,6 @@ extension CategoriesVC: UICollectionViewDragDelegate {
 
     func collectionView(_ cv: UICollectionView, dragSessionDidEnd session: UIDragSession) {
         draggingId = nil
-        dragOriginX = nil
         // Restore the expansion, whether the drop landed, missed, or the engine
         // rejected it — so you can see the group arrived intact, and a refused move
         // gives you back exactly the tree you started with.
@@ -751,14 +746,17 @@ extension CategoriesVC: UICollectionViewDropDelegate {
         guard let indexPath = collectionView.indexPathForItem(at: point),
               let id = dataSource.itemIdentifier(for: indexPath) else { return nil }
         let frame = collectionView.cellForItem(at: indexPath)?.frame ?? .zero
-        // Same level is the default everywhere — vertical movement alone can only
-        // ever reposition. Nesting needs the second axis: carry the row right past
-        // `nestingDragThreshold` and the target highlights to say it will go inside.
-        let dragDX = dragOriginX.map { point.x - $0 } ?? 0
+        // A drop can only go INSIDE a group that is already on screen: the receiver
+        // must have children and be open. Every other row splits 50/50 into
+        // before/after, so it cannot nest by accident.
+        let item = flatByID[id]
+        let canReceive = CategoryDropZone.canReceiveChild(
+            hasChildren: item?.hasChildren ?? false,
+            isExpanded: expanded.contains(id))
         return (id, CategoryDropZone.at(pointY: point.y,
                                         cellMinY: frame.minY,
                                         cellHeight: frame.height,
-                                        allowsNesting: CategoryDropZone.allowsNesting(dragDX: dragDX)))
+                                        allowsNesting: canReceive))
     }
 
     func collectionView(_ cv: UICollectionView, performDropWith coordinator: UICollectionViewDropCoordinator) {
