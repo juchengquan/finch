@@ -303,6 +303,7 @@ final class AccountDetailVC: UIViewController {
             // The SwiftUI row itself, hosted — it draws the amount and the running
             // balance, so no trailing accessory here. See TxRowCell for why this is
             // hosted rather than rebuilt.
+            cell.backgroundConfiguration = txRowBackground()
             TxRowCell.configure(cell, tx: tx, store: self.store,
                                 onPreviewReceipt: { [weak self] in self?.previewReceipt($0) })
             cell.accessories = []

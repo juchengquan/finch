@@ -323,6 +323,7 @@ final class ActivityFeedVC: UIViewController {
             // once per day-run, which also swallowed the TIME — several transactions
             // on one day rendered as identical rows with no way to tell them apart or
             // order them. Every other screen already showed all of them.
+            if self.onSelect == nil { cell.backgroundConfiguration = txRowBackground() }
             TxRowCell.configure(cell, tx: tx, store: self.store,
                                 showRunningBalance: false,
                                 onPreviewReceipt: self.isSelecting ? nil

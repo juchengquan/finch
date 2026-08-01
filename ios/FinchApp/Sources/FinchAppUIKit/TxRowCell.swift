@@ -27,6 +27,26 @@ import FinchCore
 /// UIKit would be a few hundred lines that then drift from the SwiftUI original every
 /// time a row gains a feature — and the Mac keeps rendering that original, so drift is
 /// guaranteed, not hypothetical.
+
+/// A transaction row's background, pinned so it does NOT follow the cell's
+/// highlighted state.
+///
+/// A list cell's default background paints grey while highlighted. Tapping a swipe
+/// action highlights the cell, and diffable MOVES that cell to its new index path
+/// rather than re-dequeuing it — `prepareForReuse` never fires, so the highlight
+/// arrives with the row and fades there. Clearing `isHighlighted` after the apply
+/// treated the symptom and missed frames; a row that never paints a highlight has
+/// nothing to leave behind.
+///
+/// Selection is left alone: these rows are only selectable in the split shell's
+/// column mode, where `onSelect` is non-nil, and that state still resolves normally.
+func txRowBackground() -> UIBackgroundConfiguration {
+    var bg = UIBackgroundConfiguration.listGroupedCell()
+    bg.backgroundColor = .secondarySystemGroupedBackground
+    bg.backgroundColorTransformer = nil
+    return bg
+}
+
 enum TxRowCell {
 
     /// Configure a list cell as a transaction row.
