@@ -708,8 +708,12 @@ git commit -m "feat(core): addTransaction takes several payment accounts"
 ### Task 4b: Category splits must not silently delete account legs
 
 **Files:**
-- Modify: `ios/FinchCore/Sources/FinchCore/Store/Domain/Transactions.swift:36-52` (`setTransactionSplits`)
-- Test: `ios/FinchCore/Tests/FinchCoreTests/MultiAccountAddTests.swift` (extend)
+- Modify: `ios/FinchCore/Sources/FinchCore/Store/Domain/Transactions.swift` — the `setTransactionSplits` function
+- Test: `ios/FinchCore/Tests/FinchCoreTests/MultiAccountAddTests.swift` (extend — created by Task 4, already has a private `seedTwoAccounts()` helper; reuse it)
+
+> **Locate by content, not by line number.** Earlier tasks have already shifted this
+> file. Find `static func setTransactionSplits` and the `LIMIT 1` account-leg query
+> inside it.
 
 **Interfaces:**
 - Consumes: the multi-account entry from Task 4.
@@ -1029,8 +1033,13 @@ that the relaxed `acct != 1` clause was never part of the written invariant.
 ### Task 8: A split purchase can be edited (iOS core)
 
 **Files:**
-- Modify: `ios/FinchCore/Sources/FinchCore/Store/Domain/Transactions.swift:326-331`
+- Modify: `ios/FinchCore/Sources/FinchCore/Store/Domain/Transactions.swift` — the multi-leg guard inside `updateTransaction`
 - Test: `ios/FinchCore/Tests/FinchCoreTests/MultiAccountEditTests.swift` (create)
+
+> **Locate by content, not by line number** — earlier tasks have shifted this file. Find
+> `static func updateTransaction`, then the guard reading
+> `if acctLegs.count > 1 && touchesMoney` with the comment `// Transfers (>1 account leg)
+> only take header-only patches.` That comment's premise is what this task invalidates.
 
 **Interfaces:**
 - Consumes: the entry shape from Task 4.
