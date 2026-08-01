@@ -98,7 +98,13 @@ public enum Rules {
 
             if case .set(let catId) = patch.categoryId {
                 let catCount = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM postings WHERE entry_id = ? AND category_id IS NOT NULL", arguments: [entryId]) ?? 0
-                if catCount < 2, let acct = try Row.fetchOne(db, sql: "SELECT id, account_id, amount, amount_base, exchange_rate, memo, orig_amount, orig_currency, cleared_at FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1", arguments: [entryId]) {
+                // A purchase paid from several accounts carries exactly one category leg by
+                // design, so catCount stays < 2 — but the rebuild below still reads a single
+                // account leg (LIMIT 1) and would silently drop every other payment. Skip just
+                // this entry's re-categorization (header fields and tags above/below still
+                // apply); a batch backfill should skip what it cannot safely do, not abort.
+                let acctLegCount = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM postings WHERE entry_id = ? AND account_id IS NOT NULL", arguments: [entryId]) ?? 0
+                if catCount < 2 && acctLegCount <= 1, let acct = try Row.fetchOne(db, sql: "SELECT id, account_id, amount, amount_base, exchange_rate, memo, orig_amount, orig_currency, cleared_at FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1", arguments: [entryId]) {
                     let acctBase: Double = acct["amount_base"]
                     var ep = Entries.EntryPatch()
                     ep.legs = .set([
