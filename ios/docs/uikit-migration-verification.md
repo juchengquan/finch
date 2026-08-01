@@ -103,37 +103,64 @@ below is reference; this is the queue.
       not answer at all. Human eyeball, not an instrumented measurement — good enough,
       since the original defect was blatant (toggling one row flattened every other
       switch on the screen). Full account in §2t.
-- [ ] **Only the switch flips a switch row** — row taps were REMOVED in `5a2442b2`, so
-      confirm on a device that tapping the label does nothing on all six converted
-      settings screens, and that tapping a *currency* row still opens its rate history.
+- [x] **Only the switch flips a switch row — TESTED ON A DEVICE 2026-08-01, passes.**
+      Row taps were removed in `5a2442b2`; tapping the label does nothing on the six
+      converted settings screens, the switch still flips, and a *currency* row still
+      opens its rate history rather than toggling tracking.
 
 **Accessibility — raised by the tooling, never investigated (§3).**
 
 - [x] Converted rows announce sensibly — swept 2026-08-01, two real defects found and
       fixed (transaction rows read as fragments; "Confirm all N pending" was not a
       button). See §3.
-- [ ] Segmented controls (Activity List/Calendar, Appearance Theme) are unlabelled in
-      the accessibility tree — **but equally so in the SwiftUI build**, so it is not a
-      migration defect and does not gate the flag. Needs a real VoiceOver pass to say
-      whether it matters; the fix, if any, belongs on the SwiftUI `Picker`s.
-- [ ] Saved-search chips unaudited — the row only exists once a search is saved.
+- [x] **Segmented controls — CLOSED 2026-08-01, there was never a defect.** The
+      "unlabelled" reading was an `idb` artifact; XCUITest sees every segment properly
+      labelled and stateful, in BOTH builds. Detail in §3.
+- [x] Saved-search chips audited — accessible, and a real (pre-existing, cross-platform)
+      delete defect was found and fixed on the way. See §3.
 
 **Flag removal itself (§4).**
 
-- [ ] Everything in §2, §2b and §2c passes.
+Re-checked against the code 2026-08-01. The order below is not arbitrary — item 2
+cannot start until the flags go, and the flags cannot go until item 1 is done.
+
+- [ ] **Everything in §2, §2b and §2c passes. THIS is the gate, and it is big.** A count
+      of the checkboxes: §1 has 11 open and 0 ticked, §2 has 10 open and 0 ticked, and
+      the per-screen sweep §2b–§2s runs to ~100 more. Almost none of it has been walked
+      by a human. Worth knowing before planning the flag removal as a code task — it is
+      overwhelmingly a **manual sweep**, not engineering.
 - [ ] `ActivityFeedView`'s `.rightSlideDrill(...)` entry replaced by the native push,
       and the SwiftUI screen dropped from the iOS target (`excludes:` in `project.yml`)
       while `FinchMac` keeps it — likewise `AccountDetailView`.
-- [ ] The FAB gap in §2c is resolved or consciously accepted.
+      *Status 2026-08-01: not started, and BLOCKED BY THE FLAGS THEMSELVES.* `project.yml`
+      still excludes only `FinchApp.swift`, and both screens are still referenced from
+      `AccountsTab`, `ActivityTab`, `AdaptiveShell` and `SplitColumns`. They cannot be
+      dropped while `-uikitActivity NO` and `-legacyShell YES` exist, because those two
+      fallbacks are precisely what routes back into them. So this item is downstream of
+      deleting the opt-outs, not something to attempt alongside.
+- [x] **The FAB gap in §2c is RESOLVED** — fixed in `fix/ios-uikit-pushed-fab`, in two
+      halves (the button via `TabChromeVC` above the navigation controller, then the
+      touch passthrough). Recorded in full in §2c; this line was simply never ticked.
 - [ ] Re-run §1 afterwards — the tab gains a `UINavigationController`, which changes the
       shell's structure.
 
 **iPad, now that Phase 3 has shipped (§6).**
 
+Re-checked 2026-08-01: **nothing here has moved**, and nothing in the recent commits
+touches it. All of §6 is still open bar the one ticked item — 11 checks, and they are
+per-converted-tab × two widths, so the real count is larger than the list looks.
+
 - [ ] Selection into the detail column, and Split View / Slide Over resizing across the
       compact↔regular boundary (the root rebuilds; check nothing is lost).
 - [ ] `-legacyShell YES` still works, so there is a way back if the UIKit shell
-      misbehaves in the field.
+      misbehaves in the field. Note this one is not merely a safety net: while it exists
+      it keeps `AdaptiveShell` and the SwiftUI screens alive in the iOS target, which is
+      what blocks §4's second item.
+
+Most of §6 is mechanical enough to automate rather than hand-walk — scroll, push-vs-
+column, highlight-survives-a-reload and section spacing are all things XCUITest and
+`describe-all` can assert, and `SplitSelectionUITests` already does the selection half.
+Worth doing that before walking 11 × 5 checks by hand.
 
 ---
 
@@ -850,13 +877,30 @@ VoiceOver on.
       with value, identical in both implementations); collapsible group headers announce
       Expanded/Collapsed with a hint; account, budget and scheduled rows announce as one
       combined button.
-- [ ] **NOT a migration defect, still open: segmented controls are unlabelled.** The
-      Activity List/Calendar picker and the Appearance Theme picker both appear as an
-      unlabelled `TabGroup` with no value — **and they do so in the SwiftUI build too**,
-      so this predates the conversion and affects the Mac equally. Whether VoiceOver can
-      still operate them is not something `idb` can answer; it needs Accessibility
-      Inspector or a real VoiceOver pass. If it is a genuine gap, the fix belongs on the
-      SwiftUI `Picker`s, where both platforms get it.
+- [x] **~~Segmented controls are unlabelled~~ — WITHDRAWN 2026-08-01. The tool was
+      lying, and the finding should never have been written as a defect.** `idb ui
+      describe-all` reports these pickers as an unlabelled `TabGroup`, no value, no
+      children, `custom_actions=[]` — byte-identical in the converted and the SwiftUI
+      build. That is an `idb` limitation: it does not descend into a
+      `UISegmentedControl`. XCUITest, which reads the same API VoiceOver does, sees the
+      segments perfectly well:
+
+      | picker | build | what XCUITest sees |
+      |---|---|---|
+      | Appearance Theme | converted | `System`(selected) · `Light` · `Dark`, all hittable |
+      | Appearance Theme | `-uikitActivity NO` | identical |
+      | Scheduled mode | converted | `Calendar`(selected) · `List`, both hittable |
+      | Scheduled mode | `-uikitActivity NO` | identical |
+
+      So each segment carries its own label AND its selected state — which is what
+      VoiceOver announces. Only the CONTAINER has no label, and the adjacent "Theme"
+      heading already supplies that meaning. Nothing to fix on either front-end.
+
+      **Method note, because this cost a real item on the blocking list:** an absence in
+      `describe-all` is not evidence of an accessibility gap. The tree is flat and stops
+      at some composite controls. Before filing "X is unlabelled", confirm with
+      XCUITest (`app.segmentedControls.element.buttons`) or Accessibility Inspector —
+      a probe test that prints the children takes minutes and is decisive.
 - [x] **Saved-search chips: audited 2026-08-01 — accessible, and §3's suspicion was
       wrong.** Reaching them needs a filter applied (the row appears on
       `savedSearches.isEmpty == false || filter.isActive`) and then a search saved. Both
