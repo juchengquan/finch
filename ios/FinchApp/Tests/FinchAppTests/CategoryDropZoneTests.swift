@@ -42,43 +42,32 @@ final class CategoryDropZoneTests: XCTestCase {
     }
 
     /// A missing cell frame yields height 0. Nesting is the safe reading: it is the
-    /// one outcome the engine validates (cycles and depth > 3 are rejected), whereas
-    /// a bogus sibling insert would silently renumber a group.
+    /// one outcome the engine validates (cycles and the depth cap are rejected
+    /// there), whereas a bogus sibling insert would silently renumber a group.
     func testZeroHeightNests() {
         XCTAssertEqual(CategoryDropZone.at(pointY: 0, cellMinY: 0, cellHeight: 0), .into)
         XCTAssertEqual(CategoryDropZone.at(pointY: 500, cellMinY: 0, cellHeight: 0), .into)
     }
 
-    // MARK: nesting is gated on a sideways drag
-    //
-    // Same level is the default at every row. Two earlier attempts tried to infer
-    // "I meant to go inside" from vertical position and both got it wrong — nesting
-    // owned the middle half and beat same-level two-to-one, and narrowing it to rows
-    // with hidden children still let folded categories swallow drops aimed past
-    // them. Position cannot express that intent; only a second axis can.
+    // MARK: a drop nests only into a group you can already see
 
-    func testDraggingStraightDownNeverNests() {
-        XCTAssertFalse(CategoryDropZone.allowsNesting(dragDX: 0))
-        XCTAssertFalse(CategoryDropZone.allowsNesting(dragDX: 8))    // thumb wander
-        XCTAssertFalse(CategoryDropZone.allowsNesting(dragDX: 31))   // just short
+    func testAnOpenParentCanReceive() {
+        XCTAssertTrue(CategoryDropZone.canReceiveChild(hasChildren: true, isExpanded: true))
     }
 
-    func testDraggingRightPastTheThresholdNests() {
-        XCTAssertTrue(CategoryDropZone.allowsNesting(dragDX: 32))    // exactly on it
-        XCTAssertTrue(CategoryDropZone.allowsNesting(dragDX: 80))
+    /// Folded means its children are off screen — there is no visible group to land
+    /// in, so the drop would disappear somewhere you cannot check.
+    func testAFoldedParentCannotReceive() {
+        XCTAssertFalse(CategoryDropZone.canReceiveChild(hasChildren: true, isExpanded: false))
     }
 
-    /// Leftward travel is not an un-nest gesture — the "Top level" drop row does
-    /// that. A left drag must behave exactly like a straight one.
-    func testDraggingLeftDoesNotNest() {
-        XCTAssertFalse(CategoryDropZone.allowsNesting(dragDX: -40))
-        XCTAssertFalse(CategoryDropZone.allowsNesting(dragDX: -200))
-    }
-
-    /// The threshold has to clear the tree's 14pt indent step by enough to read as
-    /// deliberate; at one step it would fire on ordinary drag wobble.
-    func testThresholdIsWellClearOfOneIndentStep() {
-        XCTAssertGreaterThan(CategoryDropZone.nestingDragThreshold, 28)
+    /// A childless category is never a receiver, so DRAGGING CANNOT CREATE a new
+    /// level of nesting — that is the add-a-sub-category action's job. Asserted in
+    /// both expansion states because "expanded" is meaningless without children and
+    /// must not accidentally qualify one.
+    func testALeafNeverReceives() {
+        XCTAssertFalse(CategoryDropZone.canReceiveChild(hasChildren: false, isExpanded: false))
+        XCTAssertFalse(CategoryDropZone.canReceiveChild(hasChildren: false, isExpanded: true))
     }
 
     // MARK: the halves layout used whenever nesting is refused
@@ -95,12 +84,12 @@ final class CategoryDropZoneTests: XCTestCase {
     }
 
     /// The whole point: with nesting refused, NO point on the row can nest — so a
-    /// drag that never went sideways cannot change a category's level by accident,
-    /// wherever on the row it is released.
+    /// row that is not an open group can never take a child by accident, wherever
+    /// on it the drop is released.
     func testWithoutNestingNoPointOnTheRowNests() {
         for y in stride(from: CGFloat(100), through: 144, by: 1) {
             XCTAssertNotEqual(halved(y), .into,
-                              "y=\(y) nested on a drag that never moved sideways")
+                              "y=\(y) nested on a row that is not an open group")
         }
     }
 

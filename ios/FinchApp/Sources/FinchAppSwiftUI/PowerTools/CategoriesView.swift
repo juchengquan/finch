@@ -261,23 +261,16 @@ struct CategoriesView: View {
             }
             .dropDestination(for: String.self) { items, location in
                 guard let src = items.first else { return false }
-                // Same zone math as the UIKit screen, from the same enum — these were
-                // two hand-copied sets of thresholds until the shared one existed.
-                //
-                // DIVERGENCE, and not an oversight: iPhone gates nesting on a sideways
-                // drag (`CategoryDropZone.allowsNesting(dragDX:)`), which needs the
-                // drag's translation from its lift point. SwiftUI does not expose it —
-                // `.dropDestination` reports a location but no translation, and
-                // `.onDrag` has no movement callback — so there is nothing here to
-                // measure. This keeps the earlier rule instead: no nest zone on an
-                // expanded parent, whose children are visible and can be dropped
-                // between directly. Weaker than the phone's, and the reason it is
-                // acceptable is that iPad/macOS drag with a pointer, where a 14pt
-                // zone is not the problem it is under a thumb.
+                // Same rule and same enum as the UIKit screen — no divergence now.
+                // The sideways-drag gate that used to force one apart needed the
+                // drag's translation, which SwiftUI does not expose; this rule needs
+                // only facts both screens already have.
                 let h = rowHeights[c.id] ?? 44
                 let zone = CategoryDropZone.at(
                     pointY: location.y, cellMinY: 0, cellHeight: h,
-                    allowsNesting: !(item.hasChildren && expanded.contains(c.id)))
+                    allowsNesting: CategoryDropZone.canReceiveChild(
+                        hasChildren: item.hasChildren,
+                        isExpanded: expanded.contains(c.id)))
                 let moves: [CategoryMove]
                 switch zone {
                 case .before: moves = CategoryReorder.reorder(src, .before, of: c.id, in: rows)
