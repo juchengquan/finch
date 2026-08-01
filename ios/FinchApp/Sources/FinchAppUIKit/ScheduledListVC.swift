@@ -125,7 +125,14 @@ final class ScheduledListVC: UIViewController {
             config.leadingSwipeActionsConfigurationProvider = { [weak self] ip in
                 self?.leadingSwipe(at: ip)
             }
-            return NSCollectionLayoutSection.list(using: config, layoutEnvironment: env)
+            let listSection = NSCollectionLayoutSection.list(using: config, layoutEnvironment: env)
+            // See ActivityFeedVC: the picker's own section padding is most of the gap
+            // under the toggle, so the token owns it rather than the row margin alone.
+            if section == .modePicker {
+                listSection.contentInsets.top = 0
+                listSection.contentInsets.bottom = Metrics.modePickerBottomGap
+            }
+            return listSection
         }
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         collectionView.delegate = self

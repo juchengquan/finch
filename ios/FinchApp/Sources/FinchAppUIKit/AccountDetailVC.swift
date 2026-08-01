@@ -199,7 +199,10 @@ final class AccountDetailVC: UIViewController {
             // first section from a large title — and this screen has no large title
             // (the bar carries name-over-balance instead), so that space just read as
             // a hole. Matches the gap on All Transactions.
-            if kind == .modePicker { section.contentInsets.top = 0 }
+            if kind == .modePicker {
+                section.contentInsets.top = 0
+                section.contentInsets.bottom = Metrics.modePickerBottomGap
+            }
             return section
         }
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)

@@ -197,7 +197,17 @@ final class ActivityFeedVC: UIViewController {
             config.trailingSwipeActionsConfigurationProvider = { [weak self] ip in
                 self?.rowActions(at: ip).map { $0.actions.trailing($0.tx) }
             }
-            return NSCollectionLayoutSection.list(using: config, layoutEnvironment: env)
+            let section = NSCollectionLayoutSection.list(using: config, layoutEnvironment: env)
+            // The picker's own section padding, not just the row's margin: an
+            // insetGrouped section pads top and bottom on top of the inter-section
+            // spacing, which is most of the gap under the toggle. Zeroing the top
+            // and handing the bottom to the token is what makes the token actually
+            // control the distance to the content it switches.
+            if kind == .modePicker {
+                section.contentInsets.top = 0
+                section.contentInsets.bottom = Metrics.modePickerBottomGap
+            }
+            return section
         }
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         collectionView.delegate = self
