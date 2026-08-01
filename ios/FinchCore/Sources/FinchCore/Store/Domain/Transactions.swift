@@ -417,9 +417,18 @@ public enum Transactions {
         let oldLegs = try Row.fetchAll(db, sql: "SELECT * FROM postings WHERE entry_id = ? ORDER BY sort_order", arguments: [entryId])
         let acctLegs = oldLegs.filter { ($0["account_id"] as String?) != nil }
         let touchesMoney = has("amount") || has("category") || has("account") || has("currency") || has("kind")
-        // Transfers (>1 account leg) only take header-only patches.
+        // More than one account leg no longer means "transfer" — a purchase paid from
+        // several accounts has them too. Both still take header-only patches, because a
+        // money patch carries ONE account and ONE amount and cannot say which leg it
+        // means. They get different messages: sending someone who split a purchase to
+        // the Transfers screen is nonsense.
         if acctLegs.count > 1 && touchesMoney {
-            throw I18nError("error.tx.transferLegEdit", [:], "Edit transfers from the Transfers screen")
+            let entryKind = try String.fetchOne(db, sql: "SELECT kind FROM entries WHERE id = ?", arguments: [entryId]) ?? ""
+            if entryKind == "transfer" {
+                throw I18nError("error.tx.transferLegEdit", [:], "Edit transfers from the Transfers screen")
+            }
+            throw I18nError("error.tx.splitLegEdit", [:],
+                            "Delete and re-add this purchase to change how it was paid")
         }
         let ledgerId = try String.fetchOne(db, sql: "SELECT ledger_id FROM entries WHERE id = ?", arguments: [entryId]) ?? ""
 
