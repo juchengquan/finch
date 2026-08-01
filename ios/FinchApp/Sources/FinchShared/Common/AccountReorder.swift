@@ -14,6 +14,11 @@ enum ReorderRow: Identifiable, Equatable {
         }
     }
     var isAccount: Bool { if case .account = self { return true }; return false }
+
+    /// The pinned Ungrouped bucket (`id == nil`) cannot be lifted — `itemsForBeginning`
+    /// refuses it — so it must not advertise a grip either.
+    var isDraggable: Bool { if case .group(let gid, _) = self { return gid != nil }; return true }
+
 }
 
 /// Pure reorder logic for the Accounts tab. SwiftUI-free → unit-testable.
