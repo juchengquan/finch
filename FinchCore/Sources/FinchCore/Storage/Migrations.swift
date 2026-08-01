@@ -57,6 +57,14 @@ public enum Migrations {
         // this with deferred foreign-key checks, so the parent-table swap is safe
         // (entries.counterparty_id re-resolves after the RENAME) and integrity is
         // verified at the end of the migration.
+        // A scheduled template's intended time-of-day. Additive + nullable: existing
+        // templates keep NULL and post at the firing moment, exactly as before.
+        migrator.registerMigration("2026-08-01-scheduled-start-time") { db in
+            do { try db.execute(sql: "ALTER TABLE scheduled_templates ADD COLUMN start_time TEXT") }
+            catch { if !"\(error)".contains("duplicate column") { throw error } }
+            try Self.ensureMetadataRow(db)   // re-stamp schema_version
+        }
+
         migrator.registerMigration("2026-07-23-counterparties-global") { db in
             let hasLedgerId = try Row.fetchAll(db, sql: "PRAGMA table_info(counterparties)")
                 .contains { ($0["name"] as? String) == "ledger_id" }

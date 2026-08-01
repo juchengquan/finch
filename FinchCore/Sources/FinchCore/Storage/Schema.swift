@@ -198,6 +198,9 @@ CREATE TABLE IF NOT EXISTS scheduled_templates (
   day_of_month         INTEGER,
   day_of_week          INTEGER,
   start_date           TEXT NOT NULL,
+  -- Intended time-of-day for postings, 'HH:mm'. NULL = unspecified, in which case
+  -- posting stamps the moment it fires (see Scheduled.post).
+  start_time           TEXT,
   end_date             TEXT,
   next_run             TEXT,
   last_run             TEXT,
