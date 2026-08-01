@@ -31,7 +31,14 @@ enum Metrics {
     /// One number because the three screens that carry the picker — Activity, the
     /// account page and Scheduled — each had it fixed separately and drifted apart
     /// (28 / 34 / different again). `ViewModePickerRow` applies it on the SwiftUI
-    /// side and the hosted cells apply it on the UIKit side, so a screen converted
-    /// later inherits the spacing instead of re-deriving it.
+    /// side; on the UIKit side each screen's layout provider applies it to the
+    /// picker SECTION (`contentInsets.bottom`, with `.top = 0`), not just to the
+    /// hosted cell's margins — an insetGrouped section pads itself on top of the
+    /// inter-section spacing, and that padding was most of the gap. Measured on
+    /// Activity: the following header sat at 297.7pt and now sits at 280.0pt.
+    ///
+    /// Tuning this alone moves things ~2pt; the section insets above are the lever.
+    /// What remains below the picker is `sectionSpacing`, which every grouped list
+    /// in the app shares — deliberately not narrowed to close the last few points.
     static let modePickerBottomGap: CGFloat = 4
 }
