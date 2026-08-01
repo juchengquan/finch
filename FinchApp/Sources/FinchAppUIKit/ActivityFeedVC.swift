@@ -821,6 +821,11 @@ private struct SavedSearchChips: View {
                                 Label(String(localized: "Delete"), systemImage: "trash")
                             }
                         }
+                        // Long-press is the ONLY way to delete a chip, and VoiceOver
+                        // does not surface a context menu — so without this a VoiceOver
+                        // user can create saved searches and never remove one. Mirrored
+                        // in ActivityTab's chip row, which has the same shape.
+                        .accessibilityAction(named: Text(String(localized: "Delete"))) { onDelete(s) }
                 }
                 Button { onSave() } label: { chip(String(localized: "＋ Save")) }
                     .buttonStyle(.plain)
