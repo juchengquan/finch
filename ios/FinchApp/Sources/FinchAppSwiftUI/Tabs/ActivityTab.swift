@@ -70,7 +70,6 @@ struct ActivityFeedView: View {
     // field re-rendered the whole list on each keystroke before.
     @State private var sections: [MonthGrouping.Section] = []
     @State private var pendingTxns: [Tx] = []   // pinned "To confirm" bucket (filtered)
-    @State private var dateShownIds: Set<String> = []
     @State private var hasMore = false
     @State private var confirmingBulkDelete = false
     @State private var pendingDelete: Tx?   // single-row delete awaiting confirmation
@@ -281,12 +280,6 @@ struct ActivityFeedView: View {
         let confirmed = f.filter { $0.pending != true }
         hasMore = confirmed.count > visibleCount
         sections = MonthGrouping.sections(Array(confirmed.prefix(visibleCount)))
-        // Bucket rows always carry their date (no day-de-dup context up there).
-        var shown = Set<String>(pendingTxns.map(\.id)); var last: String?
-        for txn in sections.flatMap({ $0.txns }) {
-            if txn.date != last { shown.insert(txn.id); last = txn.date }
-        }
-        dateShownIds = shown
     }
 
     /// A deep link / Spotlight / notification tap stashed a tx id + switched to
@@ -342,7 +335,7 @@ struct ActivityFeedView: View {
                         .foregroundStyle(selected.contains(txn.id) ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                 }
                 TxRow(txn: txn, onPreviewReceipt: isSelecting ? nil : { previewReceipt($0) },
-                      showDate: dateShownIds.contains(txn.id), showRunningBalance: false)
+                      showRunningBalance: false)
             }
             .contentShape(Rectangle())   // make the whole row tappable — without this the Spacer gap (middle) doesn't hit-test
         }

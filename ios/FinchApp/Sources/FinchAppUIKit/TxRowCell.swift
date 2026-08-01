@@ -68,20 +68,5 @@ enum TxRowCell {
         .margins(.vertical, 7)
     }
 
-    /// The rows that should print their own date.
-    ///
-    /// A row shows its date only when it differs from the row above, so a run of
-    /// same-day transactions prints the date once. Pending rows always show it —
-    /// they sit in their own bucket, with no day-de-dup context around them. Mirrors
-    /// `ActivityTab.dateShownIds`; kept here so the two cannot drift.
-    static func dateShownIDs(pending: [Tx], ordered: [Tx]) -> Set<String> {
-        var shown = Set(pending.map(\.id))
-        var last: String?
-        for tx in ordered where tx.date != last {
-            shown.insert(tx.id)
-            last = tx.date
-        }
-        return shown
-    }
 }
 #endif
