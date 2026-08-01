@@ -147,4 +147,70 @@ final class MultiAccountAddTests: XCTestCase {
         XCTAssertEqual(total, -100, "…carrying the full amount")
         XCTAssertEqual(catId, "c1", "the category must be untouched — the whole recategorize was skipped for this entry")
     }
+
+    // MARK: mixed-currency share validation (Fix round 2 — the tolerance bug)
+
+    /// Reconstructs the reviewer's exact false-rejection: two EUR shares (10.01 +
+    /// 19.59) each round independently to 10.88 / 21.29 (@ 1.087) = 32.17 base, one
+    /// cent off the combined 29.60 EUR rounding to 32.18. Both are correct; a flat
+    /// 0.005 tolerance rejected this valid split. `0.005 * (shares.count + 1)` = 0.015
+    /// covers it; the split is genuinely valid and must be accepted.
+    func test_addTransaction_mixedCurrencySplit_centRoundingWithinTolerance_isAccepted() throws {
+        let q = try TestSeed.base()
+        try q.write { db in
+            try db.execute(sql: """
+                INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+                VALUES ('a2','l1','Euro Card','credit_card','EUR',0,1,1,1,datetime('now'),datetime('now'))
+                """)
+            try db.execute(sql: """
+                INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+                VALUES ('a3','l1','Euro Savings','savings','EUR',0,2,1,1,datetime('now'),datetime('now'))
+                """)
+            // Seeded explicitly (not the fallback map) so the rate is exact and reproducible.
+            try db.execute(sql: "INSERT INTO exchange_rates (date,currency,rate) VALUES ('2026-06-01','EUR',1.087)")
+        }
+        let eid = try Apply.applyReturningId(dbQueue: q, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "amount": .double(-29.60), "currency": .string("EUR"),
+            "merchant": .string("Paris Trip"), "categoryId": .string("c1"),
+            "date": .string("2026-06-01"),
+            "accounts": .array([
+                .object(["accountId": .string("a2"), "amount": .double(-10.01)]),
+                .object(["accountId": .string("a3"), "amount": .double(-19.59)]),
+            ])]))
+        XCTAssertNotNil(eid, "a genuinely valid split must not be rejected by rounding noise")
+
+        let acctLegs = try q.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM postings WHERE entry_id = ? AND account_id IS NOT NULL", arguments: [eid!])
+        }
+        XCTAssertEqual(acctLegs, 2)
+        let problems = try Audit.run(on: q)
+        XCTAssertTrue(problems.isEmpty, "the written entry must be clean: \(problems.map(\.detail))")
+    }
+
+    /// A genuinely wrong split (nowhere near the stated total) must still be
+    /// rejected under the widened tolerance — it is not a rounding-noise no-op.
+    func test_addTransaction_mixedCurrencySplit_realMismatch_isRejected() throws {
+        let q = try TestSeed.base()
+        try q.write { db in
+            try db.execute(sql: """
+                INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+                VALUES ('a2','l1','Euro Card','credit_card','EUR',0,1,1,1,datetime('now'),datetime('now'))
+                """)
+            try db.execute(sql: """
+                INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+                VALUES ('a3','l1','Euro Savings','savings','EUR',0,2,1,1,datetime('now'),datetime('now'))
+                """)
+            try db.execute(sql: "INSERT INTO exchange_rates (date,currency,rate) VALUES ('2026-06-01','EUR',1.087)")
+        }
+        XCTAssertThrowsError(try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "amount": .double(-29.60), "currency": .string("EUR"),
+            "merchant": .string("Paris Trip"), "categoryId": .string("c1"),
+            "date": .string("2026-06-01"),
+            "accounts": .array([
+                .object(["accountId": .string("a2"), "amount": .double(-10.01)]),
+                .object(["accountId": .string("a3"), "amount": .double(-10.00)]),
+            ])]))) { error in
+            XCTAssertEqual((error as? I18nError)?.code, "error.split.accountsMismatch")
+        }
+    }
 }
