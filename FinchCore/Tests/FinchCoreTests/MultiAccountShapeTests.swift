@@ -69,4 +69,32 @@ final class MultiAccountShapeTests: XCTestCase {
         XCTAssertFalse(problems.filter { $0.code == .kindShape }.isEmpty,
                        "a 3-leg transfer must still be a kind-shape defect")
     }
+
+    /// Complements the audit test above: this proves the WRITE PATH itself still
+    /// refuses a 3-leg transfer via `Entries.postEntry` — `validateShape`'s `.transfer`
+    /// branch (untouched by this task) must still throw `error.transfer.twoLegs`. The
+    /// raw-SQL test above only proves the audit still flags a bad shape that somehow
+    /// made it into the database; it says nothing about whether `postEntry` itself still
+    /// guards the front door. Neither test replaces the other.
+    func test_transferWithThreeAccountLegs_stillThrowsAtWrite() throws {
+        let q = try seedTwoAccounts()
+        try q.write { db in
+            try db.execute(sql: """
+                INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+                VALUES ('a3','l1','Savings','savings','USD',0,2,1,1,datetime('now'),datetime('now'))
+                """)
+        }
+        try q.write { db in
+            XCTAssertThrowsError(try Entries.postEntry(db, Entries.NewEntry(
+                ledgerId: "l1", date: "2026-06-01", time: "12:05",
+                description: "Sweep", kind: .transfer,
+                legs: [
+                    .account(Entries.AccountLeg(accountId: "a1", amount: -100)),
+                    .account(Entries.AccountLeg(accountId: "a2", amount: 40)),
+                    .account(Entries.AccountLeg(accountId: "a3", amount: 60)),
+                ]))) {
+                XCTAssertEqual(($0 as? I18nError)?.code, "error.transfer.twoLegs")
+            }
+        }
+    }
 }
