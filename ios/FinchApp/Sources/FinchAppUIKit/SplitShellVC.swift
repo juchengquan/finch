@@ -48,6 +48,7 @@ final class SplitShellVC: UIViewController {
     /// The native budget list, when it is the current supplementary column — held so its
     /// highlight can follow a selection changed from elsewhere (a `budget:` deep link, or
     /// a ledger switch clearing it).
+    private weak var accountList: AccountsListVC?
     private weak var budgetList: BudgetsListVC?
     /// The native Activity feed, when it is the current supplementary column — held so
     /// its highlight can follow a selection changed from elsewhere (a `tx:` deep link
@@ -104,6 +105,15 @@ final class SplitShellVC: UIViewController {
                 guard let self, self.router.selectedTab == .ledger, let child = self.child else { return }
                 self.ledgerList?.selectedID = id
                 self.installLedgerDetail(into: child)
+            }
+            .store(in: &cancellables)
+
+        selection.$account
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] id in
+                guard let self, self.router.selectedTab == .accounts else { return }
+                self.accountList?.selectedID = id
             }
             .store(in: &cancellables)
 
@@ -219,6 +229,15 @@ final class SplitShellVC: UIViewController {
         // Gated on the same `-uikitActivity YES` flag as the tab root, so the app is
         // never half-converted — flag off means SwiftUI at both widths, which is what
         // `NavigationUITests` exercises as the control implementation.
+        if tab == .accounts, Self.uikitBudgets {
+            let list = AccountsListVC(onSelect: { [weak self] id in self?.selection.account = id })
+            list.selectedID = selection.account
+            accountList = list
+            svc.setViewController(UINavigationController(rootViewController: list), for: .supplementary)
+            svc.setViewController(host(SplitDetailColumn(tab: tab, selection: selection)), for: .secondary)
+            return
+        }
+        accountList = nil
         if tab == .budgets, Self.uikitBudgets {
             let list = BudgetsListVC(onSelect: { [weak self] id in self?.selection.budget = id })
             list.selectedID = selection.budget

@@ -13,7 +13,7 @@ incremental strangler migration, shipping continuously.
 > | **1 — UIKit shell** | **Done, shipping by default on iPhone.** `project.yml` excludes `FinchApp.swift` from the iOS target; the phone boots `@main UIKitAppDelegate`. Not gated. |
 > | **2 — pushed destinations** | **Done, and ON BY DEFAULT.** 24 `*VC.swift` files. The gate flipped from opt-in to opt-out: a plain build gets the converted screens, `-uikitActivity NO` reverts. The switch lives in `UIKitScreens` and is kept — not deleted — because `NavigationUITests` runs its suite once per implementation, and that dual run is the only thing asserting the two stay in step. |
 > | **3a — iPad container** | **Done (#646).** `UIKitShell.makeRoot` returns `SplitShellVC` at regular width and `RootTabBarController` at compact — both UIKit. The two shells no longer differ by framework. |
-> | **3b — native columns + tab roots** | **In progress.** Done: Ledger (#648), Budgets (#658), Scheduled (#660) — each at BOTH widths — and Activity, which is column-only (it has no compact tab root). Remaining: **Accounts**. |
+> | **3b — native columns + tab roots** | **Done.** Ledger (#648), Budgets (#658), Scheduled (#660) and Accounts — each converted at BOTH widths — plus Activity (#671), which is column-only because it has no compact tab root. Every list column, and every tab root that has one, is now native. |
 > | **4 — opportunistic** | Not started; optional by design. |
 >
 > **Forecast vs actual.** The estimates below are the pre-implementation forecast,
@@ -252,7 +252,7 @@ iPhone and iPad are one code path. Two constraints worth knowing before touching
 Verified by `SplitSelectionUITests` on both shells: selecting a row fills the detail
 column, and switching section resets it.
 
-#### Phase 3b — native columns + tab roots (IN PROGRESS — 4 of 5 done)
+#### Phase 3b — native columns + tab roots (DONE, 2026-08-01)
 
 Replace each hosted list column with a `UIViewController`, and delete
 `selection: Binding<String?>?` from the six screens that carry it. **This is the large
@@ -300,9 +300,25 @@ more given what Phase 2's conversions actually cost.
    that same VC an `onSelect` seam. There was no pair to keep in step, and `ActivityTab`
    (665 lines) was never the thing to convert — it is a two-line `NavigationStack`
    wrapper; `ActivityFeedView` is the screen, and only its regular-width use remains.
-5. **Accounts** — last, and by far the biggest. `AccountsTab` is 742 lines: collapsible
-   groups, search, drag reorder, swipe actions on two edges, context menus. Budget it
-   like `CategoriesVC`, not like `TagsVC`.
+5. **Accounts** — DONE 2026-08-01. `AccountsListVC`, root + column. The estimate held:
+   742 lines of SwiftUI, the biggest of the five. It still came in cheaply, because
+   `BudgetsListVC` had already paid for the shape — collapsible groups, per-ledger
+   collapse, search, two swipe edges, context menus, the reorder editor and the
+   drag/drop math were copied rather than re-derived. What Accounts added on top: a
+   summary section (net worth / liabilities + All Transactions), `archive` as a third
+   row verb, and a six-item ⋯ overflow.
+
+   **One trap if a sixth list ever appears:** accounts have no `setAccountOrder` action.
+   Budgets persist a reorder with a single call taking the whole ordered id list;
+   accounts patch each row's `sortOrder` individually via `updateAccount`. Copying
+   `BudgetsListVC.persistReorder` verbatim does not compile — which is the good outcome,
+   since it would otherwise have silently persisted nothing.
+
+   **And one that cost a red test:** the All Transactions row uses a default content
+   configuration, which exposes the cell as a plain cell. `NavigationUITests` drives the
+   Accounts→Activity drill via `app.buttons["All Transactions"]` and could not find it.
+   Native rows that stand in for a SwiftUI `Button` need the trait added explicitly —
+   the same class of miss as hosting a row without `.accessibilityElement(children: .combine)`.
 
 **The detail column is nearly free** for the rest: `BudgetDetailVC`, `TxListDetailVC`
 and `AccountDetailVC` were built in Phase 2 and take an id in their initialiser, which
