@@ -58,7 +58,8 @@ public enum NotificationPlanner {
 
         if enabled.contains(.budgetWarning) {
             for b in budgets {
-                let p = Selectors.budgetProgress(b, txns, today, categories)
+                // Budget cycles follow the wall clock, not the data — see FinchStore.budgetToday.
+                let p = Selectors.budgetProgress(b, txns, wallToday, categories)
                 if Double(p.pct) >= b.warningPct {
                     // Pre-formatted so the localized string carries NO literal `%`.
                     // A bare `%` beside interpolation must round-trip as `%%` through

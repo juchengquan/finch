@@ -174,7 +174,7 @@ final class BudgetDetailVC: UIViewController {
 
             switch id {
             case Self.progressID:
-                let p = Selectors.budgetProgress(budget, self.store.txns, self.store.today, self.store.categoryNodes)
+                let p = Selectors.budgetProgress(budget, self.store.txns, self.store.budgetToday, self.store.categoryNodes)
                 cell.contentConfiguration = UIHostingConfiguration {
                     BudgetProgressBlock(store: self.store, budget: budget, progress: p)
                 }
@@ -412,7 +412,7 @@ final class BudgetDetailVC: UIViewController {
         // This cycle's matched transactions. Only a multi-month cycle (quarterly,
         // yearly, or off-calendar) benefits from sectioning; a monthly cycle is one
         // month, so it stays a flat "This cycle".
-        let cycleTx = Selectors.budgetMatchedTransactions(budget, store.txns, store.today, store.categoryNodes)
+        let cycleTx = Selectors.budgetMatchedTransactions(budget, store.txns, store.budgetToday, store.categoryNodes)
         let sections = MonthGrouping.sections(cycleTx)
         if cycleTx.isEmpty {
             snap.appendSections([.thisCycle])

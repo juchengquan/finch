@@ -27,9 +27,11 @@ extension FinchStore {
     }
 
     /// The DATA-anchored "today" = the max tx date (falls back to the wall
-    /// clock only when there are no transactions). The web deliberately anchors
-    /// budget windows AND the Insights forecast/digest on the data (demo
-    /// determinism, no hydration mismatch) — use this ONLY for those surfaces.
+    /// clock only when there are no transactions). The web anchors the Insights
+    /// forecast/digest on the data (demo determinism, no hydration mismatch) — use
+    /// this ONLY for those surfaces. BUDGET CYCLES no longer use it: they take
+    /// `budgetToday`, because a cycle that stops advancing when you stop spending
+    /// showed last month's budget on the 1st. See `budgetToday`.
     /// Anything that means the literal current day (calendar Today ring,
     /// Today/Yesterday labels, scheduled next-runs, posting dates) must use
     /// `wallToday` — this value lags behind the real date whenever the newest
@@ -38,6 +40,23 @@ extension FinchStore {
 
     /// The real current day (wall clock), for surfaces that mean literal today.
     public var wallToday: String { Self.isoDay(Date()) }
+
+    /// The day BUDGET CYCLES are measured from — the wall clock, deliberately NOT
+    /// `today`.
+    ///
+    /// Budget windows used to be anchored on the data, matching the web, whose two
+    /// stated reasons are demo determinism and avoiding a React hydration mismatch
+    /// (`no Date() → no hydration mismatch`). Neither applies to a native app: there
+    /// is no server render here, and a real ledger is not a fixture.
+    ///
+    /// What it cost: with the newest transaction on 31 July, opening the app on
+    /// 1 August showed JULY's cycle — last month's spend, "0 days left" on every
+    /// budget — because the ledger's "today" had not moved. Any quiet spell froze
+    /// the cycle at the last thing you recorded.
+    ///
+    /// Named rather than spelled `wallToday` at each call site so this decision lives
+    /// in one place if it is ever revisited.
+    public var budgetToday: String { wallToday }
 
     public var categoryNodes: [CategoryNode] {
         categories.map { CategoryNode(id: $0.id, parentId: $0.parentId) }
@@ -278,7 +297,7 @@ extension FinchStore {
     /// currency — the Budgets-page analogue of Accounts' `subtotalDisplay`.
     public func budgetSubtotalDisplay(for group: String) -> String {
         displayMoneyBase(budgets(in: group).reduce(0.0) {
-            $0 + Selectors.budgetProgress($1, txns, today, categoryNodes).base
+            $0 + Selectors.budgetProgress($1, txns, budgetToday, categoryNodes).base
         })
     }
     /// Ledger-wide budget health for the Budgets summary card — spend totals with
@@ -286,7 +305,7 @@ extension FinchStore {
     /// card formats via the privacy-aware displayMoneyBase.
     var budgetSummary: BudgetSummary {
         BudgetSummary.compute(budgets) { b in
-            let p = Selectors.budgetProgress(b, txns, today, categoryNodes)
+            let p = Selectors.budgetProgress(b, txns, budgetToday, categoryNodes)
             return (p.used, p.base, p.over)
         }
     }
