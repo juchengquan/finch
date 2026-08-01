@@ -863,8 +863,9 @@ note in §4b and §5 was written against.
       (Insights and Settings are two-column; the rest are three).
 
 **3b — native tab roots + columns.** Each converted tab is native at BOTH widths, from
-one view controller. Done: Ledger (#648), Budgets (#658), Scheduled (#660). Remaining:
-Activity, Accounts.
+one view controller. Done: Ledger (#648), Budgets (#658), Scheduled (#660), and Activity
+(column only — it has no compact tab root; the pushed feed was already native). Remaining:
+Accounts.
 
 Per converted tab, on **both** an iPhone and an iPad:
 

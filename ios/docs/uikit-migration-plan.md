@@ -13,7 +13,7 @@ incremental strangler migration, shipping continuously.
 > | **1 — UIKit shell** | **Done, shipping by default on iPhone.** `project.yml` excludes `FinchApp.swift` from the iOS target; the phone boots `@main UIKitAppDelegate`. Not gated. |
 > | **2 — pushed destinations** | **Done, and ON BY DEFAULT.** 24 `*VC.swift` files. The gate flipped from opt-in to opt-out: a plain build gets the converted screens, `-uikitActivity NO` reverts. The switch lives in `UIKitScreens` and is kept — not deleted — because `NavigationUITests` runs its suite once per implementation, and that dual run is the only thing asserting the two stay in step. |
 > | **3a — iPad container** | **Done (#646).** `UIKitShell.makeRoot` returns `SplitShellVC` at regular width and `RootTabBarController` at compact — both UIKit. The two shells no longer differ by framework. |
-> | **3b — native columns + tab roots** | **In progress.** Done: Ledger (#648), Budgets (#658), Scheduled (#660) — each converted at BOTH widths. Remaining: **Activity**, **Accounts**. |
+> | **3b — native columns + tab roots** | **In progress.** Done: Ledger (#648), Budgets (#658), Scheduled (#660) — each at BOTH widths — and Activity, which is column-only (it has no compact tab root). Remaining: **Accounts**. |
 > | **4 — opportunistic** | Not started; optional by design. |
 >
 > **Forecast vs actual.** The estimates below are the pre-implementation forecast,
@@ -252,7 +252,7 @@ iPhone and iPad are one code path. Two constraints worth knowing before touching
 Verified by `SplitSelectionUITests` on both shells: selecting a row fills the detail
 column, and switching section resets it.
 
-#### Phase 3b — native columns + tab roots (IN PROGRESS — 3 of 5 done)
+#### Phase 3b — native columns + tab roots (IN PROGRESS — 4 of 5 done)
 
 Replace each hosted list column with a `UIViewController`, and delete
 `selection: Binding<String?>?` from the six screens that carry it. **This is the large
@@ -293,9 +293,13 @@ more given what Phase 2's conversions actually cost.
    FIRST (it looks smallest at 329 lines) and appeared blocked on a scroll regression
    for four attempts; it turned out to be `TabChromeVC` swallowing every touch, not the
    screen. See *the tab-chrome prerequisite* below.
-4. **Activity** — NEXT. `ActivityTab` is 665 lines. `ActivityFeedVC` already exists; this
-   is mostly wiring it as a column rather than a pushed screen, plus the `focusedId`
-   deep-link path.
+4. **Activity** — DONE 2026-08-01. **The exception to the root+column rule**: Activity
+   has no compact tab root to convert. `RootTabBarController.slots` has no `.activity` —
+   the feed lives inside Accounts and is reached by a PUSH, which `ActivityFeedVC` has
+   served natively since Phase 2. So this step added the iPad column only, by giving
+   that same VC an `onSelect` seam. There was no pair to keep in step, and `ActivityTab`
+   (665 lines) was never the thing to convert — it is a two-line `NavigationStack`
+   wrapper; `ActivityFeedView` is the screen, and only its regular-width use remains.
 5. **Accounts** — last, and by far the biggest. `AccountsTab` is 742 lines: collapsible
    groups, search, drag reorder, swipe actions on two edges, context menus. Budget it
    like `CategoriesVC`, not like `TagsVC`.
