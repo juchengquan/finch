@@ -97,10 +97,15 @@ final class ScheduledListVC: UIViewController {
 
         // Privacy mode is not one of those three slices, so without this the eye
         // icon and the calendar's masked figures both stayed on whatever they were
-        // when the tab was built. `BudgetsListVC` observes the same signal for the
-        // same reason.
-        store.objectWillChange
-            .receive(on: DispatchQueue.main)   // delivered after the mutation lands
+        // when the tab was built.
+        //
+        // The precise publisher, not `objectWillChange`: this screen already
+        // observes the slices it depends on, so the broad signal would rebuild the
+        // snapshot for all 19 published properties. `BudgetsListVC` and
+        // `AccountsListVC` do need the broad one — their `budgets` / `accounts`
+        // are not published slices at all — but that reason does not apply here.
+        store.$privacyMode
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.applySnapshot() }
             .store(in: &cancellables)
     }

@@ -80,6 +80,12 @@ final class LedgerDetailVC: UIViewController {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.applySnapshot() }   // Make-active row appears/disappears
             .store(in: &cancellables)
+        // The summary figures are masked at build time, and hide-amounts is none
+        // of the slices above.
+        store.$privacyMode
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.reloadSummary(); self?.applySnapshot() }
+            .store(in: &cancellables)
     }
 
     private func reloadSummary() {

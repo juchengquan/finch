@@ -153,6 +153,13 @@ final class ActivityFeedVC: UIViewController {
         // `$txns` publishes [] → [] and cannot distinguish the two states.
         TxnsLoadingCell.observe(store) { [weak self] in self?.applySnapshot() }
             .store(in: &cancellables)
+        // Hide-amounts is not `$txns`, so without this a toggle left the month
+        // headers' income/spent and the calendar's `masked:` on their old values —
+        // both are read when the cells are configured.
+        store.$privacyMode
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.applySnapshot() }
+            .store(in: &cancellables)
 
         // A one-shot filter handed over from elsewhere ("show me this account's
         // transactions"), mirroring `ActivityFeedView.consumePendingFilter`.
