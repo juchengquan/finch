@@ -272,6 +272,15 @@ Consequences worth knowing before you touch a row:
   60pt deliberately: the only levers were truncating the row's name (`lineLimit(1)`) and shrinking
   an already-sub-44pt chevron tap target. Both cost information or usability at *every* text size
   to buy a rendering detail that exists at only some of them. Row content wins.
+  **The chevron lever is now closed** — and it was narrower than the code said. Categories'
+  expand chevron is now `Metrics.tapTargetMin` (44) square on both screens, because a miss on it
+  drilled into the category (a push *and* a Back) rather than failing quietly.
+  `ExpandChevronTapTargetTests` guards the floor. Measured on the sim: SwiftUI's `.frame` was
+  honoured, so iPad/macOS really were 22×30 — but **UIKit's `customView.frame` was not**, and the
+  iPhone chevron rendered at the glyph's own ~15.7×22.3. See `AccessorySquare` in `CategoriesVC`
+  for why `frame` is ignored, why constraints crash, and why `intrinsicContentSize` is the
+  only lever that works. On SwiftUI the 44pt box overflows a clamped `expandChevronLayoutHeight`,
+  so those rows still measure 60pt; in UIKit the accessory never drove row height.
 
 Current heights: Accounts · `TxRow` · Merchants · Tags · Scheduled · Ledger = 52pt (capsule);
 Categories = 60pt, Budgets = 75pt (circle, by choice). Measure with

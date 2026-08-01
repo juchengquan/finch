@@ -302,6 +302,11 @@ struct CategoriesView: View {
     /// disclosure chevron for parents. The trailing chevron here means "expands
     /// children" (unlike Tags/Merchants' nav chevron) — kept trailing-only so the
     /// leading edge stays a clean, aligned icon column.
+    ///
+    /// Reorder mode swaps the count pill for a `ReorderGrip` rather than adding
+    /// one, so the trailing chrome stays two slots wide in both modes and the name
+    /// column doesn't reflow on entering or leaving Reorder. The chevron stays live
+    /// throughout — you need to expand a parent to drop something inside it.
     @ViewBuilder private func rowContent(_ item: FlatCategory, _ counts: [String: Int]) -> some View {
         let c = item.row
         let selectDisabled = isSelecting && mergeSelectionDisabled(c.id, selected: selected, byId: byId)
@@ -328,7 +333,7 @@ struct CategoriesView: View {
                     }
                     Text(c.name).foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    CountPill(count: counts[c.id] ?? 0)
+                    if !isReordering { CountPill(count: counts[c.id] ?? 0) }
                 }
                 .contentShape(Rectangle())
             }
@@ -347,6 +352,8 @@ struct CategoriesView: View {
                 // edges line up across parent and leaf rows.
                 ExpandChevron.slot
             }
+
+            if isReordering { ReorderGrip() }
         }
         .padding(.leading, CGFloat(item.depth) * 14)
         .opacity(selectDisabled ? 0.35 : 1)
