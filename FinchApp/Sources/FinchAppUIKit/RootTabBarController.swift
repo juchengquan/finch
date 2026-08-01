@@ -46,7 +46,11 @@ final class RootTabBarController: UITabBarController {
             // is what stops the two from drifting. `TabChromeVC` gives it the FAB and
             // the focused-tx sheet that a hosted root gets for free from `TabChrome`.
             let vc: UIViewController
-            if tab == .budgets, Self.uikitNavTabs.contains(tab) {
+            if tab == .accounts, Self.uikitNavTabs.contains(tab) {
+                let nav = UINavigationController(rootViewController: AccountsListVC())
+                nav.navigationBar.prefersLargeTitles = true
+                vc = TabChromeVC(content: nav, tab: tab, store: store, router: router)
+            } else if tab == .budgets, Self.uikitNavTabs.contains(tab) {
                 let nav = UINavigationController(rootViewController: BudgetsListVC())
                 nav.navigationBar.prefersLargeTitles = true
                 vc = TabChromeVC(content: nav, tab: tab, store: store, router: router)
