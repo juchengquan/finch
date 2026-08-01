@@ -78,6 +78,12 @@ final class LedgersVC: UIViewController {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in self?.applySnapshot() }
             .store(in: &cancellables)
+        // The net-worth column is masked at build time; hide-amounts is not one of
+        // the three slices above.
+        store.$privacyMode
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.applySnapshot() }
+            .store(in: &cancellables)
     }
 
     private func configureCollectionView() {

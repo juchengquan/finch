@@ -124,6 +124,12 @@ final class BudgetDetailVC: UIViewController {
         // `$txns` alone cannot tell "not projected yet" from "nothing matched".
         TxnsLoadingCell.observe(store) { [weak self] in self?.applySnapshot() }
             .store(in: &cancellables)
+        // Hide-amounts is not `$txns` or `$budgets`: the progress block, the
+        // history chart's `masked:` and every row figure read it at build time.
+        store.$privacyMode
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.applySnapshot() }
+            .store(in: &cancellables)
         store.$budgets
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
