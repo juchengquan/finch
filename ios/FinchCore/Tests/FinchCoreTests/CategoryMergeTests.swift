@@ -92,20 +92,37 @@ final class CategoryMergeTests: XCTestCase {
         }
     }
 
+    /// When a merged-away category's children cannot fit under the target, they are
+    /// promoted to the top level rather than dropped. Built from `Categories.maxDepth`
+    /// so it keeps exercising the fallback wherever the limit sits — the previous
+    /// version hardcoded a 2-deep target plus a 2-deep subtree, which stopped
+    /// overflowing the moment the cap moved past 4 and silently tested nothing.
     func test_child_falls_back_to_top_level_when_depth_would_exceed_cap() throws {
         let q = try seeded()
         try q.write { db in
-            // target is a depth-2 category (level 3): parent p1(1) → p2(2) → cTarget2(3-ish).
-            try db.execute(sql: "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('p1','l1',NULL,'P1','expense',0,datetime('now'),datetime('now'))")
-            try db.execute(sql: "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('deepTarget','l1','p1','DT','expense',0,datetime('now'),datetime('now'))")
-            // source has a child that itself has a child (subtreeDepth 2) — cannot fit under a depth-2 target.
+            // A target chain deep enough that two more levels overflow.
+            var parent: String? = nil
+            for level in 0..<(Categories.maxDepth - 1) {
+                let id = "p\(level)"
+                try db.execute(
+                    sql: "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES (?,'l1',?,?,'expense',0,datetime('now'),datetime('now'))",
+                    arguments: [id, parent, id.uppercased()])
+                parent = id
+            }
+            try db.execute(
+                sql: "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('deepTarget','l1',?,'DT','expense',0,datetime('now'),datetime('now'))",
+                arguments: [parent])
+            // The source's child has a child of its own — a 2-level subtree.
             try db.execute(sql: "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('cKid','l1','cSource','Kid','expense',0,datetime('now'),datetime('now'))")
             try db.execute(sql: "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('cGrandkid','l1','cKid','GK','expense',0,datetime('now'),datetime('now'))")
         }
         try merge(q, "cSource", "deepTarget")
         try q.read { db in
-            // categoryDepth(deepTarget)=2, subtreeDepth(cKid)=2 → 4 > 3 ⇒ cKid goes to top level.
+            // depth(deepTarget) = maxDepth, subtreeDepth(cKid) = 2 ⇒ overflow, so cKid
+            // is promoted to the top level instead of being nested or lost.
             XCTAssertNil(try String.fetchOne(db, sql: "SELECT parent_id FROM categories WHERE id = 'cKid'"))
+            // And nothing was destroyed on the way.
+            XCTAssertNotNil(try String.fetchOne(db, sql: "SELECT id FROM categories WHERE id = 'cGrandkid'"))
         }
     }
 

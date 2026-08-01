@@ -45,26 +45,73 @@ final class CategoryGuardTests: XCTestCase {
         }
     }
 
-    func test_createUnderDepth3Parent_rejected() throws {
+    /// Builds a chain exactly `maxDepth` deep, then proves the next level is refused.
+    /// Written against the constant rather than a literal so raising the limit does
+    /// not silently turn this into a test of nothing — it would otherwise keep
+    /// passing while asserting a depth the engine no longer cares about.
+    func test_createBeyondMaxDepth_rejected() throws {
         let q = try seeded()
-        try mkCat(q, "a")
-        try mkCat(q, "b", parent: "a")
-        try mkCat(q, "c", parent: "b")   // a→b→c is depth 3
+        var parent: String?
+        for level in 0..<Categories.maxDepth {
+            let id = "c\(level)"
+            try mkCat(q, id, parent: parent)
+            parent = id
+        }
         assertI18n("error.category.depthCap") {
-            try mkCat(q, "d", parent: "c")   // would be depth 4
+            try mkCat(q, "oneTooDeep", parent: parent)
         }
     }
 
+    /// The level BEFORE the cap must still be allowed — otherwise a guard that
+    /// rejected everything would pass the test above.
+    func test_createAtMaxDepth_allowed() throws {
+        let q = try seeded()
+        var parent: String?
+        for level in 0..<(Categories.maxDepth - 1) {
+            let id = "c\(level)"
+            try mkCat(q, id, parent: parent)
+            parent = id
+        }
+        try mkCat(q, "atCap", parent: parent)   // lands exactly at maxDepth
+    }
+
+    /// The cap counts the MOVING subtree's own height, not just where it lands: a
+    /// 2-level subtree needs two levels of headroom. Built from `maxDepth` so it
+    /// keeps testing the boundary wherever the limit is set.
     func test_moveSubtreeExceedingCap_rejected() throws {
         let q = try seeded()
+        // A 2-level subtree: a → b.
         try mkCat(q, "a")
-        try mkCat(q, "b", parent: "a")   // a→b (subtree depth 2 under a)
-        try mkCat(q, "x")
-        try mkCat(q, "y", parent: "x")   // x→y (parent depth 2)
-        // Moving a (subtree depth 2) under y (depth 2) → 2+2 = 4 > 3.
-        assertI18n("error.category.depthCap") {
-            try Apply.apply(dbQueue: q, action: "updateCategory", args: Args(["id": .string("a"), "patch": .object(["parentId": .string("y")])]))
+        try mkCat(q, "b", parent: "a")
+        // A chain deep enough that adding 2 more levels overflows.
+        var parent: String?
+        for level in 0..<(Categories.maxDepth - 1) {
+            let id = "p\(level)"
+            try mkCat(q, id, parent: parent)
+            parent = id
         }
+        // depth(parent) = maxDepth - 1, subtreeDepth(a) = 2 → maxDepth + 1 > maxDepth.
+        assertI18n("error.category.depthCap") {
+            try Apply.apply(dbQueue: q, action: "updateCategory",
+                            args: Args(["id": .string("a"), "patch": .object(["parentId": .string(parent!)])]))
+        }
+    }
+
+    /// One level shallower must succeed, so the test above is proving the boundary
+    /// rather than a guard that refuses everything.
+    func test_moveSubtreeThatExactlyFits_allowed() throws {
+        let q = try seeded()
+        try mkCat(q, "a")
+        try mkCat(q, "b", parent: "a")
+        var parent: String?
+        for level in 0..<(Categories.maxDepth - 2) {
+            let id = "p\(level)"
+            try mkCat(q, id, parent: parent)
+            parent = id
+        }
+        // depth(parent) = maxDepth - 2, subtreeDepth(a) = 2 → exactly maxDepth.
+        try Apply.apply(dbQueue: q, action: "updateCategory",
+                        args: Args(["id": .string("a"), "patch": .object(["parentId": .string(parent!)])]))
     }
 
     func test_validReparent_allowed() throws {

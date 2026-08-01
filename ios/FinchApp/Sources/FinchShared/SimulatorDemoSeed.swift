@@ -85,7 +85,7 @@ enum SimulatorDemoSeed {
                 "name": .string(c.name), "type": .string(c.kind)])
         }
 
-        // Subcategories (parent_id) — categories nest up to three levels, so the
+        // Subcategories (parent_id) — categories nest up to `Categories.maxDepth`, so the
         // picker/tree renders a real hierarchy. Budgets over a PARENT roll up their
         // descendants' spend (expandDescendants), so these still count toward the
         // Dining/Transport/Shopping/Health budgets below.
@@ -102,7 +102,8 @@ enum SimulatorDemoSeed {
             ("cat-health-pharmacy",      "Pharmacy",        "cat-health"),
             ("cat-health-fitness",       "Fitness",         "cat-health"),
         ]
-        // A third level under Shopping › Home (the deepest the 3-level cap allows).
+        // A third level under Shopping › Home. Not the deepest allowed any more —
+        // the seed stays at 3 because that is what a realistic ledger looks like.
         let subSubcategories: [(id: String, name: String, parent: String)] = [
             ("cat-shopping-home-furniture", "Furniture", "cat-shopping-home"),
             ("cat-shopping-home-decor",     "Decor",     "cat-shopping-home"),

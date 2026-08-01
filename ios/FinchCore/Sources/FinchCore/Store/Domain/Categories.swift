@@ -3,7 +3,8 @@ import GRDB
 
 /// Categories domain — port of lib/db/domain/categories/mutations.ts, including
 /// the reparenting guards from _depth.ts: self-parent, move-under-own-descendant
-/// (cycle prevention), and the ≤3-level depth cap.
+/// (cycle prevention), and the depth cap — see `maxDepth`, which is 5 natively
+/// while the web still enforces 3.
 public enum Categories {
     public static let handlers: [ActionName: Apply.Handler] = [
         .createCategory: create,
@@ -102,7 +103,7 @@ public enum Categories {
     /// Combine `sourceId` into `targetId`: repoint every reference source holds
     /// (transaction legs incl. splits, scheduled templates + splits, budget id
     /// lists), re-parent source's children under target (top-level fallback past
-    /// the 3-level cap), then delete source. One atomic transaction (Apply wraps).
+    /// the depth cap), then delete source. One atomic transaction (Apply wraps).
     static func merge(_ db: Database, _ args: Args) throws {
         struct A: Decodable { let sourceId: String; let targetId: String }
         let a = try args.to(A.self)
@@ -146,7 +147,7 @@ public enum Categories {
     }
 
     /// Repoint every reference `source` holds onto `target` and re-parent source's
-    /// children under target (top-level fallback past the 3-level cap). Does NOT
+    /// children under target (top-level fallback past the depth cap). Does NOT
     /// validate or delete `source`. Runs inside the caller's transaction.
     private static func mergeOne(_ db: Database, source: String, target: String) throws {
         try db.execute(sql: "UPDATE postings SET category_id = ? WHERE category_id = ?", arguments: [target, source])
@@ -165,7 +166,7 @@ public enum Categories {
         }
         let children = try String.fetchAll(db, sql: "SELECT id FROM categories WHERE parent_id = ?", arguments: [source])
         for child in children {
-            let fits = try categoryDepth(db, target) + subtreeDepth(db, child) <= 3
+            let fits = try categoryDepth(db, target) + subtreeDepth(db, child) <= maxDepth
             try db.execute(sql: "UPDATE categories SET parent_id = ?, updated_at = datetime('now') WHERE id = ?",
                            arguments: [fits ? target : nil, child])
         }
@@ -240,10 +241,30 @@ public enum Categories {
 
     // MARK: depth / cycle guards (port of lib/db/domain/categories/_depth.ts)
 
-    /// Hops from `id` up to the root; the 10-hop bound is the web's cycle backstop.
+    /// How deep categories may nest. **The web still enforces 3**, so a tree deeper
+    /// than that is native-only and the web cannot represent it — a deliberate
+    /// divergence, like `sortOrder` on `updateCategory` just above.
+    ///
+    /// 5 rather than "unlimited" on purpose. A finite limit is what lets every walk
+    /// below stay bounded, keeps "too deep" a thing the engine can actually say (so
+    /// a malformed import is rejected instead of producing a 500-deep chain), and
+    /// keeps `merge`'s promote-the-children fallback meaningful. It is also already
+    /// far past use: Home → Utilities → Energy → Gas → Standing charge is 5.
+    public static let maxDepth = 4 + 1
+
+    /// Step limit for the tree walks below. **Derived from `maxDepth`, never written
+    /// as a literal.** These bounds exist to stop a walk spinning forever if the data
+    /// already contains a cycle — a different job from the depth rule, which is why
+    /// they used to be a bare `10` while the cap was `3`. Once the two numbers are
+    /// close, a hardcoded bound silently becomes too short: a walk that stops at
+    /// exactly `maxDepth` steps never reaches the root of the deepest LEGAL tree and
+    /// returns a wrong depth, or misses a cycle. Always stay ahead of the rule.
+    private static let walkLimit = maxDepth + 2
+
+    /// Hops from `id` up to the root; `walkLimit` is the cycle backstop.
     private static func categoryDepth(_ db: Database, _ id: String) throws -> Int {
         var cur: String? = id, depth = 0
-        for _ in 0..<10 {
+        for _ in 0..<walkLimit {
             guard let c = cur else { break }
             guard let row = try Row.fetchOne(db, sql: "SELECT parent_id FROM categories WHERE id = ?", arguments: [c]) else {
                 throw I18nError("error.notFound.category", [:], "Category does not exist")
@@ -257,7 +278,7 @@ public enum Categories {
     /// Levels in the subtree rooted at `id` (1 = leaf).
     private static func subtreeDepth(_ db: Database, _ id: String) throws -> Int {
         var frontier = [id], depth = 1
-        for _ in 0..<10 {
+        for _ in 0..<walkLimit {
             if frontier.isEmpty { break }
             let placeholders = frontier.map { _ in "?" }.joined(separator: ",")
             let rows = try String.fetchAll(db, sql: "SELECT id FROM categories WHERE parent_id IN (\(placeholders))",
@@ -273,7 +294,7 @@ public enum Categories {
     /// move-under-own-descendant cycle guard.
     private static func isInSubtreeOf(_ db: Database, _ candidateId: String, _ ancestorId: String) throws -> Bool {
         var cur: String? = candidateId
-        for _ in 0..<10 {
+        for _ in 0..<walkLimit {
             guard let c = cur else { break }
             if c == ancestorId { return true }
             guard let row = try Row.fetchOne(db, sql: "SELECT parent_id FROM categories WHERE id = ?", arguments: [c]) else { return false }
@@ -283,14 +304,14 @@ public enum Categories {
     }
 
     private static func assertCanBeParent(_ db: Database, _ parentId: String) throws {
-        if try categoryDepth(db, parentId) >= 3 {
-            throw I18nError("error.category.depthCap", [:], "Categories nest at most three levels deep")
+        if try categoryDepth(db, parentId) >= maxDepth {
+            throw I18nError("error.category.depthCap", [:], "Categories can't be nested any deeper")
         }
     }
 
     private static func assertSubtreeFitsUnder(_ db: Database, _ movingId: String, _ newParentId: String) throws {
-        if try categoryDepth(db, newParentId) + subtreeDepth(db, movingId) > 3 {
-            throw I18nError("error.category.depthCap", [:], "Categories nest at most three levels deep")
+        if try categoryDepth(db, newParentId) + subtreeDepth(db, movingId) > maxDepth {
+            throw I18nError("error.category.depthCap", [:], "Categories can't be nested any deeper")
         }
     }
 }
