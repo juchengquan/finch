@@ -43,6 +43,11 @@ final class CategoriesVC: UIViewController {
     /// Set while a drag is in flight; `localObject` on the drag item, kept here too
     /// so the drop handler never has to load the item provider asynchronously.
     private var draggingId: String?
+    /// The category folded away for the duration of a drag, if it was expanded when
+    /// lifted — restored on `dragSessionDidEnd`. Nil when the dragged row was
+    /// already collapsed or childless, so the restore never expands something the
+    /// user had shut.
+    private var collapsedForDrag: String?
 
     private enum SectionID: Hashable { case picker, topLevel, rows, empty }
 
@@ -653,7 +658,12 @@ extension CategoriesVC: UICollectionViewDragDelegate {
     func collectionView(_ cv: UICollectionView,
                         itemsForBeginning session: UIDragSession,
                         at indexPath: IndexPath) -> [UIDragItem] {
-        guard isReordering,
+        // No dragging while searching. The visible list is filtered AND
+        // force-expanded, but `CategoryReorder` computes sibling order from the
+        // FULL row list — so what you see is not what you'd be reordering. It also
+        // makes the collapse below impossible, since search overrides `expanded`.
+        // The chevron is already inert during search for the same reason.
+        guard isReordering, search.isEmpty,
               let id = dataSource.itemIdentifier(for: indexPath),
               flatByID[id] != nil else { return [] }
         draggingId = id
@@ -662,8 +672,38 @@ extension CategoriesVC: UICollectionViewDragDelegate {
         return [item]
     }
 
+    /// Fold the dragged category's children away for the duration of the drag.
+    ///
+    /// A move only rewrites the dragged row's own `parent_id`/`sort_order` — its
+    /// children point at it and travel with it wherever it lands. But an expanded
+    /// parent lifts as ONE row while its children stay sitting in the list, so the
+    /// thing under your finger reads as a single category tearing itself out of its
+    /// group. Collapsing first makes that one row genuinely *be* the whole group.
+    ///
+    /// It also removes the drop targets that produced errors: with the children
+    /// hidden you cannot drop a parent onto its own child, which `reorder` would
+    /// otherwise turn into `parentId == sourceId` for the engine to reject with
+    /// "A category cannot be its own parent".
+    ///
+    /// Done here rather than in `itemsForBeginning` so the snapshot isn't rewritten
+    /// underneath UIKit while it is still assembling the lift.
+    func collectionView(_ cv: UICollectionView, dragSessionWillBegin session: UIDragSession) {
+        guard let id = draggingId, expanded.contains(id) else { return }
+        expanded.remove(id)
+        collapsedForDrag = id
+        applySnapshot()
+    }
+
     func collectionView(_ cv: UICollectionView, dragSessionDidEnd session: UIDragSession) {
         draggingId = nil
+        // Restore the expansion, whether the drop landed, missed, or the engine
+        // rejected it — so you can see the group arrived intact, and a refused move
+        // gives you back exactly the tree you started with.
+        if let id = collapsedForDrag {
+            expanded.insert(id)
+            collapsedForDrag = nil
+            applySnapshot()
+        }
     }
 }
 
