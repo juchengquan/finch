@@ -31,6 +31,11 @@ struct CategoryPickerRow: View {
     var splitting: Binding<SplitAllocation>? = nil
     /// Currency for the subpage's amount fields.
     var currency: String = ""
+    /// True while the OTHER split (account) already has 2+ funded rows — the
+    /// engine refuses an entry split both ways at once
+    /// (`error.split.multiAccount`, Task 4b). Disables the toggle; ignored when
+    /// `splitting` is nil.
+    var splitLocked = false
     @State private var presented = false
 
     private var selectedName: String {
@@ -55,7 +60,8 @@ struct CategoryPickerRow: View {
         }
         .sheet(isPresented: $presented) {
             CategoryPickerSheet(title: title, categories: categories, selection: $selection,
-                                noneLabel: noneLabel, splitting: splitting, currency: currency)
+                                noneLabel: noneLabel, splitting: splitting, currency: currency,
+                                splitLocked: splitLocked)
                 #if os(iOS)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -81,6 +87,8 @@ struct CategoryPickerSheet: View {
     var splitting: Binding<SplitAllocation>? = nil
     /// Currency for the amount fields; only read in split mode.
     var currency: String = ""
+    /// See `CategoryPickerRow.splitLocked`.
+    var splitLocked = false
     /// Needed for `displayNative`, which is also what makes these amounts honour
     /// privacy mode rather than printing figures the rest of the app is hiding.
     @EnvironmentObject private var store: FinchStore
@@ -94,13 +102,14 @@ struct CategoryPickerSheet: View {
     @State private var amountText: [String: String] = [:]
 
     init(title: String, categories: [CategoryRow], selection: Binding<String>, noneLabel: String? = nil,
-         splitting: Binding<SplitAllocation>? = nil, currency: String = "") {
+         splitting: Binding<SplitAllocation>? = nil, currency: String = "", splitLocked: Bool = false) {
         self.title = title
         self.categories = categories
         self._selection = selection
         self.noneLabel = noneLabel
         self.splitting = splitting
         self.currency = currency
+        self.splitLocked = splitLocked
         self._staged = State(initialValue: selection.wrappedValue)
     }
 
@@ -170,6 +179,13 @@ struct CategoryPickerSheet: View {
         Section {
             Toggle("Split across categories", isOn: $splitOn)
                 .accessibilityIdentifier("category.splitToggle")
+                .disabled(splitLocked)
+            if splitLocked {
+                // The engine refuses an entry split both ways at once
+                // (error.split.multiAccount) — say why the toggle won't move
+                // rather than let the user find out after a half-applied save.
+                Text("Turn off the account split first.").font(.footnote).foregroundStyle(.secondary)
+            }
         }
         if splitOn, let splitting {
             Section {
