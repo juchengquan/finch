@@ -11,6 +11,11 @@
 #   ios/scripts/ci-local.sh                          # the iOS job
 #   ios/scripts/ci-local.sh --all                    # + the frontend job
 #   ios/scripts/ci-local.sh --sim "iPhone 17 Pro"    # pin the simulator
+#   FINCH_CI_PLATFORMS=1 ios/scripts/ci-local.sh     # make macOS + watchOS gate again
+#
+# macOS and watchOS are PARKED: still built and reported here, but a failure is a
+# warning, not a failure — matching CI, where both run on the merge commit rather
+# than on pull requests.
 #
 # Ordering is fail-fast rather than CI's order: the i18n guards cost seconds and
 # catch the drift behind most recent CI failures; the Xcode builds cost minutes.
@@ -108,7 +113,13 @@ fi
 
 # --- 3. project + simulator --------------------------------------------------
 step "Generate the Xcode project"
-if xcodegen generate >/dev/null 2>&1; then pass "FinchApp.xcodeproj"; else fail "xcodegen generate"; fi
+# Two specs, two projects — FinchMac is deliberately NOT in FinchApp.xcodeproj
+# (see ios/project-mac.yml for why).
+if xcodegen generate --spec project.yml,project-mac.yml >/dev/null 2>&1; then
+  pass "FinchApp.xcodeproj + FinchMac.xcodeproj"
+else
+  fail "xcodegen generate"
+fi
 
 if [ -z "$SIM" ]; then
   SIM=$(xcrun simctl list devices available | grep -oE 'iPhone [0-9][0-9A-Za-z ]*' | head -1 | xargs)
@@ -165,15 +176,35 @@ else
   grep -E "error:|^xliff-keys:|^  " "$RUN_DIR/loc.log" | head -8
 fi
 
-# --- 6. the other platforms --------------------------------------------------
+# --- 6. the other platforms (PARKED: built and reported, but NOT gating) ------
+# macOS and watchOS are not under active work, and CI matches this: both build on
+# the merge commit rather than on pull requests. They still build here — a break is
+# worth knowing about before you push — but neither fails this script.
+#
+# `FINCH_CI_PLATFORMS=1` makes them gate again. To un-park permanently: drop the
+# variable, call `fail` instead of `warn`, and delete the `if:` lines from the two
+# steps in ci.yml.
+#
+# macOS only became parkable once FinchMac moved into its own project: while it was
+# a target in FinchApp.xcodeproj, `xcodebuild -exportLocalizations` compiled it on
+# every run whatever scheme/target you gave it, so a macOS break failed the i18n
+# step regardless. See ios/project-mac.yml.
+WARNED=()
+warn() { printf '\033[33m  warn  %s\033[0m\n' "$1"; WARNED+=("$1"); KEEP_RUN_DIR=1; }
+if [ "${FINCH_CI_PLATFORMS:-0}" = "1" ]; then
+  nongating() { fail "$1"; }
+else
+  nongating() { warn "$1 — not gating (parked; FINCH_CI_PLATFORMS=1 to gate)"; }
+fi
+
 step "Build FinchMac (macOS)"
-if xcodebuild build -project FinchApp.xcodeproj -scheme FinchMac -destination 'platform=macOS' \
+if xcodebuild build -project FinchMac.xcodeproj -scheme FinchMac -destination 'platform=macOS' \
      CODE_SIGNING_ALLOWED=NO -derivedDataPath "$DD" -quiet \
      -skipPackagePluginValidation -skipMacroValidation \
      COMPILER_INDEX_STORE_ENABLE=NO >"$RUN_DIR/mac.log" 2>&1; then
   pass "FinchMac"
 else
-  fail "FinchMac"; grep -E "error:" "$RUN_DIR/mac.log" | head -5
+  nongating "FinchMac"; grep -E "error:" "$RUN_DIR/mac.log" | head -5
 fi
 
 step "Build FinchWatch (watchOS)"
@@ -184,7 +215,7 @@ if xcodebuild build -project FinchApp.xcodeproj -scheme FinchWatch \
      COMPILER_INDEX_STORE_ENABLE=NO >"$RUN_DIR/watch.log" 2>&1; then
   pass "FinchWatch"
 else
-  fail "FinchWatch"; grep -E "error:" "$RUN_DIR/watch.log" | head -5
+  nongating "FinchWatch"; grep -E "error:" "$RUN_DIR/watch.log" | head -5
 fi
 
 # --- 7. frontend job (opt-in) ------------------------------------------------
@@ -210,6 +241,14 @@ printf '\n\033[1m-- summary --\033[0m\n'
 if ! git -C "$REPO" diff --quiet -- 'ios/**/*.xcstrings' 2>/dev/null; then
   printf '\033[33mNOTE: xcodebuild churned the .xcstrings catalogs during this run (formatting only).\n'
   printf 'Discard before committing:  git checkout -- "ios/FinchApp/Sources/FinchShared/Resources/*.xcstrings"\033[0m\n'
+fi
+
+# Non-gating warnings are printed whether or not anything failed — a parked
+# platform breaking is worth seeing even on an otherwise green run.
+if [ ${#WARNED[@]} -gt 0 ]; then
+  printf '\033[33m%d non-gating warning(s):\033[0m\n' "${#WARNED[@]}"
+  printf '  ! %s\n' "${WARNED[@]}"
+  printf '\nfull logs: %s\n' "$RUN_DIR"
 fi
 
 if [ ${#FAILED[@]} -eq 0 ]; then
