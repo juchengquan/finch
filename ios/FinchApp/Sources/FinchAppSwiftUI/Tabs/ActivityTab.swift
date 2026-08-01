@@ -437,6 +437,11 @@ struct ActivityFeedView: View {
                     ForEach(saved) { s in
                         Button { filter = s.filter } label: { chipLabel(s.name, selected: filter == s.filter) }
                             .buttonStyle(.plain)
+                            // Long-press is the ONLY way to delete a chip, and
+                            // VoiceOver does not surface a context menu — so without
+                            // this a VoiceOver user can create saved searches and never
+                            // remove one. Mirrored in SavedSearchChips (the UIKit feed).
+                            .accessibilityAction(named: Text("Delete")) { pendingSearchDelete = s }
                             .contextMenu {
                                 Button(role: .destructive) { pendingSearchDelete = s } label: { Label("Delete", systemImage: "trash") }
                             }
