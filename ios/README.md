@@ -46,7 +46,7 @@ explicit `date`/`occurrenceDate`, so it's reproducible and covered by the gate.)
 
 ```bash
 cd ios
-xcodegen generate          # brew install xcodegen, if needed
+xcodegen generate --spec project.yml,project-mac.yml   # brew install xcodegen, if needed
 open FinchApp.xcodeproj
 ```
 

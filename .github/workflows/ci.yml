@@ -108,7 +108,10 @@ jobs:
     # The real work. Renamed off the required-check context — the always-running
     # `ios-required` aggregate below carries that name now, so this job can be
     # skipped on docs-only PRs without leaving the required check unreported.
-    name: iOS + macOS build & test
+    #
+    # On a PULL REQUEST this is iOS + macOS. watchOS is gated to `push` — see
+    # the comment above its step.
+    name: iOS build & test (macOS + watchOS post-merge)
     needs: changes
     if: needs.changes.outputs.code == 'true'
     # iOS 26 SDK requires Xcode 26.x — use a runner image that ships it. Adjust
@@ -188,9 +191,12 @@ jobs:
         working-directory: ios
         run: swift test
 
-      - name: Generate the Xcode project
+      # Two specs, two projects: FinchApp.xcodeproj (iOS/watch/extensions) and
+      # FinchMac.xcodeproj (macOS). They are deliberately separate — see the
+      # header of ios/project-mac.yml.
+      - name: Generate the Xcode projects
         working-directory: ios
-        run: xcodegen generate
+        run: xcodegen generate --spec project.yml,project-mac.yml
 
       - name: Pick an available iPhone simulator
         id: sim
@@ -277,16 +283,33 @@ jobs:
           sys.exit(1)
           PYEOF
 
-      # Compile the native macOS app too — the iOS app build won't catch
-      # macOS-only breaks (e.g. .topBarTrailing is unavailable on macOS).
-      # Build-only (no signing needed) — this is a compile gate, not a release.
-      # Shares /tmp/dd so it reuses the resolved package checkouts above.
+      # macOS-only breaks the iOS build cannot catch — e.g. `.topBarTrailing` is
+      # unavailable on macOS. Build-only (no signing) — a compile gate, not a release.
+      #
+      # PARKED as a PR gate: macOS is not under active work, so this runs on the merge
+      # commit instead. A break still surfaces within one merge, with obvious blame,
+      # without blocking iOS PRs.
+      #
+      # THIS ONLY WORKS BECAUSE FinchMac LIVES IN ITS OWN PROJECT. While it was a
+      # target in FinchApp.xcodeproj, `xcodebuild -exportLocalizations` (the i18n step
+      # above) compiled it on every PR regardless of `-scheme`, `-target` or
+      # `-destination` — all three were tried — so a macOS break failed that step with
+      # exit 64 and skipping this one only changed the error message. Splitting the
+      # projects is what actually decoupled them; measured before and after.
+      # Do NOT move FinchMac back into project.yml without re-reading this.
+      #
+      # NOT deleted: macOS work resumes later, and FinchMac is the only target that
+      # compiles `FinchAppSwiftUI/FinchApp.swift` (the SwiftUI `@main`, which iOS
+      # excludes) plus every SwiftUI screen the migration drops from iOS via
+      # `excludes:` — a surface that GROWS with each conversion.
+      # TO RESTORE AS A PR GATE: delete the `if:` line below. Nothing else.
       - name: Build FinchMac (macOS)
+        if: github.event_name == 'push'   # parked — delete this line to gate PRs again
         working-directory: ios
         run: |
-          xcodebuild build -project FinchApp.xcodeproj -scheme FinchMac \
+          xcodebuild build -project FinchMac.xcodeproj -scheme FinchMac \
             -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO \
-            -derivedDataPath /tmp/dd \
+            -derivedDataPath /tmp/dd-mac \
             -skipPackagePluginValidation -skipMacroValidation -quiet \
             COMPILER_INDEX_STORE_ENABLE=NO
 
@@ -294,7 +317,22 @@ jobs:
       # neither is covered by the FinchApp/FinchMac builds, and watchOS-only
       # APIs (WidgetKit accessory families, WCSession receive side) can break
       # silently otherwise. Build-only compile gate, no watch tests.
+      #
+      # PARKED as a PR gate (2026-08-01): watchOS is not under active work, so
+      # this runs on the merge commit instead — a break still surfaces within one
+      # merge, with obvious blame, without blocking iOS PRs. Unlike FinchMac,
+      # this genuinely un-gates it: `-exportLocalizations` does not build
+      # FinchWatch, so nothing else on the PR path compiles the watch app.
+      #
+      # NOT deleted: watchOS work resumes later, and this is the only build of
+      # the watch app + complication extension anywhere.
+      # TO RESTORE AS A PR GATE: delete the `if:` line below. Nothing else.
+      #
+      # Caveat: `cancel-in-progress` (top of file) can cancel an in-flight
+      # post-merge run when merges land back-to-back, so a given merge's watch
+      # build may never report. The next merge covers it.
       - name: Build FinchWatch (watchOS)
+        if: github.event_name == 'push'   # parked — delete this line to gate PRs again
         working-directory: ios
         run: |
           xcodebuild build -project FinchApp.xcodeproj -scheme FinchWatch \
@@ -313,6 +351,21 @@ jobs:
   # KEEP THIS JOB'S `name:` EXACTLY EQUAL to the required-check context configured
   # in branch protection. If you rename it, update branch protection in lockstep,
   # or every PR blocks forever waiting on a status that no longer reports.
+  #
+  # THE NAME IS NOW SLIGHTLY WRONG, ON PURPOSE. It still says `+ FinchMac`, but
+  # macOS (and watchOS) are post-merge only, so a PR passing this check has NOT
+  # compiled macOS. The name is a branch-protection CONTRACT string, not a
+  # description, and renaming it in place is precisely the #579 failure mode — so
+  # it stays. The `ios` job's own name says what a PR actually covers.
+  #
+  # If it must be renamed, do it with NO blocking window:
+  #   1. merge a change that adds a SECOND aggregate job under the new name
+  #      (both then report on every PR);
+  #   2. update branch protection to require the new name and drop the old;
+  #   3. merge a change deleting the old aggregate job.
+  # Renaming in place instead means whichever side you change first leaves the
+  # required context unreported, and every PR shows BLOCKED until the other
+  # catches up — admin-override only. (#278 → #579 → #580 → #588 → #593.)
   ios-required:
     name: iOS + macOS (FinchCore + ParityTests + FinchApp + FinchMac)
     needs: [changes, ios]
