@@ -591,6 +591,11 @@ struct AccountRowView: View {
     @EnvironmentObject private var store: FinchStore
     @AppStorage(ReconcileReminder.key) private var reconcileStaleDays = ReconcileReminder.defaultDays
     let account: AccountRow
+    /// The reconcile seal is bookkeeping hygiene — useful in the Accounts list,
+    /// noise when you are choosing an account to post to. Defaults to on, so the
+    /// list is unchanged; the pickers pass false. Same shape as `TxRow`'s
+    /// `showDate` / `showRunningBalance`.
+    var showSeal = true
     var body: some View {
         HStack {
             Image(systemName: AccountTypeIcon.icon(for: account.type))
@@ -604,15 +609,17 @@ struct AccountRowView: View {
             // Reconcile seal — same glyph + colors as the detail badge: green
             // when checked within the reminder cutoff, orange when overdue,
             // nothing when the account was never reconciled.
-            switch Selectors.reconcileStatus(account.lastReconciledAt, store.wallToday,
-                                             staleDays: ReconcileReminder.staleDays(reconcileStaleDays)) {
-            case .never: EmptyView()
-            case .fresh:
-                Image(systemName: "checkmark.seal.fill").font(.caption).foregroundStyle(.green)
-                    .accessibilityLabel("Reconciled")
-            case .stale:
-                Image(systemName: "checkmark.seal.fill").font(.caption).foregroundStyle(.orange)
-                    .accessibilityLabel("Reconcile overdue")
+            if showSeal {
+                switch Selectors.reconcileStatus(account.lastReconciledAt, store.wallToday,
+                                                 staleDays: ReconcileReminder.staleDays(reconcileStaleDays)) {
+                case .never: EmptyView()
+                case .fresh:
+                    Image(systemName: "checkmark.seal.fill").font(.caption).foregroundStyle(.green)
+                        .accessibilityLabel("Reconciled")
+                case .stale:
+                    Image(systemName: "checkmark.seal.fill").font(.caption).foregroundStyle(.orange)
+                        .accessibilityLabel("Reconcile overdue")
+                }
             }
             Spacer()
             Text(store.displayMoney(account.balance, from: account.currency))
@@ -692,8 +699,12 @@ struct AddAccountGroupSheet: View {
             else { selectedAccountIds.insert(a.id) }
         } label: {
             HStack {
-                Text(a.name ?? "—").foregroundStyle(.primary)
-                Spacer()
+                // The Accounts list's own row, as the pickers now use — icon, name,
+                // balance. This list keeps its INLINE GROUPED structure: you are
+                // choosing what moves into a new group, so the existing grouping is
+                // the context for the choice, which a flat picker sheet would lose.
+                AccountRowView(account: a, showSeal: false)
+                Spacer(minLength: 8)
                 if selectedAccountIds.contains(a.id) {
                     Image(systemName: "checkmark").foregroundStyle(.tint)
                 }

@@ -176,7 +176,7 @@ struct EditTransactionSheet: View {
                 } else {
                     Section {
                         SearchablePickerRow(title: "Account", glyph: .account,
-                            options: store.accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
+                            accounts: store.accounts, selection: $accountId)
                         FieldRow(glyph: .amount, title: "Amount", trailing: {
                             // Currency lives inline with the amount, always visible.
                             Picker("", selection: $currencyCode) {
@@ -211,7 +211,7 @@ struct EditTransactionSheet: View {
                 if isSplit {
                     Section {
                         SearchablePickerRow(title: "Account", glyph: .account,
-                            options: store.accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
+                            accounts: store.accounts, selection: $accountId)
                     } header: {
                         finchSectionHeader("Account")
                     }
