@@ -49,7 +49,13 @@ struct BudgetSheet: View {
         _kind = State(initialValue: (budget?.type == "income") ? .income : .expense)
         _amount = State(initialValue: budget.map { String(format: "%g", $0.amount) } ?? "")
         _frequency = State(initialValue: budget?.frequency ?? "monthly")
-        _startDate = State(initialValue: budget.flatMap { AppDate.isoDay.date(from: $0.startDate) } ?? Date())
+        // Date AND turnover time, in one Date. Seeding from the date alone would
+        // show midnight for a budget that turns over at 09:30 — and then SAVE that,
+        // silently wiping the time the user had set.
+        _startDate = State(initialValue: budget.flatMap {
+            AppDate.isoDateTime.date(from: "\($0.startDate) \($0.startTime ?? "00:00")")
+                ?? AppDate.isoDay.date(from: $0.startDate)
+        } ?? Date())
         _groupId = State(initialValue: budget?.groupId ?? "")
         _selectedCategories = State(initialValue: Set(budget?.categoryIds ?? []))
         _selectedAccounts = State(initialValue: Set(budget?.accountIds ?? []))
@@ -193,9 +199,12 @@ struct BudgetSheet: View {
                 }
                 .labelsHidden()
             }
+            // Date AND time: the time is when the cycle turns over. Left at midnight
+            // it behaves exactly as every budget did before.
             FieldRow(glyph: .date, title: "Start date", showsDefaultTrailing: false) {
-                DatePicker("Start date", selection: $startDate, displayedComponents: .date)
+                DatePicker("Start date", selection: $startDate, displayedComponents: [.date, .hourAndMinute])
                     .labelsHidden()
+                    .environment(\.locale, AppDate.h24Locale)
             }
         } header: {
             finchSectionHeader("Cycle")
@@ -306,6 +315,9 @@ struct BudgetSheet: View {
         let categoryIds: JSONValue = .array(selectedCategories.sorted().map { .string($0) })
         let accountIds: JSONValue = .array(selectedAccounts.sorted().map { .string($0) })
         let startDateStr = AppDate.isoDay.string(from: startDate)
+        // Sent alongside the date: nil-equivalent (midnight) keeps the old behaviour,
+        // any other value moves the cycle's turnover to that time of day.
+        let startTimeStr = AppDate.isoTime.string(from: startDate)
 
         // Cap is optional and validated only when rollover is on and it's non-empty.
         let capValue: JSONValue
@@ -322,7 +334,11 @@ struct BudgetSheet: View {
             // staged pending amount + accumulated rollover. Descriptive/scope
             // fields always go through updateBudget. (Combined "Change cycle" into
             // Edit; the web keeps these as two separate actions.)
+            // The time counts as a cycle change: it only rides on the cycle patch,
+            // so a time-only edit would otherwise be dropped. A budget with no time
+            // compares against midnight, which is what it means.
             let cycleChanged = frequency != budget.frequency || startDateStr != budget.startDate
+                || startTimeStr != (budget.startTime ?? "00:00")
             var patch: [String: JSONValue] = [
                 "name": .string(name), "type": .string("expense"),
                 "categoryIds": categoryIds, "accountIds": accountIds,
@@ -339,7 +355,7 @@ struct BudgetSheet: View {
                 if cycleChanged {
                     try store.apply(.updateBudgetCycle, Args(["id": .string(budget.id), "patch": .object([
                         "frequency": .string(frequency),
-                        "startDate": .string(startDateStr),
+                        "startDate": .string(startDateStr), "startTime": .string(startTimeStr),
                         "amount": .double(limit),
                     ])]))
                 }
@@ -349,7 +365,7 @@ struct BudgetSheet: View {
             var args: [String: JSONValue] = [
                 "ledgerId": .string(store.activeLedgerId), "name": .string(name),
                 "type": .string("expense"), "amount": .double(limit), "frequency": .string(frequency),
-                "startDate": .string(startDateStr), "rollover": .bool(rollover),
+                "startDate": .string(startDateStr), "startTime": .string(startTimeStr), "rollover": .bool(rollover),
             ]
             if !groupId.isEmpty { args["groupId"] = .string(groupId) }
             if !selectedCategories.isEmpty { args["categoryIds"] = categoryIds }

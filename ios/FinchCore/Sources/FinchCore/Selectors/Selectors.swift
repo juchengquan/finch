@@ -320,8 +320,17 @@ public enum Selectors {
         }
     }
 
+    /// - Parameter startTime: the moment in the day the cycle turns over, "HH:mm".
+    ///   Nil — every budget until one is set — keeps the whole-day window this has
+    ///   always produced, byte-for-byte.
+    ///
+    /// With a time, the boundary moves within the day: a monthly budget starting
+    /// 1 Aug 09:30 runs until 1 Sep 09:30, so `to` is 1 Sep and `toTime` is 09:30,
+    /// exclusive. `today` may carry a time ("yyyy-MM-dd HH:mm") so the caller can say
+    /// which side of the turnover it is on; a bare date reads as midnight.
     public static func cycleWindow(_ frequency: String, _ startDate: String, _ today: String,
-                                   _ endDate: String? = nil, _ isRecurring: Int = 1) -> CycleWindow {
+                                   _ endDate: String? = nil, _ isRecurring: Int = 1,
+                                   _ startTime: String? = nil) -> CycleWindow {
         let start = date(startDate), now = date(today)
         if isRecurring == 0 {
             let to: String
@@ -332,9 +341,28 @@ public enum Selectors {
         if now < start {
             return CycleWindow(from: ymd(start), to: ymd(addDays(advance(start, frequency), -1)))
         }
+        // "00:00" IS the untimed behaviour — a cycle running midnight-to-midnight.
+        // Treating it as timed would take the branch below and change what `to`
+        // means for every budget the sheet saves without touching the time, which is
+        // most of them. Normalised here rather than at the write path so no route
+        // into the database can bypass it.
+        guard let turnover = startTime, !turnover.isEmpty, turnover != "00:00" else {
+            var s = start, e = advance(s, frequency), guardI = 0
+            while e <= now && guardI < 5000 { s = e; e = advance(e, frequency); guardI += 1 }
+            return CycleWindow(from: ymd(s), to: ymd(addDays(e, -1)))
+        }
+        // Timed: the turnover is a moment inside the day, so the comparison has to be
+        // one too. `today` carries the current time when the caller knows it; without
+        // one it reads as midnight, which puts a same-day "now" BEFORE the turnover —
+        // the correct reading, since the cycle has not rolled yet.
+        let nowStamp = today.count > 10 ? today : "\(today) 00:00"
         var s = start, e = advance(s, frequency), guardI = 0
-        while e <= now && guardI < 5000 { s = e; e = advance(e, frequency); guardI += 1 }
-        return CycleWindow(from: ymd(s), to: ymd(addDays(e, -1)))
+        while "\(ymd(e)) \(turnover)" <= nowStamp && guardI < 5000 {
+            s = e; e = advance(e, frequency); guardI += 1
+        }
+        // `to` is the day the cycle STOPS on — the same day the next one starts —
+        // and `toTime` is the moment it stops, exclusive.
+        return CycleWindow(from: ymd(s), to: ymd(e), fromTime: turnover, toTime: turnover)
     }
 
     // MARK: budgetProgress
@@ -363,8 +391,22 @@ public enum Selectors {
 
     /// Sum of budget-matched activity in [from, to] — the accumulation shared by
     /// budgetProgress (current cycle) and budgetCycleHistory (each past cycle).
+    /// Is `t` inside the cycle window `[from fromTime, to toTime)`?
+    ///
+    /// With both times nil this is the inclusive date comparison it has always been.
+    /// With them, it compares MOMENTS — a transaction carrying no time of its own
+    /// reads as midnight, which is the same assumption the untimed path makes.
+    static func inWindow(_ t: Tx, from: String, to: String, fromTime: String?, toTime: String?) -> Bool {
+        if fromTime == nil && toTime == nil { return t.date >= from && t.date <= to }
+        let stamp = "\(t.date) \(t.time ?? "00:00")"
+        if stamp < "\(from) \(fromTime ?? "00:00")" { return false }
+        if let hi = toTime { return stamp < "\(to) \(hi)" }
+        return t.date <= to
+    }
+
     static func usedInWindow(_ budget: BudgetRow, _ txns: [Tx], _ matchSet: Set<String>,
-                             _ accountSet: Set<String>?, from: String, to: String) -> Double {
+                             _ accountSet: Set<String>?, from: String, to: String,
+                             fromTime: String? = nil, toTime: String? = nil) -> Double {
         // Extra match dimensions (AND across, OR within, empty = unconstrained —
         // same rule as account/category).
         let tagSet = budget.tagIds.isEmpty ? nil : Set(budget.tagIds)
@@ -376,7 +418,7 @@ public enum Selectors {
             // Transfers are excluded for expense budgets only; income goals count
             // incoming transfer legs (positive amount) landing in a matched account.
             if budget.type == "expense" && kindOf(t) == "transfer" { continue }
-            if t.date < from || t.date > to { continue }
+            if !inWindow(t, from: from, to: to, fromTime: fromTime, toTime: toTime) { continue }
             if let accountSet, !accountSet.contains(t.account) { continue }
             if let tagSet, !(t.tags ?? []).contains(where: { tagSet.contains($0) }) { continue }
             if let cpSet, t.counterpartyId == nil || !cpSet.contains(t.counterpartyId!) { continue }
@@ -389,7 +431,7 @@ public enum Selectors {
 
     public static func budgetProgress(_ budget: BudgetRow, _ txns: [Tx], _ today: String,
                                       _ categories: [CategoryNode] = []) -> BudgetProgress {
-        let win = cycleWindow(budget.frequency, budget.startDate, today, budget.endDate, budget.isRecurring)
+        let win = cycleWindow(budget.frequency, budget.startDate, today, budget.endDate, budget.isRecurring, budget.startTime)
         let accountSet = budget.accountIds.isEmpty ? nil : Set(budget.accountIds)
         let matchSet = categories.isEmpty ? Set(budget.categoryIds) : expandDescendants(budget.categoryIds, categories)
 
@@ -403,7 +445,9 @@ public enum Selectors {
         // must set ≥1 dimension). Scoped goals + expense/recurring run the sum.
         let incomeUnscoped = oneShotIncome && accountSet == nil && matchSet.isEmpty
             && budget.tagIds.isEmpty && budget.counterpartyIds.isEmpty
-        var used = incomeUnscoped ? seed : seed + usedInWindow(budget, txns, matchSet, accountSet, from: win.from, to: win.to)
+        var used = incomeUnscoped ? seed : seed + usedInWindow(budget, txns, matchSet, accountSet,
+                                                               from: win.from, to: win.to,
+                                                               fromTime: win.fromTime, toTime: win.toTime)
         let base = r2(budget.amount + (budget.type == "expense" ? budget.carryForward : 0))
         used = r2(used)
         let remaining = r2(base - used)
@@ -418,14 +462,16 @@ public enum Selectors {
     /// separately by `budgetProgress`, not represented here).
     public static func budgetMatchedTransactions(_ budget: BudgetRow, _ txns: [Tx], _ today: String,
                                                  _ categories: [CategoryNode] = []) -> [Tx] {
-        let win = cycleWindow(budget.frequency, budget.startDate, today, budget.endDate, budget.isRecurring)
-        return budgetMatchedTransactions(budget, txns, from: win.from, to: win.to, categories)
+        let win = cycleWindow(budget.frequency, budget.startDate, today, budget.endDate, budget.isRecurring, budget.startTime)
+        return budgetMatchedTransactions(budget, txns, from: win.from, to: win.to,
+                                         fromTime: win.fromTime, toTime: win.toTime, categories)
     }
 
     /// Same predicate over an explicit [from, to] window — the budget detail's
     /// past-cycle drill-in (windows come from `budgetCycleHistory`).
     public static func budgetMatchedTransactions(_ budget: BudgetRow, _ txns: [Tx],
                                                  from: String, to: String,
+                                                 fromTime: String? = nil, toTime: String? = nil,
                                                  _ categories: [CategoryNode] = []) -> [Tx] {
         let accountSet = budget.accountIds.isEmpty ? nil : Set(budget.accountIds)
         let matchSet = categories.isEmpty ? Set(budget.categoryIds) : expandDescendants(budget.categoryIds, categories)
@@ -439,7 +485,7 @@ public enum Selectors {
             if ledgerOf(t) != budget.ledgerId { continue }
             if (t.pending ?? false) || kindOf(t) == "adjustment" { continue }
             if budget.type == "expense" && kindOf(t) == "transfer" { continue }
-            if t.date < from || t.date > to { continue }
+            if !inWindow(t, from: from, to: to, fromTime: fromTime, toTime: toTime) { continue }
             if let accountSet, !accountSet.contains(t.account) { continue }
             if let tagSet, !(t.tags ?? []).contains(where: { tagSet.contains($0) }) { continue }
             if let cpSet, t.counterpartyId == nil || !cpSet.contains(t.counterpartyId!) { continue }

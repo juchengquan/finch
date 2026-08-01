@@ -154,7 +154,11 @@ CREATE TABLE IF NOT EXISTS budgets (
   carry_forward      REAL NOT NULL DEFAULT 0,
   frequency          TEXT NOT NULL CHECK(frequency IN ('daily','weekly','biweekly','monthly','quarterly','yearly')),
   start_date         TEXT NOT NULL,
+  -- Time-of-day the cycle turns over, 'HH:mm'. NULL = midnight, i.e. the
+  -- date-only behaviour every existing budget has.
+  start_time         TEXT,
   end_date           TEXT,
+  end_time           TEXT,
   is_recurring       INTEGER NOT NULL DEFAULT 1,
   rollover           INTEGER NOT NULL DEFAULT 0,
   rollover_limit     REAL,

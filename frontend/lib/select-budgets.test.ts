@@ -159,3 +159,34 @@ test('budgetProgress with categories[] recursively matches descendants', () => {
   const direct = budgetProgress(b, txns, '2026-05-20');
   expect(direct.used).toBe(10);
 });
+
+// --- a turnover time (parity with iOS BudgetCycleTimeTests) -----------------
+
+test('cycleWindow with a start time turns the cycle over at that moment', () => {
+  // 09:00 on the 1st is still the PREVIOUS cycle; 09:30 is the new one.
+  expect(cycleWindow('monthly', '2026-05-01', '2026-08-01 09:00', null, 1, '09:30')).toEqual({
+    from: '2026-07-01', to: '2026-08-01', fromTime: '09:30', toTime: '09:30',
+  });
+  expect(cycleWindow('monthly', '2026-05-01', '2026-08-01 09:30', null, 1, '09:30')).toEqual({
+    from: '2026-08-01', to: '2026-09-01', fromTime: '09:30', toTime: '09:30',
+  });
+});
+
+test("cycleWindow treats '00:00' as no time at all", () => {
+  // Midnight IS the untimed behaviour, and the sheet saves "00:00" for any budget
+  // whose time the user never touched — so it must not take the timed branch,
+  // whose `to` is the next start day rather than the last day.
+  expect(cycleWindow('monthly', '2026-05-01', '2026-08-15', null, 1, '00:00'))
+    .toEqual(cycleWindow('monthly', '2026-05-01', '2026-08-15'));
+});
+
+test('budgetProgress splits spending at the turnover moment', () => {
+  const b = budget({ id: 'b-t', frequency: 'monthly', startDate: '2026-05-01', startTime: '09:30', amount: 300 });
+  const txns = [
+    tx({ amount: -10, date: '2026-08-01', time: '09:00' }),   // before -> July's cycle
+    tx({ amount: -20, date: '2026-08-01', time: '10:00' }),   // after  -> August's
+    tx({ amount: -40, date: '2026-09-01', time: '09:00' }),   // before September's -> still August's
+    tx({ amount: -80, date: '2026-09-01', time: '09:30' }),   // at it -> September's
+  ];
+  expect(budgetProgress(b, txns, '2026-08-15 12:00').used).toBe(60);
+});

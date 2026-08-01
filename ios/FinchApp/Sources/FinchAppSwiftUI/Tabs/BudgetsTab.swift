@@ -515,7 +515,9 @@ struct BudgetRowView: View {
                     // Hours on the final day — "7 hours left" is what you need when
                     // deciding whether to spend now. Plural suffix inline, matching the
                     // house pattern (see ActivityTab's "transaction\(…)").
-                    switch store.remaining(until: progress.to) {
+                    // The cycle stops at the turnover time on `progress.to`, so the
+                    // countdown has to as well — `budget.startTime` IS that moment.
+                    switch store.remaining(until: progress.to, toTime: budget.startTime) {
                     case .days(let d):
                         Text(" · \(d) day\(d == 1 ? "" : "s") left").foregroundStyle(.secondary)
                     case .hours(let h):

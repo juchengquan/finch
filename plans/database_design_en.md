@@ -701,7 +701,9 @@ CREATE TABLE budgets (
   carry_forward      REAL NOT NULL DEFAULT 0,
   frequency          TEXT NOT NULL CHECK(frequency IN ('daily','weekly','biweekly','monthly','quarterly','yearly')),
   start_date         TEXT NOT NULL,
+  start_time         TEXT,
   end_date           TEXT,
+  end_time           TEXT,
   is_recurring       INTEGER NOT NULL DEFAULT 1,
   rollover           INTEGER NOT NULL DEFAULT 0,
   rollover_limit     REAL,
@@ -728,7 +730,9 @@ CREATE TABLE budgets (
 | `carry_forward` | REAL NOT NULL · default 0 | Unused budget rolled in from the prior period (expense + rollover only). |
 | `frequency` | TEXT NOT NULL · CHECK | Cycle length: `daily`/`weekly`/`biweekly`/`monthly`/`quarterly`/`yearly`. |
 | `start_date` | TEXT NOT NULL | `YYYY-MM-DD`. Anchors the cycle. |
+| `start_time` | TEXT | `HH:mm`. The moment in the day the cycle turns over. NULL = midnight, i.e. the date-only behaviour every budget had before. |
 | `end_date` | TEXT | Optional close-out date. |
+| `end_time` | TEXT | `HH:mm` companion to `end_date`. NULL = midnight. |
 | `is_recurring` | INTEGER NOT NULL · default 1 | `1` repeats every cycle; `0` is one-shot (single window). |
 | `rollover` | INTEGER NOT NULL · default 0 | Roll under-spend forward as `carry_forward` at period boundary. |
 | `rollover_limit` | REAL | Optional cap on the rolled-forward balance. NULL = uncapped. |

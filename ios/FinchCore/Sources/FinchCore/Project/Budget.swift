@@ -20,7 +20,11 @@ public struct BudgetRow: Identifiable, Equatable, Hashable, Sendable, Codable {
     public let carryForward: Double
     public let frequency: String
     public let startDate: String
+    /// Time-of-day the cycle turns over, "HH:mm". Nil = midnight — the behaviour
+    /// every budget had before cycles could carry a time.
+    public let startTime: String?
     public let endDate: String?
+    public let endTime: String?
     public let isRecurring: Int
     public let rollover: Int
     public let rolloverLimit: Double?
@@ -35,7 +39,8 @@ public struct BudgetRow: Identifiable, Equatable, Hashable, Sendable, Codable {
     public init(
         id: String, ledgerId: String, groupId: String?, name: String, type: String,
         amount: Double, saved: Double, carryForward: Double, frequency: String,
-        startDate: String, endDate: String?, isRecurring: Int, rollover: Int,
+        startDate: String, startTime: String? = nil, endDate: String?, endTime: String? = nil,
+        isRecurring: Int, rollover: Int,
         rolloverLimit: Double?, pendingAmount: Double?, lastRolledPeriod: String?,
         accountIds: [String], categoryIds: [String],
         tagIds: [String] = [], counterpartyIds: [String] = [], warningPct: Double
@@ -43,7 +48,8 @@ public struct BudgetRow: Identifiable, Equatable, Hashable, Sendable, Codable {
         self.id = id; self.ledgerId = ledgerId; self.groupId = groupId; self.name = name
         self.type = type; self.amount = amount; self.saved = saved
         self.carryForward = carryForward; self.frequency = frequency
-        self.startDate = startDate; self.endDate = endDate; self.isRecurring = isRecurring
+        self.startDate = startDate; self.startTime = startTime
+        self.endDate = endDate; self.endTime = endTime; self.isRecurring = isRecurring
         self.rollover = rollover; self.rolloverLimit = rolloverLimit
         self.pendingAmount = pendingAmount; self.lastRolledPeriod = lastRolledPeriod
         self.accountIds = accountIds; self.categoryIds = categoryIds
@@ -66,7 +72,11 @@ public struct BudgetRow: Identifiable, Equatable, Hashable, Sendable, Codable {
         carryForward = try c.decodeIfPresent(Double.self, forKey: .carryForward) ?? 0
         frequency = try c.decode(String.self, forKey: .frequency)
         startDate = try c.decode(String.self, forKey: .startDate)
+        // Absent in every fixture written before cycles could carry a time — nil
+        // means midnight, i.e. unchanged behaviour.
+        startTime = try c.decodeIfPresent(String.self, forKey: .startTime)
         endDate = try c.decodeIfPresent(String.self, forKey: .endDate)
+        endTime = try c.decodeIfPresent(String.self, forKey: .endTime)
         isRecurring = try c.decodeIfPresent(Int.self, forKey: .isRecurring) ?? 1
         rollover = try c.decodeIfPresent(Int.self, forKey: .rollover) ?? 0
         rolloverLimit = try c.decodeIfPresent(Double.self, forKey: .rolloverLimit)
