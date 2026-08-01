@@ -3,6 +3,76 @@
 Things that **cannot be verified programmatically** and are waiting on eyes. Tick as
 you go; add findings inline under the item.
 
+---
+
+## Pick up here
+
+Written so this can be resumed cold without reading the other 900 lines. Deliberately in
+shape and order rather than counts — counts go stale the moment a PR lands, so re-count
+from the checkboxes if you need a number.
+
+**The one-line answer: everything left except the sweep is small, and the sweep gates
+everything else.**
+
+### What remains, largest first
+
+1. **THE PER-SCREEN SWEEP — §1 and §2/§2b–§2s.** Roughly 115 checks, essentially none of
+   them walked. This is the flag-removal gate and it is **not engineering**: it is a
+   person with a device opening each converted screen and comparing it against the
+   SwiftUI original. It resists automation because the questions are "does this look
+   right" and "does this read well", not "did this button do something". Organised by
+   screen because that is how you verify one — open it, run its list.
+
+2. **iPad — §6.** A handful of checks left, and about half are mechanical enough to
+   automate the way the rest of §6 already was (see *Already automated* below). The
+   remainder are genuinely visual or need a fixture: section spacing against the SwiftUI
+   screen, deleting the selected row, VoiceOver reading order.
+
+3. **Known real defects, not checklist items.** A deep link (widget / Spotlight / App
+   Intent) that targets a record opens it on a phone and **does not on an iPad** — the
+   detail column stays on its placeholder. Confirmed by screenshot. Tracked in §6.
+
+4. **Two measured cosmetic gaps — §2c.** The converted tab root shows an inline title
+   where SwiftUI showed a large one (content sits ~52pt higher, affects Accounts and
+   Budgets), and converted rows sit 9pt lower. Both measured, neither fixed, both a
+   decision rather than a bug.
+
+5. **One design decision — §2u.** Keep converting settings screens, or leave forms in
+   SwiftUI and spend UIKit only where it earns its keep. Worth settling BEFORE the next
+   form conversion, not after.
+
+### The order, which is not optional
+
+    the sweep  →  flags come off  →  drop the SwiftUI screens  →  re-run §1
+
+Dropping `ActivityFeedView` / `AccountDetailView` from the iOS target is **blocked, not
+pending**: `-uikitActivity NO` and `-legacyShell YES` are precisely what routes into
+them, so it happens after the flags go, never alongside. And §1 has to be re-run at the
+end because the tab gains a `UINavigationController`, which changes the shell's
+structure. Full detail in §4 — the only place that list is written out.
+
+### Already automated, so do not re-walk it by hand
+
+`FinchAppUITests` covers, at BOTH widths, with each destination skipping what does not
+apply to it: the list scrolls, the FAB opens the Add sheet, taps pass through beside the
+FAB, the iPad adds from its toolbar, selection fills the detail column for every
+converted tab, the highlight survives a reload, and a ledger switch clears it. Two more —
+switching across the column-count boundary, and opening a deep-link target — were written
+alongside this note; §6 is authoritative, so if those items show ticked there they are
+covered. CI runs an iPhone destination and an iPad destination, and the iPad
+step FAILS if every case skipped — an all-skipped run is reported as success by
+xcodebuild, which is exactly how the regular-width tests sat inert for weeks.
+
+### Before you trust a red result
+
+Most "defects" found here were the tooling or the query, not the app. The method notes
+below are worth the five minutes: aim at `frame.y + height/2`; drive a `UISwitch` with
+`--duration 0.25` because a plain tap does nothing; `describe-all` does not descend into
+a segmented control, so an absence there is not an accessibility gap; and assert row
+STATE through the row element, not a label match that lands on a `StaticText`.
+
+---
+
 **Two tiers.** §0 is the short list that actually gates the flag coming off — read it
 first. Everything from §1 onwards is the exhaustive per-screen sweep, kept as reference
 for whoever verifies a given screen; it is organised by screen because that is how you
