@@ -125,7 +125,12 @@ public enum Audit {
                 let badOpening = kind == "opening" && (acct != 1 || plain > 0 || eqOpen < 1 || eqAdj > 0)
                 let badAdjust = kind == "adjustment" && (acct != 1 || plain > 0 || eqAdj < 1 || eqOpen > 0)
                 let badRefund = kind == "refund" && negAcct > 0
-                let badSimple = ["income", "expense", "refund"].contains(kind) && (acct != 1 || plain < 1 || eqOpen + eqAdj > 0)
+                // `acct >= 1` rather than `acct == 1`: one purchase may be paid from
+                // several accounts (split tender). The written invariant I7 never
+                // required a single account leg for income/expense/refund — only
+                // transfer (exactly 2), opening/adjustment (exactly 1) — and the seal
+                // trigger already guarantees at least one account leg exists.
+                let badSimple = ["income", "expense", "refund"].contains(kind) && (acct < 1 || plain < 1 || eqOpen + eqAdj > 0)
                 let bad = badTransfer || badOpening || badAdjust || badRefund || badSimple
                 if bad {
                     problems.append(AuditProblem(code: .kindShape, entryId: r["id"],
