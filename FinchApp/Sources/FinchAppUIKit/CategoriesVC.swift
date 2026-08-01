@@ -179,6 +179,9 @@ final class CategoriesVC: UIViewController {
                                       symbol: CategoryIcon.symbol(for: effectiveIcon(row, map)),
                                       name: row.name,
                                       count: self.counts[row.id] ?? 0,
+                                      // Reorder swaps the pill for the grip rather than
+                                      // adding one — see `CategoryRowVisual.showsCount`.
+                                      showsCount: !self.isReordering,
                                       dimmed: dimmed)
                 }
                 cell.accessories = self.accessories(for: item)
@@ -190,13 +193,19 @@ final class CategoriesVC: UIViewController {
         }
     }
 
-    /// Leading tick in select mode; trailing expand chevron for parents.
+    /// Leading tick in select mode; trailing expand chevron for parents, and a
+    /// drag grip while reordering.
     ///
     /// The chevron is a UIKit accessory rather than part of the hosted content
     /// because it has to be tappable on its own — an interactive control inside a
     /// hosted cell fights the cell's selection. Childless rows still reserve the
     /// slot, so trailing edges line up across parent and leaf rows exactly as the
     /// SwiftUI `ExpandChevron.slot` did.
+    ///
+    /// Both trailing slots are `Metrics.tapTargetMin` wide. The chevron was 22×30
+    /// — a third of the HIG minimum — sitting at the trailing edge of a row whose
+    /// own tap DRILLS into the category's transactions, so a near-miss cost a push
+    /// and a Back rather than doing nothing.
     private func accessories(for item: FlatCategory) -> [UICellAccessory] {
         var list: [UICellAccessory] = []
         if isSelecting {
@@ -206,6 +215,7 @@ final class CategoriesVC: UIViewController {
             list.append(.customView(configuration: .init(customView: mark, placement: .leading())))
         }
 
+        let side = Metrics.tapTargetMin
         let slot: UIView
         if item.hasChildren {
             let button = UIButton(type: .system)
@@ -225,10 +235,42 @@ final class CategoriesVC: UIViewController {
         } else {
             slot = UIView()
         }
-        slot.frame = CGRect(x: 0, y: 0, width: 22, height: 30)
         list.append(.customView(configuration: .init(
-            customView: slot, placement: .trailing(), reservedLayoutWidth: .custom(22))))
+            customView: AccessorySquare(side: side, content: slot),
+            placement: .trailing(), reservedLayoutWidth: .custom(side))))
+
+        if isReordering {
+            list.append(.customView(configuration: .init(
+                customView: AccessorySquare(side: side, content: Self.makeReorderGrip()),
+                placement: .trailing(), reservedLayoutWidth: .custom(side))))
+        }
         return list
+    }
+
+    /// The drag grip shown at the trailing edge while reordering.
+    ///
+    /// **Deliberately a bare `UIImageView`, never a control.** Nothing here starts
+    /// the drag — the lift is still UIKit's long press anywhere on the cell, which
+    /// is what `itemsForBeginning` answers. A `UIButton` in this slot would swallow
+    /// that long press and make the one row region that *looks* draggable the one
+    /// region that isn't.
+    ///
+    /// It is also NOT the system `.reorder()` accessory, which drives interactive
+    /// movement + `reorderingHandlers` and can only express linear index moves.
+    /// This screen's drop math is three-zone (`CategoryDropZone`) — the middle half
+    /// of a row REPARENTS under it — and nesting is not an index move, so adopting
+    /// the system accessory would cost drag-to-nest and the "Top level" un-nest row.
+    ///
+    /// Hidden from VoiceOver: the drag it advertises has no VoiceOver equivalent
+    /// yet (there are no `accessibilityCustomActions` for moving a category), so
+    /// exposing it would promise an interaction that cannot be performed.
+    private static func makeReorderGrip() -> UIView {
+        let grip = UIImageView(image: UIImage(systemName: "line.3.horizontal"))
+        grip.tintColor = .tertiaryLabel
+        // Centre rather than stretch: `AccessorySquare` pins it to all four edges.
+        grip.contentMode = .center
+        grip.isAccessibilityElement = false
+        return grip
     }
 
     private func applySnapshot() {
@@ -663,6 +705,50 @@ extension CategoriesVC: UICollectionViewDropDelegate {
     }
 }
 
+/// A fixed square for a cell accessory, with its content stretched to fill it.
+///
+/// **Two obvious ways to size a `customView` accessory both fail, and the failures
+/// are silent or fatal rather than helpful — measure, don't assume:**
+///
+/// - Setting `customView.frame` does nothing. The chevron carried `frame = 22×30`
+///   from the day it was written and actually rendered at the glyph's own
+///   ~15.7×22.3, because `UICellAccessory` sizes the view by Auto Layout and the
+///   assigned frame is discarded. Bumping that frame to 44×44 changed nothing on
+///   screen — a tap 18pt off the chevron's centre still drilled into the category.
+/// - Setting `translatesAutoresizingMaskIntoConstraints = false` and pinning
+///   width/height throws from `-[UICellAccessoryCustomView initWithCustomView:
+///   placement:]` and takes the app down as the first cell is dequeued.
+///
+/// What survives both is `intrinsicContentSize`: the view stays autoresizing-mask
+/// based, so the accessory accepts it, and Auto Layout gets a definite size to lay
+/// out. Content is pinned to all four edges rather than centred, so the whole
+/// square is the control's own bounds — a centred child would leave the surrounding
+/// margin falling through to the cell, which is the bug this class exists to fix.
+private final class AccessorySquare: UIView {
+    private let side: CGFloat
+
+    /// - Parameter content: the control or glyph to fill the square. `nil` gives the
+    ///   empty spacer childless rows reserve so trailing edges stay aligned.
+    init(side: CGFloat, content: UIView?) {
+        self.side = side
+        super.init(frame: CGRect(x: 0, y: 0, width: side, height: side))
+        guard let content else { return }
+        content.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(content)
+        NSLayoutConstraint.activate([
+            content.leadingAnchor.constraint(equalTo: leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: trailingAnchor),
+            content.topAnchor.constraint(equalTo: topAnchor),
+            content.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override var intrinsicContentSize: CGSize { CGSize(width: side, height: side) }
+}
+
 /// Which of the three drop zones a drop point falls in, relative to the target row.
 ///
 /// Extracted as a pure function deliberately: `idb` has no drag command (only
@@ -701,6 +787,14 @@ private struct CategoryRowVisual: View {
     let symbol: String
     let name: String
     let count: Int
+    /// False while reordering, where the grip takes the pill's place.
+    ///
+    /// The pill is dropped rather than pushed aside so the trailing chrome stays
+    /// two `tapTargetMin` slots wide in BOTH modes — the name column keeps its
+    /// width and rows don't reflow when Reorder is entered or left. The count is
+    /// also the one thing on the row that reorder can't change: you are arranging
+    /// hierarchy, not reading spend, and the numbers return on Done.
+    var showsCount: Bool = true
     let dimmed: Bool
 
     var body: some View {
@@ -711,7 +805,7 @@ private struct CategoryRowVisual: View {
             }
             Text(verbatim: name).foregroundStyle(.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            CountPill(count: count)
+            if showsCount { CountPill(count: count) }
         }
         .padding(.leading, CGFloat(depth) * 14)
         .opacity(dimmed ? 0.35 : 1)
