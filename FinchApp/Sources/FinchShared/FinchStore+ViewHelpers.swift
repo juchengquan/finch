@@ -342,11 +342,15 @@ extension FinchStore {
 
     /// How much of a cycle is left, at the granularity worth showing.
     ///
-    /// A budget cycle's last day is `cycle.to`, and the cycle runs until that day
-    /// ENDS — local midnight. Nothing in the schema needs to say so: budgets carry
-    /// dates only (`startDate`/`endDate`), and end-of-day is derivable. Transactions
-    /// do carry a time (`Tx.time`, set by the Add sheet's `.hourAndMinute` picker),
-    /// but a budget window is not a transaction.
+    /// A budget cycle ends at a MOMENT, and where that moment falls depends on
+    /// whether the budget carries a turnover time:
+    ///
+    ///  - Without one, `cycle.to` is the last day and the cycle runs until that day
+    ///    ENDS — local midnight, derived rather than stored.
+    ///  - With one, `cycle.to` is the day the cycle stops ON and `toTime` is the
+    ///    moment inside it. Counting to the end of that day instead would overstate
+    ///    the remainder by up to a day — the same class of error as the "32 days
+    ///    left" in a 31-day month this helper was written to fix.
     ///
     /// Hours appear only on the FINAL day, where they are the useful unit — "7 hours
     /// left" beats "1 day left" when you are deciding whether to buy something now.
@@ -360,16 +364,30 @@ extension FinchStore {
 
     /// - Note: computed at render time, so it does not tick on its own. Fine at hour
     ///   granularity; it is the reason this stops short of minutes.
-    public func remaining(until ymd: String) -> CycleRemaining {
+    /// - Parameter now: the moment to measure from. Defaults to the wall clock;
+    ///   injectable so the boundary cases can be asserted exactly instead of
+    ///   depending on what time of day the suite happens to run.
+    public func remaining(until ymd: String, toTime: String? = nil, now: Date = Date()) -> CycleRemaining {
         guard let lastDay = Self.parseDay(ymd) else { return .ended }
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = .current
-        // The cycle ends when its last day ends: the start of the NEXT day. Built with
-        // Calendar rather than +86400 so a DST boundary cannot shift it by an hour.
-        guard let cycleEnd = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: lastDay)) else {
-            return .ended
+        let cycleEnd: Date
+        if let t = toTime, !t.isEmpty, t != "00:00" {
+            // A turnover time: the cycle stops at that moment ON `ymd`.
+            let parts = t.split(separator: ":")
+            let h = Int(parts.first ?? "0") ?? 0, m = parts.count > 1 ? (Int(parts[1]) ?? 0) : 0
+            guard let end = cal.date(byAdding: DateComponents(hour: h, minute: m),
+                                     to: cal.startOfDay(for: lastDay)) else { return .ended }
+            cycleEnd = end
+        } else {
+            // The cycle ends when its last day ends: the start of the NEXT day. Built with
+            // Calendar rather than +86400 so a DST boundary cannot shift it by an hour.
+            guard let end = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: lastDay)) else {
+                return .ended
+            }
+            cycleEnd = end
         }
-        let seconds = cycleEnd.timeIntervalSince(Date())
+        let seconds = cycleEnd.timeIntervalSince(now)
         if seconds <= 0 { return .ended }
         if seconds >= 86_400 { return .days(Int((seconds / 86_400).rounded(.up))) }
         if seconds >= 3_600 { return .hours(Int(seconds / 3_600)) }

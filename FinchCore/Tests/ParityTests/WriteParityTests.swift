@@ -113,7 +113,8 @@ final class WriteParityTests: XCTestCase {
                 ("id", { str($0["id"]) }), ("ledger_id", { str($0["ledger_id"]) }), ("group_id", { str($0["group_id"]) }),
                 ("name", { str($0["name"]) }), ("kind", { str($0["kind"]) }), ("amount", { numStr($0["amount"]) }),
                 ("saved", { numStr($0["saved"]) }), ("frequency", { str($0["frequency"]) }), ("start_date", { str($0["start_date"]) }),
-                ("end_date", { str($0["end_date"]) }), ("is_recurring", { .int($0["is_recurring"]) }), ("rollover", { .int($0["rollover"]) }),
+                ("start_time", { str($0["start_time"]) }), ("end_date", { str($0["end_date"]) }), ("end_time", { str($0["end_time"]) }),
+                ("is_recurring", { .int($0["is_recurring"]) }), ("rollover", { .int($0["rollover"]) }),
                 ("account_ids", { str($0["account_ids"]) }), ("category_ids", { str($0["category_ids"]) }),
                 ("warning_pct", { numStr($0["warning_pct"]) }), ("pending_amount", { numStr($0["pending_amount"]) })]),
             "budget_groups": try table("SELECT * FROM budget_groups ORDER BY id", [

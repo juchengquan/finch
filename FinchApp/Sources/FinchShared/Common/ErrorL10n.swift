@@ -14,6 +14,7 @@ enum ErrorL10n {
         "error.budget.amountGt0": "预算金额必须大于 0",
         "error.budget.dateFormat": "startDate 必须为 YYYY-MM-DD 格式",
         "error.budget.invalidContribution": "无效的贡献金额",
+        "error.budget.timeFormat": "startTime 必须为 HH:mm 格式",
         "error.budget.unknownFreq": "未知频率 \"{freq}\"",
         "error.category.depthCap": "类别最多嵌套三层",
         "error.category.selfParent": "类别不能成为自己的父级",

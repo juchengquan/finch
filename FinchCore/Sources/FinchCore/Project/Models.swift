@@ -219,9 +219,26 @@ public struct AnomalyScore: Codable, Equatable, Sendable {
     public var isAnomaly: Bool
 }
 
+/// A budget cycle: `[from fromTime, to toTime)`.
+///
+/// With both times nil — every budget until one is given a turnover time — this is
+/// the inclusive whole-day window it has always been, and encodes to exactly the
+/// same JSON, so no existing fixture moves.
+///
+/// With a time, the cycle turns over at that moment: a monthly budget starting
+/// 1 Aug 09:30 runs to 1 Sep 09:30, so its last (partial) day is 1 Sep and `toTime`
+/// is the moment it stops counting.
 public struct CycleWindow: Codable, Equatable, Sendable {
     public var from: String
     public var to: String
+    /// Inclusive start time on `from`. Nil = midnight.
+    public var fromTime: String?
+    /// EXCLUSIVE end time on `to`. Nil = the whole of `to` counts.
+    public var toTime: String?
+
+    public init(from: String, to: String, fromTime: String? = nil, toTime: String? = nil) {
+        self.from = from; self.to = to; self.fromTime = fromTime; self.toTime = toTime
+    }
 }
 
 public struct BudgetProgress: Codable, Equatable, Sendable {

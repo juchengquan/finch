@@ -166,4 +166,39 @@ final class BudgetTodayTests: XCTestCase {
         XCTAssertEqual(d, store.daysLeft(until: target))
     }
 
+    // MARK: - a turnover time moves the finish line
+
+    /// A fixed "now" so these read the same at 09:00 and at 23:50 — the difference
+    /// under test is hours wide, and the wall clock would decide the answer.
+    private func noonToday() throws -> (now: Date, target: String) {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = .current
+        let noon = try XCTUnwrap(cal.date(bySettingHour: 12, minute: 0, second: 0, of: Date()))
+        return (noon, AppDate.isoDay.string(from: noon))
+    }
+
+    /// With a turnover time the cycle stops at that moment ON `to`, not at the end
+    /// of that day. Counting to the end would hand back up to a day the budget does
+    /// not have — the same overstatement this helper exists to prevent.
+    func test_remaining_stopsAtTheTurnover_notTheEndOfTheDay() async throws {
+        let store = try await loadedStore()
+        let (now, today) = try noonToday()
+
+        // Untimed: noon → midnight is 12 hours.
+        XCTAssertEqual(store.remaining(until: today, now: now), .hours(12))
+        // Turning over at 18:00 leaves 6 of those, not 12.
+        XCTAssertEqual(store.remaining(until: today, toTime: "18:00", now: now), .hours(6))
+        // And a turnover already past means the cycle is over, whatever the date says.
+        XCTAssertEqual(store.remaining(until: today, toTime: "09:30", now: now), .ended)
+    }
+
+    /// "00:00" is midnight, which is what an untimed cycle already ends at — so it
+    /// must not shift the count. (The engine normalises it the same way.)
+    func test_remaining_midnightMatchesNoTimeAtAll() async throws {
+        let store = try await loadedStore()
+        let (now, today) = try noonToday()
+        XCTAssertEqual(store.remaining(until: today, toTime: "00:00", now: now),
+                       store.remaining(until: today, now: now))
+    }
+
 }
