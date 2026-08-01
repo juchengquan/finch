@@ -97,4 +97,41 @@ final class MultiAccountShapeTests: XCTestCase {
             }
         }
     }
+
+    /// A split-tender purchase must not be presented as a transfer.
+    func test_twoAccountExpense_isNotATransferGroup() throws {
+        let q = try seedTwoAccounts()
+        try q.write { db in
+            _ = try Entries.postEntry(db, Entries.NewEntry(
+                ledgerId: "l1", date: "2026-06-01", time: "12:00",
+                description: "Market", kind: .expense,
+                legs: [
+                    .account(Entries.AccountLeg(accountId: "a2", amount: -60)),
+                    .account(Entries.AccountLeg(accountId: "a1", amount: -40)),
+                    .category(Entries.CategoryLeg(categoryId: "c1", amountBase: 100)),
+                ]))
+        }
+        let txns = try Projection.run(dbQueue: q, ledgerId: "l1")
+        XCTAssertEqual(txns.count, 2, "one row per account leg")
+        XCTAssertTrue(txns.allSatisfy { $0.transferGroupId == nil },
+                      "a split-tender expense is not a transfer")
+    }
+
+    /// A genuine transfer keeps its grouping.
+    func test_transfer_stillCarriesTransferGroupId() throws {
+        let q = try seedTwoAccounts()
+        try q.write { db in
+            _ = try Entries.postEntry(db, Entries.NewEntry(
+                ledgerId: "l1", date: "2026-06-02", time: "09:00",
+                description: "Move", kind: .transfer,
+                legs: [
+                    .account(Entries.AccountLeg(accountId: "a1", amount: -50)),
+                    .account(Entries.AccountLeg(accountId: "a2", amount: 50)),
+                ]))
+        }
+        let txns = try Projection.run(dbQueue: q, ledgerId: "l1")
+        XCTAssertEqual(txns.count, 2)
+        XCTAssertTrue(txns.allSatisfy { $0.transferGroupId != nil },
+                      "a transfer's two legs must stay grouped")
+    }
 }
