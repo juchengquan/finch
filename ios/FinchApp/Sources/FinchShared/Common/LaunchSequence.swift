@@ -60,6 +60,25 @@ enum LaunchSequence {
 
         store.isHydrating = true
         store.bootstrap()   // re-open the persisted live DB + project the active ledger
+
+        #if DEBUG
+        // `-routeTo "account:everyday"` drives the SAME path a widget tap, a Spotlight
+        // result or an App Intent takes — `route(to:)` picks the tab and sets
+        // `focusedId`, and each converted list has a `focusedId` sink that pushes or
+        // selects. Nothing could reach that path from a test before: `-initialTab` only
+        // chooses a tab, and the `finch://` scheme handles `add` and nothing else, so
+        // "a deep link opens the right record" was unverifiable rather than unverified.
+        //
+        // BELOW `bootstrap()`, unlike the flags above, and the placement is the whole
+        // point: a real deep link arrives at a running app with its data loaded. Setting
+        // `focusedId` above instead routes into an EMPTY store, every list's
+        // `consumeFocus` finds no such record and drops it, and the test then reports a
+        // broken deep link that no user could ever hit. Identifier shape is
+        // `route(to:)`'s own: `<kind>:<id>`.
+        if let target = UserDefaults.standard.string(forKey: "routeTo") {
+            router.route(to: target)
+        }
+        #endif
         #if os(iOS)
         PhoneWatchLink.shared.activate()   // Watch CP1: WCSession link
         #endif

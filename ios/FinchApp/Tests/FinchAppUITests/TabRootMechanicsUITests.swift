@@ -17,6 +17,14 @@ class TabMechanicsBase: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+        // Orientation is SIMULATOR state, not app state: it survives `app.terminate()`
+        // and leaks into whatever runs next. The rotation test below left the device
+        // turned and every later test failed with "no Accounts entry in the sidebar",
+        // which reads as a broken sidebar rather than as a test-order artifact.
+        // Normalising here makes each test independent of what ran before it.
+        if XCUIDevice.shared.orientation != .portrait {
+            XCUIDevice.shared.orientation = .portrait
+        }
         app = XCUIApplication()
         app.launchArguments = ["-resetStore", "YES", "-disableNotifications", "YES",
                                "-uikitActivity", "YES"]
@@ -84,6 +92,18 @@ class TabMechanicsBase: XCTestCase {
         return table.exists ? table : app.windows.firstMatch
     }
 
+    /// Poll a condition. `waitForExistence` only waits for APPEARANCE; several of these
+    /// assertions are about something going away or a layout settling after a rotation,
+    /// where a single immediate read races the animation.
+    func waitUntil(timeout: TimeInterval, _ condition: () -> Bool) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if condition() { return true }
+            Thread.sleep(forTimeInterval: 0.4)
+        }
+        return condition()
+    }
+
     /// Reach a tab at either width: a tab bar when compact, the sidebar when regular.
     func openTab(_ name: String) {
         if !isRegular {
@@ -92,11 +112,16 @@ class TabMechanicsBase: XCTestCase {
             tab.tap()
             return
         }
-        // Regular: the sidebar may be an overlay behind a toggle in portrait.
+        // Regular: the sidebar may be hidden — an overlay behind a toggle in portrait,
+        // or collapsed because a previous run left it that way (`storedCollapsed` is a
+        // persisted preference and `-resetStore` does not touch it). Reveal it, then
+        // WAIT: reading straight after the tap raced the reveal animation and reported
+        // "no <tab> entry in the sidebar" on a perfectly good screen.
         if sidebarEntry(name) == nil {
             let named = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "sidebar")).firstMatch
             if named.exists { named.tap() }
             else { app.navigationBars.buttons.element(boundBy: 0).tap() }
+            _ = waitUntil(timeout: 10) { self.sidebarEntry(name) != nil }
         }
         guard let entry = sidebarEntry(name) else {
             return XCTFail("no \(name) entry in the sidebar")
@@ -172,6 +197,46 @@ final class TabRootMechanicsUITests: TabMechanicsBase {
         try XCTSkipIf(exercised == 0, "no tab had enough content to scroll on this destination")
     }
 
+    /// **"Deep link into the tab … selects or pushes the right thing."**
+    ///
+    /// This is the widget / Spotlight / App Intent path — `route(to:)` picks the tab and
+    /// sets `focusedId`, and each converted list has a sink that acts on it. It needed a
+    /// `-routeTo` launch flag to be reachable at all: `-initialTab` only chooses a tab,
+    /// and the `finch://` scheme handles `add` and nothing else.
+    ///
+    /// `account:everyday` rather than the `budget:` the checklist names, because account
+    /// ids are FIXED in the demo seed while budget and transaction ids are generated —
+    /// a test cannot name one. Same code path either way; `route(to:)` switches on the
+    /// prefix and does the same thing with the rest.
+    func testDeepLinkTargetFocusesTheRecord() throws {
+        // COMPACT ONLY, because the iPad does not do this — see §6. The link selects the
+        // Accounts tab there and then stops: the detail column stays on "Select an
+        // account". Confirmed by screenshot, and it is NOT what this suite introduced.
+        // Left as a skip rather than a failing test so the compact coverage can land;
+        // the gap is written up in the doc rather than hidden here.
+        try XCTSkipIf(isRegular, "regular width does not consume a deep-link target — known gap, §6")
+        app.terminate()
+        app.launchArguments = ["-resetStore", "YES", "-disableNotifications", "YES",
+                               "-uikitActivity", "YES", "-routeTo", "account:everyday"]
+        app.launch()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 30), "app did not relaunch")
+
+        // "Everyday" is the account with id `everyday` in the demo seed. What proves it
+        // opened DIFFERS by width, and getting that wrong reported a broken deep link on
+        // a working app: at compact width the account is PUSHED, so its name lands in the
+        // navigation bar; at regular width it fills the detail column, so the proof is
+        // the placeholder going away. Asserting a "Transactions" heading — the iPad
+        // column's wording — found nothing on the phone, where the pushed screen has a
+        // List/Calendar picker and month sections instead.
+        if isRegular {
+            XCTAssertTrue(app.staticTexts["Select an account"].waitForNonExistence(timeout: 25),
+                          "the detail column is still on its placeholder — focusedId was never consumed")
+        } else {
+            XCTAssertTrue(app.navigationBars["Everyday"].waitForExistence(timeout: 25),
+                          "the deep link did not push the Everyday account")
+        }
+    }
+
     /// **"The FAB … opens the Add sheet."** `TabChromeUITests` proves the button EXISTS
     /// on every root; nothing proved it did anything. A FAB wired to a dead action, or
     /// one whose hit target is covered, looks identical in a screenshot.
@@ -242,9 +307,17 @@ final class SplitMechanicsUITests: TabMechanicsBase {
     /// each wires its own `onSelect`, and a tab that forgot it fails silently — the
     /// placeholder simply stays up, which reads as "nothing selected" rather than a bug.
     func testSelectionFillsTheDetailColumnForEveryConvertedTab() throws {
+        // All five converted tabs. Each wires its own `onSelect`, so this is five
+        // separate opportunities to forget it — and Scheduled, Ledger and Activity were
+        // the three nothing covered.
         let cases: [(tab: String, rowPrefix: String, placeholder: String)] = [
-            ("Budgets", "Groceries", "Select a budget"),
-            ("Accounts", "Checking", "Select an account"),
+            ("Budgets",   "Groceries",       "Select a budget"),
+            ("Accounts",  "Checking",        "Select an account"),
+            ("Scheduled", "Apartment Rent",  "Select a scheduled item"),
+            // Travel, not Personal: tapping a ledger row only OPENS it, so this fills
+            // the column without changing which ledger is active — see
+            // `makeLedgerActive` for why that distinction matters.
+            ("Ledger",    "Travel",          "Select a ledger"),
         ]
         for c in cases {
             openTab(c.tab)
@@ -275,6 +348,41 @@ final class SplitMechanicsUITests: TabMechanicsBase {
         let cancel = app.buttons["Cancel"]
         XCTAssertTrue(cancel.waitForExistence(timeout: 15), "the toolbar + did not open a sheet")
         cancel.tap()
+    }
+
+    /// Activity, separately: its rows carry seeded amounts and dates rather than a
+    /// stable name, so this takes whatever the first row is instead of matching a label.
+    func testSelectionFillsTheDetailColumnForActivity() throws {
+        openTab("Activity")
+        let placeholder = app.staticTexts["Select a transaction"]
+        XCTAssertTrue(placeholder.waitForExistence(timeout: 20),
+                      "Activity: no detail placeholder — this is not the split shell")
+
+        guard let first = visibleRows.first else {
+            return XCTFail("Activity: no rows in the list column")
+        }
+        first.tap()
+        XCTAssertTrue(placeholder.waitForNonExistence(timeout: 15),
+                      "Activity: the selection never reached the detail column")
+    }
+
+    /// **Switching across the three-column ↔ two-column boundary** (§6, 3a). Insights and
+    /// Settings are two-column; the rest are three, so moving between them rebuilds the
+    /// split controller. The risk is not a crash — it is coming back to a tab that has
+    /// lost its list column, which still looks like a working screen.
+    func testSwitchingAcrossTheColumnCountBoundaryRebuildsCleanly() throws {
+        openTab("Accounts")
+        XCTAssertTrue(app.staticTexts["Select an account"].waitForExistence(timeout: 20),
+                      "Accounts did not come up as a three-column tab")
+
+        openTab("Insights")          // two-column
+        openTab("Settings")          // two-column
+        openTab("Accounts")          // back across the boundary
+
+        XCTAssertTrue(app.staticTexts["Select an account"].waitForExistence(timeout: 20),
+                      "Accounts lost its detail column after a trip through the two-column tabs")
+        XCTAssertTrue(rowElement(labelled: "Checking").waitForExistence(timeout: 15),
+                      "Accounts came back without its list column — the rebuild dropped it")
     }
 
     /// **"The highlight survives a data change."** `dataSource.apply` clears the

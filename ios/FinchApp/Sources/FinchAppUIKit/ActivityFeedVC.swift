@@ -779,6 +779,9 @@ extension ActivityFeedVC: UICollectionViewDelegate {
     /// No-op outside column mode, where nothing owns a persistent selection.
     private func reassertSelection() {
         guard onSelect != nil else { return }
+        // Same trap as the sibling lists: `selectedID` can be set by the split shell
+        // before this view loads, and `dataSource` is nil until `viewDidLoad`.
+        guard dataSource != nil else { return }
         guard let selectedID, let ip = dataSource.indexPath(for: selectedID) else { return }
         collectionView.selectItem(at: ip, animated: false, scrollPosition: [])
     }
