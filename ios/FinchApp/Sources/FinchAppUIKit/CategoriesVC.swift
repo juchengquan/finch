@@ -67,8 +67,24 @@ final class CategoriesVC: UIViewController {
     private var kindRows: [CategoryRow] {
         store.pickableCategories.filter { ($0.kind ?? "expense") == kind.rawValue }
     }
+    /// The in-flight tree while reordering — every drop edits THIS, not the database.
+    ///
+    /// Categories used to commit on each drop, alone among the reorder screens:
+    /// Accounts and Budgets both hold their arrangement in memory and write once on
+    /// ✓. Committing per drop meant a full ledger reprojection and the whole write
+    /// side-effect set (Spotlight, notifications, widget, auto-backup, CloudKit
+    /// outbox) for every single move, so a run of five drags paid all of it five
+    /// times. It also left no way to back out.
+    ///
+    /// Empty when not reordering; `activeRows` falls back to the store then.
+    private var reorderRows: [CategoryRow] = []
+
+    /// What the screen renders and what the drop math runs against — the pending
+    /// arrangement while reordering, the store otherwise.
+    private var activeRows: [CategoryRow] { isReordering && !reorderRows.isEmpty ? reorderRows : kindRows }
+
     private var byID: [String: CategoryRow] {
-        Dictionary(uniqueKeysWithValues: kindRows.map { ($0.id, $0) })
+        Dictionary(uniqueKeysWithValues: activeRows.map { ($0.id, $0) })
     }
 
     override func viewDidLoad() {
@@ -129,7 +145,19 @@ final class CategoriesVC: UIViewController {
                 cell.contentConfiguration = UIHostingConfiguration {
                     Picker("", selection: Binding(
                         get: { self.kind },
-                        set: { self.kind = $0; self.selected = []; self.applySnapshot() })) {
+                        set: { newKind in
+                            // Switching kind mid-reorder would strand the pending
+                            // arrangement — it belongs to the OTHER kind's rows. Commit
+                            // it first, then re-seed for the kind now on screen.
+                            if self.isReordering {
+                                self.persistReorder()
+                                self.reorderRows = []
+                            }
+                            self.kind = newKind
+                            self.selected = []
+                            if self.isReordering { self.reorderRows = self.kindRows }
+                            self.applySnapshot()
+                        })) {
                         Text(String(localized: "Expense")).tag(Kind.expense)
                         Text(String(localized: "Income")).tag(Kind.income)
                     }
@@ -267,7 +295,7 @@ final class CategoriesVC: UIViewController {
     }
 
     private func applySnapshot() {
-        let rows = kindRows
+        let rows = activeRows
         counts = Selectors.categoryTxCounts(store.txns, store.activeLedgerId)
         visible = flattenCategories(categoryForest(rows), expanded: expanded, search: search)
         flatByID = Dictionary(uniqueKeysWithValues: visible.map { ($0.row.id, $0) })
@@ -324,14 +352,23 @@ final class CategoriesVC: UIViewController {
         }
 
         if isReordering {
+            // ✕ discards the pending arrangement, ✓ commits it — the same pair
+            // Accounts and Budgets have. Categories used to offer only ✓ because
+            // every drop had already been written; now there is something to cancel.
+            let cancel = UIBarButtonItem(image: UIImage(systemName: "xmark"),
+                                         primaryAction: UIAction { [weak self] _ in
+                self?.reorderRows = []
+                self?.exitReorder()
+            })
+            cancel.accessibilityLabel = String(localized: "Cancel")
             let done = UIBarButtonItem(image: UIImage(systemName: "checkmark"),
                                        primaryAction: UIAction { [weak self] _ in
-                self?.isReordering = false
-                self?.applySnapshot()
+                self?.persistReorder()
+                self?.exitReorder()
             })
             done.accessibilityLabel = String(localized: "Done")
             navigationItem.rightBarButtonItems = [done]
-            navigationItem.leftBarButtonItems = nil
+            navigationItem.leftBarButtonItems = [cancel]
             return
         }
 
@@ -342,8 +379,10 @@ final class CategoriesVC: UIViewController {
         let more = UIBarButtonItem(image: UIImage(systemName: "ellipsis"), menu: UIMenu(children: [
             UIAction(title: String(localized: "Reorder"),
                      image: UIImage(systemName: "arrow.up.arrow.down")) { [weak self] _ in
-                self?.isReordering = true
-                self?.applySnapshot()
+                guard let self else { return }
+                self.isReordering = true
+                self.reorderRows = self.kindRows   // snapshot the tree to edit in memory
+                self.applySnapshot()
             },
             UIAction(title: String(localized: "Merge…"),
                      image: UIImage(systemName: "arrow.triangle.merge")) { [weak self] _ in
@@ -484,21 +523,49 @@ final class CategoriesVC: UIViewController {
     /// Apply moves through the chokepoint, in order. The engine rejects
     /// self/descendant/too-deep with a localized error; the first throw stops the run
     /// and surfaces it.
-    /// One write for the whole drag.
-    ///
-    /// `CategoryReorder.reorder` renumbers the entire destination sibling group, so a
-    /// drop yields a move per member. Sending each through `updateCategory` meant one
-    /// `store.apply` each — and every apply re-reads the whole active ledger and fires
-    /// the full side-effect set (Spotlight, notifications, widget snapshot + timeline
-    /// reload, auto-backup, CloudKit outbox). A drop inside a group of eight paid that
-    /// eight times, which is why the settle after a drag crawled on device.
+    /// Leave reorder mode and drop the working copy. Callers decide first whether
+    /// to keep the arrangement (`persistReorder`) or bin it (clear `reorderRows`).
+    private func exitReorder() {
+        isReordering = false
+        reorderRows = []
+        collapsedForDrag = nil
+        configureToolbar()
+        applySnapshot()
+    }
+
+    /// Apply a drop to the PENDING tree. No database write — see `reorderRows`.
     private func applyMoves(_ moves: [CategoryMove]) {
         guard !moves.isEmpty else { return }
+        if reorderRows.isEmpty { reorderRows = kindRows }
+        var byId = Dictionary(uniqueKeysWithValues: reorderRows.map { ($0.id, $0) })
+        for move in moves {
+            guard let row = byId[move.id] else { continue }
+            byId[move.id] = CategoryRow(id: row.id, ledgerId: row.ledgerId, name: row.name,
+                                        parentId: move.parentId, kind: row.kind,
+                                        icon: row.icon, color: row.color, sortOrder: move.sortOrder)
+        }
+        // Keep projection order: parent before child, then sort_order — what
+        // `categoryForest` and `CategoryReorder` both expect of their input.
+        reorderRows = reorderRows.compactMap { byId[$0.id] }
+            .sorted { ($0.sortOrder, $0.id) < ($1.sortOrder, $1.id) }
+    }
+
+    /// Commit the pending tree in ONE action, sending only the rows that actually
+    /// moved. Mirrors `AccountsListVC.persistReorder` / `BudgetsListVC.persistReorder`,
+    /// which have always deferred to ✓; Categories was the outlier.
+    private func persistReorder() {
+        guard !reorderRows.isEmpty else { return }
+        let current = Dictionary(uniqueKeysWithValues: kindRows.map { ($0.id, ($0.parentId, $0.sortOrder)) })
+        let changed = reorderRows.filter { row in
+            guard let cur = current[row.id] else { return false }
+            return cur.0 != row.parentId || cur.1 != row.sortOrder
+        }
+        guard !changed.isEmpty else { return }
         run {
-            try store.apply(.setCategoryOrder, Args(["moves": .array(moves.map { move in
-                .object(["id": .string(move.id),
-                         "parentId": move.parentId.map(JSONValue.string) ?? .null,
-                         "sortOrder": .int(move.sortOrder)])
+            try store.apply(.setCategoryOrder, Args(["moves": .array(changed.map { row in
+                .object(["id": .string(row.id),
+                         "parentId": row.parentId.map(JSONValue.string) ?? .null,
+                         "sortOrder": .int(row.sortOrder)])
             })]))
         }
     }
@@ -761,7 +828,7 @@ extension CategoriesVC: UICollectionViewDropDelegate {
 
     func collectionView(_ cv: UICollectionView, performDropWith coordinator: UICollectionViewDropCoordinator) {
         guard let source = coordinator.items.first?.dragItem.localObject as? String ?? draggingId else { return }
-        let rows = kindRows
+        let rows = activeRows
 
         guard let target = dropTarget(at: coordinator.session.location(in: cv)) else { return }
 
