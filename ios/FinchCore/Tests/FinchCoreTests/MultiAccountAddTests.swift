@@ -213,4 +213,64 @@ final class MultiAccountAddTests: XCTestCase {
             XCTAssertEqual((error as? I18nError)?.code, "error.split.accountsMismatch")
         }
     }
+
+    /// The genuinely-mixed case: one EUR account and one USD account (differing
+    /// from EACH OTHER, not just from the ledger base) against the USD ledger.
+    /// The two-EUR tests above exercise the rounded conversion path twice, but
+    /// both legs get identical treatment; they don't exercise the interaction
+    /// this feature is named for — one leg converting through the IDENTITY path
+    /// (Entries.swift's `if currency == base` branch, no rounding at all) while
+    /// the other converts through the ROUNDED path, summed in the same loop.
+    /// a1 (USD -20.00) contributes exactly; a2 (EUR -11.50 @ 1.087) contributes
+    /// r2(-12.5005) = -12.50 — total -32.50, matching the stated total exactly.
+    func test_addTransaction_mixedEURandUSDAccounts_validSplit_isAccepted() throws {
+        let q = try TestSeed.base()
+        try q.write { db in
+            try db.execute(sql: """
+                INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+                VALUES ('a2','l1','Euro Card','credit_card','EUR',0,1,1,1,datetime('now'),datetime('now'))
+                """)
+            try db.execute(sql: "INSERT INTO exchange_rates (date,currency,rate) VALUES ('2026-06-01','EUR',1.087)")
+        }
+        let eid = try Apply.applyReturningId(dbQueue: q, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "amount": .double(-32.50),
+            "merchant": .string("Café + Cash Tip"), "categoryId": .string("c1"),
+            "date": .string("2026-06-01"),
+            "accounts": .array([
+                .object(["accountId": .string("a1"), "amount": .double(-20.00)]),   // USD — identity path
+                .object(["accountId": .string("a2"), "amount": .double(-11.50)]),   // EUR — rounded path
+            ])]))
+        XCTAssertNotNil(eid, "a valid split across genuinely different currencies must not be rejected")
+
+        let acctLegs = try q.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM postings WHERE entry_id = ? AND account_id IS NOT NULL", arguments: [eid!])
+        }
+        XCTAssertEqual(acctLegs, 2)
+        let problems = try Audit.run(on: q)
+        XCTAssertTrue(problems.isEmpty, "the written entry must be clean: \(problems.map(\.detail))")
+    }
+
+    /// Same genuinely-mixed EUR+USD shape, but a real mismatch — must still be
+    /// rejected. Proves the identity/rounded interaction doesn't accidentally
+    /// widen the tolerance into a no-op for this shape either.
+    func test_addTransaction_mixedEURandUSDAccounts_realMismatch_isRejected() throws {
+        let q = try TestSeed.base()
+        try q.write { db in
+            try db.execute(sql: """
+                INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+                VALUES ('a2','l1','Euro Card','credit_card','EUR',0,1,1,1,datetime('now'),datetime('now'))
+                """)
+            try db.execute(sql: "INSERT INTO exchange_rates (date,currency,rate) VALUES ('2026-06-01','EUR',1.087)")
+        }
+        XCTAssertThrowsError(try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "amount": .double(-32.50),
+            "merchant": .string("Café + Cash Tip"), "categoryId": .string("c1"),
+            "date": .string("2026-06-01"),
+            "accounts": .array([
+                .object(["accountId": .string("a1"), "amount": .double(-20.00)]),
+                .object(["accountId": .string("a2"), "amount": .double(-1.00)]),   // nowhere near the real -11.50
+            ])]))) { error in
+            XCTAssertEqual((error as? I18nError)?.code, "error.split.accountsMismatch")
+        }
+    }
 }

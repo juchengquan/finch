@@ -211,25 +211,27 @@ export const handlers = {
       );
       for (const leg of catLegs) cats.add(String(leg.category_id));
 
-      const [acctLeg] = await exec(
-        `SELECT id, account_id, amount, amount_base, exchange_rate, currency, cleared_at, memo
-           FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1`,
-        [entryId],
-      );
-      if (!acctLeg) continue;
-
       if (catLegs.length >= 2) continue;
 
       // A purchase paid from several accounts carries exactly one category leg by
       // design, so the check above does not skip it — but the rebuild below still
       // reads a single account leg (LIMIT 1) and would silently drop every other
       // payment. Skip it instead: a bulk operation should skip what it cannot
-      // safely do, not abort the whole batch (mirrored on iOS).
+      // safely do, not abort the whole batch (mirrored on iOS). Checked before any
+      // leg fetch, like the iOS port, so a skip costs one COUNT query, not a
+      // fetch-then-discard.
       const [{ n: acctLegCount }] = await exec(
         'SELECT COUNT(*) AS n FROM postings WHERE entry_id = ? AND account_id IS NOT NULL',
         [entryId],
       );
       if (Number(acctLegCount) > 1) continue;
+
+      const [acctLeg] = await exec(
+        `SELECT id, account_id, amount, amount_base, exchange_rate, currency, cleared_at, memo
+           FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1`,
+        [entryId],
+      );
+      if (!acctLeg) continue;
 
       const legs: LegInput[] = [
         {
