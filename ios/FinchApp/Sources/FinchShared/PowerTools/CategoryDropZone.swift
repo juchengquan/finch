@@ -21,14 +21,9 @@ enum CategoryDropZone: Equatable {
 
     /// `pointY` and `cellMinY` share a coordinate space (the collection view's).
     ///
-    /// - Parameter allowsNesting: whether `.into` is on offer at all. **Pass `false`
-    ///   when the target's children are already on screen.** An expanded parent needs
-    ///   no nest zone: every position inside it is directly reachable by dropping
-    ///   between the children you can see, so a nest zone there would only be a
-    ///   second, vaguer way to do the same thing — and it would steal half the row
-    ///   from the precise one. Collapsed parents and leaves are the opposite case:
-    ///   you cannot drop "among" children that aren't rendered, so nesting is the
-    ///   only way in, and it gets the middle half.
+    /// - Parameter allowsNesting: whether `.into` is on offer at all. Drive it from
+    ///   `allowsNesting(dragDX:)` — nesting is meant to be a deliberate act, not
+    ///   something vertical position can do to you by accident.
     ///
     /// With nesting available the row is quarters — top inserts before, bottom
     /// inserts after, middle half nests. Without it the row is halves, so wherever
@@ -44,4 +39,28 @@ enum CategoryDropZone: Equatable {
         if fraction > 0.75 { return .after }
         return .into
     }
+
+    /// How far right you must drag before a drop nests instead of reordering.
+    ///
+    /// Same level is the DEFAULT, at every row, expanded or folded — dragging
+    /// straight up and down can only ever change position. Nesting is a separate,
+    /// deliberate gesture: carry the row sideways and it indents, which is the
+    /// Reminders/Notes idiom.
+    ///
+    /// This replaced two earlier attempts that both tried to infer intent from
+    /// vertical position and got it wrong. Nesting first owned the middle HALF of
+    /// every row, so it beat same-level two-to-one on target area; narrowing it to
+    /// rows whose children were hidden still left folded categories swallowing
+    /// drops aimed past them. Position cannot express "I meant to go inside" — only
+    /// a second axis can.
+    ///
+    /// 32pt is comfortably past an idle thumb's horizontal wander during a vertical
+    /// drag, and a little over two of the tree's 14pt indent steps, so it reads as
+    /// intentional without being a reach.
+    static let nestingDragThreshold: CGFloat = 32
+
+    /// Whether a drag that has travelled `dragDX` horizontally may nest.
+    /// Rightward only — dragging LEFT is not an un-nest gesture here; the
+    /// "Top level" drop row does that job.
+    static func allowsNesting(dragDX: CGFloat) -> Bool { dragDX >= nestingDragThreshold }
 }
