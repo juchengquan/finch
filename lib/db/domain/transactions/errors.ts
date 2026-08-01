@@ -5,4 +5,5 @@
 
 export const TRANSACTION_ERROR_CODES = {
   transferLegEdit: 'error.entry.transferLegEdit',
+  splitLegEdit: 'error.entry.splitLegEdit',
 } as const;
