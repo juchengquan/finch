@@ -172,20 +172,21 @@ of the four original suspicions turned out to be a real defect.** Worth remember
 before filing the next one — and worth reading the comments in that file before
 extending it.
 
-**CI runs the iPhone half only.** The workflow tests one simulator destination, an
-iPhone, so `SplitMechanicsUITests` — the four iPad checks — SKIPS on every CI run. It is
-green there because it did nothing, not because the iPad is guarded. Until an iPad
-destination is added to `ci.yml`, run those locally before touching the split shell:
+**CI now runs both widths.** `ci.yml` gained an iPad destination: a second step runs
+`SplitMechanicsUITests` and `SplitSelectionUITests` (+ its hosted twin) on an iPad after
+the iPhone step. Before that, every regular-width test skipped on every CI run — green
+because it did nothing. `SplitSelectionUITests` had been in that state since it was
+written, so the iPad selection behaviour Phase 3b depends on was never actually checked
+by anything but a local run.
 
-```bash
-xcodebuild test -project FinchApp.xcodeproj -scheme FinchApp \
-  -destination "id=<an iPad sim udid>" \
-  -only-testing:FinchAppUITests/SplitMechanicsUITests
-```
+It costs ~2 minutes, not the doubling it looks like: the step is
+`test-without-building`, and the simulator products from the iPhone step run on an iPad
+destination unchanged, so it adds test time and no build time.
 
-Adding an iPad destination is the obvious next step; note it roughly doubles the UI-test
-time, and `ci.yml` already carries a retry because these fail spuriously about 1 run in
-12.
+The step FAILS if every case skipped, rather than reporting success. xcodebuild treats an
+all-skipped run as a pass, which is exactly the blind spot being closed — so if the width
+guard stops matching (a new iPad reporting compact, a class renamed in `-only-testing`)
+CI says so instead of quietly going back to asserting nothing.
 
 What stays MANUAL, deliberately: section spacing against the SwiftUI screen (a visual
 comparison, and `Metrics.sectionSpacing` is already asserted where it matters), "each
