@@ -29,9 +29,10 @@ the resting frame. Record with `simctl io recordVideo`, extract with
 `ffmpeg -vf "fps=60,crop=W:H:X:Y"`, and compare a per-frame signature across the
 sequence — a smooth animation shows many small steps, an interrupted one shows a
 single jump. Sampling before and after an action only tells you the endpoints agree.
-(Attempted for the switch-reuse question; the run did not register a toggle and the
-comparison is still open. Note the two builds have SEPARATE containers, so row
-positions must be re-read per app rather than assumed.)
+(Attempted for the switch-reuse question; the run did not register a toggle — see the
+`--duration` note below for why — and it never did settle the question. The device
+answered it directly instead, 2026-08-01: no glitch, §2t. Note the two builds have
+SEPARATE containers, so row positions must be re-read per app rather than assumed.)
 
 **Pin the simulator when the machine is busy.** `ci-local.sh` picks a shared device
 by default; a run of it WEDGED for 30 minutes on "iPhone 17 Pro" while other sessions
@@ -57,13 +58,25 @@ catalog step is `build-xcstrings.ts && git diff --quiet`, so a correct-but-uncom
 catalog fails with "does not match a fresh build" — which reads like a content
 problem and is not one.
 
-**~~`idb ui tap` does not flip a `UISwitch`~~ — WRONG, and it hid a real bug.** Tapping
-a switch does nothing while a drag works, and this was written off as an `idb`
-limitation. A device test with a real finger showed the SAME behaviour: the switches
-in the converted screens do not respond to taps at all. That is an app defect, not a
-tooling one — see §2t. The lesson generalises: when tooling and the app disagree,
-"the tooling is limited" is a hypothesis, not a conclusion, and it is the comfortable
-one.
+**`idb ui tap` and the `UISwitch` — BOTH explanations were true at once, which is why
+this took three passes to settle.** The symptom, twice: a tap on a switch does nothing
+while a drag works.
+
+1. It was first written off as an `idb` limitation. A device test with a real finger
+   showed the SAME behaviour, so that was **wrong** — there was a genuine app defect
+   (the switch was rebuilt out from under the touch), fixed by reuse in `16174ca`; see
+   §2t.
+2. With that fixed, an *instantaneous* `idb ui tap` **still** does not flip a
+   `UISwitch` — confirmed 2026-08-01 on multiple rows, while `--duration 0.25` and
+   `ui swipe` across the switch flip it every time. So the tooling limitation is real
+   as well; it was simply never the whole story.
+
+**Drive switches with `--duration 0.25`.** A plain tap silently doing nothing reads
+exactly like "the switch is broken" or "my change killed it" — it nearly did again
+while removing the row-tap. The tell is a CONTROL: if a switch you did not touch fails
+the same way, suspect the gesture, not the code. And the wider lesson from round one
+still stands — "the tooling is limited" is a hypothesis, not a conclusion, and it is
+the comfortable one.
 
 Launch the app in each mode with:
 
@@ -83,15 +96,16 @@ below is reference; this is the queue.
 
 **Needs a real phone — the simulator provably cannot answer these.**
 
-- [ ] **Switch appearance survives a reconfigure.** Toggling one row must leave every
-      other switch's glass intact, and it must survive navigating away and back. The
-      fix (`16174ca`, `ToggleAccessory` reuses the switch instead of rebuilding it) is
-      device-unverified: six before/after samples in both the fixed and unfixed builds
-      are byte-identical, sha `bb0f2554bd84` — the simulator renders a rebuilt and a
-      reused switch the same, so it can neither validate nor invalidate the fix. Full
-      account in §2t.
-- [ ] **Row taps on toggle rows** work on all six converted settings screens, and
-      tapping a *currency* row still opens its rate history rather than toggling.
+- [x] **Switch appearance survives a reconfigure — CHECKED ON A DEVICE 2026-08-01, no
+      glitch.** Toggling one row left the other switches alone, and the appearance
+      survived navigating away and back. The fix (`16174ca`, `ToggleAccessory` reuses
+      the switch instead of rebuilding it) therefore holds where the simulator could
+      not answer at all. Human eyeball, not an instrumented measurement — good enough,
+      since the original defect was blatant (toggling one row flattened every other
+      switch on the screen). Full account in §2t.
+- [ ] **Only the switch flips a switch row** — row taps were REMOVED in `5a2442b2`, so
+      confirm on a device that tapping the label does nothing on all six converted
+      settings screens, and that tapping a *currency* row still opens its rate history.
 
 **Accessibility — raised by the tooling, never investigated (§3).**
 
@@ -531,8 +545,10 @@ Create a rule first, then work through these.
 - [ ] **Row layout**: name with "priority N" beneath, the "N×" match count (hidden
       at zero — a rule that never matched shows nothing, not a "0×" that reads like
       failure), and the Active switch.
-- [ ] **The Active switch** writes and survives a relaunch. Remember `idb ui tap`
-      will not flip a `UISwitch` — drag it.
+- [ ] **The Active switch** writes and survives a relaunch. Remember a plain
+      `idb ui tap` will not flip a `UISwitch` — use `--duration 0.25`, or drag it.
+      Note this row is the one place a switch row STAYS tappable: the tap opens the
+      rule editor, so it was excluded from the switch-only change (§2t).
 - [ ] **Swipe LEFT → Delete** (confirmation: "This permanently deletes the rule.").
 - [ ] **Swipe RIGHT → Backfill** — this edge exists only on this screen. It applies
       the rule to existing transactions, so check the match count moves.
@@ -707,9 +723,11 @@ Account detail. Neither is guessed.
       Consistent offset, so it is a top-inset or picker-height difference, not a
       per-row spacing drift. Decide whether it is worth matching.
 
-## 2t. OPEN: switch appearance differs between converted screens (device only)
+## 2t. RESOLVED: switch appearance differed between converted screens (device only)
 
-Reported from a side-by-side device comparison, and **unresolved**. On a phone the
+Reported from a side-by-side device comparison. Root-caused, fixed in `16174ca`, and
+**confirmed clean on a device 2026-08-01** — the history below is kept because the
+diagnosis took several wrong turns worth not repeating. On a phone the
 switches on **Currencies** and **Backups** look right, while those on **Appearance &
 Language**, **Notifications**, **Security** and **Experimental Labs** look flat —
 even though all eight are the SAME code (a native cell with a `UISwitch` in a
@@ -745,10 +763,15 @@ switch replaced out from under a touch never completes its gesture, while a drag
 - [x] **IMPLEMENTED in `16174ca`** — `ToggleAccessory` installs the switch once and
       afterwards updates only `isOn` and its action; the blanket
       `cell.accessories = []` is guarded so clearing never removes it.
-- [ ] ⚠️ **VERIFY ON A DEVICE — measured, the simulator cannot check this.** Toggling
-      one row must leave every other switch's appearance untouched, and the glass must
-      survive navigating away and back (which forces a reconfigure).
-      *Negative result, with a control:* a switch was sampled before and after a
+- [x] ✅ **VERIFIED ON A DEVICE, 2026-08-01 — no glitch.** Toggling one row left every
+      other switch's appearance untouched, and it survived navigating away and back
+      (which forces a reconfigure). That closes the loop the simulator could not: the
+      reuse fix behaves on the hardware where the defect was originally seen. Recorded
+      as a human eyeball check rather than a measurement, which is proportionate — the
+      original symptom was not subtle (toggling one row flattened every other switch on
+      the screen, permanently).
+      *Why no simulator evidence is cited here — negative result, with a control:* a
+      switch was sampled before and after a
       reconfigure (triggered by toggling a sibling row, which changes no layout), in
       BOTH the pre-fix build that rebuilds the switch and the post-fix build that
       reuses it. All six samples are byte-identical — sha `bb0f2554bd84`, the same
@@ -758,12 +781,18 @@ switch replaced out from under a touch never completes its gesture, while a drag
       the fix.** The device evidence stands on its own — toggling one row flattened
       the others, which is a reconfigure — and reuse is the correct response to that
       regardless.
-- [x] **Row taps FIXED in `a955c1a`.** Tapping anywhere on a toggle row now flips
-      the switch, matching SwiftUI. Applied to the six screens whose rows are purely
-      toggles; deliberately NOT to the Currencies currency rows or the Rules rows,
-      where a tap must keep navigating — both verified on the simulator.
-- [ ] On a device, confirm the row tap works on all six, AND that tapping a currency
-      row still opens its rate history rather than toggling tracking.
+- [x] ~~**Row taps FIXED in `a955c1a`**~~ — **REVERSED in `5a2442b2`, and this is now
+      the intended behaviour.** `a955c1a` had made a tap anywhere on a toggle row flip
+      the switch, to match SwiftUI. The design call since is the opposite: iOS follows
+      Settings.app, where the label is not a hit target and the row does not even
+      highlight. So the six screens stop SELECTING their switch rows (vetoing selection
+      is what suppresses the grey flash), `ToggleAccessory.flip(on:)` is deleted, and
+      the SwiftUI side lost its row-tap too via `SwitchOnlyToggleStyle`. macOS is
+      deliberately unchanged — it draws a checkbox, whose title is part of its hit area
+      by AppKit convention. Rules rows still select, because their tap opens the editor.
+- [ ] On a device, confirm tapping the LABEL does nothing on all six, that the switch
+      still flips, and that tapping a *currency* row still opens its rate history
+      rather than toggling tracking.
 - [ ] If hosting is attempted again, the row must remain touch-reachable — verify by
       actually flipping every toggle, not by reading the code.
 
@@ -772,15 +801,22 @@ switch replaced out from under a touch never completes its gesture, while a drag
 UIKit has **no toggle accessory**. The full set is disclosure indicator, detail,
 checkmark, delete, insert, reorder, multiselect, outline disclosure, pop-up menu,
 label and custom view. A settings switch is therefore hand-rolled every time, and
-three things that SwiftUI's `Toggle` gives free have to be written and maintained:
+three things that SwiftUI's `Toggle` gives free looked like they had to be written and
+maintained — though one of the three has since been withdrawn:
 
 1. **View reuse across `reconfigureItems`** — rebuilding the switch destroys iOS 26's
    appearance (§2t).
-2. **Row-level tap** — an accessory takes touches only on itself.
+2. ~~**Row-level tap** — an accessory takes touches only on itself.~~ **Withdrawn.**
+   This was only ever a cost because the target was SwiftUI's behaviour. Once iOS chose
+   Settings.app's behaviour instead (`5a2442b2`), UIKit's "an accessory takes touches
+   only on itself" turns out to be the DESIRED semantics, and it is SwiftUI that needed
+   extra code (`SwitchOnlyToggleStyle`) to match. Worth remembering when costing a
+   conversion: some of what looks like a UIKit gap is a SwiftUI default you did not
+   actually want.
 3. **The appearance itself** — automatic for standard controls, but only if the view
    survives.
 
-All three are solved now (`ToggleAccessory`), but the wider point stands: **the
+Both remaining costs are solved (`ToggleAccessory`), but the wider point stands: **the
 settings forms were never in the shadow's blast radius.** They cannot shadow — the
 bug affects pushed content — and they were converted for completeness of the tab, not
 to fix anything.
