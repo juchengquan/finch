@@ -95,6 +95,7 @@ enum ErrorL10n {
         "error.transfer.fxOnly": "只有汇率残差可用于平衡转账",
         "error.transfer.noCategory": "转账没有类别分录",
         "error.transfer.twoLegs": "转账正好有两条账户分录",
+        "error.tx.splitLegEdit": "请删除后重新添加此交易以更改付款方式",
         "error.tx.transferLegEdit": "请在「转账」页面编辑转账",
     ]
 }

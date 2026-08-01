@@ -1,8 +1,9 @@
 import { test, expect } from 'bun:test';
 import { newDb, addAccount, rawEntry, rawLeg, seal } from './entries.test';
 import { postEntry, auditLedger } from './core/entries';
-import { listTransactions } from './queries/transactions';
+import { listTransactions, updateTransaction } from './queries/transactions';
 import type { Exec } from './core/repo';
+import { I18nError } from '@/lib/i18n-error';
 
 const createSplitRule = (
   exec: Exec,
@@ -204,4 +205,79 @@ test('a genuine two-account transfer still carries transferGroupId', async () =>
     .filter((t) => t.merchant === 'Move funds');
   expect(rows.length).toBe(2);
   expect(rows.every((t) => t.transferGroupId != null)).toBe(true);
+});
+
+// Mirrors iOS's MultiAccountEditTests: updateTransaction's multi-account-leg
+// guard used to read "more than one account leg" as "this is a transfer" and
+// refuse every money edit with the Transfers-screen message. A split-tender
+// purchase has more than one account leg too, so its user was wrongly sent to
+// a screen that has nothing to do with their purchase. Header-only patches
+// must keep succeeding on both shapes; a money patch on a split gets its own
+// message instead of the transfer one.
+
+test('a header-only patch on a split-tender purchase succeeds', async () => {
+  const exec = await newDb();
+  await addAccount(exec, 'card', 'USD', 'personal');
+  await addAccount(exec, 'cash', 'USD', 'personal');
+
+  const { entryId } = await postEntry(exec, {
+    ledgerId: 'personal', date: '2026-06-01', time: '12:00',
+    description: 'Market', kind: 'expense', skipRules: true,
+    legs: [
+      { accountId: 'card', amount: -60 },
+      { accountId: 'cash', amount: -40 },
+      { categoryId: 'food', amountBase: 100 },
+    ],
+  });
+
+  await updateTransaction(exec, entryId, { merchant: 'Waitrose' });
+
+  const [row] = await exec('SELECT description FROM entries WHERE id = ?', [entryId]);
+  expect(row.description).toBe('Waitrose');
+});
+
+test('a money patch on a split-tender purchase throws the split message, not the transfer one', async () => {
+  const exec = await newDb();
+  await addAccount(exec, 'card', 'USD', 'personal');
+  await addAccount(exec, 'cash', 'USD', 'personal');
+
+  const { entryId } = await postEntry(exec, {
+    ledgerId: 'personal', date: '2026-06-01', time: '12:00',
+    description: 'Market', kind: 'expense', skipRules: true,
+    legs: [
+      { accountId: 'card', amount: -60 },
+      { accountId: 'cash', amount: -40 },
+      { categoryId: 'food', amountBase: 100 },
+    ],
+  });
+
+  expect.assertions(1);
+  try {
+    await updateTransaction(exec, entryId, { amount: -120 });
+  } catch (e) {
+    expect((e as I18nError).code).toBe('error.entry.splitLegEdit');
+  }
+});
+
+// A real transfer must keep the transfer message.
+test('a money patch on a genuine transfer still throws the transfer message', async () => {
+  const exec = await newDb();
+  await addAccount(exec, 'from-acct', 'USD', 'personal');
+  await addAccount(exec, 'to-acct', 'USD', 'personal');
+
+  const { entryId } = await postEntry(exec, {
+    ledgerId: 'personal', date: '2026-06-02', time: '09:00',
+    description: 'Move funds', kind: 'transfer', skipRules: true,
+    legs: [
+      { accountId: 'from-acct', amount: -50 },
+      { accountId: 'to-acct', amount: 50 },
+    ],
+  });
+
+  expect.assertions(1);
+  try {
+    await updateTransaction(exec, entryId, { amount: -70 });
+  } catch (e) {
+    expect((e as I18nError).code).toBe('error.entry.transferLegEdit');
+  }
 });

@@ -449,11 +449,22 @@ export async function updateTransaction(
   const oldLegs = await exec('SELECT * FROM postings WHERE entry_id = ? ORDER BY sort_order', [entryId]);
   const acctLegs = oldLegs.filter((l) => l.account_id != null);
 
-  // Guard: transfer entries may only get header-only patches.
+  // Guard: more than one account leg no longer means "transfer" — a purchase
+  // paid from several accounts has them too. Both still take header-only
+  // patches, because a money patch carries ONE account and ONE amount and
+  // cannot say which leg it means. They get different messages: sending
+  // someone who split a purchase to the Transfers screen is nonsense.
   const touchesMoney = patch.amount !== undefined || patch.category !== undefined
     || patch.account !== undefined || patch.currency !== undefined || patch.kind !== undefined;
   if (acctLegs.length > 1 && touchesMoney) {
-    throw new I18nError(TRANSACTION_ERROR_CODES.transferLegEdit, {}, 'Edit transfers from the Transfers screen');
+    if (cur.kind === 'transfer') {
+      throw new I18nError(TRANSACTION_ERROR_CODES.transferLegEdit, {}, 'Edit transfers from the Transfers screen');
+    }
+    throw new I18nError(
+      TRANSACTION_ERROR_CODES.splitLegEdit,
+      {},
+      'Delete and re-add this purchase to change how it was paid',
+    );
   }
 
   const oldAccountId = acctLegs.length > 0 ? String(acctLegs[0].account_id) : null;
