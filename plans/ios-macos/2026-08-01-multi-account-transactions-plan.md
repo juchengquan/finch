@@ -16,6 +16,11 @@
 - **Build with** `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` and `xcodegen generate` (the `.xcodeproj` is git-ignored).
 - **Gate before every push:** `ios/scripts/ci-local.sh` must print `all checks passed`. It churns `Localizable.xcstrings` as a side effect — **discard that before committing** (`git checkout -- ios/FinchApp/Sources/FinchShared/Resources/Localizable.xcstrings`) or ~8,800 junk lines land in the commit.
 - **No `Co-Authored-By` trailer** in commit messages.
+- **Two different localisation paths, do not confuse them.** `I18nError` **codes** are
+  translated in `ios/FinchApp/Sources/FinchShared/Common/ErrorL10n.swift` — a code map.
+  Static **UI strings** go through `String(localized:)`, into `ios/scripts/zh-manual.json`,
+  and the catalog is rebuilt with `bun run ios/scripts/build-xcstrings.ts`. Putting an
+  error code in `zh-manual.json` is a silent no-op: the string catalog never sees it.
 - **Invariant I7 stays authoritative for the shapes it names.** `transfer` ⟺ exactly 2 account legs and 0 category legs; `opening`/`adjustment` ⟺ exactly 1 account leg plus the matching equity leg; `refund` ⟹ no negative account leg. Only the undocumented `acct != 1` clause for `income`/`expense`/`refund` is being relaxed.
 
 ## Semantic decisions already taken (do not relitigate)
@@ -688,7 +693,7 @@ Expected: PASS. Every existing caller sends `accountId` and no `accounts`, so it
 
 - [ ] **Step 6: Add the two new error strings**
 
-Add `error.split.accountsMismatch` and `error.split.noAccount` to `ios/scripts/zh-manual.json`, then regenerate the catalog:
+Add `error.split.accountsMismatch` and `error.split.noAccount` to `ios/FinchApp/Sources/FinchShared/Common/ErrorL10n.swift`, then regenerate the catalog:
 
 ```bash
 bun run ios/scripts/build-xcstrings.ts
@@ -813,7 +818,7 @@ Expected: PASS — the throw happens and both legs survive.
 
 - [ ] **Step 5: Add the string, rebuild the catalog, mirror on the web**
 
-Add `error.split.multiAccount` to `ios/scripts/zh-manual.json`, run
+Add `error.split.multiAccount` to `ios/FinchApp/Sources/FinchShared/Common/ErrorL10n.swift`, run
 `bun run ios/scripts/build-xcstrings.ts`, and apply the identical guard to the web's
 `setTransactionSplits` equivalent in `frontend/lib/db/core/` with a matching test.
 
@@ -1193,7 +1198,7 @@ cd ios && swift test --filter MultiAccountEditTests
 
 - [ ] **Step 5: Add the string and rebuild the catalog**
 
-Add `error.tx.splitLegEdit` to `ios/scripts/zh-manual.json`, then:
+Add `error.tx.splitLegEdit` to `ios/FinchApp/Sources/FinchShared/Common/ErrorL10n.swift`, then:
 
 ```bash
 bun run ios/scripts/build-xcstrings.ts
@@ -1449,7 +1454,7 @@ Expected: PASS. The retry flags match CI (see the comment on that step in `ci.ym
 - [ ] **Step 7: Localize**
 
 `Account`, `Amount`, `Add another account`, `Still to assign: %@`, `Split payment`,
-`Cancel`, `Done` — each through `String(localized:)`, added to `ios/scripts/zh-manual.json`,
+`Cancel`, `Done` — each through `String(localized:)`, added to `ios/FinchApp/Sources/FinchShared/Common/ErrorL10n.swift`,
 then `bun run ios/scripts/build-xcstrings.ts`. Several already exist in the catalog;
 reuse rather than duplicate.
 
