@@ -2630,6 +2630,7 @@
         }
       }
     },
+    "Enter an amount to split.": {},
     "Exchange rates": {
       "localizations": {
         "zh-Hans": {
@@ -2930,6 +2931,7 @@
         }
       }
     },
+    "Give at least two categories an amount.": {},
     "Go": {
       "localizations": {
         "zh-Hans": {
@@ -5891,6 +5893,7 @@
         }
       }
     },
+    "Splits must add up to the transaction total.": {},
     "Split…": {
       "localizations": {
         "zh-Hans": {
