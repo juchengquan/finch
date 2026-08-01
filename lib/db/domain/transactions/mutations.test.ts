@@ -604,6 +604,15 @@ test('setTransactionSplits validates sum + min-2-rows; categorySpend uses splits
 // layer (bypassing postEntry) to exercise the setTransactionSplits guard in
 // isolation; hence seededDb (no end-of-test auditLedger hook), matching the
 // documented escape hatch for intentionally half-valid fixtures.
+//
+// The split total (40 + 20 = 60) deliberately matches the FIRST account leg's
+// amount (p-multi-1, -60), not the sum of both legs (-100). A split totalling
+// -100 (e.g. 60 + 40) already trips the pre-existing splitTotal-vs-single-leg
+// sum check before the new guard is ever reached, so it "throws" regardless of
+// whether the guard exists — that is not evidence the guard works. A split
+// totalling 60 sails past that old check (60 == 60) and would reach the
+// rebuild — silently dropping the second account leg — unless the
+// multi-account guard stops it first.
 test('setTransactionSplits on a multi-account entry is refused and keeps both legs', async () => {
   const { exec } = await seededDb();
   const [chk] = await exec("SELECT currency FROM accounts WHERE id = 'chk'");
@@ -635,11 +644,11 @@ test('setTransactionSplits on a multi-account entry is refused and keeps both le
     applyMutation(exec, 'setTransactionSplits', {
       id: entryId,
       splits: [
-        { categoryId: 'food', amount: 60 },
-        { categoryId: 'trans', amount: 40 },
+        { categoryId: 'food', amount: 40 },
+        { categoryId: 'trans', amount: 20 },
       ],
     }),
-  ).rejects.toThrow(/single category/i);
+  ).rejects.toMatchObject({ code: 'error.split.multiAccount' });
 
   const acctLegs = await exec(
     'SELECT amount_base FROM postings WHERE entry_id = ? AND account_id IS NOT NULL',
