@@ -13,7 +13,7 @@ import FinchCore
 /// an explanation for why this screen and not that one, which is exactly why
 /// conversion rather than a workaround is the fix.
 ///
-/// A 3-level tree with three interaction modes:
+/// A nested tree (depth capped by `Categories.maxDepth`) with three modes:
 ///   normal    — tap drills to the category's transactions; swipe / long-press give
 ///               Edit, Delete, Merge…, Copy to another ledger…
 ///   selecting — ⋯ → Merge…: tick two or more, then pick the survivor
@@ -482,7 +482,7 @@ final class CategoriesVC: UIViewController {
     }
 
     /// Apply moves through the chokepoint, in order. The engine rejects
-    /// self/descendant/depth>3 with a localized error; the first throw stops the run
+    /// self/descendant/too-deep with a localized error; the first throw stops the run
     /// and surfaces it.
     /// One write for the whole drag.
     ///
