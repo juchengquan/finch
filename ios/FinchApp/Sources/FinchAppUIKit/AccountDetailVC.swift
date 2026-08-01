@@ -379,6 +379,19 @@ final class AccountDetailVC: UIViewController {
     /// Only the VISIBLE headers are refreshed, which keeps this off `reloadSections`
     /// — that would re-render every row in the section, and this screen is expected
     /// to hold thousands.
+
+    /// Clear a highlight that outlived its row's position.
+    ///
+    /// Tapping a swipe action highlights the cell. Diffable MOVES that cell to its
+    /// new index path rather than re-dequeuing it, so `prepareForReuse` never fires
+    /// and the highlight arrives with the row — the arriving row rendered grey for
+    /// ~0.5s before de-highlighting, which reads as a blink (see #702).
+    private func clearStuckHighlight() {
+        for cell in collectionView.visibleCells where cell.isHighlighted {
+            cell.isHighlighted = false
+        }
+    }
+
     private func refreshVisibleHeaders() {
         let kind = UICollectionView.elementKindSectionHeader
         for indexPath in collectionView.indexPathsForVisibleSupplementaryElements(ofKind: kind) {
@@ -479,6 +492,7 @@ final class AccountDetailVC: UIViewController {
         sectionIDs = snap.sectionIdentifiers   // before apply — the layout reads it
         dataSource.apply(snap, animatingDifferences: false) { [weak self] in
             self?.refreshVisibleHeaders()
+            self?.clearStuckHighlight()
         }
     }
 
