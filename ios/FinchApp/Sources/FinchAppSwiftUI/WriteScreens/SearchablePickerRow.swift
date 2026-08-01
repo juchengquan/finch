@@ -26,6 +26,18 @@ struct SearchablePickerRow<RowContent: View>: View {
     /// Currency for the split section's amount fields (ignored when `splitting`
     /// is nil).
     var currency: String = ""
+    /// True while the OTHER split (category) already has 2+ funded rows — the
+    /// engine refuses an entry that is split both ways at once
+    /// (`error.split.multiAccount`, Task 4b), so the UI must not let the user
+    /// reach that state rather than surface the engine's refusal after a save
+    /// half-applies. Disables the toggle; ignored when `splitting` is nil.
+    var splitLocked = false
+    /// Account ids that cannot join a split because their own currency doesn't
+    /// match `currency` — the split assumes one currency across every row (see
+    /// `AddTransactionSheet.accountSplitArgs`), so mixing would have the engine
+    /// silently misread a typed amount as the wrong currency. Ignored when
+    /// `splitting` is nil.
+    var splitCurrencyMismatch: Set<String> = []
     /// Draws one option inside the sheet. Defaults to the plain name (see the
     /// convenience init below), so nothing that doesn't care is affected. The
     /// account pickers hand back an `AccountRowView` — REUSING the Accounts list's
@@ -34,7 +46,8 @@ struct SearchablePickerRow<RowContent: View>: View {
     @State private var presented = false
 
     init(title: String, glyph: FieldGlyph, options: [PickerOption], selection: Binding<String>,
-         splitting: Binding<SplitAllocation>? = nil, currency: String = "",
+         splitting: Binding<SplitAllocation>? = nil, currency: String = "", splitLocked: Bool = false,
+         splitCurrencyMismatch: Set<String> = [],
          @ViewBuilder rowContent: @escaping (PickerOption) -> RowContent) {
         self.title = title
         self.glyph = glyph
@@ -42,18 +55,29 @@ struct SearchablePickerRow<RowContent: View>: View {
         self._selection = selection
         self.splitting = splitting
         self.currency = currency
+        self.splitLocked = splitLocked
+        self.splitCurrencyMismatch = splitCurrencyMismatch
         self.rowContent = rowContent
     }
 
     private var selectedName: String { options.first { $0.id == selection }?.name ?? "—" }
-    /// Two-plus ticked rows ⇒ the row shows their names joined instead of the
+    /// Two-plus FUNDED rows ⇒ the row shows their names joined instead of the
     /// single selection — same rule as `CategoryPickerRow.splitSummary`, derived
     /// here rather than threaded in since `options` already has every name needed.
+    /// Reads `payload` (funded rows), not `rows` (every ticked row): `Save` gates
+    /// on `payload.count >= 2`, so a ticked-but-zero-amount row (e.g. a second tick
+    /// whose whole share was pinned away to another row) must not show as a split
+    /// here when it will save as a single account.
     private var splitSummary: String? {
         guard let splitting else { return nil }
-        return splitSummaryText(names: splitting.wrappedValue.rows.compactMap { row in
-            options.first { $0.id == row.id }?.name
-        })
+        return splitSummaryText(names: Self.namesFor(payload: splitting.wrappedValue.payload, options: options))
+    }
+
+    /// Pulled out of `splitSummary` so it's directly testable: the names for a
+    /// split's FUNDED rows, in payload order. Options that no longer resolve are
+    /// dropped rather than shown blank.
+    static func namesFor(payload: [(id: String?, amount: Double)], options: [PickerOption]) -> [String] {
+        payload.compactMap { row in row.id.flatMap { id in options.first { $0.id == id }?.name } }
     }
 
     var body: some View {
@@ -67,7 +91,8 @@ struct SearchablePickerRow<RowContent: View>: View {
         .buttonStyle(.plain)
         .sheet(isPresented: $presented) {
             SearchablePickerSheet(title: title, options: options, selection: $selection,
-                                  splitting: splitting, currency: currency, rowContent: rowContent)
+                                  splitting: splitting, currency: currency, splitLocked: splitLocked,
+                                  splitCurrencyMismatch: splitCurrencyMismatch, rowContent: rowContent)
                 #if os(iOS)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -86,20 +111,31 @@ extension SearchablePickerRow where RowContent == Text {
 
 extension SearchablePickerRow where RowContent == AccountPickerRowLabel {
     /// The account picker: pass the accounts themselves and the sheet draws the
-    /// Accounts list's own row — icon, name, balance. `splitting`/`currency` are
-    /// the split-tender affordance — several accounts paying for one purchase;
-    /// every other account picker (From/To, Adjust Balance, scheduled templates)
-    /// leaves both at their defaults and is unaffected.
+    /// Accounts list's own row — icon, name, balance. `splitting`/`currency`/
+    /// `splitLocked` are the split-tender affordance — several accounts paying
+    /// for one purchase; every other account picker (From/To, Adjust Balance,
+    /// scheduled templates) leaves all three at their defaults and is unaffected.
+    /// `splitCurrencyMismatch` is derived here (from `accounts`), not passed by
+    /// the caller — it's purely a function of the account list and `currency`.
     init(title: String, glyph: FieldGlyph, accounts: [AccountRow], selection: Binding<String>,
-         splitting: Binding<SplitAllocation>? = nil, currency: String = "") {
+         splitting: Binding<SplitAllocation>? = nil, currency: String = "", splitLocked: Bool = false) {
         self.init(title: title, glyph: glyph,
                   options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") },
-                  selection: selection, splitting: splitting, currency: currency,
+                  selection: selection, splitting: splitting, currency: currency, splitLocked: splitLocked,
+                  splitCurrencyMismatch: Self.currencyMismatchedAccountIds(accounts, transactionCurrency: currency),
                   rowContent: { opt in AccountPickerRowLabel(accounts: accounts, id: opt.id, name: opt.name) })
+    }
+
+    /// Accounts whose own currency differs from `transactionCurrency` — see
+    /// `splitCurrencyMismatch`'s doc comment for why these are excluded from a
+    /// split. Empty currency ⇒ no restriction (nothing to compare against yet).
+    static func currencyMismatchedAccountIds(_ accounts: [AccountRow], transactionCurrency: String) -> Set<String> {
+        guard !transactionCurrency.isEmpty else { return [] }
+        return Set(accounts.filter { ($0.currency ?? transactionCurrency) != transactionCurrency }.map(\.id))
     }
 }
 
-/// One account inside a picker sheet: the Accounts list's row, minus the
+/// One account inside a picker sheet: the Accounts list's own row, minus the
 /// reconcile seal (bookkeeping hygiene, not a reason to pick an account). Falls
 /// back to the bare name if the id no longer resolves — the options and the
 /// accounts are handed over together, so that should not happen, but a picker is
@@ -127,6 +163,8 @@ private struct SearchablePickerSheet<RowContent: View>: View {
     @Binding var selection: String
     var splitting: Binding<SplitAllocation>? = nil
     var currency: String = ""
+    var splitLocked = false
+    var splitCurrencyMismatch: Set<String> = []
     @ViewBuilder let rowContent: (PickerOption) -> RowContent
     /// Needed for `displayNative` in the split section, same as
     /// `CategoryPickerSheet` — so those amounts honour privacy mode too.
@@ -140,13 +178,16 @@ private struct SearchablePickerSheet<RowContent: View>: View {
     @State private var amountText: [String: String] = [:]
 
     init(title: String, options: [PickerOption], selection: Binding<String>,
-         splitting: Binding<SplitAllocation>? = nil, currency: String = "",
+         splitting: Binding<SplitAllocation>? = nil, currency: String = "", splitLocked: Bool = false,
+         splitCurrencyMismatch: Set<String> = [],
          @ViewBuilder rowContent: @escaping (PickerOption) -> RowContent) {
         self.title = title
         self.options = options
         self._selection = selection
         self.splitting = splitting
         self.currency = currency
+        self.splitLocked = splitLocked
+        self.splitCurrencyMismatch = splitCurrencyMismatch
         self.rowContent = rowContent
         self._staged = State(initialValue: selection.wrappedValue)
     }
@@ -209,6 +250,15 @@ private struct SearchablePickerSheet<RowContent: View>: View {
         Section {
             Toggle("Split across accounts", isOn: $splitOn)
                 .accessibilityIdentifier("account.splitToggle")
+                .disabled(splitLocked)
+            if splitLocked {
+                // The engine refuses an entry split both ways at once
+                // (error.split.multiAccount) — say why the toggle won't move
+                // rather than let the user find out after a half-applied save.
+                Text("Turn off the category split first.").font(.footnote).foregroundStyle(.secondary)
+            } else if splitOn, !splitCurrencyMismatch.isEmpty {
+                Text("Only \(currency) accounts can be part of a split.").font(.footnote).foregroundStyle(.secondary)
+            }
         }
         if splitOn, let splitting {
             Section {
@@ -279,6 +329,9 @@ private struct SearchablePickerSheet<RowContent: View>: View {
     }
 
     @ViewBuilder private func row(_ opt: PickerOption) -> some View {
+        // A currency-mismatched account can't join a split — only enforced WHILE
+        // actually splitting; the plain single-select list is unrestricted.
+        let mismatched = splitOn && splitCurrencyMismatch.contains(opt.id)
         Button {
             tap(opt.id)
         } label: {
@@ -292,8 +345,10 @@ private struct SearchablePickerSheet<RowContent: View>: View {
                 if isSelected { Image(systemName: "checkmark").foregroundStyle(.tint) }
             }
             .contentShape(Rectangle())
+            .opacity(mismatched ? 0.4 : 1)
         }
         .buttonStyle(.plain)
+        .disabled(mismatched)
     }
 
     /// In split mode a tap toggles membership; otherwise it stages the single choice.

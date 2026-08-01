@@ -133,6 +133,42 @@ struct AddTransactionSheet: View {
         return args
     }
 
+    /// The `accounts`/`currency` args for a split-tender purchase — several
+    /// accounts paying for one line item. Empty unless 2+ rows are funded (one
+    /// funded row is not a split; the plain `accountId` above already carries it).
+    ///
+    /// Two things this MUST get right, both missed the first time round because
+    /// they only showed up once real args were built and sent to the engine —
+    /// not in `SplitAllocation`'s own tests, which never touch a sign or a
+    /// currency key:
+    /// - SIGNED to match `signed` (the same amount already in `args["amount"]`).
+    ///   `SplitAllocation`'s rows are always positive magnitudes (`funded` is
+    ///   `amount > 0`), so an unsigned share sent alongside a NEGATIVE expense
+    ///   amount makes the engine's `totalBase` vs `statedBase` compare a positive
+    ///   sum against a negative total and reject every expense split outright.
+    ///   The engine's own tests (`MultiAccountAddTests.swift:20-26`) use negative
+    ///   shares for an expense; match that here rather than in `SplitAllocation`,
+    ///   since the sign is a property of THIS call, not of the allocation.
+    /// - `currency` sent EXPLICITLY whenever `accounts` is present. Every row in
+    ///   the split section is shown, and typed, in `currency` (the transaction's
+    ///   own currency — the split assumes one currency across every row; see
+    ///   `SearchablePickerRow.currencyMismatchedAccountIds`, which keeps that
+    ///   assumption true rather than just asserted). Without this key the engine
+    ///   defaults an omitted `currency` to the LEDGER BASE (`Transactions.swift`),
+    ///   which is wrong the moment the transaction's own currency differs from
+    ///   base — e.g. two EUR accounts paying a EUR-denominated purchase in a
+    ///   USD-base ledger.
+    static func accountSplitArgs(accountAlloc: SplitAllocation, signed: Double, currency: String) -> [String: JSONValue] {
+        let payload = accountAlloc.payload
+        guard payload.count >= 2 else { return [:] }
+        let sign: Double = signed < 0 ? -1 : 1
+        return [
+            "accounts": .array(payload.map { .object([
+                "accountId": .string($0.id ?? ""), "amount": .double(sign * $0.amount)]) }),
+            "currency": .string(currency),
+        ]
+    }
+
     /// Expense / income / refund all post a single account leg + category — they
     /// share the line-item field set and the status/tags/receipt/merchant extras.
     private var isLineItem: Bool { kind == .expense || kind == .income || kind == .refund }
@@ -166,6 +202,16 @@ struct AddTransactionSheet: View {
     private var transferIsCrossCurrency: Bool {
         kind == .transfer && currency(of: fromAccountId) != currency(of: toAccountId)
     }
+
+    /// The two splits (category, account) are mutually exclusive: the engine
+    /// refuses an entry that's split both ways at once (`error.split.multiAccount`,
+    /// Task 4b added it deliberately) — `addTransaction` commits its own
+    /// transaction before `setTransactionSplits` ever runs, so letting the UI
+    /// offer both would post the purchase, throw on the second call, and leave
+    /// the user's category split silently dropped. Disabling each toggle while
+    /// the OTHER already has 2+ funded rows keeps that combination unreachable.
+    private var categorySplitBlocked: Bool { accountAlloc.payload.count >= 2 }
+    private var accountSplitBlocked: Bool { splitAlloc.payload.count >= 2 }
 
     var body: some View {
         NavigationStack {
@@ -303,7 +349,8 @@ struct AddTransactionSheet: View {
             SearchablePickerRow(title: "Account", glyph: .account,
                 accounts: accounts, selection: $accountId,
                 splitting: $accountAlloc,
-                currency: currencyCode.isEmpty ? currency(of: accountId) : currencyCode)
+                currency: currencyCode.isEmpty ? currency(of: accountId) : currencyCode,
+                splitLocked: accountSplitBlocked)
                 // A UI test reads this row to prove the FAB seeded the sheet. Without an
                 // identifier the query also matches the "Accounts" tab-bar button and the
                 // budget detail's own Account row sitting behind the sheet.
@@ -316,7 +363,8 @@ struct AddTransactionSheet: View {
                 noneLabel: String(localized: "Uncategorized"),
                 splitSummary: splitSummaryText(names: splitAlloc.payload.map { store.categoryName($0.id) ?? "Uncategorized" }),
                 splitting: k == .refund ? nil : $splitAlloc,
-                currency: currencyCode.isEmpty ? currency(of: accountId) : currencyCode)
+                currency: currencyCode.isEmpty ? currency(of: accountId) : currencyCode,
+                splitLocked: categorySplitBlocked)
                 .accessibilityIdentifier("addtx.category")
             FieldRow(glyph: .date, title: "Date", showsDefaultTrailing: false) {
                 DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
@@ -631,14 +679,12 @@ struct AddTransactionSheet: View {
                 for (k, v) in Self.scheduledLinkArgs(prefill: prefill, posts: postsScheduledOccurrence) { args[k] = v }
                 // Split tender: several accounts paid for this one purchase. `accountId`
                 // is still sent above — the engine ignores it once `accounts` carries 2+
-                // shares, and keeping it leaves the duplicate check and the currency
-                // lookup untouched. One funded row is not a split (a plain single-account
-                // save must be byte-identical to today's), so this only fires at 2+,
-                // exactly like the category split below.
-                if accountAlloc.payload.count >= 2 {
-                    args["accounts"] = .array(accountAlloc.payload.map { .object([
-                        "accountId": .string($0.id ?? ""), "amount": .double($0.amount)]) })
-                }
+                // shares, and keeping it leaves the duplicate check untouched. One funded
+                // row is not a split (a plain single-account save must be byte-identical
+                // to today's), so `accountSplitArgs` yields nothing below 2, exactly like
+                // the category split further down.
+                for (k, v) in Self.accountSplitArgs(accountAlloc: accountAlloc, signed: signed,
+                        currency: currencyCode.isEmpty ? currency(of: accountId) : currencyCode) { args[k] = v }
                 let eid = try store.applyReturningId(.addTransaction, Args(args))
                 // Two funded legs or more is a split; anything less is the plain
                 // single category already carried by `category` in the args above.
