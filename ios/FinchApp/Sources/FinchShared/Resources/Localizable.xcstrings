@@ -13,12 +13,32 @@
         }
       }
     },
-    " · %lld days left": {
+    " · %lld day%@ left": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": " · 剩余 %lld 天"
+            "value": " · 剩余 %1$lld 天"
+          }
+        }
+      }
+    },
+    " · %lld hour%@ left": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " · 剩余 %1$lld 小时"
+          }
+        }
+      }
+    },
+    " · less than an hour left": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " · 剩余不到 1 小时"
           }
         }
       }

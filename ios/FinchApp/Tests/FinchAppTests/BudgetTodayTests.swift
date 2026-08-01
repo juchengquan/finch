@@ -129,4 +129,41 @@ final class BudgetTodayTests: XCTestCase {
                                  "\(left) days left in a \(daysInMonth)-day month — the count is anchored elsewhere")
     }
 
+
+    // MARK: - hours on the final day
+
+    /// The final day reports HOURS, not "1 day left" — which is the whole point of
+    /// the finer unit: on the last day you want to know whether you have all evening
+    /// or twenty minutes.
+    func test_remaining_onTheFinalDay_isHours() async throws {
+        let store = try await loadedStore()
+        switch store.remaining(until: store.wallToday) {
+        case .hours(let h):
+            XCTAssertGreaterThanOrEqual(h, 1)
+            XCTAssertLessThanOrEqual(h, 23, "a whole day should have been reported as days")
+        case .lessThanAnHour:
+            break   // legitimate if this runs in the last hour before midnight
+        case .days(let d):
+            XCTFail("the final day reported \(d) day(s) instead of hours")
+        case .ended:
+            XCTFail("today is not over")
+        }
+    }
+
+    func test_remaining_pastCycleHasEnded() async throws {
+        let store = try await loadedStore()
+        XCTAssertEqual(store.remaining(until: day(offsetFromToday: -1)), .ended)
+    }
+
+    /// Above a day it stays in days, and agrees with `daysLeft` — the finer unit
+    /// must not change the count people already read.
+    func test_remaining_aboveADay_staysInDaysAndMatchesDaysLeft() async throws {
+        let store = try await loadedStore()
+        let target = day(offsetFromToday: 30)
+        guard case .days(let d) = store.remaining(until: target) else {
+            return XCTFail("30 days out should report days")
+        }
+        XCTAssertEqual(d, store.daysLeft(until: target))
+    }
+
 }
