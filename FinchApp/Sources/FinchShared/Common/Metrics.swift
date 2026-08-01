@@ -25,4 +25,13 @@ enum Metrics {
     static let headerBottomPadding: CGFloat = 0
     /// Row insets for the type-caption row (`TxnTypeToolbar.caption`).
     static let captionInsets = EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16)
+
+    /// Gap below the Calendar/List mode picker, before the content it switches.
+    ///
+    /// One number because the three screens that carry the picker — Activity, the
+    /// account page and Scheduled — each had it fixed separately and drifted apart
+    /// (28 / 34 / different again). `ViewModePickerRow` applies it on the SwiftUI
+    /// side and the hosted cells apply it on the UIKit side, so a screen converted
+    /// later inherits the spacing instead of re-deriving it.
+    static let modePickerBottomGap: CGFloat = 4
 }

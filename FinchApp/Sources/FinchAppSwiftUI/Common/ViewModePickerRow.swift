@@ -12,7 +12,8 @@ struct ViewModePickerRow<Mode: Hashable>: View {
             ForEach(options, id: \.value) { o in Text(o.title).tag(o.value) }
         }
         .pickerStyle(.segmented)
-        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 4, trailing: 16))
+        .listRowInsets(EdgeInsets(top: 0, leading: 16,
+                                  bottom: Metrics.modePickerBottomGap, trailing: 16))
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
     }

@@ -134,7 +134,8 @@ final class CategoriesVC: UIViewController {
                 // No card behind it — see ActivityFeedVC's mode picker. An
                 // insetGrouped list gives every cell the grouped background, which
                 // the bare SwiftUI picker row doesn't have.
-                .margins(.vertical, 0)
+                .margins(.top, 0)
+                .margins(.bottom, Metrics.modePickerBottomGap)
                 cell.backgroundConfiguration = .clear()
                 return
 
