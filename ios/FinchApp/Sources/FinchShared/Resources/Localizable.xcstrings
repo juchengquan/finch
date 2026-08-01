@@ -4187,12 +4187,12 @@
         }
       }
     },
-    "No income this month": {
+    "No income in %@": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "本月无收入"
+            "value": "%@ 无收入"
           }
         }
       }
@@ -4333,16 +4333,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ 无支出"
-          }
-        }
-      }
-    },
-    "No spending this month": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "本月无支出"
           }
         }
       }
@@ -7051,12 +7041,12 @@
         }
       }
     },
-    "of income saved this month": {
+    "of income saved in %@": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "本月收入储蓄占比"
+            "value": "%@ 收入储蓄占比"
           }
         }
       }
@@ -7113,12 +7103,12 @@
         }
       }
     },
-    "spent more than earned this month": {
+    "spent more than earned in %@": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "本月支出超过收入"
+            "value": "%@ 支出超过收入"
           }
         }
       }
