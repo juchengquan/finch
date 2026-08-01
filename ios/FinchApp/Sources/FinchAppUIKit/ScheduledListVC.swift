@@ -209,7 +209,7 @@ final class ScheduledListVC: UIViewController {
                 // and account-detail pickers were fixed for; this screen went native
                 // afterwards and missed it.
                 .margins(.top, 0)
-                .margins(.bottom, 4)
+                .margins(.bottom, Metrics.modePickerBottomGap)
                 cell.backgroundConfiguration = .clear()
 
             case Self.calendarID:

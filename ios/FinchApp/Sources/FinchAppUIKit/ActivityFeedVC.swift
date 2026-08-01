@@ -80,8 +80,6 @@ final class ActivityFeedVC: UIViewController {
     private static let calendarID = "__calendar__"
 
     private var searchQuery = ""
-    /// Rows that print their own date — see TxRowCell.dateShownIDs.
-    private var dateShownIDs: Set<String> = []
     /// The app's own sort enum, reused — it carries `sorted(_:)`, so ordering is
     /// literally the same code the SwiftUI screen ran.
     private var sort: TxSort = .dateDesc
@@ -257,7 +255,8 @@ final class ActivityFeedVC: UIViewController {
                 // grouped background, which wrapped the picker in a white rounded
                 // card the SwiftUI row doesn't have — and cost ~20pt of vertical
                 // rhythm, pushing everything below it down.
-                .margins(.vertical, 0)
+                .margins(.top, 0)
+                .margins(.bottom, Metrics.modePickerBottomGap)
                 cell.backgroundConfiguration = .clear()
                 cell.accessories = []
                 return
@@ -308,10 +307,13 @@ final class ActivityFeedVC: UIViewController {
             guard let tx = self.txByID[id] else { return }
             // The SwiftUI row itself, hosted — it draws the amount, so no trailing
             // accessory. `showRunningBalance: false` because this feed mixes accounts
-            // and a running balance only reads sensibly within one; `showDate` prints
-            // the date once per day-run, as the SwiftUI feed does.
+            // and a running balance only reads sensibly within one.
+            //
+            // Every row prints its own date and time. The feed used to print the date
+            // once per day-run, which also swallowed the TIME — several transactions
+            // on one day rendered as identical rows with no way to tell them apart or
+            // order them. Every other screen already showed all of them.
             TxRowCell.configure(cell, tx: tx, store: self.store,
-                                showDate: self.dateShownIDs.contains(tx.id),
                                 showRunningBalance: false,
                                 onPreviewReceipt: self.isSelecting ? nil
                                     : { [weak self] in self?.previewReceipt($0) })
@@ -417,9 +419,6 @@ final class ActivityFeedVC: UIViewController {
         let confirmed = txns.filter { $0.pending != true }
         hasMore = confirmed.count > visibleCount
         let page = Array(confirmed.prefix(visibleCount))
-        // Must be set BEFORE the cells configure — they read it to decide whether to
-        // print a date, and a stale set prints the date on the wrong rows.
-        dateShownIDs = TxRowCell.dateShownIDs(pending: pending, ordered: page)
 
         var snap = NSDiffableDataSourceSnapshot<SectionID, String>()
         var headers: [SectionID: HeaderContent] = [:]
