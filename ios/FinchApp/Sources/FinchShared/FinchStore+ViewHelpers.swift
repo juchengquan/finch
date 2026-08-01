@@ -310,10 +310,29 @@ extension FinchStore {
         }
     }
 
-    /// Whole days from `today` to `ymd` (UTC), floored at 0.
+    /// Whole days from the WALL CLOCK to `ymd` INCLUSIVE (UTC), floored at 0.
+    ///
+    /// Two things this gets right that the previous version did not, both reported
+    /// from a device on the 1st of a month:
+    ///
+    /// **The anchor.** It measured from `today` — the newest transaction's date —
+    /// while the cycle it is describing comes from `budgetToday` (the wall clock).
+    /// Mixing the two overstated the count by however long since you last recorded
+    /// something: `Aug 31 - Jul 30 = 32 days left` in an August that has 31.
+    ///
+    /// **Today counts.** Counting only the days AFTER today made a cycle's final day
+    /// read "0 days left" while it was still running and still spendable. Today is a
+    /// day you can still use, so it is included: the 1st of a 31-day month reads
+    /// "31 days left", the last day reads "1 day left", and it rolls over the morning
+    /// after.
+    ///
+    /// Deliberately different from `MonthForecast.daysRemaining`, which stays
+    /// exclusive — that one is a term in the run-rate maths ("days of spending still
+    /// to come"), not a label.
     public func daysLeft(until ymd: String) -> Int {
-        guard let to = Self.parseDay(ymd), let now = Self.parseDay(today) else { return 0 }
-        return max(0, Int((to.timeIntervalSince(now) / 86_400).rounded(.up)))
+        guard let to = Self.parseDay(ymd), let now = Self.parseDay(budgetToday) else { return 0 }
+        let daysAfterToday = Int((to.timeIntervalSince(now) / 86_400).rounded(.up))
+        return max(0, daysAfterToday + 1)
     }
 
     // MARK: - Per-ledger reads (two-layer Ledger tab: detail works for ANY ledger)
