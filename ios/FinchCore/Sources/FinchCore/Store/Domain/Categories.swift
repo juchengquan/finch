@@ -12,7 +12,44 @@ public enum Categories {
         .mergeCategory: merge,
         .mergeCategories: mergeMany,
         .copyCategories: copyCategories,
+        .setCategoryOrder: setOrder,
     ]
+
+    /// Apply a whole drag's worth of `parent_id` / `sort_order` changes in ONE action.
+    ///
+    /// **This exists for cost, not convenience.** `CategoryReorder.reorder` renumbers
+    /// the entire destination sibling group, so a single drop yields one move per
+    /// member — and routing each through `updateCategory` meant one `store.apply` per
+    /// move. Every one of those re-reads the whole active ledger and fires the full
+    /// write side-effect set: Spotlight re-index, notification re-plan, widget
+    /// snapshot + timeline reload, auto-backup, CloudKit outbox. Dropping inside a
+    /// group of eight paid all of that eight times, which is what made the settle
+    /// after a drag crawl on device. Budgets already had this shape
+    /// (`setBudgetOrder`); Categories was the odd one out.
+    ///
+    /// Guards are NOT relaxed for being in a batch — each move re-runs the same
+    /// self-parent, under-own-descendant and depth-cap checks `update` applies, and
+    /// the first failure throws, rolling the whole action back. A drag is one
+    /// intention; it should land completely or not at all.
+    static func setOrder(_ db: Database, _ args: Args) throws {
+        struct Move: Decodable { let id: String; let parentId: String?; let sortOrder: Int }
+        struct A: Decodable { let moves: [Move] }
+        for move in try args.to(A.self).moves {
+            if let pid = move.parentId {
+                if pid == move.id {
+                    throw I18nError("error.category.selfParent", [:], "A category cannot be its own parent")
+                }
+                if try isInSubtreeOf(db, pid, move.id) {
+                    throw I18nError("error.category.underDescendant", [:],
+                                    "A category cannot be moved under its own descendant")
+                }
+                try assertSubtreeFitsUnder(db, move.id, pid)
+            }
+            try db.execute(
+                sql: "UPDATE categories SET parent_id = ?, sort_order = ?, updated_at = datetime('now') WHERE id = ?",
+                arguments: [move.parentId, move.sortOrder, move.id])
+        }
+    }
 
     static func create(_ db: Database, _ args: Args) throws {
         struct A: Decodable { let id: String?; let ledgerId: String?; let name: String; let type: String?; let icon: String?; let color: String?; let parentId: String? }
