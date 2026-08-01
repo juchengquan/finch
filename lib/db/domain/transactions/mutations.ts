@@ -220,6 +220,17 @@ export const handlers = {
 
       if (catLegs.length >= 2) continue;
 
+      // A purchase paid from several accounts carries exactly one category leg by
+      // design, so the check above does not skip it — but the rebuild below still
+      // reads a single account leg (LIMIT 1) and would silently drop every other
+      // payment. Skip it instead: a bulk operation should skip what it cannot
+      // safely do, not abort the whole batch (mirrored on iOS).
+      const [{ n: acctLegCount }] = await exec(
+        'SELECT COUNT(*) AS n FROM postings WHERE entry_id = ? AND account_id IS NOT NULL',
+        [entryId],
+      );
+      if (Number(acctLegCount) > 1) continue;
+
       const legs: LegInput[] = [
         {
           id: String(acctLeg.id),

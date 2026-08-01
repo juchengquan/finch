@@ -659,6 +659,56 @@ test('setTransactionSplits on a multi-account entry is refused and keeps both le
   expect(total).toBeCloseTo(-100, 2);
 });
 
+// bulkRecategorize has the same LIMIT-1-rebuild hazard: a split-tender entry has
+// exactly one category leg, so the pre-existing `catLegs.length >= 2` skip never
+// fires, and the rebuild would silently drop every account leg but the one
+// LIMIT 1 fetches. Unlike setTransactionSplits (a single caller that can be told
+// no), this is a bulk loop over many ids — it must skip the unsafe entry and
+// keep going, not throw. Same seeding rationale as the test above (no web write
+// path produces this shape today; seeded directly at the SQL layer).
+test('bulkRecategorize on a multi-account entry is skipped and keeps both legs', async () => {
+  const { exec } = await seededDb();
+  const [chk] = await exec("SELECT currency FROM accounts WHERE id = 'chk'");
+  const [sav] = await exec("SELECT currency FROM accounts WHERE id = 'sav'");
+  const entryId = 'e-multi-acct-bulk-test';
+  await exec(
+    `INSERT INTO entries (id,ledger_id,date,description,kind,status,confirmed_at,sealed,created_at,updated_at)
+     VALUES (?,'personal','2026-06-01','Market','expense','confirmed',datetime('now'),0,datetime('now'),datetime('now'))`,
+    [entryId],
+  );
+  await exec(
+    `INSERT INTO postings (id,entry_id,account_id,category_id,amount,currency,amount_base,exchange_rate,sort_order)
+     VALUES (?,?,?,NULL,-60,?,-60,1,0)`,
+    ['p-multi-bulk-1', entryId, 'chk', String(chk.currency)],
+  );
+  await exec(
+    `INSERT INTO postings (id,entry_id,account_id,category_id,amount,currency,amount_base,exchange_rate,sort_order)
+     VALUES (?,?,?,NULL,-40,?,-40,1,1)`,
+    ['p-multi-bulk-2', entryId, 'sav', String(sav.currency)],
+  );
+  await exec(
+    `INSERT INTO postings (id,entry_id,account_id,category_id,amount,currency,amount_base,exchange_rate,sort_order)
+     VALUES (?,?,NULL,'food',100,'USD',100,1,2)`,
+    ['p-multi-bulk-cat', entryId],
+  );
+  await exec('UPDATE entries SET sealed = 1 WHERE id = ?', [entryId]); // fires tr_entry_seal — confirms the fixture balances
+
+  await applyMutation(exec, 'bulkRecategorize', { ids: [entryId], categoryId: 'misc' });
+
+  const acctLegs = await exec(
+    'SELECT amount_base FROM postings WHERE entry_id = ? AND account_id IS NOT NULL',
+    [entryId],
+  );
+  expect(acctLegs.length).toBe(2);
+  const total = acctLegs.reduce((s, r) => s + Number(r.amount_base), 0);
+  expect(total).toBeCloseTo(-100, 2);
+  const [catRow] = await exec(
+    'SELECT category_id AS c FROM postings WHERE entry_id = ? AND category_id IS NOT NULL',
+    [entryId],
+  );
+  expect(String(catRow.c)).toBe('food'); // untouched — the whole recategorize was skipped
+});
+
 test('bulkRecategorize moves N rows in one statement; categorySpend shifts accordingly', async () => {
   const exec = await seededAndAudited();
   const { categorySpend } = await import('@/lib/db/queries/categories');
