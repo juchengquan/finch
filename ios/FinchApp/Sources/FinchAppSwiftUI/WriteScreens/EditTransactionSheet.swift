@@ -90,7 +90,7 @@ struct EditTransactionSheet: View {
         // Stored splits arrive PINNED via `merging`, so opening the sheet does not
         // re-divide amounts the user set earlier; repeated categories fold together.
         _splitAlloc = State(initialValue: .merging(
-            (txn.splits ?? []).map { (categoryId: $0.categoryId, amount: $0.amount) },
+            (txn.splits ?? []).map { (id: $0.categoryId, amount: $0.amount) },
             total: abs(txn.nativeAmount ?? txn.amount)))
     }
 
@@ -160,7 +160,7 @@ struct EditTransactionSheet: View {
                         // save() needs it to name the collapsed transaction.
                         CategoryPickerRow(title: "Category", glyph: .category, categories: categories, selection: $categoryId,
                             noneLabel: String(localized: "Uncategorized"),
-                            splitSummary: splitSummaryText(categoryNames: splitAlloc.payload.map { store.categoryName($0.categoryId) ?? "Uncategorized" }),
+                            splitSummary: splitSummaryText(names: splitAlloc.payload.map { store.categoryName($0.id) ?? "Uncategorized" }),
                             splitting: $splitAlloc,
                             currency: txn.currency ?? "")
                             .accessibilityIdentifier("edittx.category")
@@ -204,7 +204,7 @@ struct EditTransactionSheet: View {
                         }
                         CategoryPickerRow(title: "Category", glyph: .category, categories: categories, selection: $categoryId,
                             noneLabel: String(localized: "Uncategorized"),
-                            splitSummary: splitSummaryText(categoryNames: splitAlloc.payload.map { store.categoryName($0.categoryId) ?? "Uncategorized" }),
+                            splitSummary: splitSummaryText(names: splitAlloc.payload.map { store.categoryName($0.id) ?? "Uncategorized" }),
                             splitting: effectiveKind == "refund" ? nil : $splitAlloc,
                             currency: currencyCode)
                             .accessibilityIdentifier("edittx.category")
@@ -472,7 +472,7 @@ struct EditTransactionSheet: View {
             // amount has to be in place before the legs are rebuilt against it.
             if splitAlloc.payload.count >= 2 {
                 let splitPayload: [JSONValue] = splitAlloc.payload.map { .object([
-                    "categoryId": $0.categoryId.map(JSONValue.string) ?? .null,
+                    "categoryId": $0.id.map(JSONValue.string) ?? .null,
                     "amount": .double($0.amount)]) }
                 try store.apply(.setTransactionSplits,
                                 Args(["id": .string(txn.id), "splits": .array(splitPayload)]))

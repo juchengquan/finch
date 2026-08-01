@@ -2941,6 +2941,16 @@
         }
       }
     },
+    "Give at least two accounts an amount.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请至少为两个账户填写金额。"
+          }
+        }
+      }
+    },
     "Give at least two categories an amount.": {},
     "Go": {
       "localizations": {
@@ -5870,6 +5880,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "拆分到 %lld 个类别"
+          }
+        }
+      }
+    },
+    "Split across accounts": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拆分到多个账户"
           }
         }
       }
