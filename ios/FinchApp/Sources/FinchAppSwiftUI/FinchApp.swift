@@ -61,6 +61,9 @@ struct FinchApp: App {
                 switch phase {
                 case .background:
                     gate.didEnterBackground()
+                    // Fire the debounced widget / Watch / Spotlight round now rather
+                    // than leaving it unfired until the next write.
+                    store.flushAmbientSideEffects()
                     Task { await AutoBackupManager.shared.backupIfDue() }   // Phase 5: throttled backup before kill (local daily, folder per frequency)
                 case .active:
                     gate.didBecomeActive()

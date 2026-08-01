@@ -112,6 +112,33 @@ extension FinchStore {
         try apply(.deleteTransaction, Args(["id": .string(txId)]))
         unlink(relPaths: files)
     }
+
+    /// Confirm several pending transactions as ONE write.
+    ///
+    /// The multi-select toolbars used to loop `apply` per row, and every `apply`
+    /// fires a full round of post-write work — a whole-ledger reprojection, a widget
+    /// rebuild, a Spotlight re-index. Ten selected rows meant ten rounds, all on the
+    /// main actor, while ten rows were trying to animate out of the pending section.
+    ///
+    /// Returns how many ops did NOT throw — which is not the same as rows changed:
+    /// the engine treats an unresolvable id as a silent no-op, exactly as the old
+    /// per-row loop did. The count exists because `applyBatch` skips a genuinely
+    /// rejected op rather than abandoning the rest, so the caller can say what it
+    /// could not apply instead of failing silently — see the `bulkConfirm` sites.
+    @discardableResult
+    public func confirmTransactions(_ ids: [String]) -> Int {
+        applyBatch(ids.map { (action: ActionName.confirmTransaction, args: Args(["id": .string($0)])) })
+    }
+
+    /// Delete several transactions as one write, unlinking their receipts after.
+    /// Attachment paths are read BEFORE the delete, while the rows still exist.
+    @discardableResult
+    public func deleteTransactions(_ ids: [String]) -> Int {
+        let files = ids.flatMap { attachments(for: $0).map { $0.relPath } }
+        let applied = applyBatch(ids.map { (action: ActionName.deleteTransaction, args: Args(["id": .string($0)])) })
+        unlink(relPaths: files)
+        return applied
+    }
     /// Human-readable transactions CSV for the active ledger, optionally scoped
     /// to one `YYYY-MM` month (Insights → Breakdown export). Mirrors the web's
     /// `/api/export/transactions?ledger=…&month=…`.
