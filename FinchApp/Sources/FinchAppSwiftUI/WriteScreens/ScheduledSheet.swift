@@ -3,9 +3,9 @@ import FinchCore
 
 /// Add or edit a scheduled template (recurring transaction / installment plan).
 /// `nil` template = add (`createScheduled`); otherwise edit (`updateScheduled`).
-/// On edit, type / account / start date are not patchable (the engine omits
-/// them), so they're shown read-only; name, amount, category, frequency,
-/// day-of-month and the installment count are editable. Routes FinchStore.apply.
+/// On edit, type and account are not patchable (the engine omits them), so they're
+/// shown read-only; name, amount, category, frequency, day-of-month, START DATE and
+/// the installment count are editable. Routes FinchStore.apply.
 struct ScheduledSheet: View {
     @EnvironmentObject private var store: FinchStore
     @Environment(\.dismiss) private var dismiss
@@ -122,13 +122,9 @@ struct ScheduledSheet: View {
                             Stepper("Day of month: \(dayOfMonth)", value: $dayOfMonth, in: 1...31)   // matches web (1–31); engine clamps to month length
                         }
                     }
-                    if isEdit {
-                        FieldRow(glyph: .date, title: "Start") { Text(template?.startDate ?? "—") }
-                    } else {
-                        FieldRow(glyph: .date, title: "Start", showsDefaultTrailing: false) {
-                            DatePicker("Start", selection: $startDate, displayedComponents: .date)
-                                .labelsHidden()
-                        }
+                    FieldRow(glyph: .date, title: "Start", showsDefaultTrailing: false) {
+                        DatePicker("Start", selection: $startDate, displayedComponents: .date)
+                            .labelsHidden()
                     }
                 } header: {
                     finchSectionHeader("Schedule")
@@ -221,6 +217,8 @@ struct ScheduledSheet: View {
                 "frequency": .string(frequency),
             ]
             if frequency == "monthly" { patch["dayOfMonth"] = .int(dayOfMonth) }
+            // Moving the start moves the schedule: occurrences are derived from it.
+            patch["startDate"] = .string(AppDate.isoDay.string(from: startDate))
             if kind != .transfer { patch["category"] = categoryId.isEmpty ? .null : .string(categoryId) }
             patch["installmentTotal"] = installmentN.map { JSONValue.int($0) } ?? .null
             do { try store.apply(.updateScheduled, Args(["id": .string(template.id), "patch": .object(patch)])); dismiss() }
