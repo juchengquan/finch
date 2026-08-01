@@ -508,12 +508,14 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   // above was added). It's s2 (monthly, dayOfMonth 15, startDate 2026-01-15)
   // that actually generates rows: Jan–Apr occurrences, exercising the
   // date-dedup + occurrence math end to end.
-  { action: 'generateDueScheduled', args: { today: '2026-04-15' } },
+  // `time` pinned for the same reason `today` is: postings now always carry one,
+  // and an unpinned "now" would make this fixture differ on every regeneration.
+  { action: 'generateDueScheduled', args: { today: '2026-04-15', time: '09:00' } },
   // postScheduled with a PINNED date — reproducible offline now that the action
   // takes an explicit date, so it finally gets a parity gate (it was excluded
   // before: it used to stamp `new Date()`, making it non-reproducible offline).
-  { action: 'postScheduled', args: { templateId: 's2', date: '2026-05-20' } },
-  { action: 'postScheduled', args: { templateId: 's2', date: '2026-05-21', occurrenceDate: '2026-05-18' } },
+  { action: 'postScheduled', args: { templateId: 's2', date: '2026-05-20', time: '10:15' } },
+  { action: 'postScheduled', args: { templateId: 's2', date: '2026-05-21', time: '10:16', occurrenceDate: '2026-05-18' } },
   // addTransaction/createTransfer carrying sourceTemplateId + occurrenceDate —
   // the write path the shipped UI actually uses ("Post now" on the Scheduled
   // calendar opens a prefilled edit sheet; saving it calls addTransaction /

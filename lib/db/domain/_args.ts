@@ -175,8 +175,8 @@ export type Args = {
   addScheduledSplit: { templateId: string; accountId: string; pct: number };
   removeScheduledSplit: { templateId: string; index: number };
   updateScheduledSplit: { templateId: string; index: number; pct: number };
-  postScheduled: { templateId: string; date?: string; occurrenceDate?: string };
-  generateDueScheduled: { today?: string };
+  postScheduled: { templateId: string; date?: string; time?: string; occurrenceDate?: string };
+  generateDueScheduled: { today?: string; time?: string };
 
   // --- transfers (3) ---
   createTransfer: {

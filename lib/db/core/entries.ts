@@ -348,7 +348,7 @@ export async function postEntry(exec: Exec, e: NewEntry): Promise<{ entryId: str
        status === 'confirmed' ? ts : null, counterpartyId ?? null,
        e.refundedEntryId ?? null, e.sourceTemplateId ?? null, e.occurrenceDate ?? null, notes,
        appliedRuleIds ? JSON.stringify(appliedRuleIds) : null, reviewedAt,
-       dedupHash(e.date, e.time, description, legs), ts, ts],
+       e.sourceTemplateId ? null : dedupHash(e.date, e.time, description, legs), ts, ts],
     );
     await insertPostings(exec, entryId, legs);
     // Rule-added tags land inside the same SAVEPOINT (the entry row exists,
