@@ -235,8 +235,8 @@ struct RuleSheet: View {
                     Button { actions.append(ActRow()) } label: { Label("Add action", systemImage: "plus") }
                 }
                 Section {
-                    Toggle("Run on edit", isOn: $runOnEdit)
-                    if isEdit { Toggle("Active", isOn: $isActive) }
+                    Toggle("Run on edit", isOn: $runOnEdit).switchOnlyToggles()
+                    if isEdit { Toggle("Active", isOn: $isActive).switchOnlyToggles() }
                 }
                 if let errorMessage { Section { Text(errorMessage).foregroundStyle(.red).font(.footnote) } }
             }

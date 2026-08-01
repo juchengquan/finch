@@ -459,18 +459,15 @@ extension BackupsVC: UICollectionViewDelegate {
         // Backup rows are INERT — restore and delete are swipe/long-press only, so a
         // stray tap can never start a destructive flow.
         if id == Self.backUpNowID { return !store.ledgers.isEmpty }
-        // A tap anywhere on the folder row flips it, as SwiftUI's Toggle does.
-        return id == Self.folderToggleID || id == Self.folderNameID || id == Self.retentionID
+        // The folder row is NOT here: its switch is flipped by the switch only, as in
+        // Settings.app (see `ToggleAccessory`).
+        return id == Self.folderNameID || id == Self.retentionID
     }
 
     func collectionView(_ cv: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         cv.deselectItem(at: indexPath, animated: true)
         guard let id = dataSource.itemIdentifier(for: indexPath) else { return }
         switch id {
-        case Self.folderToggleID:
-            if let cell = cv.cellForItem(at: indexPath) as? UICollectionViewListCell {
-                ToggleAccessory.flip(on: cell)
-            }
         case Self.backUpNowID:
             Task { await backups.flush() }
         case Self.folderNameID:

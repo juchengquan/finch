@@ -159,14 +159,12 @@ final class SecuritySettingsVC: UIViewController {
 
 extension SecuritySettingsVC: UICollectionViewDelegate {
     /// Only the Face-ID row is a toggle; the two pull-down menus own their touches.
+    /// NOTHING here is row-selectable. Switch rows are flipped by their SWITCH only —
+    /// Settings.app behaviour, see `ToggleAccessory` — and the other controls own their
+    /// own touches. This must stay rather than be deleted: list rows are selectable by
+    /// default, and returning false is also what suppresses the grey selection flash.
     func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
-        dataSource.itemIdentifier(for: indexPath) == Self.sensitiveID
-    }
-
-    func collectionView(_ cv: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        cv.deselectItem(at: indexPath, animated: true)
-        guard let cell = cv.cellForItem(at: indexPath) as? UICollectionViewListCell else { return }
-        ToggleAccessory.flip(on: cell)
+        false
     }
 }
 #endif
