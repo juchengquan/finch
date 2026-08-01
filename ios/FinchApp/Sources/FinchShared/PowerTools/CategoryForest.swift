@@ -1,7 +1,16 @@
 import Foundation
 import FinchCore
 
-/// A node in the category forest (≤3 levels; enforced by the engine).
+/// Step limit for every ancestor walk in this file.
+///
+/// Derived from `Categories.maxDepth`, never a literal: these bounds exist to stop a
+/// walk spinning forever on corrupt data, which is a different job from the depth
+/// rule. When the two are written independently, raising the cap leaves the walks
+/// one step short and they start returning wrong answers with no error.
+private let ancestorWalkLimit = Categories.maxDepth + 2
+
+/// A node in the category forest. Depth is capped at `Categories.maxDepth`,
+/// enforced by the engine, not here.
 struct CategoryTreeNode: Identifiable, Equatable {
     let row: CategoryRow
     let children: [CategoryTreeNode]
@@ -26,11 +35,17 @@ func categoryForest(_ rows: [CategoryRow]) -> [CategoryTreeNode] {
 }
 
 /// Effective icon short-name: own → nearest ancestor's → nil (caller maps nil to
-/// the default symbol). Bounded walk (≤4 hops; the tree is ≤3 deep).
+/// the default symbol).
+///
+/// The walk is bounded only so corrupt data cannot spin it forever, and the bound
+/// is DERIVED from the depth cap. It was a literal `4` justified by "the tree is ≤3
+/// deep" — which silently becomes wrong the moment the cap rises: a category deeper
+/// than the bound would stop walking before reaching the ancestor that actually
+/// carries the icon, and quietly render the default instead.
 func effectiveIcon(_ row: CategoryRow, _ byId: [String: CategoryRow]) -> String? {
     var cur: CategoryRow? = row
     var hops = 0
-    while let c = cur, hops < 4 {
+    while let c = cur, hops < ancestorWalkLimit {
         if let icon = c.icon, !icon.isEmpty { return icon }
         cur = c.parentId.flatMap { byId[$0] }; hops += 1
     }
@@ -38,10 +53,11 @@ func effectiveIcon(_ row: CategoryRow, _ byId: [String: CategoryRow]) -> String?
 }
 
 /// Effective color hex: own → nearest ancestor's → `CategoryPalette.defaultHex`.
+/// Same derived bound as `effectiveIcon` — see the note there.
 func effectiveColor(_ row: CategoryRow, _ byId: [String: CategoryRow]) -> String {
     var cur: CategoryRow? = row
     var hops = 0
-    while let c = cur, hops < 4 {
+    while let c = cur, hops < ancestorWalkLimit {
         if let color = c.color, !color.isEmpty { return color }
         cur = c.parentId.flatMap { byId[$0] }; hops += 1
     }
@@ -80,12 +96,13 @@ func flattenCategories(_ forest: [CategoryTreeNode], expanded: Set<String>, sear
 /// `selected` (excluding itself). Used to disable a category during multi-select
 /// merge when one of its ancestors or descendants is already selected, so the
 /// selected set stays mutually unrelated (no merging a category with its own
-/// parent/child). Bounded walk (≤10 hops; the tree is ≤3 deep).
+/// parent/child). Bounded walk, derived from the depth cap for the same reason as
+/// `effectiveIcon`.
 func mergeSelectionDisabled(_ candidate: String, selected: Set<String>, byId: [String: CategoryRow]) -> Bool {
     func isAncestor(_ a: String, of b: String) -> Bool {
         var cur = byId[b]?.parentId
         var hops = 0
-        while let c = cur, hops < 10 {
+        while let c = cur, hops < ancestorWalkLimit {
             if c == a { return true }
             cur = byId[c]?.parentId
             hops += 1

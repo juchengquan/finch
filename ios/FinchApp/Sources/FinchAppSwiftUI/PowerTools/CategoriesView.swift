@@ -15,7 +15,7 @@ private struct MergePair: Identifiable {
     var id: String { a.id + "|" + b.id }
 }
 
-/// Categories admin — a 3-level tree (inline expand/collapse) with per-category
+/// Categories admin — a nested tree (inline expand/collapse) with per-category
 /// icon + color, search, create-child, edit, delete (children promote up a
 /// level), and **drag to reparent + reorder** (only in Reorder mode, entered via
 /// ⋯ → Reorder): a drop places the category before or after the target within the
@@ -398,7 +398,7 @@ struct CategoriesView: View {
     }
 
     /// Apply one or more category moves (parentId + sortOrder) through the
-    /// chokepoint, in order. The engine rejects self/descendant/depth>3 with a
+    /// chokepoint, in order. The engine rejects self/descendant/too-deep with a
     /// localized error; on the first throw we stop and surface it.
     /// Confirm a copy: these actions dedup against the target, so a bare "done"
     /// would look identical whether 12 rows landed or none did. Also the ONLY
@@ -512,7 +512,7 @@ struct CategoryEditSheet: View {
     }
 
     /// Same-kind categories eligible as a parent: depth < 2 (so the child stays
-    /// within the 3-level cap) and, when editing, excluding the category itself
+    /// within the depth cap) and, when editing, excluding the category itself
     /// and its descendants. Tree-ordered for an indented menu.
     private var parentOptions: [FlatCategory] {
         let all = store.pickableCategories.filter { ($0.kind ?? "expense") == kindSel }

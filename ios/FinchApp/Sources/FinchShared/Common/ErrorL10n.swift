@@ -16,7 +16,9 @@ enum ErrorL10n {
         "error.budget.invalidContribution": "无效的贡献金额",
         "error.budget.timeFormat": "startTime 必须为 HH:mm 格式",
         "error.budget.unknownFreq": "未知频率 \"{freq}\"",
-        "error.category.depthCap": "类别最多嵌套三层",
+        // No number in the text — the limit is `Categories.maxDepth`, and naming it
+        // here would mean re-translating this string every time it changes.
+        "error.category.depthCap": "类别无法再向下嵌套",
         "error.category.selfParent": "类别不能成为自己的父级",
         "error.category.underDescendant": "类别不能移动到自己的后代之下",
         "error.fx.dateFormat": "日期必须为 YYYY-MM-DD 格式",
