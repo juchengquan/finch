@@ -1014,8 +1014,17 @@ note in §4b and §5 was written against.
 - [ ] Sidebar visibility persists the user's preference and is not overwritten by
       iPadOS auto-collapsing on rotation to portrait (`SplitShellVC` only records the
       preference while landscape — check it survives a rotate round-trip).
-- [ ] Switching tabs across the three-column ↔ two-column boundary rebuilds cleanly
-      (Insights and Settings are two-column; the rest are three).
+      *Automation attempted and withdrawn.* Two things make it non-hermetic: device
+      ORIENTATION is simulator state that survives `app.terminate()` and leaks into the
+      next test (it broke every test that ran after it until `setUp` started normalising
+      it), and `storedCollapsed` is a persisted preference that `-resetStore` does not
+      clear — so the test's own starting state depends on what ran before. Doable, but it
+      wants a way to reset that preference first.
+- [x] **AUTOMATED** — Switching tabs across the three-column ↔ two-column boundary
+      rebuilds cleanly (Insights and Settings are two-column; the rest are three).
+      `testSwitchingAcrossTheColumnCountBoundaryRebuildsCleanly` goes Accounts → Insights
+      → Settings → Accounts and requires BOTH columns back. The risk was never a crash;
+      it is returning to a tab that quietly lost its list column.
 
 **3b — native tab roots + columns.** Each converted tab is native at BOTH widths, from
 one view controller. **All five are done**: Ledger (#648), Budgets (#658), Scheduled
@@ -1040,10 +1049,16 @@ Per converted tab, on **both** an iPhone and an iPad:
       read as though a FAB were required on both, which cost a false failure.
 - [~] **PARTLY AUTOMATED** — Compact: tapping a row PUSHES its detail. Regular: tapping
       a row fills the DETAIL COLUMN and the row stays highlighted (no disclosure chevron
-      in that mode). Covered for Accounts and Budgets by
-      `SplitMechanicsUITests.testSelectionFillsTheDetailColumnForEveryConvertedTab` plus
-      the existing `SplitSelectionUITests` and `NavigationUITests` drills; Scheduled,
-      Ledger and Activity columns are still a hand-check, as is the chevron.
+      in that mode). **Regular width is now covered for all five converted tabs** —
+      Accounts, Budgets, Scheduled and Ledger in
+      `testSelectionFillsTheDetailColumnForEveryConvertedTab`, and Activity in its own
+      test (its rows carry seeded amounts rather than a stable name, so it takes the
+      first row instead of matching a label).
+      Still manual: the COMPACT push for Scheduled, and the chevron. The Scheduled one
+      was attempted and withdrawn — the tab opens on the CALENDAR, so its list sits below
+      the fold behind the tab bar and a tap lands on the tab bar instead; driving it
+      needs a mode switch plus a scroll-into-view, and it was not worth blocking the rest
+      of this work. Worth finishing, with that as the head start.
 - [x] **AUTOMATED, and it passes** — The highlight survives a data change;
       `dataSource.apply` clears the selection, so it has to be re-asserted.
       `SplitMechanicsUITests.testTheSelectionSurvivesADataChange` selects a row, forces a
@@ -1066,8 +1081,20 @@ Per converted tab, on **both** an iPhone and an iPad:
 - [ ] Section spacing matches the SwiftUI screen (`Metrics.sectionSpacing`, 12pt — UIKit's
       insetGrouped default is ~36pt, and this was wrong on first conversion).
 - [ ] Each row reads as ONE VoiceOver element, not one per label.
-- [ ] Deep link into the tab (`-initialTab`, or a `budget:` / `tx:` target) selects or
-      pushes the right thing.
+- [~] **AUTOMATED at compact width — AND IT FOUND A REAL iPAD GAP.**
+      `testDeepLinkTargetFocusesTheRecord` drives `route(to:)`, the path a widget tap,
+      Spotlight result or App Intent takes. It needed a new `-routeTo <kind>:<id>` launch
+      flag to be reachable at all — `-initialTab` only picks a tab and the `finch://`
+      scheme handles `add` and nothing else — so this was UNVERIFIABLE rather than merely
+      unverified. It uses `account:everyday` rather than the `budget:` the line used to
+      name, because account ids are fixed in the demo seed while budget and transaction
+      ids are generated; same code path, `route(to:)` switches on the prefix.
+- [ ] ⚠️ **REGULAR WIDTH DOES NOT CONSUME A DEEP-LINK TARGET.** On an iPad the link
+      selects the Accounts tab and stops: the detail column stays on "Select an account",
+      confirmed by screenshot, while the identical link PUSHES the account on a phone.
+      So a widget or Spotlight tap on iPad drops you on a list with nothing selected.
+      Not introduced by the tests — they are what surfaced it. The compact test skips at
+      regular width rather than failing, so this is tracked here and not hidden as red.
 
 ## 5. Open questions
 
