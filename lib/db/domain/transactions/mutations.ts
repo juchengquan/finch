@@ -130,6 +130,14 @@ export const handlers = {
     const statementBalance = Number(args.statementBalance);
     if (!Number.isFinite(statementBalance)) throw new I18nError('error.reconcile.statementBalance', {}, 'Statement balance is required');
     const statementDate = args.statementDate ? str(args.statementDate) : new Date().toISOString().slice(0, 10);
+    // The moment the statement was cut. '00:00' is midnight, which is what a
+    // date-only checkpoint already means — normalised away so the stored value
+    // stays byte-identical for everyone who never sets a time.
+    const rawTime = args.statementTime ? str(args.statementTime) : '';
+    const statementTime = rawTime && rawTime !== '00:00' ? rawTime : null;
+    if (statementTime && !/^\d{2}:\d{2}$/.test(statementTime)) {
+      throw new I18nError('error.reconcile.timeFormat', {}, 'statementTime must be HH:mm');
+    }
     const doPostAdjustment = args.postAdjustment === true;
 
     if (doPostAdjustment) {
@@ -151,6 +159,9 @@ export const handlers = {
           accountId,
           delta,
           date: statementDate,
+          // Dated to the statement, so timed to it too — without a time it sinks to
+          // the bottom of that day's feed, below the transactions it accounts for.
+          time: statementTime,
           source: 'reconcile',
         });
         if (adjResult) {
@@ -168,7 +179,10 @@ export const handlers = {
               last_reconciled_balance = ?,
               updated_at = datetime('now')
         WHERE id = ?`,
-      [statementDate, statementBalance, accountId],
+      // The column is `_at`, a moment: it carries the time when there is one. Every
+      // reader already slices to 10 chars, so a date-only checkpoint is unchanged
+      // and a timed one still reads as the same day wherever it is read as a day.
+      [statementTime ? `${statementDate} ${statementTime}` : statementDate, statementBalance, accountId],
     );
     return;
   },
