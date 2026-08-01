@@ -62,6 +62,11 @@ struct AddTransactionSheet: View {
     @State private var pickedFileURL: URL?
     @State private var prefillApplied = false             // duplicate-prefill runs once
     @State private var splitAlloc = SplitAllocation(total: 0)
+    /// Split tender: the same purchase paid from several accounts. Same
+    /// `SplitAllocation` model as `splitAlloc`, one axis over — rides
+    /// `SearchablePickerRow`'s `splitting:` parameter, the account-picker twin of
+    /// `CategoryPickerRow`'s.
+    @State private var accountAlloc = SplitAllocation(total: 0)
     @State private var refundedTxId: String? = nil
     @State private var showingRefundPicker = false
     @State private var targetBalance = ""   // adjust-balance: the account's new balance
@@ -214,7 +219,9 @@ struct AddTransactionSheet: View {
             .onChange(of: amount) { _, newValue in
                 // Re-divide rather than discard: this used to null the split outright,
                 // so correcting a typo in the amount silently threw the split away.
-                splitAlloc.setTotal(abs(DecimalInput.parse(newValue) ?? 0))
+                let total = abs(DecimalInput.parse(newValue) ?? 0)
+                splitAlloc.setTotal(total)
+                accountAlloc.setTotal(total)
             }
             .sheet(isPresented: $showingRefundPicker) {
                 RefundSourcePickerView { refundedTxId = $0 }
@@ -294,7 +301,9 @@ struct AddTransactionSheet: View {
     @ViewBuilder private func expenseIncomeFields(for k: Kind) -> some View {
         Section {
             SearchablePickerRow(title: "Account", glyph: .account,
-                accounts: accounts, selection: $accountId)
+                accounts: accounts, selection: $accountId,
+                splitting: $accountAlloc,
+                currency: currencyCode.isEmpty ? currency(of: accountId) : currencyCode)
                 // A UI test reads this row to prove the FAB seeded the sheet. Without an
                 // identifier the query also matches the "Accounts" tab-bar button and the
                 // budget detail's own Account row sitting behind the sheet.
@@ -305,7 +314,7 @@ struct AddTransactionSheet: View {
                 // nil category leg — so the picker offers it rather than making the
                 // field impossible to clear once set.
                 noneLabel: String(localized: "Uncategorized"),
-                splitSummary: splitSummaryText(categoryNames: splitAlloc.payload.map { store.categoryName($0.categoryId) ?? "Uncategorized" }),
+                splitSummary: splitSummaryText(names: splitAlloc.payload.map { store.categoryName($0.id) ?? "Uncategorized" }),
                 splitting: k == .refund ? nil : $splitAlloc,
                 currency: currencyCode.isEmpty ? currency(of: accountId) : currencyCode)
                 .accessibilityIdentifier("addtx.category")
@@ -620,12 +629,22 @@ struct AddTransactionSheet: View {
                     if let refundedTxId { args["refundedTransactionId"] = .string(refundedTxId) }
                 }
                 for (k, v) in Self.scheduledLinkArgs(prefill: prefill, posts: postsScheduledOccurrence) { args[k] = v }
+                // Split tender: several accounts paid for this one purchase. `accountId`
+                // is still sent above — the engine ignores it once `accounts` carries 2+
+                // shares, and keeping it leaves the duplicate check and the currency
+                // lookup untouched. One funded row is not a split (a plain single-account
+                // save must be byte-identical to today's), so this only fires at 2+,
+                // exactly like the category split below.
+                if accountAlloc.payload.count >= 2 {
+                    args["accounts"] = .array(accountAlloc.payload.map { .object([
+                        "accountId": .string($0.id ?? ""), "amount": .double($0.amount)]) })
+                }
                 let eid = try store.applyReturningId(.addTransaction, Args(args))
                 // Two funded legs or more is a split; anything less is the plain
                 // single category already carried by `category` in the args above.
                 if let eid, splitAlloc.payload.count >= 2 {
                     let payload: [JSONValue] = splitAlloc.payload.map { .object([
-                        "categoryId": $0.categoryId.map(JSONValue.string) ?? .null, "amount": .double($0.amount)]) }
+                        "categoryId": $0.id.map(JSONValue.string) ?? .null, "amount": .double($0.amount)]) }
                     try store.apply(.setTransactionSplits, Args(["id": .string(eid), "splits": .array(payload)]))
                 }
                 if let eid, let photo = pickedPhoto {

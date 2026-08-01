@@ -1,11 +1,12 @@
 import SwiftUI
 import FinchCore
 
-/// The Category row's value when a transaction is split: the split's category names
-/// joined for display, or nil for a single category (fewer than 2 names).
-/// E.g. ["Groceries", "Household"] → "Groceries, Household".
-func splitSummaryText(categoryNames: [String]) -> String? {
-    categoryNames.count >= 2 ? categoryNames.joined(separator: ", ") : nil
+/// A split row's value when 2+ legs are ticked: their names joined for display, or
+/// nil for a single leg (fewer than 2 names). Shared by the category picker AND the
+/// account picker's split summary — axis-agnostic, so it lives here rather than
+/// being copied. E.g. ["Groceries", "Household"] → "Groceries, Household".
+func splitSummaryText(names: [String]) -> String? {
+    names.count >= 2 ? names.joined(separator: ", ") : nil
 }
 
 /// The Category field as a tap-to-open row + bottom sheet that renders the
@@ -141,7 +142,7 @@ struct CategoryPickerSheet: View {
                 } else {
                     // Collapse to the largest leg — the same category the row was
                     // already displaying, per the projection's dominant-leg rule.
-                    if let dominant = splitting.wrappedValue.dominantCategoryId { staged = dominant }
+                    if let dominant = splitting.wrappedValue.dominantId { staged = dominant }
                     splitting.wrappedValue = SplitAllocation(total: splitting.wrappedValue.total)
                 }
                 amountText.removeAll()
@@ -153,7 +154,7 @@ struct CategoryPickerSheet: View {
                         // Splitting still names a single category — the dominant leg —
                         // so the transaction's own category field stays meaningful and
                         // agrees with what the projection will derive from the legs.
-                        selection = splitOn ? (splitting?.wrappedValue.dominantCategoryId ?? staged) : staged
+                        selection = splitOn ? (splitting?.wrappedValue.dominantId ?? staged) : staged
                         dismiss()
                     } label: { Image(systemName: "checkmark") }
                         .accessibilityLabel("Confirm")
