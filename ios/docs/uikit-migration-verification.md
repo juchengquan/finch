@@ -157,10 +157,41 @@ per-converted-tab × two widths, so the real count is larger than the list looks
       it keeps `AdaptiveShell` and the SwiftUI screens alive in the iOS target, which is
       what blocks §4's second item.
 
-Most of §6 is mechanical enough to automate rather than hand-walk — scroll, push-vs-
-column, highlight-survives-a-reload and section spacing are all things XCUITest and
-`describe-all` can assert, and `SplitSelectionUITests` already does the selection half.
-Worth doing that before walking 11 × 5 checks by hand.
+**Automated 2026-08-01** — `TabRootMechanicsUITests.swift` takes the mechanical half:
+scroll, FAB-opens-the-sheet, taps-pass-beside-the-FAB, selection-fills-the-column,
+highlight-survives-a-reload, ledger-switch-clears, and the iPad's toolbar `+`. Seven
+tests, split by width so each destination runs only what applies to it and skips the
+rest — iPhone runs three, iPad four.
+
+Every one of them FAILED first for a reason that was not the app: the iPad has no FAB by
+design, Ledger is a sidebar section there rather than a toolbar button, `Make active
+ledger` is a cell rather than a button, `isSelected` on a loose label match reads a
+StaticText, sidebar entries counted as list rows, and section names recur as content so
+a plain label match taps the heading in the detail column instead of navigating. **None
+of the four original suspicions turned out to be a real defect.** Worth remembering
+before filing the next one — and worth reading the comments in that file before
+extending it.
+
+**CI runs the iPhone half only.** The workflow tests one simulator destination, an
+iPhone, so `SplitMechanicsUITests` — the four iPad checks — SKIPS on every CI run. It is
+green there because it did nothing, not because the iPad is guarded. Until an iPad
+destination is added to `ci.yml`, run those locally before touching the split shell:
+
+```bash
+xcodebuild test -project FinchApp.xcodeproj -scheme FinchApp \
+  -destination "id=<an iPad sim udid>" \
+  -only-testing:FinchAppUITests/SplitMechanicsUITests
+```
+
+Adding an iPad destination is the obvious next step; note it roughly doubles the UI-test
+time, and `ci.yml` already carries a retry because these fail spuriously about 1 run in
+12.
+
+What stays MANUAL, deliberately: section spacing against the SwiftUI screen (a visual
+comparison, and `Metrics.sectionSpacing` is already asserted where it matters), "each
+row reads as ONE VoiceOver element" (§3 swept it), deleting the selected row (destructive
+and needs its own fixture), and the two 3a container items, which are rotation and
+window-resize behaviour.
 
 ---
 
@@ -992,20 +1023,45 @@ pushed feed was already native from Phase 2).
 
 Per converted tab, on **both** an iPhone and an iPad:
 
-- [ ] The list scrolls. Not a formality: `TabChromeVC` swallowed every touch on its
-      first outing and nothing underneath it moved at all. Swipe starting ON the
-      content, and confirm the screenshot actually changes.
-- [ ] The FAB is present on the tab root, opens the Add sheet, and does not block
-      taps or scrolling anywhere else.
-- [ ] Compact: tapping a row PUSHES its detail. Regular: tapping a row fills the
-      DETAIL COLUMN and the row stays highlighted (no disclosure chevron in that mode).
-- [ ] The highlight survives a data change — `dataSource.apply` clears the selection,
-      so it has to be re-asserted.
+- [x] **AUTOMATED** — The list scrolls. Not a formality: `TabChromeVC` swallowed every
+      touch on its first outing and nothing underneath it moved at all.
+      `TabRootMechanicsUITests.testConvertedTabRootsScroll` asserts a named row actually
+      MOVES, across Accounts/Budgets/Scheduled. *Exercises at compact width only:*
+      XCUITest exposes on-screen rows, so "is anything below the fold" cannot be answered
+      on the taller iPad columns, and the test skips there rather than passing having
+      asserted nothing. iPad scroll is still a hand-check.
+- [x] **AUTOMATED** — The FAB is present on the tab root, opens the Add sheet, and does
+      not block taps or scrolling anywhere else. `testFABOpensTheAddSheet` and
+      `testTapsPassThroughBesideTheFAB`; presence on every root was already
+      `TabChromeUITests`. **The iPad has NO FAB — deliberately**, add is a toolbar `+`,
+      and it is the same in the hosted build, so those two skip at regular width and
+      `testIPadOffersAddInTheToolbar` covers the iPad instead. The line above used to
+      read as though a FAB were required on both, which cost a false failure.
+- [~] **PARTLY AUTOMATED** — Compact: tapping a row PUSHES its detail. Regular: tapping
+      a row fills the DETAIL COLUMN and the row stays highlighted (no disclosure chevron
+      in that mode). Covered for Accounts and Budgets by
+      `SplitMechanicsUITests.testSelectionFillsTheDetailColumnForEveryConvertedTab` plus
+      the existing `SplitSelectionUITests` and `NavigationUITests` drills; Scheduled,
+      Ledger and Activity columns are still a hand-check, as is the chevron.
+- [x] **AUTOMATED, and it passes** — The highlight survives a data change;
+      `dataSource.apply` clears the selection, so it has to be re-asserted.
+      `SplitMechanicsUITests.testTheSelectionSurvivesADataChange` selects a row, forces a
+      snapshot via privacy mode, and checks both the detail column and the row highlight.
+      *Read the query before trusting a failure here:* asserting `isSelected` through a
+      loose label match reports a lost highlight on a perfectly good screen, because the
+      match lands on a `StaticText` inside the cell and a StaticText is never selected.
+      That is why the suite has `rowElement(labelled:)` — use it for any state assertion.
 - [ ] Deleting the selected row clears the detail column back to its placeholder.
       *(Known issue: a stale nav-bar title lingers above the placeholder. Shared
       `SplitDetailColumn` behaviour, so it affects every tab equally — not specific to
       the converted ones.)*
-- [ ] A ledger switch clears the per-tab selection.
+- [x] **AUTOMATED, and it passes** — A ledger switch clears the per-tab selection.
+      `SplitMechanicsUITests.testALedgerSwitchClearsTheSelection`. Two traps are baked
+      into that test as comments: tapping a ledger row only OPENS it (making it current
+      is a separate "Make active ledger" row, and it is a CELL, not a button), and the
+      test confirms the Accounts list really switched ledger BEFORE asserting anything
+      about the selection — an earlier version passed its first assertion while still
+      sitting in the Ledger section it had never left.
 - [ ] Section spacing matches the SwiftUI screen (`Metrics.sectionSpacing`, 12pt — UIKit's
       insetGrouped default is ~36pt, and this was wrong on first conversion).
 - [ ] Each row reads as ONE VoiceOver element, not one per label.
