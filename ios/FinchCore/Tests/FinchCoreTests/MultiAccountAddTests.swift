@@ -64,4 +64,39 @@ final class MultiAccountAddTests: XCTestCase {
         XCTAssertEqual(card, -60)
         XCTAssertEqual(cash, -40)
     }
+
+    /// Splitting the CATEGORY of a purchase that was paid from several ACCOUNTS would
+    /// rebuild it from a single account leg and silently drop the rest. Refuse it.
+    func test_setTransactionSplits_onMultiAccountEntry_isRefusedAndKeepsBothLegs() throws {
+        let q = try seedTwoAccounts()
+        try q.write { db in
+            try db.execute(sql: """
+                INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at)
+                VALUES ('c2','l1',NULL,'Household','expense',1,datetime('now'),datetime('now'))
+                """)
+        }
+        let eid = try Apply.applyReturningId(dbQueue: q, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "amount": .double(-100),
+            "merchant": .string("Market"), "categoryId": .string("c1"),
+            "date": .string("2026-06-01"),
+            "accounts": .array([
+                .object(["accountId": .string("a2"), "amount": .double(-60)]),
+                .object(["accountId": .string("a1"), "amount": .double(-40)]),
+            ])]))!
+
+        XCTAssertThrowsError(try Apply.apply(dbQueue: q, action: "setTransactionSplits", args: Args([
+            "id": .string(eid),
+            "splits": .array([
+                .object(["categoryId": .string("c1"), "amount": .double(60)]),
+                .object(["categoryId": .string("c2"), "amount": .double(40)]),
+            ])])))
+
+        // The refusal must leave the entry exactly as it was — both payments intact.
+        let (legs, total) = try q.read { db in
+            (try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM postings WHERE entry_id = ? AND account_id IS NOT NULL", arguments: [eid]) ?? 0,
+             try Double.fetchOne(db, sql: "SELECT ROUND(SUM(amount_base), 2) FROM postings WHERE entry_id = ? AND account_id IS NOT NULL", arguments: [eid]) ?? 0)
+        }
+        XCTAssertEqual(legs, 2, "both payment accounts must survive the refusal")
+        XCTAssertEqual(total, -100, "…carrying the full amount")
+    }
 }

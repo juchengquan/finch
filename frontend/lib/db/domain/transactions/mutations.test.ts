@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 import { applyMutation } from '@/lib/db/mutate';
-import { seededAndAudited } from '@/lib/db/core/test-utils';
+import { seededAndAudited, seededDb } from '@/lib/db/core/test-utils';
 import type { Exec } from '@/lib/db/core/repo';
 import { convertToBase } from '@/lib/db/queries/rates';
 import { recomputeAccount, listAccounts } from '@/lib/db/queries/accounts';
@@ -593,6 +593,61 @@ test('setTransactionSplits validates sum + min-2-rows; categorySpend uses splits
   // (categorySpend returns signed amounts — negative for expenses).
   const restored = await categorySpend(exec, 'personal');
   expect(restored[originalCat]).toBeDefined();
+});
+
+// Splitting the CATEGORY of a purchase paid from several ACCOUNTS would rebuild
+// the entry from a single account leg (LIMIT 1) and silently drop the rest.
+// NOTE: postEntry's validateShape on the web still pins expense/income/refund
+// entries to exactly one account leg (unlike the iOS port, which Task 1 of the
+// multi-account-transactions plan relaxed) — so there is no web write path that
+// produces this shape today. The fixture below is seeded directly at the SQL
+// layer (bypassing postEntry) to exercise the setTransactionSplits guard in
+// isolation; hence seededDb (no end-of-test auditLedger hook), matching the
+// documented escape hatch for intentionally half-valid fixtures.
+test('setTransactionSplits on a multi-account entry is refused and keeps both legs', async () => {
+  const { exec } = await seededDb();
+  const [chk] = await exec("SELECT currency FROM accounts WHERE id = 'chk'");
+  const [sav] = await exec("SELECT currency FROM accounts WHERE id = 'sav'");
+  const entryId = 'e-multi-acct-test';
+  await exec(
+    `INSERT INTO entries (id,ledger_id,date,description,kind,status,confirmed_at,sealed,created_at,updated_at)
+     VALUES (?,'personal','2026-06-01','Market','expense','confirmed',datetime('now'),0,datetime('now'),datetime('now'))`,
+    [entryId],
+  );
+  await exec(
+    `INSERT INTO postings (id,entry_id,account_id,category_id,amount,currency,amount_base,exchange_rate,sort_order)
+     VALUES (?,?,?,NULL,-60,?,-60,1,0)`,
+    ['p-multi-1', entryId, 'chk', String(chk.currency)],
+  );
+  await exec(
+    `INSERT INTO postings (id,entry_id,account_id,category_id,amount,currency,amount_base,exchange_rate,sort_order)
+     VALUES (?,?,?,NULL,-40,?,-40,1,1)`,
+    ['p-multi-2', entryId, 'sav', String(sav.currency)],
+  );
+  await exec(
+    `INSERT INTO postings (id,entry_id,account_id,category_id,amount,currency,amount_base,exchange_rate,sort_order)
+     VALUES (?,?,NULL,'food',100,'USD',100,1,2)`,
+    ['p-multi-cat', entryId],
+  );
+  await exec('UPDATE entries SET sealed = 1 WHERE id = ?', [entryId]); // fires tr_entry_seal — confirms the fixture balances
+
+  await expect(
+    applyMutation(exec, 'setTransactionSplits', {
+      id: entryId,
+      splits: [
+        { categoryId: 'food', amount: 60 },
+        { categoryId: 'trans', amount: 40 },
+      ],
+    }),
+  ).rejects.toThrow(/single category/i);
+
+  const acctLegs = await exec(
+    'SELECT amount_base FROM postings WHERE entry_id = ? AND account_id IS NOT NULL',
+    [entryId],
+  );
+  expect(acctLegs.length).toBe(2);
+  const total = acctLegs.reduce((s, r) => s + Number(r.amount_base), 0);
+  expect(total).toBeCloseTo(-100, 2);
 });
 
 test('bulkRecategorize moves N rows in one statement; categorySpend shifts accordingly', async () => {
