@@ -48,6 +48,9 @@ final class CategoriesVC: UIViewController {
     /// already collapsed or childless, so the restore never expands something the
     /// user had shut.
     private var collapsedForDrag: String?
+    /// Where the current drag was lifted, horizontally. Nesting is gated on how far
+    /// right of this the finger has travelled — see `CategoryDropZone.allowsNesting`.
+    private var dragOriginX: CGFloat?
 
     private enum SectionID: Hashable { case picker, topLevel, rows, empty }
 
@@ -667,6 +670,7 @@ extension CategoriesVC: UICollectionViewDragDelegate {
               let id = dataSource.itemIdentifier(for: indexPath),
               flatByID[id] != nil else { return [] }
         draggingId = id
+        dragOriginX = session.location(in: cv).x
         let item = UIDragItem(itemProvider: NSItemProvider(object: id as NSString))
         item.localObject = id      // read back synchronously on drop
         return [item]
@@ -696,6 +700,7 @@ extension CategoriesVC: UICollectionViewDragDelegate {
 
     func collectionView(_ cv: UICollectionView, dragSessionDidEnd session: UIDragSession) {
         draggingId = nil
+        dragOriginX = nil
         // Restore the expansion, whether the drop landed, missed, or the engine
         // rejected it — so you can see the group arrived intact, and a refused move
         // gives you back exactly the tree you started with.
@@ -757,27 +762,14 @@ extension CategoriesVC: UICollectionViewDropDelegate {
         guard let indexPath = collectionView.indexPathForItem(at: point),
               let id = dataSource.itemIdentifier(for: indexPath) else { return nil }
         let frame = collectionView.cellForItem(at: indexPath)?.frame ?? .zero
+        // Same level is the default everywhere — vertical movement alone can only
+        // ever reposition. Nesting needs the second axis: carry the row right past
+        // `nestingDragThreshold` and the target highlights to say it will go inside.
+        let dragDX = dragOriginX.map { point.x - $0 } ?? 0
         return (id, CategoryDropZone.at(pointY: point.y,
                                         cellMinY: frame.minY,
                                         cellHeight: frame.height,
-                                        allowsNesting: allowsNesting(into: id)))
-    }
-
-    /// Whether dropping onto `id` may nest inside it.
-    ///
-    /// Only when its children aren't already on screen. An EXPANDED parent gives no
-    /// nest zone: every position inside it is reachable by dropping between the
-    /// children you can see, so a nest zone would be a second, vaguer route to the
-    /// same result while taking half the row away from the precise one — which is
-    /// what made same-level reordering so hard to hit. A collapsed parent or a leaf
-    /// is the reverse: there are no visible children to drop among, so nesting is
-    /// the only way in and it keeps the middle half.
-    ///
-    /// Search is irrelevant here — it force-expands the tree, and dragging during
-    /// search is refused outright (`itemsForBeginning`).
-    private func allowsNesting(into id: String) -> Bool {
-        guard let item = flatByID[id] else { return true }
-        return !(item.hasChildren && expanded.contains(id))
+                                        allowsNesting: CategoryDropZone.allowsNesting(dragDX: dragDX)))
     }
 
     func collectionView(_ cv: UICollectionView, performDropWith coordinator: UICollectionViewDropCoordinator) {

@@ -284,10 +284,17 @@ struct CategoriesView: View {
                 guard let src = items.first else { return false }
                 // Same zone math as the UIKit screen, from the same enum — these were
                 // two hand-copied sets of thresholds until the shared one existed.
-                // `allowsNesting` is false for an expanded parent: its children are on
-                // screen, so every position inside it is already reachable by dropping
-                // between them, and a nest zone would only take half the row away from
-                // the precise route.
+                //
+                // DIVERGENCE, and not an oversight: iPhone gates nesting on a sideways
+                // drag (`CategoryDropZone.allowsNesting(dragDX:)`), which needs the
+                // drag's translation from its lift point. SwiftUI does not expose it —
+                // `.dropDestination` reports a location but no translation, and
+                // `.onDrag` has no movement callback — so there is nothing here to
+                // measure. This keeps the earlier rule instead: no nest zone on an
+                // expanded parent, whose children are visible and can be dropped
+                // between directly. Weaker than the phone's, and the reason it is
+                // acceptable is that iPad/macOS drag with a pointer, where a 14pt
+                // zone is not the problem it is under a thumb.
                 let h = rowHeights[c.id] ?? 44
                 let zone = CategoryDropZone.at(
                     pointY: location.y, cellMinY: 0, cellHeight: h,
