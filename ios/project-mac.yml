@@ -1,0 +1,75 @@
+name: FinchMac
+
+# The macOS app, in its OWN project — deliberately NOT a target in FinchApp.xcodeproj.
+#
+# WHY IT IS SPLIT OUT. `xcodebuild -exportLocalizations` (the i18n "extracted keys are
+# current" guard, which runs on every pull request) builds EVERY target in whichever
+# project it is pointed at, regardless of `-scheme`, `-target` or `-destination` — all
+# three were tried. While FinchMac lived in FinchApp.xcodeproj, that meant a macOS-only
+# compile error failed the i18n guard on an iOS pull request (exit 64, no xliff), and no
+# amount of skipping the macOS build step could change it — only the error message.
+#
+# Separating the projects is what actually decouples the platforms: the iOS export can
+# no longer see FinchMac, so macOS breaks stay out of iOS PRs.
+#
+# COST OF THE SPLIT, so it is not a surprise:
+#   - `xcodegen generate` alone no longer regenerates the Mac project. Generate both:
+#       xcodegen generate --spec project.yml,project-mac.yml
+#     (CI and ci-local.sh already do this.)
+#   - The two projects share the SAME source directories, so a change to FinchShared or
+#     FinchAppSwiftUI still affects both. The split isolates the BUILD, not the code.
+#   - Adding a file under FinchApp/Sources/ needs a regen of both projects, not one.
+#
+# Everything below is the FinchMac target exactly as it was in project.yml.
+
+options:
+  bundleIdPrefix: com.juchengquan
+  deploymentTarget:
+    macOS: "14.0"
+
+packages:
+  FinchCore:
+    path: .                      # the local SwiftPM package (Package.swift)
+
+targets:
+  # Shares the SAME SwiftUI sources as the iOS app; the iOS-only modifiers are shimmed
+  # in Common/PlatformCompat.swift (#if os(macOS)). As the UIKit migration converts a
+  # screen, iOS drops the SwiftUI file via `excludes:` in project.yml while FinchMac
+  # keeps it — so this target is the only thing compiling a growing set of them, plus
+  # FinchAppSwiftUI/FinchApp.swift (the SwiftUI `@main`, which iOS excludes outright).
+  FinchMac:
+    type: application
+    platform: macOS
+    sources:
+      - path: FinchApp/Sources/FinchShared
+      - path: FinchApp/Sources/FinchAppSwiftUI
+      - path: Shared   # Foundation-only watch wire types; unguarded references (e.g. QuickAddCatalogBuilder) must resolve on macOS too
+    dependencies:
+      - package: FinchCore
+        product: FinchCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.juchengquan.finch.mac
+        PRODUCT_NAME: finch
+        GENERATE_INFOPLIST_FILE: YES
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        CODE_SIGN_ENTITLEMENTS: FinchApp/FinchMac.entitlements
+        # Ad-hoc "Sign to Run Locally" — no Development Team needed, so ⌘R / a
+        # local build produces a runnable signed app (Apple Silicon requires at
+        # least an ad-hoc signature to launch). App Sandbox signs fine ad-hoc; the
+        # team-only App Group was dropped from FinchMac.entitlements. CI builds this
+        # with CODE_SIGNING_ALLOWED=NO, so the signing config is exercised locally
+        # only. For real distribution, set a Development Team + restore the App Group.
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        # Kept even though the iOS project drives the catalog: without it a macOS-only
+        # string would never be extracted, and this target owns FinchApp.swift.
+        SWIFT_EMIT_LOC_STRINGS: "YES"
+
+schemes:
+  FinchMac:
+    build:
+      targets:
+        FinchMac: all
