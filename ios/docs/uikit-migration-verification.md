@@ -821,8 +821,23 @@ VoiceOver on.
       still operate them is not something `idb` can answer; it needs Accessibility
       Inspector or a real VoiceOver pass. If it is a genuine gap, the fix belongs on the
       SwiftUI `Picker`s, where both platforms get it.
-- [ ] **Saved-search chips: not audited.** The chip row only exists once a search has
-      been saved, and the demo dataset has none. Save one, then re-check.
+- [x] **Saved-search chips: audited 2026-08-01 — accessible, and §3's suspicion was
+      wrong.** Reaching them needs a filter applied (the row appears on
+      `savedSearches.isEmpty == false || filter.isActive`) and then a search saved. Both
+      the named chip and `＋ Save` expose as **Buttons with their text as the label**, in
+      the converted feed *and* the SwiftUI one — `Button 'Work trips'`,
+      `Button '＋ Save'`. Nothing is hidden from the tree.
+- [x] **FIXED while checking: a saved search could not be deleted with VoiceOver.**
+      Delete was `.contextMenu` only — long-press, which VoiceOver does not surface — so
+      a VoiceOver user could create saved searches and never remove one. **Pre-existing
+      and present in BOTH implementations**, so it also affected the Mac; not a migration
+      defect. An `.accessibilityAction(named: "Delete")` is now on the chip in both
+      places. Verified: the chip reports `custom_actions=['Delete']`, and `＋ Save`
+      correctly reports none.
+
+      Note the two chip rows are SEPARATE implementations — `SavedSearchChips` is private
+      to `ActivityFeedVC`, and `ActivityTab` has its own. Anything done to one has to be
+      done to the other; there is no shared component to fix once.
 
 ## 4. Before the flag comes off
 
