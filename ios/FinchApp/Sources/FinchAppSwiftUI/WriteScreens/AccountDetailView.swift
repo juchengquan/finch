@@ -266,7 +266,7 @@ struct AccountDetailView: View {
                             // No force-unwrap: a month section is never empty in practice,
                             // but `first!` at render time is a hard crash if it ever is.
                             Text(store.displayMoneyBase(MonthGrouping.net(section.txns))
-                                 + (section.txns.first.map { "  ·  " + store.displayMoneyBase(store.runningBalanceBase(for: $0)) } ?? ""))
+                                 + (section.txns.first.flatMap { t in store.runningBalanceBase(for: t).map { "  ·  " + store.displayMoneyBase($0) } } ?? ""))
                                 .foregroundStyle(.secondary)
                         }
                         Text("Income \(store.displayMoneyBase(MonthGrouping.income(section.txns))) · Spent \(store.displayMoneyBase(MonthGrouping.expense(section.txns)))")

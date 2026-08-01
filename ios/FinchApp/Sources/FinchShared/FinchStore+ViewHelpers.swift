@@ -205,17 +205,32 @@ extension FinchStore {
     /// oldest→newest, per account. `txns` is newest-first (projection order), so we
     /// walk it reversed. Opening entries are excluded from the feed (Projection), so
     /// seeding from `openingBalanceBase` doesn't double-count.
-    public func runningBalanceBase(for tx: Tx) -> Double {
+    ///
+    /// **Pending transactions are skipped, and get no figure of their own (nil).**
+    ///
+    /// The walk used to add every transaction regardless of status, while the
+    /// account's stored balance counts only confirmed ones — two rules for the same
+    /// quantity. Setting a $4,200 salary to pending therefore moved the account
+    /// balance and left every row's running balance exactly where it was, because by
+    /// the walk's rule nothing HAD changed: same row, same amount, only its status.
+    /// The top row then claimed a balance $4,200 above the one printed over it.
+    ///
+    /// A pending row returns nil rather than the preceding confirmed balance: this
+    /// column means "the balance after this cleared", and a pending row has not.
+    /// Printing the previous row's figure would be a number that is not true of the
+    /// row it sits on.
+    public func runningBalanceBase(for tx: Tx) -> Double? {
         if runningBalanceCache == nil {
             var running = Dictionary(uniqueKeysWithValues: accounts.map { ($0.id, $0.openingBalanceBase ?? 0) })
             var result: [String: Double] = [:]
             for t in txns.reversed() {
+                guard t.pending != true else { continue }
                 running[t.account, default: 0] += t.amount
                 result[t.id] = running[t.account]
             }
             runningBalanceCache = result
         }
-        return runningBalanceCache?[tx.id] ?? 0
+        return runningBalanceCache?[tx.id]
     }
 
     // MARK: - Scheduled

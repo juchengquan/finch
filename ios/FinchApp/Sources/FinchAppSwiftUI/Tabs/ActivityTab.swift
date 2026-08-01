@@ -658,8 +658,9 @@ struct TxRow: View {
             // Right: amount (top) + running account balance after this txn (bottom).
             VStack(alignment: .trailing, spacing: 1) {
                 Text(store.displayMoneyBase(txn.amount)).fontWeight(.semibold)
-                if showRunningBalance {
-                    let remaining = store.runningBalanceBase(for: txn)
+                // nil on a pending row — it has not cleared, so there is no
+                // "balance after" to print.
+                if showRunningBalance, let remaining = store.runningBalanceBase(for: txn) {
                     Text(store.displayMoneyBase(remaining))
                         .font(.caption2)
                         .foregroundStyle(remaining < 0 ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
