@@ -299,7 +299,7 @@ struct AddTransactionSheet: View {
     @ViewBuilder private func expenseIncomeFields(for k: Kind) -> some View {
         Section {
             SearchablePickerRow(title: "Account", glyph: .account,
-                options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
+                accounts: accounts, selection: $accountId)
                 // A UI test reads this row to prove the FAB seeded the sheet. Without an
                 // identifier the query also matches the "Accounts" tab-bar button and the
                 // budget detail's own Account row sitting behind the sheet.
@@ -349,7 +349,7 @@ struct AddTransactionSheet: View {
     @ViewBuilder private var adjustFields: some View {
         Section {
             SearchablePickerRow(title: "Account", glyph: .account,
-                options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
+                accounts: accounts, selection: $accountId)
                 // A UI test reads this row to prove the FAB seeded the sheet. Without an
                 // identifier the query also matches the "Accounts" tab-bar button and the
                 // budget detail's own Account row sitting behind the sheet.
@@ -379,9 +379,9 @@ struct AddTransactionSheet: View {
     @ViewBuilder private var transferFields: some View {
         Section {
             SearchablePickerRow(title: "From", glyph: .fromAccount,
-                options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $fromAccountId)
+                accounts: accounts, selection: $fromAccountId)
             SearchablePickerRow(title: "To", glyph: .toAccount,
-                options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $toAccountId)
+                accounts: accounts, selection: $toAccountId)
             // Same currency → one amount row; cross-currency → From + To, the To
             // row being the independent received amount in the destination's money.
             if transferIsCrossCurrency {

@@ -146,7 +146,7 @@ struct BudgetSheet: View {
             MultiSelectPickerRow(
                 title: "Accounts",
                 glyph: .account,
-                options: store.accounts.map { PickerOption(id: $0.id, name: $0.name ?? "Account") },
+                accounts: store.accounts,
                 selection: $selectedAccounts,
                 emptyLabel: "Any account")
             MultiSelectPickerRow(
@@ -215,7 +215,7 @@ struct BudgetSheet: View {
             MultiSelectPickerRow(
                 title: "Accounts",
                 glyph: .account,
-                options: store.accounts.map { PickerOption(id: $0.id, name: $0.name ?? "Account") },
+                accounts: store.accounts,
                 selection: $selectedAccounts,
                 emptyLabel: "All accounts")
         } header: {

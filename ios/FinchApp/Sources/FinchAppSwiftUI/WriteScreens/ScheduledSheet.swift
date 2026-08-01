@@ -104,12 +104,12 @@ struct ScheduledSheet: View {
                         }
                     } else if kind == .transfer {
                         SearchablePickerRow(title: "From", glyph: .fromAccount,
-                            options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $fromAccountId)
+                            accounts: accounts, selection: $fromAccountId)
                         SearchablePickerRow(title: "To", glyph: .toAccount,
-                            options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
+                            accounts: accounts, selection: $accountId)
                     } else {
                         SearchablePickerRow(title: "Account", glyph: .account,
-                            options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
+                            accounts: accounts, selection: $accountId)
                         CategoryPickerRow(title: "Category", glyph: .category, categories: categories, selection: $categoryId)
                     }
                 } header: {
