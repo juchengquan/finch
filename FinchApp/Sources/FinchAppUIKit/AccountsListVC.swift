@@ -103,7 +103,7 @@ final class AccountsListVC: UIViewController {
         // `txnsReady`.
         store.objectWillChange
             .receive(on: DispatchQueue.main)   // delivered after the mutation lands
-            .sink { [weak self] _ in self?.applySnapshot() }
+            .sink { [weak self] _ in self?.setNeedsSnapshot() }
             .store(in: &cancellables)
 
         // Collapse state is per-ledger, so a ledger switch loads a different set.
@@ -430,6 +430,22 @@ final class AccountsListVC: UIViewController {
     private var groupsToShow: [String] {
         searchActive ? store.accountGroupsOrdered.filter { !filteredAccounts(in: $0).isEmpty }
                      : store.accountGroupsOrdered
+    }
+
+    /// Coalesce a burst of `objectWillChange` into ONE rebuild.
+    ///
+    /// `reprojectActiveLedger` assigns ~17 @Published slices back to back, so the
+    /// store emits ~17 times in a few milliseconds and this list rebuilt itself once
+    /// per emission — measured at 37 full rebuilds in 1.1s on launch.
+    private var snapshotScheduled = false
+    private func setNeedsSnapshot() {
+        guard !snapshotScheduled else { return }
+        snapshotScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.snapshotScheduled = false
+            self.applySnapshot()
+        }
     }
 
     private func applySnapshot() {
