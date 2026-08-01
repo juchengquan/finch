@@ -713,12 +713,28 @@ git commit -m "feat(core): addTransaction takes several payment accounts"
 ### Task 4b: Category splits must not silently delete account legs
 
 **Files:**
-- Modify: `ios/FinchCore/Sources/FinchCore/Store/Domain/Transactions.swift` — the `setTransactionSplits` function
+- Modify: `ios/FinchCore/Sources/FinchCore/Store/Domain/Transactions.swift` — `setTransactionSplits` **and** `bulkRecategorize`
+- Modify: `ios/FinchCore/Sources/FinchCore/Store/Domain/Rules.swift` — the backfill's `patch.categoryId` rebuild
+- Modify: the web mirrors of all three
 - Test: `ios/FinchCore/Tests/FinchCoreTests/MultiAccountAddTests.swift` (extend — created by Task 4, already has a private `seedTwoAccounts()` helper; reuse it)
 
-> **Locate by content, not by line number.** Earlier tasks have already shifted this
-> file. Find `static func setTransactionSplits` and the `LIMIT 1` account-leg query
-> inside it.
+> **There are THREE rebuild-from-`LIMIT 1` sites, not one.** The plan originally named
+> only `setTransactionSplits`; a review of Tasks 4/4b found two more with the identical
+> shape, both reachable from the shipping UI:
+>
+> | site | gate | why it fires on a split purchase |
+> |---|---|---|
+> | `setTransactionSplits` | none | — |
+> | `bulkRecategorize` | `if catCount >= 2 { continue }` | a split purchase has **exactly one** category leg by design, so it does not skip |
+> | `Rules` backfill (`patch.categoryId`) | `if catCount < 2` | same |
+>
+> Each fetches one account leg with `LIMIT 1` (no `ORDER BY`), sets `ep.legs = .set([that
+> leg, one category leg])`, and calls `rebuildEntry` — deleting every other payment. The
+> result balances, and Task 1 relaxed the audit to permit N account legs, so nothing
+> flags it. `updateTransaction` is already safe (`acctLegs.count > 1 && touchesMoney`
+> throws), which shows the codebase knows the pattern; these two never got it.
+>
+> **Locate by content, not by line number** — earlier tasks have shifted these files.
 
 **Interfaces:**
 - Consumes: the multi-account entry from Task 4.
