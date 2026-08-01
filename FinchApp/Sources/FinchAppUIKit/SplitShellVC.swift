@@ -49,6 +49,10 @@ final class SplitShellVC: UIViewController {
     /// highlight can follow a selection changed from elsewhere (a `budget:` deep link, or
     /// a ledger switch clearing it).
     private weak var budgetList: BudgetsListVC?
+    /// The native Activity feed, when it is the current supplementary column — held so
+    /// its highlight can follow a selection changed from elsewhere (a `tx:` deep link
+    /// from Spotlight or a notification, or a ledger switch clearing it).
+    private weak var activityList: ActivityFeedVC?
 
     /// Same switch `RootTabBarController.uikitNavTabs` uses — literally the same read
     /// now — so the compact root and the regular-width column convert together or not
@@ -113,6 +117,18 @@ final class SplitShellVC: UIViewController {
             .sink { [weak self] id in
                 guard let self, self.router.selectedTab == .budgets else { return }
                 self.budgetList?.selectedID = id
+            }
+            .store(in: &cancellables)
+
+        // Transaction selection changed from somewhere other than the feed — the
+        // `tx:` deep link below, or a ledger switch clearing it. The hosted detail
+        // column re-reads `selection` itself; only the native list needs telling.
+        selection.$tx
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] id in
+                guard let self, self.router.selectedTab == .activity else { return }
+                self.activityList?.selectedID = id
             }
             .store(in: &cancellables)
 
@@ -221,6 +237,21 @@ final class SplitShellVC: UIViewController {
             svc.setViewController(host(SplitDetailColumn(tab: tab, selection: selection)), for: .secondary)
             return
         }
+        // Activity is the odd one in Phase 3b: it has no compact tab ROOT to convert
+        // (the feed lives inside Accounts and is reached by a push, native since
+        // Phase 2), so this step adds the column only — there is no root/column pair
+        // to keep in step, and `ActivityFeedVC` already serves both.
+        if tab == .activity, Self.uikitBudgets {
+            let list = ActivityFeedVC(onSelect: { [weak self] id in self?.selection.tx = id })
+            list.selectedID = selection.tx
+            activityList = list
+            svc.setViewController(UINavigationController(rootViewController: list), for: .supplementary)
+            // Detail stays hosted: `TransactionDetailView` is a sibling COLUMN here,
+            // not a push, so it is not at navigation depth and cannot shadow.
+            svc.setViewController(host(SplitDetailColumn(tab: tab, selection: selection)), for: .secondary)
+            return
+        }
+        activityList = nil
         svc.setViewController(host(SplitListColumn(tab: tab, selection: selection)), for: .supplementary)
         svc.setViewController(host(SplitDetailColumn(tab: tab, selection: selection)), for: .secondary)
     }

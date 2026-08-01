@@ -7,6 +7,16 @@ import FinchCore
 
 /// Phase 2, screen 1: `ActivityFeedView` converted to UIKit.
 ///
+/// **Two modes, as of Phase 3b step 4.** `onSelect == nil` is the original pushed
+/// screen — reached from Accounts → All Transactions on iPhone — where tapping a row
+/// opens the edit sheet. Non-nil makes it the iPad supplementary COLUMN: a tap reports
+/// the id and the row stays selected, driving the shell's detail column.
+///
+/// Activity is the odd one in Phase 3b: it has **no compact tab root** to convert
+/// (`RootTabBarController.slots` has no `.activity` — the feed lives inside Accounts),
+/// so unlike Ledger/Budgets/Scheduled there is no "root and column together" pairing.
+/// The compact path was already native from Phase 2; this step only adds the column.
+///
 /// This is the template the rest of Phase 2 follows, so it is worth reading:
 /// `UICollectionView` list configuration + a diffable data source for the pending
 /// bucket and month sections, `UISearchController` for `.searchable`,
@@ -104,6 +114,23 @@ final class ActivityFeedVC: UIViewController {
 
     private let store = FinchStore.shared
 
+    /// Selection mode. `nil` → the pushed screen: a row opens the edit sheet. Non-nil →
+    /// this feed is a split view's supplementary column, so a row reports its id and
+    /// stays selected instead. Same seam as `LedgersVC` / `BudgetsListVC` /
+    /// `ScheduledListVC`; `String?` so deleting the selected row can clear the column.
+    private let onSelect: ((String?) -> Void)?
+    /// The row to show as selected, when a split view owns the selection.
+    var selectedID: String? {
+        didSet { guard selectedID != oldValue else { return }; reassertSelection() }
+    }
+
+    init(onSelect: ((String?) -> Void)? = nil) {
+        self.onSelect = onSelect
+        super.init(nibName: nil, bundle: nil)
+    }
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         title = String(localized: "Activity")
@@ -125,6 +152,25 @@ final class ActivityFeedVC: UIViewController {
         // Removes the loading row when the projection lands on an empty ledger, where
         // `$txns` publishes [] → [] and cannot distinguish the two states.
         TxnsLoadingCell.observe(store) { [weak self] in self?.applySnapshot() }
+            .store(in: &cancellables)
+
+        // A one-shot filter handed over from elsewhere ("show me this account's
+        // transactions"), mirroring `ActivityFeedView.consumePendingFilter`.
+        //
+        // NOTE: nothing in the app writes `router.pendingFilter` today — grep finds the
+        // declaration and the two consumers and no producer at all. This is carried for
+        // parity so the native column behaves like the SwiftUI one the day a writer is
+        // added, rather than being a silently missing feature then.
+        DeepLinkRouter.shared.$pendingFilter
+            .compactMap { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] pending in
+                guard let self else { return }
+                self.searchQuery = ""
+                self.filter = pending
+                DeepLinkRouter.shared.pendingFilter = nil
+                self.applySnapshot()
+            }
             .store(in: &cancellables)
     }
 
@@ -446,7 +492,11 @@ final class ActivityFeedVC: UIViewController {
         sectionIDs = snap.sectionIdentifiers
         dataSource.apply(snap, animatingDifferences: false) { [weak self] in
             self?.refreshVisibleHeaders()
+            // `apply` clears the selection, so in column mode the row would stop
+            // looking selected every time a figure changed underneath it.
+            self?.reassertSelection()
         }
+        dropSelectionIfGone()
         configureToolbar()
     }
 
@@ -677,7 +727,34 @@ extension ActivityFeedVC: UICollectionViewDelegate {
             return
         }
         guard let tx = txByID[id] else { return }
+        if let onSelect {
+            // Stay selected: the row is the current state of the column beside it, not
+            // a button that fired. (Re-selecting because the guard above deselected.)
+            selectedID = id
+            cv.selectItem(at: ip, animated: false, scrollPosition: [])
+            onSelect(id)
+            return
+        }
         presentEditTransaction(tx)
+    }
+
+    /// Clear the column when the selected transaction stops existing — deleted from a
+    /// row action, from the bulk bar, or on another device via sync. Done here, off the
+    /// snapshot, rather than in each delete path: there are three of them and a
+    /// stale-id detail column is the same bug however the row went away.
+    private func dropSelectionIfGone() {
+        guard let onSelect, let id = selectedID else { return }
+        guard !store.txns.contains(where: { $0.id == id }) else { return }
+        selectedID = nil
+        onSelect(nil)
+    }
+
+    /// Restore the highlight after a snapshot apply or an external selection change.
+    /// No-op outside column mode, where nothing owns a persistent selection.
+    private func reassertSelection() {
+        guard onSelect != nil else { return }
+        guard let selectedID, let ip = dataSource.indexPath(for: selectedID) else { return }
+        collectionView.selectItem(at: ip, animated: false, scrollPosition: [])
     }
 
     /// Right-click on Mac/iPad and long-press on touch — swipe is touch-only, so the
