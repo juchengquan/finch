@@ -347,14 +347,23 @@ final class MultiAccountRulesTests: XCTestCase {
                 INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at)
                 VALUES ('c2','l1',NULL,'Household','expense',1,datetime('now'),datetime('now'))
                 """)
-            try db.execute(sql: """
-                INSERT INTO rules (id,ledger_id,name,enabled,priority,match_json,actions_json,created_at,updated_at)
-                VALUES ('r1','l1','Split market',1,0,
-                        '{"field":"description","op":"contains","value":"Market"}',
-                        '{"splits":[{"categoryId":"c1","fraction":0.7},{"categoryId":"c2","fraction":0.3}]}',
-                        datetime('now'),datetime('now'))
-                """)
         }
+        // Build the rule through the action, not raw SQL — the `rules` table stores
+        // `condition` and `actions` as JSON blobs (NOT `match_json`/`actions_json`),
+        // and `createRule` is what the rest of the suite uses. Shape copied from
+        // BackfillRuleTests.swift:27-29; the "split" action shape is
+        // RulesEngine.swift:111-116.
+        let condition: JSONValue = .object([
+            "field": .string("merchant"), "op": .string("contains"), "value": .string("Market")])
+        let actions: JSONValue = .array([.object([
+            "type": .string("split"),
+            "splits": .array([
+                .object(["fraction": .double(0.7), "categoryId": .string("c1")]),
+                .object(["fraction": .double(0.3), "categoryId": .string("c2")]),
+            ])])])
+        try Apply.apply(dbQueue: q, action: "createRule", args: Args([
+            "id": .string("r1"), "ledgerId": .string("l1"), "name": .string("Split market"),
+            "condition": condition, "actions": actions]))
         let eid = try q.write { db in
             try Entries.postEntry(db, Entries.NewEntry(
                 ledgerId: "l1", date: "2026-06-01", time: "12:00",
@@ -378,10 +387,12 @@ final class MultiAccountRulesTests: XCTestCase {
 }
 ```
 
-> If the `rules` table's column names differ from the above, read
-> `ios/FinchCore/Sources/FinchCore/Storage/Schema.swift` (`CREATE TABLE … rules`, ~line 286)
-> and `Rules.activeRules` for the exact `match_json` / `actions_json` shape, and adjust
-> the INSERT — the assertions are what matter.
+> Verified against the source: the `rules` table's JSON columns are `condition` and
+> `actions` (`Schema.swift:286-292`), the rule is created via the `createRule` action
+> (`BackfillRuleTests.swift:27-29`), and the splits action is `type: "split"` carrying a
+> `splits` array of `{fraction, categoryId}` (`RulesEngine.swift:111-116`). The condition
+> matches on `merchant`, which `postEntry` fills from the entry's description — so
+> `description: "Market"` is what makes this rule fire.
 
 - [ ] **Step 2: Run to verify it fails**
 
