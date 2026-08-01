@@ -63,8 +63,16 @@ public enum Selectors {
         if let a = opts.accountId { out = out.filter { $0.account == a } }
         if let c = opts.categoryId { out = out.filter { $0.category == c } }
         if let s = opts.status { out = out.filter { ($0.pending ?? false) == (s == "pending") } }
-        if let f = opts.from { out = out.filter { $0.date >= f } }
-        if let t = opts.to { out = out.filter { $0.date <= t } }
+        // A bare "yyyy-MM-dd" compares against the transaction's DATE, exactly as it
+        // always has. A bound carrying a time compares MOMENTS instead — and stays
+        // inclusive at both ends, because a filter range is what the user typed
+        // ("from here to here"), not a cycle whose top belongs to the next window.
+        if let f = opts.from {
+            out = f.count > 10 ? out.filter { momentOf($0) >= f } : out.filter { $0.date >= f }
+        }
+        if let t = opts.to {
+            out = t.count > 10 ? out.filter { momentOf($0) <= t } : out.filter { $0.date <= t }
+        }
         if let lo = opts.minAmount { out = out.filter { abs($0.amount) >= lo } }
         if let hi = opts.maxAmount { out = out.filter { abs($0.amount) <= hi } }
         if let tags = opts.tagIds, !tags.isEmpty {
@@ -391,6 +399,11 @@ public enum Selectors {
 
     /// Sum of budget-matched activity in [from, to] — the accumulation shared by
     /// budgetProgress (current cycle) and budgetCycleHistory (each past cycle).
+    /// A transaction as a single comparable moment, "yyyy-MM-dd HH:mm". One with no
+    /// time of its own reads as midnight — the assumption every date-only comparison
+    /// in the engine already makes.
+    static func momentOf(_ t: Tx) -> String { "\(t.date) \(t.time ?? "00:00")" }
+
     /// Is `t` inside the cycle window `[from fromTime, to toTime)`?
     ///
     /// With both times nil this is the inclusive date comparison it has always been.
@@ -398,7 +411,7 @@ public enum Selectors {
     /// reads as midnight, which is the same assumption the untimed path makes.
     static func inWindow(_ t: Tx, from: String, to: String, fromTime: String?, toTime: String?) -> Bool {
         if fromTime == nil && toTime == nil { return t.date >= from && t.date <= to }
-        let stamp = "\(t.date) \(t.time ?? "00:00")"
+        let stamp = momentOf(t)
         if stamp < "\(from) \(fromTime ?? "00:00")" { return false }
         if let hi = toTime { return stamp < "\(to) \(hi)" }
         return t.date <= to

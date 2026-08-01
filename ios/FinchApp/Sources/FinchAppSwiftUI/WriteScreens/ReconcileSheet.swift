@@ -34,12 +34,21 @@ struct ReconcileSheet: View {
                             Text("Statement balance"); Spacer()
                             TextField("0.00", text: $statementBalance).numericInput($statementBalance).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
                         }
-                        DatePicker("Statement date", selection: $date, displayedComponents: .date)
+                        // Date AND time: a statement is cut at a moment, and the
+                        // adjustment this sheet posts is dated to it.
+                        DatePicker("Statement date", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                            .environment(\.locale, AppDate.h24Locale)
                     } footer: {
                         // The detail page shows only the seal; the checkpoint's
                         // date lives here, where the next reconcile happens.
-                        if let last = a.lastReconciledAt,
-                           let d = AppDate.isoDay.date(from: String(last.prefix(10))) {
+                        // The checkpoint carries a time when one was given; show it,
+                        // since it is the thing that distinguishes two reconciles of
+                        // the same account on the same day.
+                        if let last = a.lastReconciledAt, last.count > 10,
+                           let d = AppDate.isoDateTime.date(from: String(last.prefix(16))) {
+                            Text("Last reconciled on \(d.formatted(date: .abbreviated, time: .shortened))")
+                        } else if let last = a.lastReconciledAt,
+                                  let d = AppDate.isoDay.date(from: String(last.prefix(10))) {
                             Text("Last reconciled on \(d.formatted(date: .abbreviated, time: .omitted))")
                         }
                     }
@@ -141,7 +150,9 @@ struct ReconcileSheet: View {
         do {
             try store.apply(.reconcileAccount, Args([
                 "accountId": .string(accountId), "statementBalance": .double(bal),
-                "statementDate": .string(AppDate.isoDay.string(from: date)), "postAdjustment": .bool(postAdjustment)]))
+                "statementDate": .string(AppDate.isoDay.string(from: date)),
+                "statementTime": .string(AppDate.isoTime.string(from: date)),
+                "postAdjustment": .bool(postAdjustment)]))
             dismiss()
         } catch { errorMessage = i18nMessage(error) }
     }
@@ -198,7 +209,8 @@ struct ReconcileSheet: View {
             "ledgerId": .string(store.activeLedgerId), "accountId": .string(a.id),
             "amount": .double(signed),
             "merchant": .string(addMerchant.isEmpty ? "Reconcile" : addMerchant),
-            "date": .string(AppDate.isoDay.string(from: date)), "status": .string("confirmed")]
+            "date": .string(AppDate.isoDay.string(from: date)),
+            "time": .string(AppDate.isoTime.string(from: date)), "status": .string("confirmed")]
         do {
             if let id = try store.applyReturningId(.addTransaction, Args(args)) {
                 try store.apply(.setCleared, Args(["id": .string(id), "cleared": .bool(true)]))

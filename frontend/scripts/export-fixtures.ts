@@ -385,7 +385,7 @@ async function canonicalState(x: Exec): Promise<Record<string, unknown>> {
     entries: entryObjs,
     ledgers: map(await rows('SELECT * FROM ledgers ORDER BY id'), { id: (r) => r.id, name: (r) => r.name, base: (r) => r.base_currency, is_default: (r) => Number(r.is_default), color: (r) => r.color ?? null, tagline: (r) => r.tagline ?? null }),
     account_groups: map(await rows('SELECT * FROM account_groups ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, name: (r) => r.name, sort_order: (r) => Number(r.sort_order) }),
-    accounts: map(await rows('SELECT * FROM accounts ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, group_id: (r) => r.group_id ?? null, name: (r) => r.name, type: (r) => r.type, currency: (r) => r.currency, current_balance: (r) => num(r.current_balance), sort_order: (r) => Number(r.sort_order), include_in_net_worth: (r) => Number(r.include_in_net_worth), is_active: (r) => Number(r.is_active), archived: (r) => r.archived_at != null }),
+    accounts: map(await rows('SELECT * FROM accounts ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, group_id: (r) => r.group_id ?? null, name: (r) => r.name, type: (r) => r.type, currency: (r) => r.currency, current_balance: (r) => num(r.current_balance), sort_order: (r) => Number(r.sort_order), include_in_net_worth: (r) => Number(r.include_in_net_worth), is_active: (r) => Number(r.is_active), archived: (r) => r.archived_at != null, last_reconciled_at: (r) => r.last_reconciled_at ?? null }),
     categories: map(await rows('SELECT * FROM categories ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, parent_id: (r) => r.parent_id ?? null, name: (r) => r.name, kind: (r) => r.kind, system: (r) => r.system ?? null, sort_order: (r) => Number(r.sort_order) }),
     counterparties: map(await rows('SELECT * FROM counterparties ORDER BY id'), { id: (r) => r.id, name: (r) => r.name, is_verified: (r) => Number(r.is_verified) }),
     tags: map(await rows('SELECT * FROM tags ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, name: (r) => r.name, color: (r) => r.color ?? null }),
@@ -464,7 +464,7 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   // gap) byte-for-byte against the oracle.
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a2', amount: -30, merchant: 'ClearMe', categoryId: 'food', date: '2026-05-09', skipRules: true } },
   { action: 'setCleared', args: { id: '$lastAccountPosting', cleared: true } },
-  { action: 'reconcileAccount', args: { accountId: 'a2', statementBalance: 500, statementDate: '2026-05-31', postAdjustment: true } },
+  { action: 'reconcileAccount', args: { accountId: 'a2', statementBalance: 500, statementDate: '2026-05-31', statementTime: '09:15', postAdjustment: true } },
 
   // Holdings on an investment account — exercises create/setPrice/update (these
   // tables were previously never seeded by the oracle).

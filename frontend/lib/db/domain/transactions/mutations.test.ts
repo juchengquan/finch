@@ -778,6 +778,52 @@ test('reconcileAccount stamps the checkpoint without an adjustment when none is 
   expect(Number(adj[0].c)).toBe(0);
 });
 
+test('reconcileAccount stores a statement MOMENT when one is given', async () => {
+  const exec = await seededAndAudited();
+  await applyMutation(exec, 'reconcileAccount', {
+    accountId: 'chk',
+    statementBalance: 9999.99,
+    statementDate: '2026-05-31',
+    statementTime: '09:15',
+    postAdjustment: true,
+  });
+  const [row] = await exec('SELECT last_reconciled_at AS d FROM accounts WHERE id = ?', ['chk']);
+  expect(row.d).toBe('2026-05-31 09:15');
+  // The adjustment is dated to the statement, so it is timed to it too — without
+  // that it sinks below the transactions it accounts for.
+  const [adj] = await exec(
+    "SELECT e.date AS d, e.time AS t FROM entries e JOIN postings p ON p.entry_id = e.id WHERE p.account_id = 'chk' AND e.kind = 'adjustment'",
+  );
+  expect(adj.d).toBe('2026-05-31');
+  expect(adj.t).toBe('09:15');
+});
+
+test('reconcileAccount treats midnight as no time at all', async () => {
+  const exec = await seededAndAudited();
+  await applyMutation(exec, 'reconcileAccount', {
+    accountId: 'chk',
+    statementBalance: 9999.99,
+    statementDate: '2026-05-31',
+    statementTime: '00:00',
+    postAdjustment: false,
+  });
+  const [row] = await exec('SELECT last_reconciled_at AS d FROM accounts WHERE id = ?', ['chk']);
+  // The sheet's picker always produces a time; midnight must not change what a
+  // date-only reconcile has always stored.
+  expect(row.d).toBe('2026-05-31');
+});
+
+test('reconcileAccount rejects a malformed statement time', async () => {
+  const exec = await seededAndAudited();
+  await expect(applyMutation(exec, 'reconcileAccount', {
+    accountId: 'chk',
+    statementBalance: 100,
+    statementDate: '2026-05-31',
+    statementTime: '9:15',
+    postAdjustment: false,
+  })).rejects.toThrow();
+});
+
 test('reconcileAccount with postAdjustment posts the exact remainder + lands cleared sum on target', async () => {
   const exec = await seededAndAudited();
   // Clear a handful of rows so the cleared sum is non-trivial.

@@ -67,7 +67,12 @@ struct BudgetSheet: View {
         _savedText = State(initialValue: (budget?.type == "income" && (budget?.saved ?? 0) != 0)
             ? String(format: "%g", budget!.saved) : "")
         _hasTargetDate = State(initialValue: budget?.endDate != nil)
-        _targetDate = State(initialValue: budget?.endDate.flatMap { AppDate.isoDay.date(from: $0) } ?? Date())
+        // Date AND time, so a goal saved for 18:00 does not reopen at midnight and
+        // save that back — the same trap the Start picker had.
+        _targetDate = State(initialValue: budget?.endDate.flatMap {
+            AppDate.isoDateTime.date(from: "\($0) \(budget?.endTime ?? "00:00")")
+                ?? AppDate.isoDay.date(from: $0)
+        } ?? Date())
     }
 
     private var categories: [CategoryRow] {
@@ -135,8 +140,9 @@ struct BudgetSheet: View {
             }
             if hasTargetDate {
                 FieldRow(glyph: .date, title: "Target date", showsDefaultTrailing: false) {
-                    DatePicker("Target date", selection: $targetDate, displayedComponents: .date)
+                    DatePicker("Target date", selection: $targetDate, displayedComponents: [.date, .hourAndMinute])
                         .labelsHidden()
+                        .environment(\.locale, AppDate.h24Locale)
                 }
             }
         } footer: {
@@ -274,6 +280,7 @@ struct BudgetSheet: View {
             return
         }
         let endDate: JSONValue = hasTargetDate ? .string(AppDate.isoDay.string(from: targetDate)) : .null
+        let endTime: JSONValue = hasTargetDate ? .string(AppDate.isoTime.string(from: targetDate)) : .null
         let savedVal = max(0, DecimalInput.parse(savedText) ?? 0)
         let categoryIds: JSONValue = .array(selectedCategories.sorted().map { .string($0) })
         let accountIds: JSONValue = .array(selectedAccounts.sorted().map { .string($0) })
@@ -285,7 +292,7 @@ struct BudgetSheet: View {
                 "name": .string(name), "type": .string("income"),
                 "amount": .double(target), "saved": .double(savedVal),
                 "groupId": groupId.isEmpty ? .null : .string(groupId),
-                "endDate": endDate,
+                "endDate": endDate, "endTime": endTime,
                 "categoryIds": categoryIds, "accountIds": accountIds,
                 "tagIds": tagIds, "counterpartyIds": counterpartyIds,
             ]
@@ -305,7 +312,10 @@ struct BudgetSheet: View {
             ]
             if !groupId.isEmpty { args["groupId"] = .string(groupId) }
             if savedVal > 0 { args["saved"] = .double(savedVal) }
-            if hasTargetDate { args["endDate"] = .string(AppDate.isoDay.string(from: targetDate)) }
+            if hasTargetDate {
+                args["endDate"] = .string(AppDate.isoDay.string(from: targetDate))
+                args["endTime"] = .string(AppDate.isoTime.string(from: targetDate))
+            }
             do { try store.apply(.createBudget, Args(args)); dismiss() }
             catch { errorMessage = i18nMessage(error) }
         }

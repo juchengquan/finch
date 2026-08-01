@@ -59,8 +59,20 @@ export function selectTransactions(txns: Tx[], opts: ListOptions, names?: Search
   if (opts.accountId) out = out.filter((t) => t.account === opts.accountId);
   if (opts.categoryId) out = out.filter((t) => t.category === opts.categoryId);
   if (opts.status) out = out.filter((t) => t.pending === (opts.status === 'pending'));
-  if (opts.from) out = out.filter((t) => t.date >= opts.from!);
-  if (opts.to) out = out.filter((t) => t.date <= opts.to!);
+  // A bare 'yyyy-MM-dd' compares against the transaction's DATE, exactly as it
+  // always has. A bound carrying a time compares MOMENTS instead — and stays
+  // inclusive at both ends, because a filter range is what the user typed ("from
+  // here to here"), not a cycle whose top belongs to the next window.
+  if (opts.from) {
+    out = opts.from.length > 10
+      ? out.filter((t) => momentOf(t) >= opts.from!)
+      : out.filter((t) => t.date >= opts.from!);
+  }
+  if (opts.to) {
+    out = opts.to.length > 10
+      ? out.filter((t) => momentOf(t) <= opts.to!)
+      : out.filter((t) => t.date <= opts.to!);
+  }
   if (opts.minAmount != null) out = out.filter((t) => Math.abs(t.amount) >= opts.minAmount!);
   if (opts.maxAmount != null) out = out.filter((t) => Math.abs(t.amount) <= opts.maxAmount!);
   out = [...out].sort((a, b) => {
@@ -1444,12 +1456,19 @@ export function cycleWindow(
   return { from: toYmd(s), to: toYmd(e), fromTime: startTime, toTime: startTime };
 }
 
+/** A transaction as a single comparable moment, 'yyyy-MM-dd HH:mm'. One with no
+ *  time of its own reads as midnight — the assumption every date-only comparison
+ *  already makes. */
+export function momentOf(t: { date: string; time?: string | null }): string {
+  return `${t.date} ${t.time ?? '00:00'}`;
+}
+
 /** Is `t` inside `[from fromTime, to toTime)`? Without times, the inclusive date
  *  comparison this has always used. With them, moments — a transaction carrying no
  *  time of its own reads as midnight. */
 export function inCycleWindow(t: { date: string; time?: string | null }, w: CycleWindow): boolean {
   if (!w.fromTime && !w.toTime) return t.date >= w.from && t.date <= w.to;
-  const stamp = `${t.date} ${t.time ?? '00:00'}`;
+  const stamp = momentOf(t);
   if (stamp < `${w.from} ${w.fromTime ?? '00:00'}`) return false;
   if (w.toTime) return stamp < `${w.to} ${w.toTime}`;
   return t.date <= w.to;

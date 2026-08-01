@@ -374,6 +374,29 @@ test('selectTransactions filters by date range (from / to inclusive)', () => {
   expect(openEnd.map((t) => t.id).sort()).toEqual(['t2', 't3']);
 });
 
+// --- a range bound can carry a time (parity with iOS DateTimeRangeTests) -----
+
+test('selectTransactions treats a timed bound as a moment, inclusive at both ends', () => {
+  const txns = [
+    tx({ id: 't1', date: '2026-05-01', time: '08:00' }),
+    tx({ id: 't2', date: '2026-05-01', time: '18:00' }),
+    tx({ id: 't3', date: '2026-05-02', time: '08:00' }),
+    tx({ id: 't4', date: '2026-05-02' }),                  // no time → midnight
+  ];
+  const ids = (o: { from?: string; to?: string }) =>
+    selectTransactions(txns, { ledgerId: 'personal', ...o }).map((t) => t.id).sort();
+
+  // A bare date is a whole-day bound — unchanged.
+  expect(ids({ from: '2026-05-01', to: '2026-05-01' })).toEqual(['t1', 't2']);
+  // A time cuts within the day...
+  expect(ids({ from: '2026-05-01 12:00' })).toEqual(['t2', 't3', 't4']);
+  // ...and the upper bound stays INCLUSIVE, unlike a budget cycle's.
+  expect(ids({ to: '2026-05-02 08:00' })).toEqual(['t1', 't2', 't3', 't4']);
+  expect(ids({ to: '2026-05-02 07:59' })).toEqual(['t1', 't2', 't4']);
+  // A transaction with no time of its own reads as midnight.
+  expect(ids({ from: '2026-05-02 00:01' })).toEqual(['t3']);
+});
+
 test('selectTransactions filters by absolute amount (min / max inclusive)', () => {
   const txns = [
     tx({ id: 'a', amount: -5 }),

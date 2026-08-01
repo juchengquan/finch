@@ -101,7 +101,8 @@ final class WriteParityTests: XCTestCase {
                 ("name", { str($0["name"]) }), ("type", { str($0["type"]) }), ("currency", { str($0["currency"]) }),
                 ("current_balance", { numStr($0["current_balance"]) }), ("sort_order", { .int($0["sort_order"]) }),
                 ("include_in_net_worth", { .int($0["include_in_net_worth"]) }), ("is_active", { .int($0["is_active"]) }),
-                ("archived", { .bool(($0["archived_at"] as String?) != nil) })]),
+                ("archived", { .bool(($0["archived_at"] as String?) != nil) }),
+                ("last_reconciled_at", { str($0["last_reconciled_at"]) })]),
             "categories": try table("SELECT * FROM categories ORDER BY id", [
                 ("id", { str($0["id"]) }), ("ledger_id", { str($0["ledger_id"]) }), ("parent_id", { str($0["parent_id"]) }),
                 ("name", { str($0["name"]) }), ("kind", { str($0["kind"]) }), ("system", { str($0["system"]) }), ("sort_order", { .int($0["sort_order"]) })]),
