@@ -125,7 +125,7 @@ struct BudgetSheet: View {
                 TextField("0.00", text: $savedText).numericInput($savedText).keyboardType(.decimalPad)
             }
             FieldRow(glyph: .status, title: "Set target date") {
-                Toggle("Set target date", isOn: $hasTargetDate)
+                Toggle("Set target date", isOn: $hasTargetDate).switchOnlyToggles()
             }
             if hasTargetDate {
                 FieldRow(glyph: .date, title: "Target date", showsDefaultTrailing: false) {
@@ -226,7 +226,7 @@ struct BudgetSheet: View {
 
         Section {
             FieldRow(glyph: .status, title: "Roll over unused budget") {
-                Toggle("Roll over unused budget", isOn: $rollover)
+                Toggle("Roll over unused budget", isOn: $rollover).switchOnlyToggles()
             }
             if rollover {
                 FieldRow(glyph: .amount, title: "Cap") {

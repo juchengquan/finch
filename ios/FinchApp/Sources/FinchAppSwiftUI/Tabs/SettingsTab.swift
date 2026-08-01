@@ -219,7 +219,7 @@ struct SettingsPowerToolsView: View {
             Section {
                 Toggle("Sync across devices (iCloud)", isOn: Binding(
                     get: { cloudSync.enabled },
-                    set: { on in Task { await cloudSync.setEnabled(on, store: store) } }))
+                    set: { on in Task { await cloudSync.setEnabled(on, store: store) } })).switchOnlyToggles()
                 if cloudSync.isBootstrapping {
                     HStack { ProgressView(); Text("Setting up iCloud sync…").foregroundStyle(.secondary) }
                 } else if cloudSync.isSyncing {
@@ -273,7 +273,7 @@ struct SettingsNotificationsView: View {
                         set: { on in
                             NotificationPrefs.set(kind, on: on)
                             Task { await NotificationService.shared.refresh() }
-                        }))
+                        })).switchOnlyToggles()
                 }
             }
         }
@@ -304,7 +304,7 @@ struct SettingsSecurityView: View {
                 if gate.settings.policy != .off {
                     Toggle("Require Face ID for export & destructive actions", isOn: Binding(
                         get: { gate.settings.sensitiveActionsEnabled },
-                        set: { gate.settings.sensitiveActionsEnabled = $0 }))
+                        set: { gate.settings.sensitiveActionsEnabled = $0 })).switchOnlyToggles()
                 }
             } footer: {
                 Text("Uses Face ID / Touch ID, falling back to your device passcode. finch never stores a passcode of its own.")

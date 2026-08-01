@@ -107,9 +107,9 @@ struct TransactionFilterSheet: View {
                     }
                 }
                 Section("Date range") {
-                    Toggle("From", isOn: $useFrom)
+                    Toggle("From", isOn: $useFrom).switchOnlyToggles()
                     if useFrom { DatePicker("From date", selection: $fromDate, displayedComponents: .date).labelsHidden() }
-                    Toggle("To", isOn: $useTo)
+                    Toggle("To", isOn: $useTo).switchOnlyToggles()
                     if useTo { DatePicker("To date", selection: $toDate, displayedComponents: .date).labelsHidden() }
                 }
                 Section("Amount range") {

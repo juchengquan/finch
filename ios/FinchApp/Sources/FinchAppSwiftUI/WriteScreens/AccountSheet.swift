@@ -81,7 +81,7 @@ struct AccountSheet: View {
                     }
                     if isEdit {
                         FieldRow(glyph: .status, title: "Include in net worth") {
-                            Toggle("Include in net worth", isOn: $includeInNetWorth)
+                            Toggle("Include in net worth", isOn: $includeInNetWorth).switchOnlyToggles()
                         }
                     }
                 }
