@@ -221,12 +221,22 @@ final class ActivityFeedVC: UIViewController {
                 return
             }
             if id == Self.confirmAllID {
-                var cfg = cell.defaultContentConfiguration()
                 let n = self.dataSource.snapshot().numberOfItems(inSection: .pending) - 1
-                cfg.text = String(localized: "Confirm all \(n) pending")
-                cfg.image = UIImage(systemName: "checkmark.circle")
-                cfg.textProperties.color = .tintColor
-                cell.contentConfiguration = cfg
+                let title = String(localized: "Confirm all \(n) pending")
+                // Hosted rather than a `defaultContentConfiguration` so it announces as
+                // a BUTTON, which is what the SwiftUI screen's `Button` gives. A content
+                // configuration owns the cell's accessibility, so setting the trait on
+                // the cell afterwards does nothing — this row read as plain text while
+                // the control read it as a button. Same fix as the Accounts screen's
+                // All Transactions row.
+                cell.contentConfiguration = UIHostingConfiguration {
+                    Label(title, systemImage: "checkmark.circle")
+                        .foregroundStyle(Color.accentColor)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .accessibilityElement(children: .combine)
+                        .accessibilityAddTraits(.isButton)
+                }
                 cell.accessories = []
                 return
             }
