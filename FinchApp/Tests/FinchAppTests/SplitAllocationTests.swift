@@ -112,3 +112,95 @@ extension SplitAllocationTests {
         XCTAssertEqual(a.allocated, 70, accuracy: 0.0001)
     }
 }
+
+extension SplitAllocationTests {
+
+    // Toggling split off keeps the largest leg. Not arbitrary: it is the same rule
+    // Projection.swift:136-148 uses to decide which category a split DISPLAYS, so the
+    // survivor is the category the row was already showing.
+    func test_dominantCategoryIsTheLargestLeg() {
+        var a = SplitAllocation(total: 66.20)
+        a.tick("groceries"); a.tick("household"); a.tick("dining")
+        a.setAmount("groceries", 40); a.setAmount("household", 18.20); a.setAmount("dining", 8)
+        XCTAssertEqual(a.dominantCategoryId, "groceries")
+    }
+
+    // The web writes to the same ledger with free-form split rows, so a stored
+    // transaction can repeat a category. Checkboxes cannot express that, so repeats
+    // fold together. Lossless: the only field separating two same-category legs is
+    // `description`, which the UI never writes and the projection reads back as nil.
+    func test_mergingFoldsRepeatedCategoriesAndSumsThem() {
+        let a = SplitAllocation.merging([
+            (categoryId: "groceries", amount: 10),
+            (categoryId: "groceries", amount: 20),
+            (categoryId: "household", amount: 28.20),
+        ], total: 58.20)
+        XCTAssertEqual(a.rows.map(\.id), ["groceries", "household"])
+        XCTAssertEqual(a.rows.map(\.amount), [30.00, 28.20])
+    }
+
+    // Loaded rows are amounts the user set previously, so they arrive pinned and are
+    // not re-divided the moment the sheet opens.
+    func test_mergedRowsArrivePinned() {
+        let a = SplitAllocation.merging([
+            (categoryId: "a", amount: 70), (categoryId: "b", amount: 30),
+        ], total: 100)
+        XCTAssertEqual(a.rows.map(\.pinned), [true, true])
+        XCTAssertEqual(a.rows.map(\.amount), [70, 30])
+    }
+
+    func test_mergingMapsNilCategoryToTheUncategorisedRow() {
+        let a = SplitAllocation.merging([
+            (categoryId: nil, amount: 5), (categoryId: "a", amount: 5),
+        ], total: 10)
+        XCTAssertEqual(a.rows.map(\.id), ["", "a"])
+    }
+
+    // Fewer than two ticked is a plain single-category transaction, which is legal —
+    // and is what the engine demands, since it rejects a one-row split outright.
+    func test_fewerThanTwoRowsIsLegal() {
+        var a = SplitAllocation(total: 100)
+        XCTAssertNil(a.problem)
+        a.tick("a")
+        XCTAssertNil(a.problem)
+    }
+
+    func test_twoRowsThatAddUpAreLegal() {
+        var a = SplitAllocation(total: 100)
+        a.tick("a"); a.tick("b")
+        XCTAssertNil(a.problem)
+    }
+
+    // The toggle is usable before an amount is entered; this is what stops Confirm,
+    // and the reason has to be sayable in the sheet.
+    func test_noTotalYetIsReportedAsNeedsAmount() {
+        var a = SplitAllocation(total: 0)
+        a.tick("a"); a.tick("b")
+        XCTAssertEqual(a.problem, .needsAmount)
+    }
+
+    func test_pinnedRowsThatDoNotAddUpAreReported() {
+        var a = SplitAllocation(total: 100)
+        a.tick("a"); a.tick("b")
+        a.setAmount("a", 80); a.setAmount("b", 5)
+        XCTAssertEqual(a.problem, .sumMismatch)
+    }
+
+    // Zero-amount rows drop out, so two ticks with only one funded is "needs two".
+    func test_onlyOneFundedRowIsReportedAsNeedsTwo() {
+        var a = SplitAllocation(total: 100)
+        a.tick("a"); a.tick("b")
+        a.setAmount("a", 100); a.setAmount("b", 0)
+        XCTAssertEqual(a.problem, .needsTwo)
+    }
+
+    func test_payloadDropsZeroRowsAndMapsUncategorised() {
+        var a = SplitAllocation(total: 100)
+        a.tick(""); a.tick("b"); a.tick("c")
+        a.setAmount("", 60); a.setAmount("b", 40); a.setAmount("c", 0)
+        let p = a.payload
+        XCTAssertEqual(p.count, 2)
+        XCTAssertNil(p[0].categoryId)
+        XCTAssertEqual(p[1].categoryId, "b")
+    }
+}
