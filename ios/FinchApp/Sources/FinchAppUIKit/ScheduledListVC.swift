@@ -94,6 +94,15 @@ final class ScheduledListVC: UIViewController {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in self?.applySnapshot() }
             .store(in: &cancellables)
+
+        // Privacy mode is not one of those three slices, so without this the eye
+        // icon and the calendar's masked figures both stayed on whatever they were
+        // when the tab was built. `BudgetsListVC` observes the same signal for the
+        // same reason.
+        store.objectWillChange
+            .receive(on: DispatchQueue.main)   // delivered after the mutation lands
+            .sink { [weak self] _ in self?.applySnapshot() }
+            .store(in: &cancellables)
     }
 
     // MARK: Collection view
@@ -153,13 +162,24 @@ final class ScheduledListVC: UIViewController {
             navigationItem.leftBarButtonItems = nil
         }
 
+        // Hide-amounts, same construction as `BudgetsListVC`. The SwiftUI root has
+        // always carried it; the converted root shipped without it, so with the
+        // UIKit screens on by default the toggle was simply gone from this tab.
+        let privacy = UIBarButtonItem(
+            image: UIImage(systemName: store.privacyMode ? "eye.slash" : "eye"),
+            primaryAction: UIAction { [weak self] _ in self?.store.privacyMode.toggle() })
+        privacy.accessibilityLabel = String(localized: "Privacy mode")
+        privacy.accessibilityValue = store.privacyMode ? String(localized: "on") : String(localized: "off")
+
         let add = UIBarButtonItem(image: UIImage(systemName: "plus"), primaryAction: UIAction { [weak self] _ in
             self?.presentSheet(ScheduledSheet(prefillStart: nil))
         })
         add.accessibilityLabel = String(localized: "Add Scheduled")
         // Disabled with no accounts: a recurring transaction needs somewhere to post.
         add.isEnabled = !store.accounts.isEmpty
-        navigationItem.rightBarButtonItem = add
+        // Right-to-left: `add` sits outermost, so this reads "eye +" on screen —
+        // the order the SwiftUI root uses.
+        navigationItem.rightBarButtonItems = [add, privacy]
     }
 
     private func configureDataSource() {
