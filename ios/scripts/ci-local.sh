@@ -127,9 +127,17 @@ fi
 echo "  simulator: ${SIM:-<none found>}"
 
 # --- 4. FinchApp build + test ------------------------------------------------
+# The three retry flags MATCH CI — see the long comment on that step in
+# .github/workflows/ci.yml for the flake data behind them and for why
+# -test-repetition-relaunch-enabled is load-bearing rather than a tuning knob.
+# They are here so this script keeps predicting CI's verdict: without them a
+# UI-test flake fails locally and passes in CI, which is the false signal this
+# script exists to prevent. A green run costs nothing; only failures are re-run.
 step "Build + test FinchApp"
 if xcodebuild test -project FinchApp.xcodeproj -scheme FinchApp \
      -destination "platform=iOS Simulator,name=$SIM" -derivedDataPath "$DD" \
+     -retry-tests-on-failure -test-iterations 3 \
+     -test-repetition-relaunch-enabled YES \
      -skipPackagePluginValidation -skipMacroValidation \
      COMPILER_INDEX_STORE_ENABLE=NO >"$RUN_DIR/app.log" 2>&1; then
   pass "$(grep -oE 'Executed [0-9]+ tests' "$RUN_DIR/app.log" | tail -1)"

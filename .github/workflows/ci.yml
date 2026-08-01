@@ -233,12 +233,51 @@ jobs:
           restore-keys: |
             dd-${{ runner.os }}-
 
+      # `-retry-tests-on-failure` re-runs ONLY the tests that failed, up to
+      # `-test-iterations` attempts each. A green run pays nothing — retries are
+      # spent on failure alone, so this costs time exactly when time was already
+      # going to be lost to a re-run.
+      #
+      # WHY: FinchAppUITests drives a simulator through XCUITest, and it fails
+      # spuriously at roughly 1 run in 12 — measured across 25 consecutive runs
+      # (2026-08-01). Both failures were NavigationUIKitUITests on the Accounts
+      # drill, and one is PROVABLY transient: #678's PR run failed
+      # `testAccountsDrillIntoAccountDetail` ("the drill didn't open"), and the
+      # merge commit of that identical code passed minutes later (c9e29f18).
+      # #680 hit the other shape — drill and sheet both succeeded, then the app
+      # died mid-retry with "Lost connection to the application
+      # (mach_error=10000003)" while XCTest re-snapshotted the accessibility
+      # tree at 20-30s an attempt. Re-running that job unchanged went green.
+      #
+      # THIS MASKS AN INTERMITTENT PRODUCT BUG AS READILY AS A HARNESS ONE, and
+      # both observed failures were UIKit-mode Accounts drills — the surface the
+      # migration is actively converting. If a test starts needing its retry on
+      # most runs, the retry is hiding a race in the conversion, not absorbing
+      # simulator noise. Read the result bundle before assuming noise.
+      #
+      # `-test-repetition-relaunch-enabled YES` IS LOAD-BEARING, not a tuning knob.
+      # Without it xcodebuild repeats a test IN THE SAME PROCESS (its documented
+      # default), and #680's failure mode was precisely a dead process plus a
+      # poisoned testmanagerd connection — "Couldn't communicate with a helper
+      # application … peer may have been unloaded". Retrying in the same runner is
+      # retrying into the wreckage. The tests already relaunch the APP under test
+      # in setUpWithError; this relaunches the RUNNER, which is the half that died.
+      #
+      # `-test-iterations 3` is the documented default for -retry-tests-on-failure
+      # and is stated anyway, so the ceiling is visible here rather than inherited.
+      #
+      # Scoped to the whole step because the unit tests and the UI tests share it
+      # today. The 328 FinchAppTests run in 12s and have not flaked, so the blast
+      # radius is small; splitting the UI tests into their own step is what would
+      # confine this to the target that needs it.
       - name: Build + test FinchApp
         working-directory: ios
         run: |
           xcodebuild test -project FinchApp.xcodeproj -scheme FinchApp \
             -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.name }}" \
             -derivedDataPath /tmp/dd \
+            -retry-tests-on-failure -test-iterations 3 \
+            -test-repetition-relaunch-enabled YES \
             -skipPackagePluginValidation -skipMacroValidation \
             COMPILER_INDEX_STORE_ENABLE=NO
 
