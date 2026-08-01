@@ -596,6 +596,12 @@ struct AddTransactionSheet: View {
                     "categoryId": categoryId.isEmpty ? .null : .string(categoryId), "date": .string(ymd), "time": .string(hm),
                 ]
                 if !note.isEmpty { args["note"] = .string(note) }
+                // The user was shown the possible-duplicate prompt and chose "Add
+                // anyway". Without this the engine's double-submit backstop refuses
+                // the write regardless — the prompt asked and the answer was
+                // ignored, which is the bug this fixes. Reachable only after that
+                // confirmation, so ordinary saves keep the backstop.
+                if dupConfirmed { args["allowDuplicate"] = .bool(true) }
                 // Foreign-currency entry: pass the chosen currency so the engine
                 // carries orig_* + converts to the account/base currency.
                 if !currencyCode.isEmpty, currencyCode != currency(of: accountId) {
