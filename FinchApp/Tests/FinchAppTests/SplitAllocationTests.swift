@@ -122,7 +122,7 @@ extension SplitAllocationTests {
         var a = SplitAllocation(total: 66.20)
         a.tick("groceries"); a.tick("household"); a.tick("dining")
         a.setAmount("groceries", 40); a.setAmount("household", 18.20); a.setAmount("dining", 8)
-        XCTAssertEqual(a.dominantCategoryId, "groceries")
+        XCTAssertEqual(a.dominantId, "groceries")
     }
 
     // The web writes to the same ledger with free-form split rows, so a stored
@@ -131,9 +131,9 @@ extension SplitAllocationTests {
     // `description`, which the UI never writes and the projection reads back as nil.
     func test_mergingFoldsRepeatedCategoriesAndSumsThem() {
         let a = SplitAllocation.merging([
-            (categoryId: "groceries", amount: 10),
-            (categoryId: "groceries", amount: 20),
-            (categoryId: "household", amount: 28.20),
+            (id: "groceries", amount: 10),
+            (id: "groceries", amount: 20),
+            (id: "household", amount: 28.20),
         ], total: 58.20)
         XCTAssertEqual(a.rows.map(\.id), ["groceries", "household"])
         XCTAssertEqual(a.rows.map(\.amount), [30.00, 28.20])
@@ -143,7 +143,7 @@ extension SplitAllocationTests {
     // not re-divided the moment the sheet opens.
     func test_mergedRowsArrivePinned() {
         let a = SplitAllocation.merging([
-            (categoryId: "a", amount: 70), (categoryId: "b", amount: 30),
+            (id: "a", amount: 70), (id: "b", amount: 30),
         ], total: 100)
         XCTAssertEqual(a.rows.map(\.pinned), [true, true])
         XCTAssertEqual(a.rows.map(\.amount), [70, 30])
@@ -151,7 +151,7 @@ extension SplitAllocationTests {
 
     func test_mergingMapsNilCategoryToTheUncategorisedRow() {
         let a = SplitAllocation.merging([
-            (categoryId: nil, amount: 5), (categoryId: "a", amount: 5),
+            (id: nil, amount: 5), (id: "a", amount: 5),
         ], total: 10)
         XCTAssertEqual(a.rows.map(\.id), ["", "a"])
     }
@@ -200,8 +200,50 @@ extension SplitAllocationTests {
         a.setAmount("", 60); a.setAmount("b", 40); a.setAmount("c", 0)
         let p = a.payload
         XCTAssertEqual(p.count, 2)
-        XCTAssertNil(p[0].categoryId)
-        XCTAssertEqual(p[1].categoryId, "b")
+        XCTAssertNil(p[0].id)
+        XCTAssertEqual(p[1].id, "b")
+    }
+}
+
+extension SplitAllocationTests {
+
+    // `SplitAllocation` is shared by the account split (`SearchablePickerRow`'s
+    // `splitting:`) as well as the category split — one allocation model, not a
+    // fork. These use account-shaped ids to prove the arithmetic genuinely
+    // doesn't depend on category semantics (no account ever ticks "", so that
+    // leg of `payload`/`merging` is moot here, but everything else is identical).
+    func test_splitAllocationWorksIdenticallyForAccountIds() {
+        var a = SplitAllocation(total: 100)
+        a.tick("acct-checking"); a.tick("acct-savings")
+        XCTAssertEqual(a.rows.map(\.amount), [50, 50])
+        a.setAmount("acct-checking", 30)
+        XCTAssertEqual(a.rows.map(\.amount), [30, 70])
+        XCTAssertNil(a.problem)
+        XCTAssertEqual(a.payload.map(\.id), ["acct-checking", "acct-savings"])
+        // The larger leg (savings, 70) survives an account-split collapse — the
+        // same "keep the biggest" rule the category picker uses.
+        XCTAssertEqual(a.dominantId, "acct-savings")
+    }
+
+    // One row is not a split for accounts either — `AddTransactionSheet.save()`
+    // gates `args["accounts"]` on `payload.count >= 2`, so a single ticked account
+    // must produce a one-row payload rather than being silently promoted.
+    func test_oneAccountRowIsNotASplit() {
+        var a = SplitAllocation(total: 100)
+        a.tick("acct-checking")
+        XCTAssertEqual(a.payload.count, 1)
+        XCTAssertNil(a.problem)
+    }
+
+    // A three-way account split of an odd amount cannot land exactly on every leg
+    // individually, but `redistribute()` puts the remainder on the last row so the
+    // sum is always exact — the property that keeps `problem` (and so Save) from
+    // ever blocking on a rounding cent.
+    func test_threeWayAccountSplitOfAnOddAmountStillSumsExactly() {
+        var a = SplitAllocation(total: 100)
+        a.tick("acct-a"); a.tick("acct-b"); a.tick("acct-c")
+        XCTAssertEqual(a.allocated, 100, accuracy: 0.0001)
+        XCTAssertNil(a.problem)
     }
 }
 

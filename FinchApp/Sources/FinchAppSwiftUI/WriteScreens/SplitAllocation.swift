@@ -1,16 +1,20 @@
 import Foundation
 
 /// The rows of a split and the arithmetic that keeps them adding up to the total.
+/// Axis-agnostic: a purchase split across CATEGORIES (`CategoryPickerRow`) and one
+/// split across the ACCOUNTS that paid for it (`SearchablePickerRow`'s `splitting`)
+/// share this one allocation model rather than each carrying its own copy.
 ///
 /// Deliberately free of SwiftUI: this is where every allocation rule lives, so the
 /// rules are tested directly instead of through a sheet. The view owns presentation
 /// only. See `ios/docs/category-split-toggle-design.md` for why each rule is what it is.
 struct SplitAllocation: Equatable {
 
-    /// One ticked category. `pinned` means the user typed this amount, so it is held
-    /// fixed and the unpinned rows divide whatever is left around it.
+    /// One ticked category or account. `pinned` means the user typed this amount,
+    /// so it is held fixed and the unpinned rows divide whatever is left around it.
     struct Row: Equatable, Identifiable {
-        /// Category id; `""` is the Uncategorized row (a `nil` leg to the engine).
+        /// Category or account id; `""` is the Uncategorized row (a `nil` leg to the
+        /// engine) — meaningful for categories only, since every account has a real id.
         var id: String
         var amount: Double
         var pinned: Bool
@@ -97,23 +101,25 @@ struct SplitAllocation: Equatable {
         return nil
     }
 
-    /// The category a collapse keeps — the largest leg, matching the rule the
-    /// projection already uses to pick the category a split displays.
-    var dominantCategoryId: String? {
+    /// The row a collapse keeps — the largest leg, matching the rule the projection
+    /// already uses to pick the category a split displays (and, for accounts, the
+    /// same "keep the biggest one" rule applied one axis over).
+    var dominantId: String? {
         rows.max { $0.amount < $1.amount }?.id
     }
 
-    /// What gets written. Zero rows drop out; `""` becomes a nil (uncategorised) leg.
-    var payload: [(categoryId: String?, amount: Double)] {
-        funded.map { (categoryId: $0.id.isEmpty ? nil : $0.id, amount: $0.amount) }
+    /// What gets written. Zero rows drop out; `""` becomes a nil (uncategorised) leg
+    /// — moot for accounts, which never tick an empty id.
+    var payload: [(id: String?, amount: Double)] {
+        funded.map { (id: $0.id.isEmpty ? nil : $0.id, amount: $0.amount) }
     }
 
     /// Load stored splits, folding repeats into one row each. Rows arrive PINNED:
     /// they are amounts the user set before, and must not be re-divided on open.
-    static func merging(_ splits: [(categoryId: String?, amount: Double)], total: Double) -> SplitAllocation {
+    static func merging(_ splits: [(id: String?, amount: Double)], total: Double) -> SplitAllocation {
         var out = SplitAllocation(total: total)
         for s in splits {
-            let id = s.categoryId ?? ""
+            let id = s.id ?? ""
             if let i = out.rows.firstIndex(where: { $0.id == id }) {
                 out.rows[i].amount = round2(out.rows[i].amount + abs(s.amount))
             } else {
