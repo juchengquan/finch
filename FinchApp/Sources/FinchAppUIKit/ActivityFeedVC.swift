@@ -383,6 +383,19 @@ final class ActivityFeedVC: UIViewController {
     /// flipping its status left the figures stale. SwiftUI recomputed them for free.
     /// Only the visible headers are refreshed, to stay off `reloadSections` — which
     /// would re-render every row in the section.
+
+    /// Clear a highlight that outlived its row's position.
+    ///
+    /// Tapping a swipe action highlights the cell. Diffable MOVES that cell to its
+    /// new index path rather than re-dequeuing it, so `prepareForReuse` never fires
+    /// and the highlight arrives with the row — the arriving row rendered grey for
+    /// ~0.5s before de-highlighting, which reads as a blink (see #702).
+    private func clearStuckHighlight() {
+        for cell in collectionView.visibleCells where cell.isHighlighted {
+            cell.isHighlighted = false
+        }
+    }
+
     private func refreshVisibleHeaders() {
         let kind = UICollectionView.elementKindSectionHeader
         for ip in collectionView.indexPathsForVisibleSupplementaryElements(ofKind: kind) {
@@ -463,6 +476,7 @@ final class ActivityFeedVC: UIViewController {
             sectionIDs = snap.sectionIdentifiers
             dataSource.apply(snap, animatingDifferences: false) { [weak self] in
                 self?.refreshVisibleHeaders()
+            self?.clearStuckHighlight()
             }
             configureToolbar()
             return
@@ -518,6 +532,7 @@ final class ActivityFeedVC: UIViewController {
         sectionIDs = snap.sectionIdentifiers
         dataSource.apply(snap, animatingDifferences: false) { [weak self] in
             self?.refreshVisibleHeaders()
+            self?.clearStuckHighlight()
             // `apply` clears the selection, so in column mode the row would stop
             // looking selected every time a figure changed underneath it.
             self?.reassertSelection()
