@@ -48,5 +48,43 @@ final class CategoryDropZoneTests: XCTestCase {
         XCTAssertEqual(CategoryDropZone.at(pointY: 0, cellMinY: 0, cellHeight: 0), .into)
         XCTAssertEqual(CategoryDropZone.at(pointY: 500, cellMinY: 0, cellHeight: 0), .into)
     }
+
+    // MARK: allowsNesting — an expanded parent offers no nest zone
+    //
+    // Its children are already on screen, so every position inside it is reachable
+    // by dropping between them. Keeping a nest zone there would be a second, vaguer
+    // route to the same result while taking half the row away from the precise one —
+    // which is what made same-level reordering hard to hit.
+
+    private func halved(_ y: CGFloat) -> CategoryDropZone {
+        CategoryDropZone.at(pointY: y, cellMinY: 100, cellHeight: 44, allowsNesting: false)
+    }
+
+    func testWithoutNestingTheRowIsHalves() {
+        XCTAssertEqual(halved(100), .before)       // top edge
+        XCTAssertEqual(halved(121), .before)       // fraction 0.477 — just above centre
+        XCTAssertEqual(halved(122), .after)        // fraction 0.5 exactly
+        XCTAssertEqual(halved(143), .after)        // bottom edge
+    }
+
+    /// The whole point: the band that used to nest now reorders instead.
+    func testWithoutNestingTheMiddleNeverNests() {
+        for y in stride(from: CGFloat(100), through: 144, by: 1) {
+            XCTAssertNotEqual(halved(y), .into,
+                              "y=\(y) offered nesting on a row whose children are visible")
+        }
+    }
+
+    /// Nesting stays the default so collapsed parents and leaves are unaffected —
+    /// they have no visible children to drop among, so it is the only way in.
+    func testNestingRemainsTheDefault() {
+        XCTAssertEqual(CategoryDropZone.at(pointY: 122, cellMinY: 100, cellHeight: 44), .into)
+    }
+
+    /// Degenerate frame with nesting refused must not silently nest anyway.
+    func testZeroHeightWithoutNestingFallsBackToBefore() {
+        XCTAssertEqual(
+            CategoryDropZone.at(pointY: 0, cellMinY: 0, cellHeight: 0, allowsNesting: false), .before)
+    }
 }
 #endif

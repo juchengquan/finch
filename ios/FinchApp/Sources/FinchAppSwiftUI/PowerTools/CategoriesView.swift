@@ -282,15 +282,21 @@ struct CategoriesView: View {
             }
             .dropDestination(for: String.self) { items, location in
                 guard let src = items.first else { return false }
+                // Same zone math as the UIKit screen, from the same enum — these were
+                // two hand-copied sets of thresholds until the shared one existed.
+                // `allowsNesting` is false for an expanded parent: its children are on
+                // screen, so every position inside it is already reachable by dropping
+                // between them, and a nest zone would only take half the row away from
+                // the precise route.
                 let h = rowHeights[c.id] ?? 44
-                let frac = h > 0 ? location.y / h : 0.5
+                let zone = CategoryDropZone.at(
+                    pointY: location.y, cellMinY: 0, cellHeight: h,
+                    allowsNesting: !(item.hasChildren && expanded.contains(c.id)))
                 let moves: [CategoryMove]
-                if frac < 0.25 {
-                    moves = CategoryReorder.reorder(src, .before, of: c.id, in: rows)
-                } else if frac > 0.75 {
-                    moves = CategoryReorder.reorder(src, .after, of: c.id, in: rows)
-                } else {
-                    moves = CategoryReorder.reparent(src, under: c.id, in: rows).map { [$0] } ?? []
+                switch zone {
+                case .before: moves = CategoryReorder.reorder(src, .before, of: c.id, in: rows)
+                case .after:  moves = CategoryReorder.reorder(src, .after, of: c.id, in: rows)
+                case .into:   moves = CategoryReorder.reparent(src, under: c.id, in: rows).map { [$0] } ?? []
                 }
                 guard !moves.isEmpty else { restoreCollapsedForDrag(); return false }
                 applyMoves(moves)

@@ -757,7 +757,27 @@ extension CategoriesVC: UICollectionViewDropDelegate {
         guard let indexPath = collectionView.indexPathForItem(at: point),
               let id = dataSource.itemIdentifier(for: indexPath) else { return nil }
         let frame = collectionView.cellForItem(at: indexPath)?.frame ?? .zero
-        return (id, CategoryDropZone.at(pointY: point.y, cellMinY: frame.minY, cellHeight: frame.height))
+        return (id, CategoryDropZone.at(pointY: point.y,
+                                        cellMinY: frame.minY,
+                                        cellHeight: frame.height,
+                                        allowsNesting: allowsNesting(into: id)))
+    }
+
+    /// Whether dropping onto `id` may nest inside it.
+    ///
+    /// Only when its children aren't already on screen. An EXPANDED parent gives no
+    /// nest zone: every position inside it is reachable by dropping between the
+    /// children you can see, so a nest zone would be a second, vaguer route to the
+    /// same result while taking half the row away from the precise one — which is
+    /// what made same-level reordering so hard to hit. A collapsed parent or a leaf
+    /// is the reverse: there are no visible children to drop among, so nesting is
+    /// the only way in and it keeps the middle half.
+    ///
+    /// Search is irrelevant here — it force-expands the tree, and dragging during
+    /// search is refused outright (`itemsForBeginning`).
+    private func allowsNesting(into id: String) -> Bool {
+        guard let item = flatByID[id] else { return true }
+        return !(item.hasChildren && expanded.contains(id))
     }
 
     func collectionView(_ cv: UICollectionView, performDropWith coordinator: UICollectionViewDropCoordinator) {
@@ -768,6 +788,7 @@ extension CategoriesVC: UICollectionViewDropDelegate {
 
         if target.id == Self.topLevelID {
             if let move = CategoryReorder.reparent(source, under: nil, in: rows) { applyMoves([move]) }
+            settle(coordinator, on: source)
             return
         }
         guard flatByID[target.id] != nil, target.id != source else { return }
@@ -778,6 +799,29 @@ extension CategoriesVC: UICollectionViewDropDelegate {
         case .into:
             if let move = CategoryReorder.reparent(source, under: target.id, in: rows) { applyMoves([move]) }
         }
+        settle(coordinator, on: source)
+    }
+
+    /// Hand the lifted preview back to UIKit so it animates INTO its new row.
+    ///
+    /// Without this the drop looked slow, and it was: `performDropWith` computed the
+    /// move and returned without ever telling the coordinator where the item went,
+    /// so UIKit had no destination and played the CANCEL animation — flying the
+    /// preview all the way back to where it was picked up — before the reprojected
+    /// snapshot swapped in the new order underneath it. Half a second of motion in
+    /// the wrong direction on every drop.
+    ///
+    /// `applySnapshot()` has to run first, and synchronously. The usual refresh
+    /// arrives via `store.objectWillChange.receive(on: DispatchQueue.main)`, which
+    /// hops a runloop turn even when it is already on main — so at this point
+    /// `visible` still describes the PRE-move list, and the index path derived from
+    /// it would point at the wrong row.
+    private func settle(_ coordinator: UICollectionViewDropCoordinator, on id: String) {
+        guard let item = coordinator.items.first?.dragItem else { return }
+        applySnapshot()
+        guard let section = sectionIDs.firstIndex(of: .rows),
+              let row = visible.firstIndex(where: { $0.row.id == id }) else { return }
+        coordinator.drop(item, toItemAt: IndexPath(item: row, section: section))
     }
 }
 
@@ -825,32 +869,6 @@ private final class AccessorySquare: UIView {
     override var intrinsicContentSize: CGSize { CGSize(width: side, height: side) }
 }
 
-/// Which of the three drop zones a drop point falls in, relative to the target row.
-///
-/// Extracted as a pure function deliberately: `idb` has no drag command (only
-/// press-move-release, which never triggers a UIKit drag lift), so the gesture that
-/// reaches `performDropWith` cannot be driven automatically. This is the one part of
-/// reorder-by-drag that CAN be tested, so it is — leaving only "does UIKit deliver
-/// the drop" for a human. `CategoryReorder` itself is already unit-tested.
-enum CategoryDropZone: Equatable {
-    /// Insert before the target, within its sibling group.
-    case before
-    /// Nest under the target.
-    case into
-    /// Insert after the target.
-    case after
-
-    /// `pointY` and `cellMinY` share a coordinate space (the collection view's).
-    /// Mirrors the SwiftUI screen's `location.y / h` thirds: the top quarter inserts
-    /// before, the bottom quarter after, and the middle half nests under.
-    static func at(pointY: CGFloat, cellMinY: CGFloat, cellHeight: CGFloat) -> CategoryDropZone {
-        guard cellHeight > 0 else { return .into }
-        let fraction = (pointY - cellMinY) / cellHeight
-        if fraction < 0.25 { return .before }
-        if fraction > 0.75 { return .after }
-        return .into
-    }
-}
 
 // MARK: - Hosted leaves
 
