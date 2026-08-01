@@ -67,6 +67,15 @@ final class MultiAccountAddTests: XCTestCase {
 
     /// Splitting the CATEGORY of a purchase that was paid from several ACCOUNTS would
     /// rebuild it from a single account leg and silently drop the rest. Refuse it.
+    ///
+    /// The split total (40 + 20 = 60) deliberately matches the FIRST account leg's
+    /// amount (a2, -60), not the sum of both legs (-100). That is what makes this
+    /// test discriminating: a split that totals -100 (e.g. 60 + 40) already trips
+    /// the pre-existing `error.split.sumMismatch` check (splitTotal vs the single
+    /// fetched leg's magnitude) before the new guard is ever reached, so it "throws"
+    /// regardless of whether the guard exists. A split totalling 60 sails past that
+    /// old check (60 == 60) and would reach the rebuild — silently dropping a1's -40
+    /// leg — unless the multi-account guard stops it first.
     func test_setTransactionSplits_onMultiAccountEntry_isRefusedAndKeepsBothLegs() throws {
         let q = try seedTwoAccounts()
         try q.write { db in
@@ -87,9 +96,12 @@ final class MultiAccountAddTests: XCTestCase {
         XCTAssertThrowsError(try Apply.apply(dbQueue: q, action: "setTransactionSplits", args: Args([
             "id": .string(eid),
             "splits": .array([
-                .object(["categoryId": .string("c1"), "amount": .double(60)]),
-                .object(["categoryId": .string("c2"), "amount": .double(40)]),
-            ])])))
+                .object(["categoryId": .string("c1"), "amount": .double(40)]),
+                .object(["categoryId": .string("c2"), "amount": .double(20)]),
+            ])]))) { error in
+            XCTAssertEqual((error as? I18nError)?.code, "error.split.multiAccount",
+                            "must be refused by the multi-account guard specifically, not any other validation")
+        }
 
         // The refusal must leave the entry exactly as it was — both payments intact.
         let (legs, total) = try q.read { db in
