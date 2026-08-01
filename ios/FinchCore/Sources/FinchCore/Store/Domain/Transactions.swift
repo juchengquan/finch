@@ -543,6 +543,14 @@ public enum Transactions {
             let entryId = ref.entryId
             let catCount = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM postings WHERE entry_id = ? AND category_id IS NOT NULL", arguments: [entryId]) ?? 0
             if catCount >= 2 { continue }
+            // A purchase paid from several accounts carries exactly one category leg by
+            // design, so catCount stays < 2 and the check above does not skip it — but the
+            // rebuild below still reads a single account leg (LIMIT 1) and would silently
+            // drop every other payment. Skip it instead: a bulk operation should skip what
+            // it cannot safely do, not abort the whole batch (mirrors setTransactionSplits'
+            // refusal, minus the throw — there is no single caller here to surface it to).
+            let acctLegCount = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM postings WHERE entry_id = ? AND account_id IS NOT NULL", arguments: [entryId]) ?? 0
+            if acctLegCount > 1 { continue }
             guard let acct = try Row.fetchOne(db, sql:
                 "SELECT id, account_id, amount, amount_base, exchange_rate, memo, orig_amount, orig_currency, cleared_at FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1",
                 arguments: [entryId]) else { continue }
