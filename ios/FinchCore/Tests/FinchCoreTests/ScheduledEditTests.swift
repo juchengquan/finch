@@ -79,4 +79,51 @@ final class ScheduledEditTests: XCTestCase {
         XCTAssertFalse(occAfter.contains("2026-03-01"), "an occurrence before the new start survived")
     }
 
+
+    // MARK: - the intended time-of-day (phase 2)
+
+    /// Without an intended time the posting still writes NULL — pinned deliberately,
+    /// because the WEB ORACLE writes NULL and `WriteParityTests` compares against it.
+    ///
+    /// This is a known wart, not a preference: a NULL-time entry sinks to the BOTTOM
+    /// of its day (the feed orders by `date DESC, time DESC`, SQLite sorts NULLs
+    /// last), which is exactly what `AddTransactionSheet` avoids when it prefills an
+    /// occurrence. Stamping the firing moment here fixes it and WAS tried — parity
+    /// failed. Moving it is a decision for both front-ends, so this test exists to
+    /// make the current behaviour deliberate rather than accidental.
+    func test_postScheduled_withoutAnIntendedTime_writesNull_forWebParity() throws {
+        let q = try seededTemplate()
+        try Apply.apply(dbQueue: q, action: "postScheduled", args: Args([
+            "templateId": .string("s1"), "date": .string("2026-02-01"),
+        ]))
+        let time = try q.read { db in
+            try String.fetchOne(db, sql: "SELECT time FROM entries WHERE source_template_id = 's1'")
+        }
+        XCTAssertNil(time, "iOS now stamps a time the web does not — WriteParityTests will fail")
+    }
+
+    /// And when the template says WHEN, the posting uses it.
+    func test_postScheduled_usesTheTemplatesIntendedTime() throws {
+        let q = try seededTemplate()
+        try Apply.apply(dbQueue: q, action: "updateScheduled", args: Args(["id": .string("s1"), "patch": .object([
+            "startTime": .string("09:30"),
+        ])]))
+        try Apply.apply(dbQueue: q, action: "postScheduled", args: Args([
+            "templateId": .string("s1"), "date": .string("2026-02-01"),
+        ]))
+        let time = try q.read { db in
+            try String.fetchOne(db, sql: "SELECT time FROM entries WHERE source_template_id = 's1'")
+        }
+        XCTAssertEqual(time, "09:30")
+    }
+
+    func test_startTime_isProjected() throws {
+        let q = try seededTemplate()
+        try Apply.apply(dbQueue: q, action: "updateScheduled", args: Args(["id": .string("s1"), "patch": .object([
+            "startTime": .string("07:05"),
+        ])]))
+        let t = try Projection.scheduledTemplates(dbQueue: q, ledgerId: "l1").first { $0.id == "s1" }
+        XCTAssertEqual(t?.startTime, "07:05")
+    }
+
 }

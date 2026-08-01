@@ -16,12 +16,27 @@ public enum Scheduled {
         .postScheduled: post,
     ]
 
+    /// The time a posting from `template` carries: its intended time-of-day, or nil
+    /// when it has none.
+    ///
+    /// **Nil deliberately, and it is a known wart.** An entry with a NULL time sinks
+    /// to the BOTTOM of its day — the feed orders by `date DESC, time DESC` and
+    /// SQLite sorts NULLs last — which is exactly what `AddTransactionSheet` avoids
+    /// when it prefills an occurrence. Stamping the firing moment here would fix
+    /// that, and it was tried: `WriteParityTests` fails, because the web oracle
+    /// writes NULL. Changing it is a PARITY decision (the web has to move too), not
+    /// an iOS one, so this only fills in a time the user actually chose.
+    static func postingTime(_ template: Row) -> String? {
+        guard let t = template["start_time"] as String?, !t.isEmpty else { return nil }
+        return t
+    }
+
     private static func postSingle(_ db: Database, ledgerId: String, accountId: String, amount: Double,
-                                   description: String, date: String, sourceTemplateId: String, categoryId: String?,
-                                   occurrenceDate: String? = nil) throws {
+                                   description: String, date: String, time: String?, sourceTemplateId: String,
+                                   categoryId: String?, occurrenceDate: String? = nil) throws {
         try Entries.postSimple(db, .init(ledgerId: ledgerId, accountId: accountId, amount: amount, date: date,
             description: description, categoryId: categoryId, kind: amount > 0 ? .income : .expense,
-            sourceTemplateId: sourceTemplateId, occurrenceDate: occurrenceDate))
+            time: time, sourceTemplateId: sourceTemplateId, occurrenceDate: occurrenceDate))
     }
 
     /// Post one transaction/transfer NOW from a template (confirmed). Honours the
@@ -45,13 +60,14 @@ public enum Scheduled {
         let date = a.date ?? String(ISO8601DateFormatter().string(from: Date()).prefix(10))
         let occurrenceDate = a.occurrenceDate ?? date
         let desc = (t["description"] as String?) ?? name
+        let postTime = postingTime(t)
         let type: String = t["kind"]
         let accountId: String = t["account_id"]
 
         if type == "transfer" {
             guard let from = t["from_account_id"] as String? else { throw I18nError("error.scheduled.missingAccount", ["name": name], "\"\(name)\" is missing an account") }
             try Entries.postTransfer(db, fromAccountId: from, toAccountId: accountId, fromAmount: abs((t["amount"] as Double?) ?? 0),
-                                     date: date, note: desc, sourceTemplateId: templateId, occurrenceDate: occurrenceDate)
+                                     date: date, time: postTime, note: desc, sourceTemplateId: templateId, occurrenceDate: occurrenceDate)
             return
         }
         guard let amount = t["amount"] as Double? else { throw I18nError("error.scheduled.variableAmount", ["name": name], "\"\(name)\" has a variable amount — add it manually") }
@@ -66,7 +82,7 @@ public enum Scheduled {
                     if portion == 0 { continue }
                     try postSingle(db, ledgerId: ledgerId, accountId: sp["account_id"], amount: portion,
                                    description: "\(desc) · \((sp["description"] as String?) ?? "")", date: date,
-                                   sourceTemplateId: templateId, categoryId: categoryId, occurrenceDate: occurrenceDate)
+                                   time: postTime, sourceTemplateId: templateId, categoryId: categoryId, occurrenceDate: occurrenceDate)
                     posted += 1
                 }
                 if posted == 0 { throw I18nError("error.scheduled.noSplits", ["name": name], "No split amounts to post for \"\(name)\"") }
@@ -74,7 +90,8 @@ public enum Scheduled {
             }
         }
         try postSingle(db, ledgerId: ledgerId, accountId: accountId, amount: (type == "income" ? 1 : -1) * amount,
-                       description: desc, date: date, sourceTemplateId: templateId, categoryId: categoryId, occurrenceDate: occurrenceDate)
+                       description: desc, date: date, time: postTime, sourceTemplateId: templateId,
+                       categoryId: categoryId, occurrenceDate: occurrenceDate)
     }
 
     /// Post every due (not-yet-generated) occurrence of each active template as a
@@ -94,7 +111,7 @@ public enum Scheduled {
                 id: r["id"], name: (r["name"] as String?) ?? "", description: nil, type: type,
                 amount: amount, frequency: r["frequency"], dayOfMonth: (r["day_of_month"] as Int?) ?? 1,
                 weekDay: r["day_of_week"], accountId: r["account_id"], fromAccountId: r["from_account_id"],
-                startDate: r["start_date"], endDate: r["end_date"], nextRun: (r["next_run"] as String?) ?? "",
+                startDate: r["start_date"], startTime: r["start_time"], endDate: r["end_date"], nextRun: (r["next_run"] as String?) ?? "",
                 maxExecutions: nil, installmentTotal: nil, installmentPaid: nil)
             var dates = Selectors.occurrencesUpTo(template, today)
             if dates.isEmpty { continue }
@@ -116,8 +133,8 @@ public enum Scheduled {
                 let fromAccountId: String = r["from_account_id"]
                 for date in dates {
                     try Entries.postTransfer(db, fromAccountId: fromAccountId, toAccountId: acctId, fromAmount: abs(amount),
-                                             date: date, note: description.isEmpty ? nil : description, sourceTemplateId: r["id"],
-                                             occurrenceDate: date, timestamp: ts)
+                                             date: date, time: postingTime(r), note: description.isEmpty ? nil : description,
+                                             sourceTemplateId: r["id"], occurrenceDate: date, timestamp: ts)
                 }
                 continue
             }
@@ -127,7 +144,8 @@ public enum Scheduled {
             for date in dates {
                 try Entries.postSimple(db, .init(ledgerId: ledgerId, accountId: acctId, amount: signed, date: date,
                     description: description, categoryId: categoryId, kind: type == "income" ? .income : .expense,
-                    status: .pending, counterpartyId: cpId, id: nil, sourceTemplateId: r["id"], occurrenceDate: date))
+                    time: postingTime(r), status: .pending, counterpartyId: cpId, id: nil,
+                    sourceTemplateId: r["id"], occurrenceDate: date))
             }
         }
     }
@@ -147,7 +165,7 @@ public enum Scheduled {
             let id: String?; let ledgerId: String?; let name: String; let description: String?; let type: String?
             let amount: Double?; let frequency: String?; let dayOfMonth: Double?; let weekDay: Double?
             let accountId: String?; let fromAccountId: String?; let color: String?; let category: String?
-            let startDate: String?; let endDate: String?; let maxExecutions: Double?
+            let startDate: String?; let startTime: String?; let endDate: String?; let maxExecutions: Double?
         }
         let a = try args.to(A.self)
         let name = a.name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -166,13 +184,13 @@ public enum Scheduled {
         try db.execute(sql: """
             INSERT INTO scheduled_templates
               (id,ledger_id,name,description,kind,amount,amount_varies,splits_enabled,account_id,
-               from_account_id,category_id,frequency,day_of_month,day_of_week,start_date,
+               from_account_id,category_id,frequency,day_of_month,day_of_week,start_date,start_time,
                end_date,max_executions,installment_total,next_run,last_run,auto_post,color,is_active,created_at,updated_at)
-            VALUES (?,?,?,?,?,?,0,0,?,?,?,?,?,?,?,?,?,?,NULL,NULL,?,?,1,datetime('now'),datetime('now'))
+            VALUES (?,?,?,?,?,?,0,0,?,?,?,?,?,?,?,?,?,?,?,NULL,NULL,?,?,1,datetime('now'),datetime('now'))
             """, arguments: [a.id ?? Entries.newId("sch"), a.ledgerId ?? "personal", name,
                              a.description?.trimmingCharacters(in: .whitespacesAndNewlines), type, a.amount,
                              accountId, fromAccountId, a.category, frequency, Int(a.dayOfMonth ?? 1) == 0 ? 1 : Int(a.dayOfMonth ?? 1),
-                             a.weekDay.map { Int($0) }, startDate, a.endDate, a.maxExecutions.map { Int($0) }, installmentTotal,
+                             a.weekDay.map { Int($0) }, startDate, a.startTime, a.endDate, a.maxExecutions.map { Int($0) }, installmentTotal,
                              (args.values["autoPost"]?.isTruthy ?? false) ? 1 : 0, a.color])
     }
 
@@ -187,6 +205,8 @@ public enum Scheduled {
         // recompute. It was omitted here, which is the only reason the sheet showed it
         // read-only.
         "startDate": "start_date",
+        // The intended time-of-day for postings. NULL keeps today's behaviour.
+        "startTime": "start_time",
     ]
 
     static func update(_ db: Database, _ args: Args) throws {

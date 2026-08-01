@@ -73,9 +73,17 @@ that when prefilling, with the reason recorded:
 > stamping the occurrence at local midnight would otherwise sink it to the bottom of
 > today's list
 
-So the feature is *choosing* that time instead of it being whenever the app fired.
-`start_time` becomes the intended time-of-day; the posting path uses it when set and
-falls back to now when NULL.
+**Corrected while implementing.** That comment is wrong about the silent path: it
+passes no time at all, and `Entries` inserts `e.time` with no default — so generated
+transactions get NULL and **sink to the bottom of their day** (the feed orders by
+`date DESC, time DESC`; SQLite sorts NULLs last). The sheet avoids that; the silent
+path causes it.
+
+Stamping the firing moment fixes it, was implemented, and **fails
+`WriteParityTests`** — the web oracle writes NULL. So phase 2 ships the half that is
+an iOS decision (use a time the user chose) and leaves the NULL case alone. Making
+postings always carry a time is a **parity decision requiring the web to move too**,
+and is deliberately out of scope here.
 
 ## Phase 3 — budget cycles carry a time
 
