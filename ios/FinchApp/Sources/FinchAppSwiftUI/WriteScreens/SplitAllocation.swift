@@ -70,4 +70,56 @@ struct SplitAllocation: Equatable {
     }
 
     static func round2(_ x: Double) -> Double { (x * 100).rounded() / 100 }
+
+    // MARK: - Validation and collapse
+
+    /// Why Confirm is blocked, or nil when the selection is writable.
+    enum Problem: Equatable {
+        /// Two-plus ticked but the transaction has no amount to divide yet.
+        case needsAmount
+        /// Two-plus ticked but fewer than two carry a positive amount.
+        case needsTwo
+        /// Funded rows do not add up to the total.
+        case sumMismatch
+    }
+
+    private var funded: [Row] { rows.filter { $0.amount > 0 } }
+
+    var problem: Problem? {
+        // Fewer than two ticked is not a split at all — it is a plain single-category
+        // transaction, which is legal and is all the engine will accept below two.
+        guard rows.count >= 2 else { return nil }
+        guard total > 0 else { return .needsAmount }
+        guard funded.count >= 2 else { return .needsTwo }
+        let sum = funded.reduce(0) { $0 + $1.amount }
+        // Same tolerance the split editor used, and looser than the engine's own.
+        guard abs(sum - total) <= 0.01 * Double(funded.count) else { return .sumMismatch }
+        return nil
+    }
+
+    /// The category a collapse keeps — the largest leg, matching the rule the
+    /// projection already uses to pick the category a split displays.
+    var dominantCategoryId: String? {
+        rows.max { $0.amount < $1.amount }?.id
+    }
+
+    /// What gets written. Zero rows drop out; `""` becomes a nil (uncategorised) leg.
+    var payload: [(categoryId: String?, amount: Double)] {
+        funded.map { (categoryId: $0.id.isEmpty ? nil : $0.id, amount: $0.amount) }
+    }
+
+    /// Load stored splits, folding repeats into one row each. Rows arrive PINNED:
+    /// they are amounts the user set before, and must not be re-divided on open.
+    static func merging(_ splits: [(categoryId: String?, amount: Double)], total: Double) -> SplitAllocation {
+        var out = SplitAllocation(total: total)
+        for s in splits {
+            let id = s.categoryId ?? ""
+            if let i = out.rows.firstIndex(where: { $0.id == id }) {
+                out.rows[i].amount = round2(out.rows[i].amount + abs(s.amount))
+            } else {
+                out.rows.append(Row(id: id, amount: round2(abs(s.amount)), pinned: true))
+            }
+        }
+        return out
+    }
 }
