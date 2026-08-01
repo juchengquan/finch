@@ -151,6 +151,15 @@ final class LedgersVC: UIViewController {
     }
 
     private func applySnapshot() {
+        // The split shell sets `selectedID` BEFORE this view loads — `install(columns:)`
+        // runs while the column is still being assembled — so `dataSource` is nil here on
+        // a deep link that opens straight into a selection. Applying then trapped on the
+        // implicitly-unwrapped nil and killed the app at launch, on iPad only, on the
+        // widget / Spotlight / App Intent path. Nothing hit it interactively, where the
+        // view always exists before a row can be tapped. `viewDidLoad` applies once the
+        // data source is built, and `selectedID` is already stored by then, so skipping
+        // here loses nothing.
+        guard dataSource != nil else { return }
         ledgerByID = Dictionary(uniqueKeysWithValues: store.ledgers.map { ($0.id, $0) })
         var snap = NSDiffableDataSourceSnapshot<SectionID, String>()
         snap.appendSections([.ledgers])
