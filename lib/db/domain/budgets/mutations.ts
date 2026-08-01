@@ -44,7 +44,9 @@ export const handlers = {
       saved: args.saved != null ? Number(args.saved) : 0,
       frequency: str(args.frequency || 'monthly'),
       startDate: str(args.startDate || new Date().toISOString().slice(0, 10)),
+      startTime: args.startTime ? str(args.startTime) : null,
       endDate: args.endDate ? str(args.endDate) : null,
+      endTime: args.endTime ? str(args.endTime) : null,
       isRecurring: args.isRecurring != null ? Number(args.isRecurring) : type === 'income' ? 0 : 1,
       rollover: args.rollover ? 1 : 0,
       rolloverLimit: args.rolloverLimit == null ? null : Number(args.rolloverLimit),
@@ -76,6 +78,10 @@ export const handlers = {
     const validFreqs = ['daily','weekly','biweekly','monthly','quarterly','yearly'];
     if (!validFreqs.includes(patch.frequency)) throw new I18nError('error.budget.unknownFreq', { freq: String(patch.frequency) }, `Unknown frequency "${patch.frequency}"`);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(patch.startDate)) throw new I18nError('error.budget.dateFormat', {}, 'startDate must be YYYY-MM-DD');
+    // The turnover time travels with the start date it belongs to; malformed values
+    // are rejected here rather than silently skewing the cycle window, which is
+    // plain 'HH:mm' string comparison.
+    if (patch.startTime != null && !/^\d{2}:\d{2}$/.test(String(patch.startTime))) throw new I18nError('error.budget.timeFormat', {}, 'startTime must be HH:mm');
     if (patch.amount !== undefined && !(Number(patch.amount) > 0)) throw new I18nError('error.budget.amountGt0', {}, 'Budget amount must be greater than 0');
     await qUpdateBudgetCycle(exec, str(args.id), patch);
   },

@@ -191,7 +191,10 @@ CREATE TABLE IF NOT EXISTS budgets (
   carry_forward      REAL NOT NULL DEFAULT 0,
   frequency          TEXT NOT NULL CHECK(frequency IN ('daily','weekly','biweekly','monthly','quarterly','yearly')),
   start_date         TEXT NOT NULL,
+  -- Time-of-day the cycle turns over, 'HH:mm'. NULL = midnight.
+  start_time         TEXT,
   end_date           TEXT,
+  end_time           TEXT,
   is_recurring       INTEGER NOT NULL DEFAULT 1,
   rollover           INTEGER NOT NULL DEFAULT 0,
   rollover_limit     REAL,
@@ -665,6 +668,12 @@ const MIGRATIONS: Record<string, string[] | ((exec: ExecFn) => Promise<void>)> =
     ])
       await exec(sql);
   },
+  // A budget cycle's turnover time. Additive + nullable: NULL means midnight,
+  // which is exactly what every existing budget already does.
+  '2026-08-01T00:00:00Z': [
+    'ALTER TABLE budgets ADD COLUMN start_time TEXT',
+    'ALTER TABLE budgets ADD COLUMN end_time TEXT',
+  ],
 };
 
 // Additive migrations (ALTER TABLE ADD COLUMN, CREATE ... IF NOT EXISTS) must be

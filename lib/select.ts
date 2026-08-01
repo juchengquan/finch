@@ -1385,6 +1385,10 @@ export interface CycleWindow {
   from: string;
   /** Inclusive last day of the active period (YYYY-MM-DD). */
   to: string;
+  /** Inclusive start time on `from` (HH:mm). Absent = midnight. */
+  fromTime?: string;
+  /** EXCLUSIVE end time on `to` (HH:mm). Absent = the whole of `to` counts. */
+  toTime?: string;
 }
 
 /**
@@ -1399,6 +1403,7 @@ export function cycleWindow(
   today: string,
   endDate: string | null = null,
   isRecurring = 1,
+  startTime: string | null = null,
 ): CycleWindow {
   const start = fromYmd(startDate);
   const now = fromYmd(today);
@@ -1415,11 +1420,39 @@ export function cycleWindow(
   // Walk forward until the period end passes `now`. Bounded for safety.
   let s = start;
   let e = advance(s, frequency);
-  for (let guard = 0; e <= now && guard < 5000; guard++) {
+  // '00:00' IS the untimed behaviour — a cycle running midnight-to-midnight.
+  // Treating it as timed would take the branch below and change what `to` means for
+  // every budget saved without touching the time, which is most of them. Normalised
+  // here rather than at the write path so no route into the database can bypass it.
+  if (!startTime || startTime === '00:00') {
+    for (let guard = 0; e <= now && guard < 5000; guard++) {
+      s = e;
+      e = advance(e, frequency);
+    }
+    return { from: toYmd(s), to: toYmd(addDays(e, -1)) };
+  }
+  // Timed: the turnover is a moment inside the day, so compare moments. A bare
+  // `today` reads as midnight, which puts a same-day "now" BEFORE the turnover —
+  // correct, since the cycle has not rolled yet.
+  const nowStamp = today.length > 10 ? today : `${today} 00:00`;
+  for (let guard = 0; `${toYmd(e)} ${startTime}` <= nowStamp && guard < 5000; guard++) {
     s = e;
     e = advance(e, frequency);
   }
-  return { from: toYmd(s), to: toYmd(addDays(e, -1)) };
+  // `to` is the day the cycle STOPS on — the day the next one starts — and
+  // `toTime` is the moment it stops, exclusive.
+  return { from: toYmd(s), to: toYmd(e), fromTime: startTime, toTime: startTime };
+}
+
+/** Is `t` inside `[from fromTime, to toTime)`? Without times, the inclusive date
+ *  comparison this has always used. With them, moments — a transaction carrying no
+ *  time of its own reads as midnight. */
+export function inCycleWindow(t: { date: string; time?: string | null }, w: CycleWindow): boolean {
+  if (!w.fromTime && !w.toTime) return t.date >= w.from && t.date <= w.to;
+  const stamp = `${t.date} ${t.time ?? '00:00'}`;
+  if (stamp < `${w.from} ${w.fromTime ?? '00:00'}`) return false;
+  if (w.toTime) return stamp < `${w.to} ${w.toTime}`;
+  return t.date <= w.to;
 }
 
 export interface BudgetProgress extends CycleWindow {
@@ -1468,7 +1501,7 @@ export function budgetProgress(
   today: string,
   categories: { id: string; parentId: string | null }[] = [],
 ): BudgetProgress {
-  const win = cycleWindow(budget.frequency, budget.startDate, today, budget.endDate, budget.isRecurring);
+  const win = cycleWindow(budget.frequency, budget.startDate, today, budget.endDate, budget.isRecurring, budget.startTime ?? null);
   const accountSet = budget.accountIds.length ? new Set(budget.accountIds) : null;
   // Pre-expand the budget's configured category ids to include every
   // descendant, once. Falls back to just the configured set when no
@@ -1498,7 +1531,7 @@ export function budgetProgress(
     // Transfers are excluded for expense budgets only; income goals count
     // incoming transfer legs (positive amount) landing in a matched account.
     if (budget.type === 'expense' && kindOf(t) === 'transfer') continue;
-    if (t.date < win.from || t.date > win.to) continue;
+    if (!inCycleWindow(t, win)) continue;
     if (accountSet && !accountSet.has(t.account)) continue;
     if (tagSet && !(t.tags ?? []).some((x) => tagSet.has(x))) continue;
     if (cpSet && (t.counterpartyId == null || !cpSet.has(t.counterpartyId))) continue;
