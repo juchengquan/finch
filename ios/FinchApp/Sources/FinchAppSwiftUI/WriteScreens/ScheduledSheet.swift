@@ -49,7 +49,13 @@ struct ScheduledSheet: View {
         _categoryId = State(initialValue: template?.categoryId ?? "")
         _frequency = State(initialValue: template?.frequency ?? "monthly")
         _dayOfMonth = State(initialValue: template?.dayOfMonth ?? 1)
-        _startDate = State(initialValue: template?.startDate.flatMap { AppDate.isoDay.date(from: $0) } ?? prefillStart ?? Date())
+        // Seed from the template's date AND its intended time, so opening the sheet
+        // shows what it will actually post at rather than midnight.
+        let seeded: Date? = template?.startDate.flatMap { d in
+            if let t = template?.startTime, !t.isEmpty { return AppDate.isoDateTime.date(from: "\(d) \(t)") }
+            return AppDate.isoDay.date(from: d)
+        }
+        _startDate = State(initialValue: seeded ?? prefillStart ?? Date())
         _installmentEnabled = State(initialValue: template?.installmentTotal != nil)
         _installmentTotal = State(initialValue: template?.installmentTotal.map { String($0) } ?? "")
     }
@@ -122,9 +128,13 @@ struct ScheduledSheet: View {
                             Stepper("Day of month: \(dayOfMonth)", value: $dayOfMonth, in: 1...31)   // matches web (1–31); engine clamps to month length
                         }
                     }
+                    // Date AND time: the time is when this schedule posts. Left
+                    // unset it posts at whatever moment it fires, which is what
+                    // every existing template does.
                     FieldRow(glyph: .date, title: "Start", showsDefaultTrailing: false) {
-                        DatePicker("Start", selection: $startDate, displayedComponents: .date)
+                        DatePicker("Start", selection: $startDate, displayedComponents: [.date, .hourAndMinute])
                             .labelsHidden()
+                            .environment(\.locale, AppDate.h24Locale)
                     }
                 } header: {
                     finchSectionHeader("Schedule")
@@ -219,6 +229,7 @@ struct ScheduledSheet: View {
             if frequency == "monthly" { patch["dayOfMonth"] = .int(dayOfMonth) }
             // Moving the start moves the schedule: occurrences are derived from it.
             patch["startDate"] = .string(AppDate.isoDay.string(from: startDate))
+            patch["startTime"] = .string(AppDate.isoTime.string(from: startDate))
             if kind != .transfer { patch["category"] = categoryId.isEmpty ? .null : .string(categoryId) }
             patch["installmentTotal"] = installmentN.map { JSONValue.int($0) } ?? .null
             do { try store.apply(.updateScheduled, Args(["id": .string(template.id), "patch": .object(patch)])); dismiss() }
@@ -232,6 +243,7 @@ struct ScheduledSheet: View {
             "type": .string(kind.rawValue), "amount": amountValue.map { JSONValue.double($0) } ?? .null,
             "accountId": .string(accountId), "frequency": .string(frequency),
             "startDate": .string(AppDate.isoDay.string(from: startDate)),
+            "startTime": .string(AppDate.isoTime.string(from: startDate)),
         ]
         if frequency == "monthly" { args["dayOfMonth"] = .int(dayOfMonth) }   // integer field; matches the edit path
         if kind == .transfer { args["fromAccountId"] = .string(fromAccountId) }
