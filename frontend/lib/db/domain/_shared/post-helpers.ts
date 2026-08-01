@@ -13,9 +13,10 @@ export async function postSingle(
   sourceTemplateId: string | null = null,
   categoryId: string | null = null,
   occurrenceDate: string | null = null,
+  time: string | null = null,
 ): Promise<void> {
   await postSimple(exec, {
-    ledgerId, accountId, date,
+    ledgerId, accountId, date, time,
     amount, description, categoryId,
     kind: amount > 0 ? 'income' : 'expense',
     sourceTemplateId, occurrenceDate,
