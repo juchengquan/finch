@@ -310,10 +310,15 @@ extension FinchStore {
         }
     }
 
-    /// Whole days from the WALL CLOCK to `ymd` INCLUSIVE (UTC), floored at 0.
+    /// Whole days from the WALL CLOCK to `ymd` INCLUSIVE (device timezone), floored at 0.
     ///
     /// Two things this gets right that the previous version did not, both reported
     /// from a device on the 1st of a month:
+    ///
+    /// Dates here are in the DEVICE's timezone, not UTC: `AppDate` sets a locale but
+    /// no `timeZone`, so its formatters use the current one. (An older comment on this
+    /// method claimed UTC. Harmless while the unit was whole days; it would be an
+    /// hours-sized error now that `remaining(until:)` exists.)
     ///
     /// **The anchor.** It measured from `today` — the newest transaction's date —
     /// while the cycle it is describing comes from `budgetToday` (the wall clock).
@@ -333,6 +338,42 @@ extension FinchStore {
         guard let to = Self.parseDay(ymd), let now = Self.parseDay(budgetToday) else { return 0 }
         let daysAfterToday = Int((to.timeIntervalSince(now) / 86_400).rounded(.up))
         return max(0, daysAfterToday + 1)
+    }
+
+    /// How much of a cycle is left, at the granularity worth showing.
+    ///
+    /// A budget cycle's last day is `cycle.to`, and the cycle runs until that day
+    /// ENDS — local midnight. Nothing in the schema needs to say so: budgets carry
+    /// dates only (`startDate`/`endDate`), and end-of-day is derivable. Transactions
+    /// do carry a time (`Tx.time`, set by the Add sheet's `.hourAndMinute` picker),
+    /// but a budget window is not a transaction.
+    ///
+    /// Hours appear only on the FINAL day, where they are the useful unit — "7 hours
+    /// left" beats "1 day left" when you are deciding whether to buy something now.
+    /// Above that it stays in days, matching `daysLeft`.
+    public enum CycleRemaining: Equatable, Sendable {
+        case days(Int)          // 24h or more, inclusive of today
+        case hours(Int)         // the final day, 1...23
+        case lessThanAnHour     // the last stretch; minutes would go stale unrendered
+        case ended
+    }
+
+    /// - Note: computed at render time, so it does not tick on its own. Fine at hour
+    ///   granularity; it is the reason this stops short of minutes.
+    public func remaining(until ymd: String) -> CycleRemaining {
+        guard let lastDay = Self.parseDay(ymd) else { return .ended }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = .current
+        // The cycle ends when its last day ends: the start of the NEXT day. Built with
+        // Calendar rather than +86400 so a DST boundary cannot shift it by an hour.
+        guard let cycleEnd = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: lastDay)) else {
+            return .ended
+        }
+        let seconds = cycleEnd.timeIntervalSince(Date())
+        if seconds <= 0 { return .ended }
+        if seconds >= 86_400 { return .days(Int((seconds / 86_400).rounded(.up))) }
+        if seconds >= 3_600 { return .hours(Int(seconds / 3_600)) }
+        return .lessThanAnHour
     }
 
     // MARK: - Per-ledger reads (two-layer Ledger tab: detail works for ANY ledger)
