@@ -293,7 +293,13 @@ public enum Transactions {
             // omitted `currency` means the amount is already in the ledger base. The Add
             // sheet sends `currency` explicitly for a split.
             let statedBase = try Entries.convertToBase(db, a.amount, a.currency ?? base, base, a.date).amountBase
-            guard abs(totalBase - statedBase) < 0.005 else {
+            // convertToBase rounds to 2dp, so totalBase and statedBase are each a sum of
+            // independently-rounded cents — a flat 0.005 demands EXACT cent equality across
+            // N+1 roundings (N shares + the stated total), which a valid split can miss by a
+            // cent (e.g. 10.01 + 19.59 EUR @ 1.087 rounds to 10.88 + 21.29 = 32.17, but the
+            // combined 29.60 EUR rounds to 32.18 — one cent apart, both correct). Scale the
+            // tolerance by the number of independent roundings involved.
+            guard abs(totalBase - statedBase) < 0.005 * Double(shares.count + 1) else {
                 throw I18nError("error.split.accountsMismatch",
                                 ["total": String(format: "%.2f", totalBase), "amount": String(format: "%.2f", statedBase)],
                                 "The account amounts add up to \(totalBase), not \(statedBase)")
