@@ -357,7 +357,7 @@ final class AccountDetailVC: UIViewController {
     /// deliberately stays out there.
     private func monthHeader(_ key: String, _ txns: [Tx], withBalance: Bool) -> HeaderContent {
         let balance = withBalance
-            ? (txns.first.map { "  ·  " + store.displayMoneyBase(store.runningBalanceBase(for: $0)) } ?? "")
+            ? (txns.first.flatMap { t in store.runningBalanceBase(for: t).map { "  ·  " + store.displayMoneyBase($0) } } ?? "")
             : ""
         let subtitle = withBalance
             ? "\(String(localized: "Income")) \(store.displayMoneyBase(MonthGrouping.income(txns)))"
