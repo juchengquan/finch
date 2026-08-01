@@ -321,7 +321,23 @@ git commit -m "fix(core): a split-tender purchase is not a transfer"
 - Consumes: the legal shape from Task 1.
 - Produces: `postEntry` writes a **balanced** entry when a rule carrying `splits` fires on a multi-account entry.
 
-Today the block does `legs.first(where: { $0.accountId != nil })` and derives split portions from that one leg's amount. On a `-60 / -40` entry a splits rule deletes both category legs and rebuilds them summing to 60 against 100 of account legs — `tr_entry_seal` aborts the write.
+Today the block does `legs.first(where: { $0.accountId != nil })` and derives split
+portions from that one leg's amount. On a `-60 / -40` entry a splits rule deletes both
+category legs and rebuilds them summing to 60 against 100 of account legs.
+
+**The entry does not fail — it is silently corrupted, which is worse.** `appendResidue`
+(`Entries.swift:251-260`) force-balances whatever is left over into a `sys:fx` equity leg,
+so the missing 40 is booked as a **foreign-exchange residue on a domestic purchase**.
+Nothing catches it: `validateShape` explicitly permits fx equity on an expense
+(`Entries.swift:301` rejects only non-fx equity), and the audit's `badSimple` tests
+`eqOpen + eqAdj > 0` — fx is neither. The entry balances, passes validation, passes the
+audit, and is wrong.
+
+That also means **the test must assert the per-category amounts**, not the totals. Both
+`SUM(amount_base)` and `SUM(... WHERE category_id IS NOT NULL)` are algebraic identities
+here — the fx leg is itself a category leg, so the buggy path's `c1=42, c2=18, fx=40` and
+the correct path's `c1=70, c2=30` both total 100. A totals-only test passes before and
+after the fix and proves nothing.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -374,15 +390,21 @@ final class MultiAccountRulesTests: XCTestCase {
                     .category(Entries.CategoryLeg(categoryId: "c1", amountBase: 100)),
                 ]))
         }
-        let sum = try q.read { db in
-            try Double.fetchOne(db, sql: "SELECT ROUND(SUM(amount_base), 2) FROM postings WHERE entry_id = ?", arguments: [eid])
+        // Assert the PER-CATEGORY amounts. Totals cannot discriminate: appendResidue
+        // force-balances the shortfall into a sys:fx equity leg, which is itself a
+        // category leg, so the buggy path's c1=42 / c2=18 / fx=40 and the correct
+        // path's c1=70 / c2=30 both sum to 100.
+        let (c1, c2, fxLegs) = try q.read { db in
+            (try Double.fetchOne(db, sql: "SELECT ROUND(SUM(amount_base), 2) FROM postings WHERE entry_id = ? AND category_id = 'c1'", arguments: [eid]) ?? 0,
+             try Double.fetchOne(db, sql: "SELECT ROUND(SUM(amount_base), 2) FROM postings WHERE entry_id = ? AND category_id = 'c2'", arguments: [eid]) ?? 0,
+             try Int.fetchOne(db, sql: """
+                SELECT COUNT(*) FROM postings p JOIN categories c ON c.id = p.category_id
+                 WHERE p.entry_id = ? AND c.system = 'fx'
+                """, arguments: [eid]) ?? 0)
         }
-        XCTAssertEqual(sum, 0, "the entry must balance after the rule rewrote its splits")
-
-        let catTotal = try q.read { db in
-            try Double.fetchOne(db, sql: "SELECT ROUND(SUM(amount_base), 2) FROM postings WHERE entry_id = ? AND category_id IS NOT NULL", arguments: [eid])
-        }
-        XCTAssertEqual(catTotal, 100, "splits must cover the FULL 100, not just the first leg's 60")
+        XCTAssertEqual(c1, 70, accuracy: 0.001, "70% of the FULL 100, not of the first leg's 60")
+        XCTAssertEqual(c2, 30, accuracy: 0.001, "30% of the FULL 100, not of the first leg's 60")
+        XCTAssertEqual(fxLegs, 0, "no phantom fx residue — a domestic purchase has no exchange-rate remainder")
     }
 }
 ```
