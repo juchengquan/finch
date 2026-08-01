@@ -2,7 +2,8 @@ import SwiftUI
 import FinchCore
 
 /// The filter state for the transaction feed. Value type; `fromYMD`/`toYMD` convert
-/// the picked dates to the "yyyy-MM-dd" strings `ListOptions` expects.
+/// the picked dates to the strings `ListOptions` expects — "yyyy-MM-dd", or
+/// "yyyy-MM-dd HH:mm" once a bound carries a time of day.
 struct TxFilter: Equatable, Codable {
     var direction: String? = nil       // nil = all, "in", "out"
     var accountId: String? = nil
@@ -25,8 +26,22 @@ struct TxFilter: Equatable, Codable {
     private static let ymd: DateFormatter = {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; return f
     }()
-    var fromYMD: String? { from.map { Self.ymd.string(from: $0) } }
-    var toYMD: String? { to.map { Self.ymd.string(from: $0) } }
+    private static let hm: DateFormatter = {
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "HH:mm"; return f
+    }()
+
+    /// Midnight means "no time given", so a bound left at 00:00 sends a bare date.
+    ///
+    /// It has to: the picker always produces a time, and "to 2026-08-01 00:00" would
+    /// exclude everything after midnight on the closing day — a range that silently
+    /// loses a day compared with what it does today. Whereas a bare "to 2026-08-01"
+    /// includes the whole day, which is what a range picked by day means.
+    private static func stamp(_ d: Date) -> String {
+        let time = hm.string(from: d)
+        return time == "00:00" ? ymd.string(from: d) : "\(ymd.string(from: d)) \(time)"
+    }
+    var fromYMD: String? { from.map { Self.stamp($0) } }
+    var toYMD: String? { to.map { Self.stamp($0) } }
 }
 
 /// Edits a `TxFilter` in a sheet (apply on Done; Cancel discards).
@@ -108,9 +123,9 @@ struct TransactionFilterSheet: View {
                 }
                 Section("Date range") {
                     Toggle("From", isOn: $useFrom).switchOnlyToggles()
-                    if useFrom { DatePicker("From date", selection: $fromDate, displayedComponents: .date).labelsHidden() }
+                    if useFrom { DatePicker("From date", selection: $fromDate, displayedComponents: [.date, .hourAndMinute]).labelsHidden().environment(\.locale, AppDate.h24Locale) }
                     Toggle("To", isOn: $useTo).switchOnlyToggles()
-                    if useTo { DatePicker("To date", selection: $toDate, displayedComponents: .date).labelsHidden() }
+                    if useTo { DatePicker("To date", selection: $toDate, displayedComponents: [.date, .hourAndMinute]).labelsHidden().environment(\.locale, AppDate.h24Locale) }
                 }
                 Section("Amount range") {
                     HStack { Text("Min"); Spacer(); TextField("0", text: $minText).numericInput($minText).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }

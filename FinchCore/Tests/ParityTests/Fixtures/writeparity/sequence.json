@@ -260,6 +260,7 @@
         "accountId": "a2",
         "statementBalance": 500,
         "statementDate": "2026-05-31",
+        "statementTime": "09:15",
         "postAdjustment": true
       }
     },
@@ -1332,7 +1333,7 @@
       {
         "ledger_id": "personal",
         "date": "2026-05-31",
-        "time": null,
+        "time": "09:15",
         "description": "Reconciliation adjustment",
         "kind": "adjustment",
         "status": "confirmed",
@@ -1448,7 +1449,8 @@
         "sort_order": 3,
         "include_in_net_worth": 1,
         "is_active": 1,
-        "archived": false
+        "archived": false,
+        "last_reconciled_at": null
       },
       {
         "id": "a2",
@@ -1461,7 +1463,8 @@
         "sort_order": 1,
         "include_in_net_worth": 1,
         "is_active": 1,
-        "archived": false
+        "archived": false,
+        "last_reconciled_at": "2026-05-31 09:15"
       },
       {
         "id": "a3",
@@ -1474,7 +1477,8 @@
         "sort_order": 2,
         "include_in_net_worth": 1,
         "is_active": 1,
-        "archived": false
+        "archived": false,
+        "last_reconciled_at": null
       }
     ],
     "categories": [
