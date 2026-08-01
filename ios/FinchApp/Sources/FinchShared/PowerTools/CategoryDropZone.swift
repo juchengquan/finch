@@ -40,28 +40,26 @@ enum CategoryDropZone: Equatable {
         return .into
     }
 
-    /// How far right you must drag before a drop nests instead of reordering.
+    /// Whether a row can take a dropped category as a child.
     ///
-    /// Same level is the DEFAULT, at every row, expanded or folded — dragging
-    /// straight up and down can only ever change position. Nesting is a separate,
-    /// deliberate gesture: carry the row sideways and it indents, which is the
-    /// Reminders/Notes idiom.
+    /// **Only a group you can already see.** The receiver must have at least one
+    /// child AND be expanded, so the children it would join are on screen and the
+    /// drop lands somewhere visible. A childless category is never a receiver —
+    /// which means dragging cannot create a NEW level of nesting; the add-a-
+    /// sub-category action does that, where you can see what you are making.
     ///
-    /// This replaced two earlier attempts that both tried to infer intent from
-    /// vertical position and got it wrong. Nesting first owned the middle HALF of
-    /// every row, so it beat same-level two-to-one on target area; narrowing it to
-    /// rows whose children were hidden still left folded categories swallowing
-    /// drops aimed past them. Position cannot express "I meant to go inside" — only
-    /// a second axis can.
+    /// This applies at every depth, which is the whole point: a sub-category with
+    /// children of its own is a receiver on exactly the same terms, and only while
+    /// it is open.
     ///
-    /// 32pt is comfortably past an idle thumb's horizontal wander during a vertical
-    /// drag, and a little over two of the tree's 14pt indent steps, so it reads as
-    /// intentional without being a reach.
-    static let nestingDragThreshold: CGFloat = 32
-
-    /// Whether a drag that has travelled `dragDX` horizontally may nest.
-    /// Rightward only. Dragging LEFT is not an un-nest gesture: un-nesting happens
-    /// by dropping beside a shallower row, since a drop always joins the TARGET's
-    /// sibling group — land next to a top-level category and you become top-level.
-    static func allowsNesting(dragDX: CGFloat) -> Bool { dragDX >= nestingDragThreshold }
+    /// Three earlier rules failed before this one. Nesting first owned the middle
+    /// half of EVERY row, so it beat same-level two-to-one on target area. Refusing
+    /// it on expanded parents inverted the problem and let folded rows swallow drops
+    /// aimed past them. Gating it on a sideways drag worked but asked the user to
+    /// learn a gesture, and could not be expressed in SwiftUI at all, which forced
+    /// iPhone and iPad apart. This rule needs no gesture and no drag translation —
+    /// only facts both screens already have — so they can finally agree.
+    static func canReceiveChild(hasChildren: Bool, isExpanded: Bool) -> Bool {
+        hasChildren && isExpanded
+    }
 }
