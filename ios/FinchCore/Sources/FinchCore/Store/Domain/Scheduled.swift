@@ -181,6 +181,12 @@ public enum Scheduled {
         "dayOfMonth": "day_of_month", "weekDay": "day_of_week", "autoPost": "auto_post", "color": "color",
         "type": "kind", "category": "category_id", "endDate": "end_date", "maxExecutions": "max_executions",
         "installmentTotal": "installment_total",
+        // Editable: occurrences are DERIVED from start_date (`Forecast.occurrencesUpTo`
+        // anchors on it), and `next_run` is never written — inserted NULL and left
+        // there. So moving the start moves the whole schedule, with nothing stored to
+        // recompute. It was omitted here, which is the only reason the sheet showed it
+        // read-only.
+        "startDate": "start_date",
     ]
 
     static func update(_ db: Database, _ args: Args) throws {
