@@ -4633,6 +4633,16 @@
         }
       }
     },
+    "Only %@ accounts can be part of a split.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只有 %@ 账户才能参与拆分。"
+          }
+        }
+      }
+    },
     "Open Screen": {
       "localizations": {
         "zh-Hans": {
@@ -6592,6 +6602,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "尝试调整搜索或筛选条件。"
+          }
+        }
+      }
+    },
+    "Turn off the account split first.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先关闭账户拆分。"
+          }
+        }
+      }
+    },
+    "Turn off the category split first.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先关闭类别拆分。"
           }
         }
       }
