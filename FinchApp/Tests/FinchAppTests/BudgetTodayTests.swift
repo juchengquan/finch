@@ -87,4 +87,46 @@ final class BudgetTodayTests: XCTestCase {
         XCTAssertLessThanOrEqual(cycle.from, store.wallToday,
                                  "the cycle starts on \(cycle.from), after today — it is next month's")
     }
+
+    // MARK: - "days left" counts today, from the wall clock
+
+    private func day(offsetFromToday days: Int) -> String {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: Date().addingTimeInterval(Double(days) * 86_400))
+    }
+
+    /// A cycle's FINAL day must read "1 day left", not "0". Counting only the days
+    /// after today made a live, still-spendable cycle look finished — the reading
+    /// that started this whole investigation.
+    func test_daysLeft_countsTodayItself() async throws {
+        let store = try await loadedStore()
+        XCTAssertEqual(store.daysLeft(until: store.wallToday), 1)
+    }
+
+    func test_daysLeft_isZeroOncePast() async throws {
+        let store = try await loadedStore()
+        XCTAssertEqual(store.daysLeft(until: day(offsetFromToday: -1)), 0)
+    }
+
+    /// The device report: on 1 August, budgets read "32 days left" in a month with 31
+    /// days, because the count was measured from the newest TRANSACTION (30 July)
+    /// while the cycle came from the calendar. Anchored consistently, a count can
+    /// never exceed the cycle's own length.
+    func test_daysLeft_neverExceedsTheCycleLength() async throws {
+        let store = try await loadedStore()
+        let budget = monthlyBudget(ledgerId: store.activeLedgerId)
+        let cycle = Selectors.budgetProgress(budget, store.txns, store.budgetToday, store.categoryNodes)
+
+        let left = store.daysLeft(until: cycle.to)
+        let cal = Calendar(identifier: .gregorian)
+        let daysInMonth = cal.range(of: .day, in: .month, for: Date())?.count ?? 31
+
+        XCTAssertGreaterThanOrEqual(left, 1, "a live cycle always has today left")
+        XCTAssertLessThanOrEqual(left, daysInMonth,
+                                 "\(left) days left in a \(daysInMonth)-day month — the count is anchored elsewhere")
+    }
+
 }
