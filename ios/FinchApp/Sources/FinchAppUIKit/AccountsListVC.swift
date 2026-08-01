@@ -281,6 +281,10 @@ final class AccountsListVC: UIViewController {
     /// A row in the flat reorder editor: a group header (collapsible, drags as a block)
     /// or an account.
     private func configureReorderRow(_ cell: UICollectionViewListCell, row: ReorderRow) {
+        // Everything draggable gets a grip. Without one, reorder mode looked
+        // identical to the normal list apart from the toolbar, with nothing on
+        // screen saying the rows could be dragged at all.
+        cell.accessories = row.isDraggable ? [reorderGripAccessory()] : []
         switch row {
         case .group(let gid, let name):
             guard let gid else {
@@ -886,6 +890,15 @@ extension AccountsListVC: UICollectionViewDropDelegate {
         reorderRows = AccountReorder.applyVisibleMove(reorderRows, collapsed: collapsed,
                                                       from: IndexSet(integer: srcVisible), to: destination)
         applySnapshot()
+        // Hand the lifted preview back to UIKit so it animates INTO its new row.
+        // Without this the drop played the CANCEL animation — flying the preview all
+        // the way back to the lift point — before the reordered list appeared
+        // underneath it. `applySnapshot` above is synchronous and renders from
+        // `reorderRows`, so the index path resolved here is already the new one.
+        if let item = coordinator.items.first?.dragItem,
+           let dest = dataSource.indexPath(for: sourceID) {
+            coordinator.drop(item, toItemAt: dest)
+        }
     }
 }
 #endif
