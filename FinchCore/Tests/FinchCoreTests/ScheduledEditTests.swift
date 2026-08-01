@@ -82,16 +82,17 @@ final class ScheduledEditTests: XCTestCase {
 
     // MARK: - the intended time-of-day (phase 2)
 
-    /// Without an intended time the posting still writes NULL — pinned deliberately,
-    /// because the WEB ORACLE writes NULL and `WriteParityTests` compares against it.
+    /// Every posting carries a time now — the intended one, or the firing moment.
     ///
-    /// This is a known wart, not a preference: a NULL-time entry sinks to the BOTTOM
-    /// of its day (the feed orders by `date DESC, time DESC`, SQLite sorts NULLs
-    /// last), which is exactly what `AddTransactionSheet` avoids when it prefills an
-    /// occurrence. Stamping the firing moment here fixes it and WAS tried — parity
-    /// failed. Moving it is a decision for both front-ends, so this test exists to
-    /// make the current behaviour deliberate rather than accidental.
-    func test_postScheduled_withoutAnIntendedTime_writesNull_forWebParity() throws {
+    /// Without one the entry sinks to the BOTTOM of its day: the feed orders by
+    /// `date DESC, time DESC` and SQLite sorts NULLs last, which is exactly what
+    /// `AddTransactionSheet` avoids when it prefills an occurrence. The automatic
+    /// path used to cause it.
+    ///
+    /// Determinism comes from the caller, not a clock seam: the app omits the time
+    /// and gets "now", while the parity fixture PINS it — the same shape the action's
+    /// `date` already uses.
+    func test_postScheduled_withoutAnIntendedTime_stampsTheFiringMoment() throws {
         let q = try seededTemplate()
         try Apply.apply(dbQueue: q, action: "postScheduled", args: Args([
             "templateId": .string("s1"), "date": .string("2026-02-01"),
@@ -99,7 +100,19 @@ final class ScheduledEditTests: XCTestCase {
         let time = try q.read { db in
             try String.fetchOne(db, sql: "SELECT time FROM entries WHERE source_template_id = 's1'")
         }
-        XCTAssertNil(time, "iOS now stamps a time the web does not — WriteParityTests will fail")
+        XCTAssertEqual(time?.count, 5, "expected HH:mm, got \(time ?? "nil") — a null time sinks the row")
+    }
+
+    /// An explicit time wins over both — this is what the fixture uses.
+    func test_postScheduled_honoursAnExplicitTime() throws {
+        let q = try seededTemplate()
+        try Apply.apply(dbQueue: q, action: "postScheduled", args: Args([
+            "templateId": .string("s1"), "date": .string("2026-02-01"), "time": .string("11:22"),
+        ]))
+        let time = try q.read { db in
+            try String.fetchOne(db, sql: "SELECT time FROM entries WHERE source_template_id = 's1'")
+        }
+        XCTAssertEqual(time, "11:22")
     }
 
     /// And when the template says WHEN, the posting uses it.

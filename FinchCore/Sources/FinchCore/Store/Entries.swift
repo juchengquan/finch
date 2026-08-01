@@ -304,6 +304,17 @@ public enum Entries {
     }
 
     /// Double-submit backstop hash; nil when time is nil (parity with the web).
+    ///
+    /// NOT computed for template-generated entries, and that is deliberate. This
+    /// guard exists for a person tapping save twice. The scheduler legitimately
+    /// creates several near-identical entries for ONE payment — each half of a
+    /// 50/50 split, each instalment paid the same day — which are indistinguishable
+    /// by date, time, description and amount because they genuinely are alike. They
+    /// have their own protections: the instalment cap, and occurrence tracking.
+    ///
+    /// They used to escape this by accident (no time meant no hash). Giving them a
+    /// time made the accident load-bearing and broke splits, so the exemption is now
+    /// stated rather than implied.
     static func dedupHash(_ date: String, _ time: String?, _ description: String, _ legs: [ResolvedLeg]) -> String? {
         guard let time else { return nil }
         let acct = legs.filter { $0.accountId != nil }
@@ -407,7 +418,7 @@ public enum Entries {
                 """, arguments: [entryId, e.ledgerId, e.date, e.time, description, kind.rawValue, status.rawValue,
                                  status == .confirmed ? ts : nil, counterpartyId, e.refundedEntryId, e.sourceTemplateId, e.occurrenceDate,
                                  notes, appliedJson, reviewedAt,
-                                 e.allowDuplicate ? nil : dedupHash(e.date, e.time, description, legs), ts, ts])
+                                 (e.allowDuplicate || e.sourceTemplateId != nil) ? nil : dedupHash(e.date, e.time, description, legs), ts, ts])
             try insertPostings(db, entryId, legs)
             // Rule-added tags land inside the same SAVEPOINT (the entry row exists).
             for tagId in tagIdsAdd ?? [] {

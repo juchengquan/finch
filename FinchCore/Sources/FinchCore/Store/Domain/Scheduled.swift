@@ -16,19 +16,24 @@ public enum Scheduled {
         .postScheduled: post,
     ]
 
-    /// The time a posting from `template` carries: its intended time-of-day, or nil
-    /// when it has none.
+    /// The time a posting carries: an explicitly requested one, else the template's
+    /// intended time-of-day, else the moment it fires.
     ///
-    /// **Nil deliberately, and it is a known wart.** An entry with a NULL time sinks
-    /// to the BOTTOM of its day — the feed orders by `date DESC, time DESC` and
-    /// SQLite sorts NULLs last — which is exactly what `AddTransactionSheet` avoids
-    /// when it prefills an occurrence. Stamping the firing moment here would fix
-    /// that, and it was tried: `WriteParityTests` fails, because the web oracle
-    /// writes NULL. Changing it is a PARITY decision (the web has to move too), not
-    /// an iOS one, so this only fills in a time the user actually chose.
-    static func postingTime(_ template: Row) -> String? {
-        guard let t = template["start_time"] as String?, !t.isEmpty else { return nil }
-        return t
+    /// Never nil, and that is the point. An entry with a NULL time sinks to the
+    /// BOTTOM of its day — the feed orders by `date DESC, time DESC` and SQLite sorts
+    /// NULLs last — which is exactly what `AddTransactionSheet` avoids when it
+    /// prefills an occurrence. The automatic path used to cause it.
+    ///
+    /// The `explicit` argument is what keeps this deterministic: the app omits it and
+    /// gets the firing moment, while the parity fixture pins it — the same shape the
+    /// action's `date` already uses ("postScheduled with a PINNED date").
+    static func postingTime(_ template: Row, explicit: String?) -> String {
+        if let e = explicit, !e.isEmpty { return e }
+        if let t = template["start_time"] as String?, !t.isEmpty { return t }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "HH:mm"
+        return f.string(from: Date())
     }
 
     private static func postSingle(_ db: Database, ledgerId: String, accountId: String, amount: Double,
@@ -42,7 +47,7 @@ public enum Scheduled {
     /// Post one transaction/transfer NOW from a template (confirmed). Honours the
     /// installment cap and income splits.
     static func post(_ db: Database, _ args: Args) throws {
-        struct A: Decodable { let templateId: String; let date: String?; let occurrenceDate: String? }
+        struct A: Decodable { let templateId: String; let date: String?; let time: String?; let occurrenceDate: String? }
         let a = try args.to(A.self)
         let templateId = a.templateId
         guard let t = try Row.fetchOne(db, sql: "SELECT * FROM scheduled_templates WHERE id = ?", arguments: [templateId]) else {
@@ -60,7 +65,7 @@ public enum Scheduled {
         let date = a.date ?? String(ISO8601DateFormatter().string(from: Date()).prefix(10))
         let occurrenceDate = a.occurrenceDate ?? date
         let desc = (t["description"] as String?) ?? name
-        let postTime = postingTime(t)
+        let postTime = postingTime(t, explicit: a.time)
         let type: String = t["kind"]
         let accountId: String = t["account_id"]
 
@@ -98,8 +103,10 @@ public enum Scheduled {
     /// pending transaction/transfer. DEFERRED: split-enabled templates are
     /// skipped (as on the web), and the rules engine isn't applied.
     static func generateDue(_ db: Database, _ args: Args) throws {
-        struct A: Decodable { let today: String? }
-        let today = (try? args.to(A.self).today.flatMap { $0 }) ?? String(ISO8601DateFormatter().string(from: Date()).prefix(10))
+        struct A: Decodable { let today: String?; let time: String? }
+        let parsed = try? args.to(A.self)
+        let today = (parsed?.today).flatMap { $0 } ?? String(ISO8601DateFormatter().string(from: Date()).prefix(10))
+        let explicitTime = (parsed?.time).flatMap { $0 }
         let ts = ISO8601DateFormatter().string(from: Date())
         for r in try Row.fetchAll(db, sql: "SELECT * FROM scheduled_templates WHERE is_active = 1") {
             let type: String = r["kind"]
@@ -133,7 +140,7 @@ public enum Scheduled {
                 let fromAccountId: String = r["from_account_id"]
                 for date in dates {
                     try Entries.postTransfer(db, fromAccountId: fromAccountId, toAccountId: acctId, fromAmount: abs(amount),
-                                             date: date, time: postingTime(r), note: description.isEmpty ? nil : description,
+                                             date: date, time: postingTime(r, explicit: explicitTime), note: description.isEmpty ? nil : description,
                                              sourceTemplateId: r["id"], occurrenceDate: date, timestamp: ts)
                 }
                 continue
@@ -144,7 +151,7 @@ public enum Scheduled {
             for date in dates {
                 try Entries.postSimple(db, .init(ledgerId: ledgerId, accountId: acctId, amount: signed, date: date,
                     description: description, categoryId: categoryId, kind: type == "income" ? .income : .expense,
-                    time: postingTime(r), status: .pending, counterpartyId: cpId, id: nil,
+                    time: postingTime(r, explicit: explicitTime), status: .pending, counterpartyId: cpId, id: nil,
                     sourceTemplateId: r["id"], occurrenceDate: date))
             }
         }
