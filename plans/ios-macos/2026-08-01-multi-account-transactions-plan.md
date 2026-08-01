@@ -627,12 +627,27 @@ Then at the top of `addTransactionReturningId`, after `let a = try args.to(AddIn
         // if the shares don't total the stated amount, so a typo cannot silently
         // post a different purchase than the one on screen.
         if let shares = a.accounts, shares.count >= 2 {
-            let total = (shares.reduce(0.0) { $0 + $1.amount } * 100).rounded() / 100
-            let stated = (a.amount * 100).rounded() / 100
-            guard total == stated else {
+            // Each share is in ITS OWN account's currency, so the shares and the stated
+            // amount only become comparable in the ledger base. A raw sum would add
+            // incomparable units the moment two accounts hold different currencies —
+            // which is supported. A same-currency split converts at one rate and still
+            // reconciles exactly, within the penny tolerance the double rounding needs.
+            let base = try String.fetchOne(db, sql: "SELECT base_currency FROM ledgers WHERE id = ?", arguments: [a.ledgerId]) ?? "USD"
+            var totalBase = 0.0
+            for s in shares {
+                guard let ccy = try String.fetchOne(db, sql: "SELECT currency FROM accounts WHERE id = ?", arguments: [s.accountId]) else {
+                    throw I18nError("error.notFound.account", [:], "Account not found")
+                }
+                totalBase += try Entries.convertToBase(db, s.amount, ccy, base, a.date).amountBase
+            }
+            // With no single account there is no account currency to default to, so an
+            // omitted `currency` means the amount is already in the ledger base. The Add
+            // sheet sends `currency` explicitly for a split.
+            let statedBase = try Entries.convertToBase(db, a.amount, a.currency ?? base, base, a.date).amountBase
+            guard abs(totalBase - statedBase) < 0.005 else {
                 throw I18nError("error.split.accountsMismatch",
-                                ["total": String(format: "%.2f", total), "amount": String(format: "%.2f", stated)],
-                                "The account amounts add up to \(total), not \(stated)")
+                                ["total": String(format: "%.2f", totalBase), "amount": String(format: "%.2f", statedBase)],
+                                "The account amounts add up to \(totalBase), not \(statedBase)")
             }
             let eid = try Entries.postEntry(db, Entries.NewEntry(
                 ledgerId: a.ledgerId, date: a.date, time: a.time, description: a.merchant, kind: kind,
