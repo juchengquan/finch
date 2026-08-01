@@ -99,9 +99,27 @@ Do this one alone, and decide the web's position explicitly before starting.
 Both are read-only consumers rather than stored state, so they benefit from the
 comparison helpers phases 2–3 introduce. Cheapest last.
 
-## Parity
+## Parity — DECIDED: the web follows iOS
 
-Every phase touches `plans/database_design_en.md`, the model the web shares. Each
-carries the same decision: the web follows, or the two schemas diverge deliberately.
-Phase 1 needs no such decision — it only stops dropping a value the schema always
+Taken 2026-08-01. Every phase from here changes **both** front-ends and regenerates
+the fixtures; the two schemas do not diverge.
+
+Phase 1 needed no such decision — it only stopped dropping a value the schema always
 had.
+
+What "the web follows" costs, per phase:
+
+| | iOS | web | fixtures |
+|---|---|---|---|
+| 2 — chosen posting time | done (#681) | `start_time` column + `postScheduled` threading | regenerate |
+| 2b — always stamp a time | one line, reverted for parity | thread a time through `postSingle`/`postTransfer` | regenerate |
+| 3 — budgets carry a time | `cycleWindow` becomes datetime-aware | same, in `lib/select.ts` | regenerate; every boundary answer moves |
+| 4 — reconcile + filter | UI only | UI only | none |
+
+**Sequencing note.** 2b is the cheapest way to prove the whole "web follows"
+workflow — one behaviour, both stacks, fixtures regenerated, both suites green —
+before phase 3 does the same thing to every budget boundary in the fixture set. Do
+it first.
+
+`frontend/scripts/export-fixtures.ts` is the regeneration entry point, and
+`ios/README.md` documents its two gotchas.
