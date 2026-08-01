@@ -41,4 +41,25 @@ enum Metrics {
     /// What remains below the picker is `sectionSpacing`, which every grouped list
     /// in the app shares — deliberately not narrowed to close the last few points.
     static let modePickerBottomGap: CGFloat = 4
+
+    /// Minimum side of an interactive element, per Apple's HIG.
+    ///
+    /// Named as a FLOOR, not a size, because the pressure on it is always
+    /// downward: `ios/CLAUDE.md` records shrinking Categories' expand chevron as
+    /// one of two levers once considered for getting that row under 60pt (the
+    /// swipe-action style boundary). It was already sub-44 at the time — 22×30 —
+    /// which is what made missing it — and drilling into the category instead —
+    /// the common failure. `ExpandChevronTapTargetTests` makes the floor a tripwire.
+    static let tapTargetMin: CGFloat = 44
+
+    /// Layout height the expand chevron REPORTS to its row, as distinct from the
+    /// `tapTargetMin` box it actually accepts touches in.
+    ///
+    /// The two differ only on the SwiftUI side, where the chevron is a layout
+    /// participant in the row's `HStack` and a 44pt-tall frame would push the row
+    /// past 60pt. Clamping the reported height keeps iPad/macOS rows at the same
+    /// 60pt as iPhone's while the 44×44 hit box overflows it by 7pt top and bottom.
+    /// In UIKit the chevron is a cell accessory, not row content, so it takes the
+    /// full 44 and nothing moves.
+    static let expandChevronLayoutHeight: CGFloat = 30
 }
