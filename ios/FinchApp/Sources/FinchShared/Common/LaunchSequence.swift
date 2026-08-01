@@ -138,6 +138,13 @@ enum LaunchSequence {
         }
         try? fm.removeItem(at: AppGroup.widgetSnapshotURL)
         try? fm.removeItem(at: AppGroup.containerURL.appendingPathComponent("pending_attachments"))
+        // The remembered ledger lives in UserDefaults, NOT in the database, so deleting
+        // the file alone does not reset it — and the reseed reuses the same ledger ids,
+        // so a run that switched to "travel" comes back up in Travel on every launch
+        // afterwards, including the next test run. `-resetStore YES` has to mean a clean
+        // slate or it is worse than nothing: a UI suite then fails with "no 'Checking'
+        // row", which reads as the app being broken rather than as leftover state.
+        UserDefaults.standard.removeObject(forKey: FinchStore.activeLedgerKey)
     }
     #endif
 }
