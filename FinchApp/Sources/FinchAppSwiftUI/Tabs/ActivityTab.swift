@@ -362,12 +362,20 @@ struct ActivityFeedView: View {
         duplicating = txn
     }
     private func bulkConfirm() {
-        run { for id in selected { try store.apply(.confirmTransaction, Args(["id": .string(id)])) } }
+        report(store.confirmTransactions(Array(selected)), of: selected.count)
         isSelecting = false; selected.removeAll()
     }
     private func bulkDelete() {
-        run { for id in selected { try store.deleteTransaction(id) } }   // also unlinks receipts
+        report(store.deleteTransactions(Array(selected)), of: selected.count)   // also unlinks receipts
         isSelecting = false; selected.removeAll()
+    }
+    /// One write for the whole selection, so a row the engine rejects is skipped
+    /// rather than abandoning the rest — which means the shortfall has to be said
+    /// out loud, or a silently-skipped row looks like it worked.
+    private func report(_ applied: Int, of requested: Int) {
+        if applied < requested {
+            errorMessage = String(localized: "\(requested - applied) of \(requested) couldn't be applied.")
+        }
     }
     /// Run a mutation, surfacing a rejection as a localized error alert instead
     /// of silently no-op'ing (was `try?`).

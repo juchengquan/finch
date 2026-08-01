@@ -261,26 +261,97 @@ public final class FinchStore: ObservableObject {
     /// Every post-write side effect, fired exactly once per user-visible write
     /// (single action or a whole batch). `mutations` lists what was applied —
     /// the CloudKit outbox logs each one individually.
+    ///
+    /// **Split by whether a pixel is waiting for it.** Everything here used to run
+    /// inline, on the main actor, between the tap and the next frame — which is
+    /// exactly the window a row-move animation needs. Confirming a pending
+    /// transaction therefore animated against a main thread busy rebuilding the
+    /// widget snapshot, the Spotlight index and the DB-info probe, none of which is
+    /// on screen while the row slides. See `scheduleAmbientSideEffects`.
     private func fireWriteSideEffects(_ q: DatabaseQueue, mutations: [(ActionName, Args)]) {
+        WriteTiming.begin()
+        // The projection IS the animation: the row cannot move until the new state
+        // is published, so this stays synchronous.
         self.ledgers = (try? Projection.ledgers(dbQueue: q)) ?? ledgers
+        WriteTiming.mark("ledgers")
         reprojectActiveLedger()
-        self.dbInfo = makeDBInfo()
-        // Phase 6.1: keep Spotlight in sync (idempotent full re-index; the
-        // in-memory store is the UI's source of truth regardless).
-        Task { await SpotlightIndexer.shared.indexAll(store: self) }
-        // Phase 6.2: re-plan notifications from the new state.
-        Task { await NotificationService.shared.refresh() }
-        // Tier 2/3: refresh the home-screen + Watch widget on every write (was
-        // only on backup, so the widget could show stale figures for up to an hour).
-        WidgetSnapshotWriter.write(from: self)
-        WidgetCenter.shared.reloadAllTimelines()
-        // Phase 5: debounce an auto-backup pack.
-        AutoBackupManager.shared.schedule()
+        WriteTiming.mark("reproject")
         // Phase 8: publish each write to the CloudKit mutation log (no-op when
         // sync is off or while replaying a remote mutation — the echo guard).
+        // Stays inline: a mutation that never reaches the outbox is a lost edit,
+        // which is worse than a frame.
         for (action, args) in mutations {
             CloudKitSyncCoordinator.shared.noteLocalMutation(action: action, args: args, ledgerId: activeLedgerId)
         }
+        WriteTiming.mark("cloudkit")
+        scheduleAmbientSideEffects()
+    }
+
+    // MARK: - Ambient side effects
+
+    /// The pending debounced round, cancelled and replaced by each new write.
+    private var ambientTask: Task<Void, Never>?
+
+    /// How long after the LAST write the ambient round fires. Long enough to clear a
+    /// row-move animation (~0.35s) and to swallow a burst — a multi-select confirm,
+    /// an import, a sync replay — into one round instead of N.
+    static let ambientDebounce = Duration.milliseconds(400)
+
+    /// Counts completed ambient rounds. The seam the tests assert on: "one write did
+    /// not run this inline" and "a burst of ten ran it once" are both statements
+    /// about this number.
+    private(set) var ambientRunCount = 0
+
+    /// Queue the work no on-screen pixel is waiting for: the widget + Watch
+    /// snapshot, the Spotlight index, scheduled notifications, the DB-info probe and
+    /// the auto-backup timer.
+    ///
+    /// `WidgetSnapshotWriter.write` walks every transaction once per budget, encodes
+    /// JSON and writes it to the App Group synchronously; `makeDBInfo` runs COUNT(*)
+    /// across every table — which the launch path already refuses to do on the main
+    /// actor, for this same reason (see `computeDBInfo`). Neither is visible while a
+    /// row is moving, so neither belongs in that window.
+    private func scheduleAmbientSideEffects() {
+        ambientTask?.cancel()
+        ambientTask = Task { [weak self] in
+            try? await Task.sleep(for: FinchStore.ambientDebounce)
+            guard !Task.isCancelled else { return }
+            await self?.runAmbientSideEffects()
+        }
+    }
+
+    /// Run the pending ambient round NOW, cancelling the debounce.
+    ///
+    /// Called when the app backgrounds: a stale widget is never more visible than on
+    /// the home screen the user just went back to, and the debounce would otherwise
+    /// drop the update on the floor until the next write.
+    public func flushAmbientSideEffects() {
+        guard ambientTask != nil else { return }
+        ambientTask?.cancel()
+        ambientTask = nil
+        Task { await runAmbientSideEffects() }
+    }
+
+    private func runAmbientSideEffects() async {
+        ambientTask = nil
+        WriteTiming.beginAmbient()
+        self.dbInfo = makeDBInfo()
+        WriteTiming.markAmbient("dbInfo")
+        // Tier 2/3: refresh the home-screen + Watch widget (was only on backup, so
+        // the widget could show stale figures for up to an hour).
+        WidgetSnapshotWriter.write(from: self)
+        WidgetCenter.shared.reloadAllTimelines()
+        WriteTiming.markAmbient("widget")
+        // Phase 5: debounce an auto-backup pack.
+        AutoBackupManager.shared.schedule()
+        ambientRunCount += 1
+        // Phase 6.1: keep Spotlight in sync (idempotent full re-index; the
+        // in-memory store is the UI's source of truth regardless). Its own item
+        // building already runs off the main actor.
+        Task { await SpotlightIndexer.shared.indexAll(store: self) }
+        // Phase 6.2: re-plan notifications from the new state.
+        Task { await NotificationService.shared.refresh() }
+        WriteTiming.markAmbient("done")
     }
 
     // MARK: - Projection
