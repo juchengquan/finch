@@ -374,19 +374,28 @@ public enum Entries {
             // Amount is the SUM of every account leg (so a rule matching ">= 100"
             // fires on a 60 + 40 split tender), and the account is the LARGEST leg
             // (an account-matching rule has to pick one, and the biggest payer is
-            // the least surprising choice). Deriving either from `legs.first` made a
-            // splits rule rebuild the category legs against one leg's amount, leaving
-            // the entry unbalanced and aborting the seal.
+            // the least surprising choice; on a tie the FIRST leg wins, since ties
+            // never satisfy the strict `<` predicate `max(by:)` uses). Deriving
+            // either from `legs.first` made a splits rule rebuild the category legs
+            // against one leg's amount, leaving the entry unbalanced and aborting
+            // the seal.
             let acctLegs = legs.filter { $0.accountId != nil }
             let acctTotal = r2(acctLegs.reduce(0.0) { $0 + $1.amount })
             let acctTotalBase = r2(acctLegs.reduce(0.0) { $0 + $1.amountBase })
+            // Rule conditions match on `nativeAmount`/`currency`. Across legs in different
+            // currencies their raw sum is not a quantity in any currency, so fall back to the
+            // ledger base, which is comparable. When every leg shares a currency — including
+            // every single-account entry — this is exactly the old value.
+            let legCcys = Set(acctLegs.map(\.currency))
+            let sharedCcy: String? = legCcys.count == 1 ? legCcys.first : nil
             if !rules.isEmpty, let acctLeg = acctLegs.max(by: { abs($0.amountBase) < abs($1.amountBase) }) {
                 let firstCat = legs.first(where: { $0.accountId == nil })
                 let synthetic = Tx(
                     id: entryId, merchant: description, category: firstCat?.categoryId,
                     amount: acctTotalBase, account: acctLeg.accountId!, date: e.date,
-                    pending: status == .pending, ledgerId: e.ledgerId, currency: acctLeg.currency,
-                    nativeAmount: acctTotal, time: e.time, kind: kind.rawValue,
+                    pending: status == .pending, ledgerId: e.ledgerId,
+                    currency: sharedCcy ?? base,
+                    nativeAmount: sharedCcy != nil ? acctTotal : acctTotalBase, time: e.time, kind: kind.rawValue,
                     counterpartyId: counterpartyId, tags: [], note: notes,
                     sourceTemplateId: e.sourceTemplateId, refundedTransactionId: e.refundedEntryId)
                 let patch = RulesEngine.applyRules(synthetic, rules)
