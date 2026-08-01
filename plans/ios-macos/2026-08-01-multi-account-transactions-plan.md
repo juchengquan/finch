@@ -952,7 +952,24 @@ In the same file's `postEntry`, apply the Task 3 change: replace the `legs.find(
 
 - [ ] **Step 5: Mirror the transfer-group fix**
 
-In `frontend/lib/select.ts`, find where a transfer group is inferred from a count of account legs and gate it on `kind === 'transfer'`, exactly as Task 2 did.
+**The file is `frontend/lib/db/queries/transactions.ts`, not `lib/select.ts`.** (`select.ts`
+only *consumes* `transferGroupId`.) In `enrichLegTxs`, the exact mirror of
+`Projection.swift:149` reads:
+
+```typescript
+    const acctCount = acctCountMap.get(eid) ?? 1;
+    if (acctCount >= 2) tx.transferGroupId = eid;
+```
+
+Gate it on the entry's `kind` being `'transfer'`, exactly as Task 2 did on iOS, and carry
+the same comment.
+
+Two downstream consumers infer "transfer" from that field and are fixed for free once it
+is set correctly — do **not** change them: `lib/select.ts:20`
+(`t.kind ?? (t.transferGroupId ? 'transfer' : …)`) and `lib/rules/engine.ts:31`
+(`if (t.transferGroupId) return 'transfer'`). Confirm `kind` is selected into the row that
+`enrichLegTxs` mutates; if it is not, add it to the query rather than reintroducing a
+leg-count heuristic.
 
 - [ ] **Step 6: Run the web suite**
 
