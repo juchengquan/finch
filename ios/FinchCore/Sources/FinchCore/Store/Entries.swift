@@ -370,13 +370,23 @@ public enum Entries {
         let ruled: Set<Kind> = [.income, .expense, .refund]
         if !e.skipRules && ruled.contains(kind) {
             let rules = try Rules.activeRules(db, e.ledgerId)
-            if !rules.isEmpty, let acctLeg = legs.first(where: { $0.accountId != nil }) {
+            // The rules engine sees ONE synthetic transaction for the whole entry.
+            // Amount is the SUM of every account leg (so a rule matching ">= 100"
+            // fires on a 60 + 40 split tender), and the account is the LARGEST leg
+            // (an account-matching rule has to pick one, and the biggest payer is
+            // the least surprising choice). Deriving either from `legs.first` made a
+            // splits rule rebuild the category legs against one leg's amount, leaving
+            // the entry unbalanced and aborting the seal.
+            let acctLegs = legs.filter { $0.accountId != nil }
+            let acctTotal = r2(acctLegs.reduce(0.0) { $0 + $1.amount })
+            let acctTotalBase = r2(acctLegs.reduce(0.0) { $0 + $1.amountBase })
+            if !rules.isEmpty, let acctLeg = acctLegs.max(by: { abs($0.amountBase) < abs($1.amountBase) }) {
                 let firstCat = legs.first(where: { $0.accountId == nil })
                 let synthetic = Tx(
                     id: entryId, merchant: description, category: firstCat?.categoryId,
-                    amount: acctLeg.amountBase, account: acctLeg.accountId!, date: e.date,
+                    amount: acctTotalBase, account: acctLeg.accountId!, date: e.date,
                     pending: status == .pending, ledgerId: e.ledgerId, currency: acctLeg.currency,
-                    nativeAmount: acctLeg.amount, time: e.time, kind: kind.rawValue,
+                    nativeAmount: acctTotal, time: e.time, kind: kind.rawValue,
                     counterpartyId: counterpartyId, tags: [], note: notes,
                     sourceTemplateId: e.sourceTemplateId, refundedTransactionId: e.refundedEntryId)
                 let patch = RulesEngine.applyRules(synthetic, rules)
@@ -393,13 +403,13 @@ public enum Entries {
                         // account leg; the last split absorbs the rounding remainder
                         // in BOTH native and base space (else r2 drift mints a phantom
                         // sys:fx residue on cross-currency entries).
-                        let ratio = acctLeg.amount != 0 ? acctLeg.amountBase / acctLeg.amount : 1
+                        let ratio = acctTotal != 0 ? acctTotalBase / acctTotal : 1
                         legs.removeAll { $0.accountId == nil }
-                        var remaining = acctLeg.amount
-                        var remainingBase = acctLeg.amountBase
+                        var remaining = acctTotal
+                        var remainingBase = acctTotalBase
                         for (i, s) in splits.enumerated() {
                             let isLast = i == splits.count - 1
-                            let portion = isLast ? r2(remaining) : r2(acctLeg.amount * s.fraction)
+                            let portion = isLast ? r2(remaining) : r2(acctTotal * s.fraction)
                             remaining = r2(remaining - portion)
                             let catBase = isLast ? r2(-remainingBase) : r2(-portion * ratio)
                             remainingBase = r2(remainingBase + catBase)
