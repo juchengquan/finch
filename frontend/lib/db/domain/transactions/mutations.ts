@@ -317,6 +317,21 @@ export const handlers = {
     const ref = await resolveEntryRef(exec, txId);
     if (ref) {
       const { entryId } = ref;
+      // A purchase paid from several accounts carries one category leg by design, and
+      // the rebuild below reads a single account leg (LIMIT 1) — running it here would
+      // drop every other payment silently, leaving a balanced entry that no trigger and
+      // no audit rule flags. Refuse instead (mirrored on iOS).
+      const [{ n: acctLegCount }] = await exec(
+        'SELECT COUNT(*) AS n FROM postings WHERE entry_id = ? AND account_id IS NOT NULL',
+        [entryId],
+      );
+      if (Number(acctLegCount) > 1) {
+        throw new I18nError(
+          'error.split.multiAccount',
+          {},
+          'A purchase paid from several accounts takes a single category',
+        );
+      }
       // Load the account leg — forward verbatim (amounts/account don't change).
       const [acctLeg] = await exec(
         `SELECT id, account_id, amount, amount_base, exchange_rate, cleared_at, memo
