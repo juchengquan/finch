@@ -23,6 +23,19 @@ type Handler<A extends ActionName> = (exec: Exec, args: Args[A]) => Promise<void
 
 const str = (v: unknown) => String(v);
 
+// The time a posting carries: an explicitly requested one, else the template's
+// intended time-of-day, else the moment it fires.
+//
+// Never null, and that is the point: an entry with a NULL time sinks to the BOTTOM
+// of its day, since the feed orders by `date DESC, time DESC` and SQLite sorts NULLs
+// last. `explicit` is what keeps it deterministic — the app omits it and gets the
+// firing moment, the parity fixture pins it, exactly as `date` already works.
+function postingTime(explicit?: string): string {
+  if (explicit) return explicit;
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 export const handlers = {
   createScheduled: async (exec, args: Args['createScheduled']) => {
     const name = str(args.name).trim();
@@ -98,6 +111,7 @@ export const handlers = {
     const date = args.date ? str(args.date) : new Date().toISOString().slice(0, 10);
     const occurrenceDate = args.occurrenceDate ? str(args.occurrenceDate) : date;
     const desc = t.description || t.name;
+    const postTime = postingTime(args.time ? str(args.time) : undefined);
 
     if (t.type === 'transfer') {
       if (!t.fromAccountId || !t.accountId) throw new I18nError('error.scheduled.missingAccount', { name: t.name }, `"${t.name}" is missing an account`);
@@ -106,6 +120,7 @@ export const handlers = {
         toAccountId: t.accountId,
         fromAmount: Math.abs(Number(t.amount ?? 0)),
         date,
+        time: postTime,
         note: desc,
         sourceTemplateId: t.id,
         occurrenceDate,
@@ -121,17 +136,18 @@ export const handlers = {
       for (const sp of t.splits) {
         const portion = sp.abs != null ? sp.abs : (t.amount * (sp.pct ?? 0)) / 100;
         if (!portion) continue;
-        await postSingle(exec, ledgerId, sp.accountId, portion, `${desc} · ${sp.label}`, date, t.id, t.category ?? null, occurrenceDate);
+        await postSingle(exec, ledgerId, sp.accountId, portion, `${desc} · ${sp.label}`, date, t.id, t.category ?? null, occurrenceDate, postTime);
         posted++;
       }
       if (!posted) throw new I18nError('error.scheduled.noSplits', { name: t.name }, `No split amounts to post for "${t.name}"`);
       return;
     }
 
-    await postSingle(exec, ledgerId, t.accountId, sign * t.amount, desc, date, t.id, t.category ?? null, occurrenceDate);
+    await postSingle(exec, ledgerId, t.accountId, sign * t.amount, desc, date, t.id, t.category ?? null, occurrenceDate, postTime);
   },
   generateDueScheduled: async (exec, args: Args['generateDueScheduled']) => {
     const today = args.today ? str(args.today) : new Date().toISOString().slice(0, 10);
+    const genTime = postingTime(args.time ? str(args.time) : undefined);
     const rows = await exec('SELECT * FROM scheduled_templates WHERE is_active = 1');
     const ts = new Date().toISOString();
     for (const r of rows) {
@@ -178,7 +194,7 @@ export const handlers = {
         const sourceTemplateId = String(r.id);
         for (const date of dates) {
           await postTransfer(exec, {
-            fromAccountId, toAccountId: acctId, fromAmount, date,
+            fromAccountId, toAccountId: acctId, fromAmount, date, time: genTime,
             note: description || null, sourceTemplateId, occurrenceDate: date, timestamp: ts,
           });
         }
@@ -190,7 +206,7 @@ export const handlers = {
       const cpId = await resolveCounterpartyIdByName(exec, description);
       for (const date of dates) {
         await postSimple(exec, {
-          ledgerId, accountId: acctId, date,
+          ledgerId, accountId: acctId, date, time: genTime,
           amount, description, categoryId,
           kind: type === 'income' ? 'income' : 'expense',
           status: 'pending',

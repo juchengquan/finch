@@ -409,14 +409,16 @@
     {
       "action": "generateDueScheduled",
       "args": {
-        "today": "2026-04-15"
+        "today": "2026-04-15",
+        "time": "09:00"
       }
     },
     {
       "action": "postScheduled",
       "args": {
         "templateId": "s2",
-        "date": "2026-05-20"
+        "date": "2026-05-20",
+        "time": "10:15"
       }
     },
     {
@@ -424,6 +426,7 @@
       "args": {
         "templateId": "s2",
         "date": "2026-05-21",
+        "time": "10:16",
         "occurrenceDate": "2026-05-18"
       }
     },
@@ -509,7 +512,7 @@
       {
         "ledger_id": "personal",
         "date": "2026-01-15",
-        "time": null,
+        "time": "09:00",
         "description": "Gym",
         "kind": "expense",
         "status": "pending",
@@ -553,7 +556,7 @@
       {
         "ledger_id": "personal",
         "date": "2026-02-15",
-        "time": null,
+        "time": "09:00",
         "description": "Gym",
         "kind": "expense",
         "status": "pending",
@@ -597,7 +600,7 @@
       {
         "ledger_id": "personal",
         "date": "2026-03-15",
-        "time": null,
+        "time": "09:00",
         "description": "Gym",
         "kind": "expense",
         "status": "pending",
@@ -641,7 +644,7 @@
       {
         "ledger_id": "personal",
         "date": "2026-04-15",
-        "time": null,
+        "time": "09:00",
         "description": "Gym",
         "kind": "expense",
         "status": "pending",
@@ -1182,7 +1185,7 @@
       {
         "ledger_id": "personal",
         "date": "2026-05-20",
-        "time": null,
+        "time": "10:15",
         "description": "Gym",
         "kind": "expense",
         "status": "confirmed",
@@ -1226,7 +1229,7 @@
       {
         "ledger_id": "personal",
         "date": "2026-05-21",
-        "time": null,
+        "time": "10:16",
         "description": "Gym",
         "kind": "expense",
         "status": "confirmed",
