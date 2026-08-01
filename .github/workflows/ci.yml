@@ -205,6 +205,26 @@ jobs:
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "Using simulator: $NAME"
 
+      # An iPad too — the regular-width UI tests assert nothing on a phone (see the
+      # step below). Parsed from JSON rather than grepped: iPad device names contain
+      # parentheses of their own ("iPad Pro 11-inch (M4)"), so the `grep -oE` trick
+      # used above truncates them at the first bracket and yields a name that matches
+      # no device. This strips the UDID and state instead, keeping the whole name.
+      # Fails loudly when no iPad runtime is installed, because the whole point of
+      # this pair of steps is that silence is not coverage.
+      - name: Pick an available iPad simulator
+        id: ipad
+        run: |
+          NAME=$(xcrun simctl list devices available \
+            | sed -E 's/^[[:space:]]+//; s/ \([0-9A-F-]{36}\).*$//' \
+            | grep '^iPad' | head -1)
+          if [ -z "$NAME" ]; then
+            echo "::error::No iPad simulator available on this runner — the regular-width tests cannot run."
+            exit 1
+          fi
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "Using iPad simulator: $NAME"
+
       # Cache Xcode's resolved SwiftPM checkouts so the FinchApp/FinchMac builds
       # don't re-clone/re-resolve GRDB et al. Both xcodebuild steps share one
       # -derivedDataPath (/tmp/dd).
@@ -280,6 +300,45 @@ jobs:
             -test-repetition-relaunch-enabled YES \
             -skipPackagePluginValidation -skipMacroValidation \
             COMPILER_INDEX_STORE_ENABLE=NO
+
+      # The iPad half of the split shell, which NOTHING was running until now.
+      #
+      # `SplitSelectionUITests`, its hosted twin and `SplitMechanicsUITests` all call
+      # `XCTSkipUnless(width >= 700)`, so on the iPhone destination above they skip —
+      # every one of them. That is green because it did nothing, which is the most
+      # expensive kind of green: `SplitSelectionUITests` has been shipping "passes in
+      # CI" since it was written while only ever really running on someone's local
+      # iPad. Phase 3b put five converted tab roots behind exactly those assertions.
+      #
+      # `test-without-building` is what makes this cheap: the products in /tmp/dd from
+      # the step above are simulator builds and run on an iPad destination unchanged,
+      # so this adds test TIME (~2 minutes for 8 tests, measured) and no build time.
+      # Re-running the whole suite on a second destination would have roughly doubled
+      # the job for no extra coverage — the unit tests are width-agnostic.
+      #
+      # Same retry flags as the iPhone step, for the same reason: these are XCUITest
+      # and the flake rate documented above applies to them too.
+      - name: Test the split shell on an iPad (regular width)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building -project FinchApp.xcodeproj -scheme FinchApp \
+            -destination "platform=iOS Simulator,name=${{ steps.ipad.outputs.name }}" \
+            -derivedDataPath /tmp/dd \
+            -only-testing:FinchAppUITests/SplitMechanicsUITests \
+            -only-testing:FinchAppUITests/SplitSelectionUITests \
+            -only-testing:FinchAppUITests/SplitSelectionHostedUITests \
+            -retry-tests-on-failure -test-iterations 3 \
+            -test-repetition-relaunch-enabled YES \
+            COMPILER_INDEX_STORE_ENABLE=NO 2>&1 | tee /tmp/ipad-tests.log
+          # A run where every case skipped is the failure this step exists to prevent,
+          # and xcodebuild reports it as success. If the width guard stops matching —
+          # a new iPad that reports compact, a renamed class in -only-testing — this
+          # catches it instead of quietly restoring the old blind spot.
+          if ! grep -qE "Test Case .* passed \(" /tmp/ipad-tests.log; then
+            echo "::error::No iPad test actually ran — every case skipped. This step is not providing coverage."
+            exit 1
+          fi
 
       # i18n guard 2 of 2 — needs a compile, so it runs here where /tmp/dd is
       # already warm from the build above. Catches the OTHER failure mode: a new
