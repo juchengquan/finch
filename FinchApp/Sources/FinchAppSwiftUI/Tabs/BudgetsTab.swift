@@ -512,7 +512,19 @@ struct BudgetRowView: View {
                 if isGoal {
                     Text(" saved").foregroundStyle(.secondary)
                 } else {
-                    Text(" · \(store.daysLeft(until: progress.to)) days left").foregroundStyle(.secondary)
+                    // Hours on the final day — "7 hours left" is what you need when
+                    // deciding whether to spend now. Plural suffix inline, matching the
+                    // house pattern (see ActivityTab's "transaction\(…)").
+                    switch store.remaining(until: progress.to) {
+                    case .days(let d):
+                        Text(" · \(d) day\(d == 1 ? "" : "s") left").foregroundStyle(.secondary)
+                    case .hours(let h):
+                        Text(" · \(h) hour\(h == 1 ? "" : "s") left").foregroundStyle(.secondary)
+                    case .lessThanAnHour:
+                        Text(" · less than an hour left").foregroundStyle(.secondary)
+                    case .ended:
+                        EmptyView()
+                    }
                 }
             }
             .font(.caption2)

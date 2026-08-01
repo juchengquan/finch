@@ -366,7 +366,6 @@
   "Activate %@": "启用 %@",
   "Picking one of these activates it when you save.": "选择其中一项将在保存时启用它。",
   " saved": " 已存",
-  " · %lld days left": " · 剩余 %lld 天",
   "%@ spent · of %@": "已花费 %1$@ · 共 %2$@",
   "%@/mo": "%@/月",
   "%lld more tags": "还有 %lld 个标签",
@@ -722,5 +721,8 @@
   "No income in %@": "%@ 无收入",
   "of income saved in %@": "%@ 收入储蓄占比",
   "spent more than earned in %@": "%@ 支出超过收入",
-  "This month": "本月"
+  "This month": "本月",
+  " · %lld day%@ left": " · 剩余 %1$lld 天",
+  " · %lld hour%@ left": " · 剩余 %1$lld 小时",
+  " · less than an hour left": " · 剩余不到 1 小时"
 }
