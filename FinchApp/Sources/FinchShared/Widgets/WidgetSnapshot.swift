@@ -15,7 +15,7 @@ public enum WidgetSnapshotWriter {
             AccountSnapshotItem(id: $0.id, name: $0.name ?? "Account", balance: $0.balance, currency: $0.currency ?? store.displayCurrency)
         }
         let buds = store.budgets.map {
-            BudgetSnapshotItem(id: $0.id, name: $0.name, usedPct: Selectors.budgetProgress($0, store.txns, store.today, store.categoryNodes).pct)
+            BudgetSnapshotItem(id: $0.id, name: $0.name, usedPct: Selectors.budgetProgress($0, store.txns, store.budgetToday, store.categoryNodes).pct)
         }
         return WidgetSnapshot(netWorth: nw, currency: store.displayCurrency,
                               budgetUsedPct: pct, weeklySpent: weekly, generatedAt: stamp,

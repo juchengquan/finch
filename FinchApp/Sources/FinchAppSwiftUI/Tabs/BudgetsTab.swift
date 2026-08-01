@@ -487,7 +487,7 @@ struct BudgetRowView: View {
     @EnvironmentObject private var store: FinchStore
     let budget: BudgetRow
     var body: some View {
-        let progress = Selectors.budgetProgress(budget, store.txns, store.today, store.categoryNodes)
+        let progress = Selectors.budgetProgress(budget, store.txns, store.budgetToday, store.categoryNodes)
         // Goals (income, non-recurring — funded by real matched inflows) have no
         // cycle: no days-left countdown, no Over flag, and MORE saved is better
         // (so the 3-color spend banding would read backwards) — show % saved
