@@ -4,7 +4,7 @@
 
 **Goal:** One purchase paid from several accounts is stored as **one transaction** with several account legs, in both front-ends.
 
-**Architecture:** The `postings` schema already permits N account legs — `tr_entry_seal` requires only `sum(amount_base) = 0`, `>= 2` postings and `>= 1` account leg, with no upper bound, and transfers already use two. The block is one clause in the `kind-shape` audit rule (`acct != 1`) that was never part of the written invariant. This plan relaxes that clause, repairs the three places that silently assume a single account leg, extends the write API, then does the same in the web stack and regenerates the shared fixtures. **No schema migration anywhere.**
+**Architecture:** The `postings` schema already permits N account legs — `tr_entry_seal` requires only `sum(amount_base) = 0`, `>= 2` postings and `>= 1` account leg, with no upper bound, and transfers already use two. What refuses a split purchase is the *same rule written twice*: `Entries.validateShape:299` throws on the write path, and `Audit.swift:128` reports after the fact — neither clause is part of the written invariant I7. This plan relaxes both, repairs the places that silently assume a single account leg, extends the write API, then does the same in the web stack and regenerates the shared fixtures. **No schema migration anywhere.**
 
 **Tech Stack:** Swift 6 / GRDB / XCTest (iOS + macOS core), TypeScript / bun:test / sql.js (web), XcodeGen, shared SQLite schema and JSON fixtures.
 
@@ -52,8 +52,15 @@
 ### Task 1: Relax the kind-shape invariant (iOS)
 
 **Files:**
+- Modify: `ios/FinchCore/Sources/FinchCore/Store/Entries.swift:299` and `:302` (`validateShape`)
 - Modify: `ios/FinchCore/Sources/FinchCore/Storage/Audit.swift:128`
 - Test: `ios/FinchCore/Tests/FinchCoreTests/MultiAccountShapeTests.swift` (create)
+
+> **The rule is enforced TWICE and both must move together.** `Entries.validateShape`
+> (called from `postEntry:409` and the two `rebuildEntry` paths at `:691`/`:697`) throws
+> `error.entry.oneAccountLeg` *before anything is written*; `Audit.swift` only reports
+> after the fact. Relaxing the audit alone changes nothing observable — the write still
+> fails. This was missed when the plan was drafted and found by the Task 1 implementer.
 
 **Interfaces:**
 - Consumes: `TestSeed.base()` → migrated `DatabaseQueue` with ledger `l1` (USD), account `a1` (Cash, USD), category `c1` (Food, expense).
@@ -76,7 +83,7 @@ final class MultiAccountShapeTests: XCTestCase {
         try q.write { db in
             try db.execute(sql: """
                 INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
-                VALUES ('a2','l1','Card','credit','USD',0,1,1,1,datetime('now'),datetime('now'))
+                VALUES ('a2','l1','Card','credit_card','USD',0,1,1,1,datetime('now'),datetime('now'))
                 """)
         }
         return q
@@ -133,7 +140,36 @@ cd ios && swift test --filter MultiAccountShapeTests
 
 Expected: `test_expenseAcrossTwoAccounts_passesAudit` FAILS with a `kind-shape` problem reading `kind=expense but shape is acct=2 plain=1 …`. `test_transferWithThreeAccountLegs_stillFailsAudit` already PASSES.
 
-- [ ] **Step 3: Relax the clause**
+- [ ] **Step 3a: Relax the write-path check**
+
+In `ios/FinchCore/Sources/FinchCore/Store/Entries.swift`, in `validateShape`'s
+`default:` branch (income / expense / refund), replace lines 299 and 302:
+
+```swift
+            if acct.count != 1 { throw I18nError("error.entry.oneAccountLeg", ["kind": kind.rawValue], "A \(kind.rawValue) entry has exactly one account leg") }
+```
+```swift
+            if kind == .refund && acct[0].amount <= 0 { throw I18nError("error.refund.positive", [:], "A refund must be positive") }
+```
+
+with:
+
+```swift
+            // One purchase may be paid from SEVERAL accounts (split tender), so the
+            // count is no longer pinned at 1. `legs.count < 2 || acct.count < 1` above
+            // already guarantees at least one account leg, so nothing weaker is needed
+            // here. Invariant I7 never asked for exactly one — see the plan header.
+```
+```swift
+            // EVERY account leg must be positive, not just the first. `acct[0]` was
+            // adequate while there could only be one; with split tender it would wave
+            // through a refund whose second leg is negative.
+            if kind == .refund && acct.contains(where: { $0.amount <= 0 }) {
+                throw I18nError("error.refund.positive", [:], "A refund must be positive")
+            }
+```
+
+- [ ] **Step 3b: Relax the audit clause**
 
 In `ios/FinchCore/Sources/FinchCore/Storage/Audit.swift`, replace line 128:
 
@@ -305,7 +341,7 @@ final class MultiAccountRulesTests: XCTestCase {
         try q.write { db in
             try db.execute(sql: """
                 INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
-                VALUES ('a2','l1','Card','credit','USD',0,1,1,1,datetime('now'),datetime('now'))
+                VALUES ('a2','l1','Card','credit_card','USD',0,1,1,1,datetime('now'),datetime('now'))
                 """)
             try db.execute(sql: """
                 INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at)
@@ -462,7 +498,7 @@ final class MultiAccountAddTests: XCTestCase {
         try q.write { db in
             try db.execute(sql: """
                 INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
-                VALUES ('a2','l1','Card','credit','USD',0,1,1,1,datetime('now'),datetime('now'))
+                VALUES ('a2','l1','Card','credit_card','USD',0,1,1,1,datetime('now'),datetime('now'))
                 """)
         }
         return q
@@ -812,9 +848,17 @@ cd frontend && bun test lib/db/multi-account.test.ts
 
 Expected: the first test FAILS with a `kind-shape` problem; the second PASSES.
 
-- [ ] **Step 3: Relax the web clause**
+- [ ] **Step 3: Relax BOTH web clauses**
 
-In `frontend/lib/db/core/entries.ts`, line 806, replace:
+The web mirrors iOS exactly: `validateShape` (`frontend/lib/db/core/entries.ts:202`)
+blocks the write, and the `kind-shape` audit rule reports afterwards. **Both must move**,
+matching Task 1 Steps 3a and 3b — including generalising the refund check from the first
+account leg to every account leg. Relaxing only the audit leaves the write still failing.
+
+First, in `validateShape`'s income/expense/refund branch, drop the `acct.length !== 1`
+throw and make the refund positivity check cover every account leg rather than `acct[0]`.
+
+Then, in the same file's audit rule (line ~806), replace:
 
 ```typescript
       (['income', 'expense', 'refund'].includes(kind) && (acct !== 1 || plain < 1 || eqOpen + eqAdj > 0));
@@ -972,7 +1016,7 @@ final class MultiAccountEditTests: XCTestCase {
         try q.write { db in
             try db.execute(sql: """
                 INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
-                VALUES ('a2','l1','Card','credit','USD',0,1,1,1,datetime('now'),datetime('now'))
+                VALUES ('a2','l1','Card','credit_card','USD',0,1,1,1,datetime('now'),datetime('now'))
                 """)
         }
         let eid = try Apply.applyReturningId(dbQueue: q, action: "addTransaction", args: Args([
@@ -1016,7 +1060,7 @@ final class MultiAccountEditTests: XCTestCase {
         try q.write { db in
             try db.execute(sql: """
                 INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
-                VALUES ('a2','l1','Card','credit','USD',0,1,1,1,datetime('now'),datetime('now'))
+                VALUES ('a2','l1','Card','credit_card','USD',0,1,1,1,datetime('now'),datetime('now'))
                 """)
         }
         let eid = try q.write { db in
