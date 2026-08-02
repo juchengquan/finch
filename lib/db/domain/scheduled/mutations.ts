@@ -140,14 +140,18 @@ export const handlers = {
       //
       // A single entry has a single `description`, so each split's own
       // `description` has no per-row home any more. It is carried onto that leg's
-      // `memo` instead of being dropped: `memo` is already the per-leg label a
-      // transfer's "Transfer to/from" text uses, and the projection surfaces
-      // `memo ?? description` as the leg's display text.
+      // `memo` instead of being dropped — reproducing EXACTLY the string the old
+      // per-split loop used to stamp as that row's own `description`
+      // (`${desc} · ${sp.label}`), so an existing split template looks unchanged
+      // in the feed after this ships. `memo ?? description` is what the
+      // projection shows, so a split with no label gets no memo at all (falls
+      // through to the entry's own description) rather than a dangling " · " or
+      // a redundant duplicate.
       const legs: LegInput[] = [];
       for (const sp of t.splits) {
         const portion = sp.abs != null ? sp.abs : (t.amount * (sp.pct ?? 0)) / 100;
         if (!portion) continue;
-        legs.push({ accountId: sp.accountId, amount: portion, memo: sp.label ? sp.label : null });
+        legs.push({ accountId: sp.accountId, amount: portion, memo: sp.label ? `${desc} · ${sp.label}` : null });
       }
       if (!legs.length) throw new I18nError('error.scheduled.noSplits', { name: t.name }, `No split amounts to post for "${t.name}"`);
       await postEntry(exec, {
