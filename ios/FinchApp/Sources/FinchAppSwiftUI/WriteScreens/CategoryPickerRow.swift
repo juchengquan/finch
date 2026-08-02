@@ -115,15 +115,12 @@ struct CategoryPickerSheet: View {
                 // The "none" choice isn't a searchable category — hide it while
                 // a query filters the tree.
                 //
-                // Split mode always offers it, even where the caller passes no
-                // noneLabel: an uncategorised leg is legal (the engine takes a nil
-                // category) and the old split editor let you leave a row's category
-                // unset, so without this the rewrite quietly dropped that. Single-
-                // select is untouched — offering "no category" on a plain transaction
-                // is a separate decision.
-                if query.isEmpty, let label = noneLabel ?? splitNoneLabel {
-                    noneRow(label)
-                }
+                // Offered wherever the caller names it — the transaction sheets pass
+                // "Uncategorized", so a plain transaction and a split leg can both be
+                // left uncategorised, which the engine has always accepted (a nil
+                // category leg). The Parent field names it differently ("None (top
+                // level)"), which is why the label belongs to the caller.
+                if query.isEmpty, let noneLabel { noneRow(noneLabel) }
                 ForEach(visible) { item in row(item) }
             }
             .searchable(text: $query, prompt: "Search")
@@ -238,12 +235,6 @@ struct CategoryPickerSheet: View {
                 }
                 for r in alloc.wrappedValue.rows where !r.pinned && r.id != id { amountText[r.id] = nil }
             })
-    }
-
-    /// "Uncategorized" in split mode, where the caller offers no none-label of its
-    /// own. nil outside split mode, which leaves single-select exactly as it was.
-    private var splitNoneLabel: String? {
-        splitOn ? String(localized: "Uncategorized") : nil
     }
 
     /// The empty-selection row: same geometry as `CategoryTreeRow` (26pt glyph
