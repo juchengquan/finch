@@ -416,13 +416,13 @@ Implements Decisions 15, 19 and 20.
 
 **Files:**
 - Modify: `FinchStore+ViewHelpers.swift:109-114` (attachment unlink), `:136-141` (bulk delete)
-- Modify: `ActivityTab.swift:395`, `ActivityFeedVC.swift:634` (the two bulk paths), `TxListDetailVC.swift:259` (the unwarned site)
+- Modify: `ActivityTab.swift:395`, `ActivityFeedVC.swift:651` (the two bulk paths), `TxListDetailVC.swift:305` (the unwarned site)
 
 - [ ] **Step 1: Write the attachment test for the EDIT path.** A two-row group with a receipt on each; edit it down to one row. Assert the removed row's files are unlinked and **the surviving row's are not**. Deleting a row directly is already correct, since it no longer cascades.
 - [ ] **Step 2: Write the group-of-one test for delete.** Delete one member of a two-row group; assert the survivor's `group_id` is cleared (Decision 20) and that **it is still there at all** — the earlier cascading design would have removed it.
 - [ ] **Step 3: Write the bulk-delete test.** Select a group member plus an unrelated row and delete. Assert the count reported matches what actually went. Today `applyBatch` (`:136-141`) reports "2 deleted" while 4 entries vanish — and `applyBatch` is the thing Decision 4 bans, because it **skips failures and continues**.
 - [ ] **Step 4: Run all three, record. Step 5: Implement.**
-- [ ] **Step 6: Add the missing warning** at `TxListDetailVC.swift:259` — eight sites warn via the `accountLegCount > 1` branch, this one does not.
+- [ ] **Step 6: Add the missing warning** at `TxListDetailVC.swift:305` — eight sites warn via the `accountLegCount > 1` branch, this one does not.
 - [ ] **Step 7:** `swift test`, build both UI targets, gate. **Step 8: Commit.**
 
 ---
