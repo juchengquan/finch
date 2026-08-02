@@ -327,7 +327,7 @@ Per Decision 5, `anomalyScore` keeps its single-`Tx` signature. Both callers mus
 
 **Bug A2 — `txns.count` and `total / count`** in detail views: `CategoryDetailView.swift:32,35`, `CounterpartyDetailView.swift:29,32`, `TagDetailView.swift:31,34`, `TxListDetailVC.swift:147,152-154,199`.
 
-**Pending counts — the same class, and the plan must fix all of them or none:** `ActivityTab.swift:411` (rendered `:142`), `:137`, `CategoryDetailView.swift:39`, `TagDetailView.swift:38`, `CounterpartyDetailView.swift:36`, `TxListDetailVC.swift:213`, `ActivityFeedVC.swift:500`, `AccountDetailVC.swift:466`, `AccountDetailView.swift:246`, `ReconcileSheet.swift:179`.
+**Pending counts — the same class, and the plan must fix all of them or none:** `ActivityTab.swift:411` (rendered `:142`), `:137`, `CategoryDetailView.swift:39`, `TagDetailView.swift:38`, `CounterpartyDetailView.swift:36`, `TxListDetailVC.swift:232`, `ActivityFeedVC.swift:519`, `AccountDetailVC.swift:480`, `AccountDetailView.swift:246`, `ReconcileSheet.swift:179`.
 
 **Do NOT fix `deleteImpactMessage` call sites** (`CategoriesView.swift:170`, `TagsView.swift:102`, `MerchantsView.swift:85`, UIKit twins) — they read `counts[...]` from Task 4's selectors and are fixed transitively. **Assert that; do not edit them.**
 
@@ -346,7 +346,7 @@ Per Decision 5, `anomalyScore` keeps its single-`Tx` signature. Both callers mus
 
 ### Task 8: Sort, Watch, and the delete dialog
 
-- **`TxSort.amountDesc` / `.amountAsc`** — the enum is `ActivityTab.swift:19-20`, but it is **applied** at `ActivityTab.swift:305`, `:535` and `ActivityFeedVC.swift:431`, `:442`. `:582` is only the sort *menu* — **editing it does nothing.** Rank on the purchase total.
+- **`TxSort.amountDesc` / `.amountAsc`** — the enum is `ActivityTab.swift:19-20`, but it is **applied** at `ActivityTab.swift:305`, `:535` and `ActivityFeedVC.swift:452`, `:463`. `:582` is only the sort *menu* — **editing it does nothing.** Rank on the purchase total.
 - **`QuickAddCatalog.swift:27`** `categoryUse` — `+= 1` per leg. **Leave `accountUse` (`:26`) alone**: a split purchase genuinely uses both accounts.
 - **`ActivityTab.swift:343-347`** — "Delete N transaction(s)?" over `selected`, which holds posting ids.
 
