@@ -125,6 +125,49 @@ test('postScheduled splits income across its linked accounts', async () => {
   expect(await balanceOf(exec, 'inv')).toBeCloseTo(invBefore + 5800 * 0.15, 2);
 });
 
+test('postScheduled posts a split income template as ONE entry with an account leg per split', async () => {
+  const exec = await seededAndAudited();
+  await applyMutation(exec, 'postScheduled', { templateId: 'rt-salary' });
+
+  const entries = await exec("SELECT id FROM entries WHERE source_template_id = 'rt-salary'");
+  expect(entries.length).toBe(1);
+
+  const legs = await exec(
+    `SELECT p.account_id, p.amount, p.memo FROM postings p
+       JOIN entries e ON e.id = p.entry_id
+      WHERE e.source_template_id = 'rt-salary' AND p.account_id IS NOT NULL
+      ORDER BY p.sort_order`,
+  );
+  expect(legs.length).toBe(3);
+  // Each split's own `description` ("label") has no per-row home on a single
+  // entry any more — it is carried onto that leg's memo rather than dropped.
+  expect(legs.map((l) => String(l.memo))).toEqual(['Daily spending', 'Savings sweep', 'Auto-invest']);
+  expect(Number(legs[0].amount)).toBeCloseTo(5800 * 0.6, 2);
+  expect(Number(legs[1].amount)).toBeCloseTo(5800 * 0.25, 2);
+  expect(Number(legs[2].amount)).toBeCloseTo(5800 * 0.15, 2);
+});
+
+test('postScheduled split: amount_abs overrides amount_pct when both are set', async () => {
+  const exec = await seededAndAudited();
+  await exec("UPDATE scheduled_splits SET amount_abs = 999 WHERE id = 'rt-salary-s0'");
+  await applyMutation(exec, 'postScheduled', { templateId: 'rt-salary' });
+  const [leg] = await exec(
+    `SELECT p.amount FROM postings p JOIN entries e ON e.id = p.entry_id
+      WHERE e.source_template_id = 'rt-salary' AND p.account_id = 'chk'`,
+  );
+  expect(Number(leg.amount)).toBeCloseTo(999, 2);
+});
+
+test('postScheduled: every split resolving to zero still throws error.scheduled.noSplits', async () => {
+  const exec = await seededAndAudited();
+  await exec("UPDATE scheduled_splits SET amount_pct = 0, amount_abs = NULL WHERE template_id = 'rt-salary'");
+  await expect(applyMutation(exec, 'postScheduled', { templateId: 'rt-salary' })).rejects.toThrow(
+    'No split amounts to post',
+  );
+  const entries = await exec("SELECT id FROM entries WHERE source_template_id = 'rt-salary'");
+  expect(entries.length).toBe(0);
+});
+
 test('updateScheduledSplit updates the nth split by sort order', async () => {
   const exec = await seededAndAudited();
   await applyMutation(exec, 'updateScheduledSplit', { templateId: 'rt-salary', index: 1, pct: 30 });
