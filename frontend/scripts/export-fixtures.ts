@@ -495,15 +495,14 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   // re-deriving amount_base via an FX lookup at the new date.
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: -2000, currency: 'JPY', merchant: 'Relock', categoryId: 'food', date: '2026-05-12', skipRules: true } },
   { action: 'updateTransaction', args: { id: '$lastAccountPosting', patch: { amount: -5000, date: '2026-05-13' } } },
-  // NOT ADDED: a split-tender `addTransaction` (`accounts: [...]` instead of a
-  // single `accountId`) — see task-11-report.md "Correction 1 blocker". Web's
-  // `addTransaction` action (queries/transactions.ts) has no `accounts` branch at
-  // all (only `postEntry` — the core — supports multi-account legs; the action/
-  // mutation layer was never wired for it, unlike iOS's addTransactionReturningId).
-  // Adding this call here makes THIS SCRIPT throw ("Account not found", entries.ts
-  // resolveLegs) while building the oracle, before any JSON is written — it does
-  // not produce a byte-mismatch to adjust around, it prevents fixture regeneration
-  // entirely for every task. Left out until that's fixed at the action-layer.
+  // Split tender: one purchase paid from TWO accounts (Task 4's manual path —
+  // `accounts` instead of a single `accountId`). ONE entry, two account legs
+  // (-120/-80 of -200) plus one auto-balanced category leg. `currency` sent
+  // explicitly, the same way the Add sheet does for a split (with no single
+  // account, there's no account currency to default to). First parity-oracle
+  // coverage for this path — until fix round 2, web's `addTransaction` action
+  // had no `accounts` branch at all (see task-11-report.md "Correction 1").
+  { action: 'addTransaction', args: { ledgerId: 'personal', accounts: [{ accountId: 'a1', amount: -120 }, { accountId: 'a2', amount: -80 }], currency: 'USD', amount: -200, merchant: 'Furniture', categoryId: 'fun', date: '2026-05-14', skipRules: true } },
   // A second template (s2), created BEFORE the split CRUD below so it is still
   // active — and NOT split-enabled — when the generateDueScheduled sweep runs.
   // (s1 becomes splits_enabled=1 in that block, so it's skipped by generateDue;
