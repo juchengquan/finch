@@ -54,7 +54,16 @@ struct CounterpartyDetailView: View {
             Button("Delete", role: .destructive) { delete(tx) }
             Button("Cancel", role: .cancel) {}
         } message: { tx in
-            Text("\(tx.merchant) · \(store.displayMoneyBase(tx.amount))")
+            // Same multi-leg warning as ActivityTab's delete alert: a split
+            // purchase (or a transfer) renders as one row per account leg,
+            // and deleting any one row deletes the whole entry.
+            if tx.transferGroupId != nil {
+                Text("\(tx.merchant) · \(store.displayMoneyBase(tx.amount))") + Text(" " + ActivityFeedView.transferDeleteHint)
+            } else if (tx.accountLegCount ?? 1) > 1 {
+                Text("\(tx.merchant) · \(store.displayMoneyBase(tx.amount))") + Text(" " + ActivityFeedView.multiLegDeleteHint)
+            } else {
+                Text("\(tx.merchant) · \(store.displayMoneyBase(tx.amount))")
+            }
         }
         .errorAlert($errorMessage)
     }
