@@ -159,6 +159,7 @@ struct EditTransactionSheet: View {
                         // the subpage hands back the surviving (largest) category, and
                         // save() needs it to name the collapsed transaction.
                         CategoryPickerRow(title: "Category", glyph: .category, categories: categories, selection: $categoryId,
+                            noneLabel: String(localized: "Uncategorized"),
                             splitSummary: splitSummaryText(categoryNames: splitAlloc.payload.map { store.categoryName($0.categoryId) ?? "Uncategorized" }),
                             splitting: $splitAlloc,
                             currency: txn.currency ?? "")
@@ -202,6 +203,7 @@ struct EditTransactionSheet: View {
                             TextField("0.00", text: $amountText).keyboardType(.decimalPad).numericInput($amountText)
                         }
                         CategoryPickerRow(title: "Category", glyph: .category, categories: categories, selection: $categoryId,
+                            noneLabel: String(localized: "Uncategorized"),
                             splitSummary: splitSummaryText(categoryNames: splitAlloc.payload.map { store.categoryName($0.categoryId) ?? "Uncategorized" }),
                             splitting: effectiveKind == "refund" ? nil : $splitAlloc,
                             currency: currencyCode)
@@ -434,7 +436,13 @@ struct EditTransactionSheet: View {
             let sign: Double = canReclassify ? (selectedKind == .expense ? -1.0 : 1.0) : (originalNative < 0 ? -1.0 : 1.0)
             let signed = sign * parsed
             if abs(signed - originalNative) > 0.001 || kindChanged { patch["amount"] = .double(signed) }
-            if !categoryId.isEmpty, categoryId != txn.category { patch["category"] = .string(categoryId) }
+            // Empty means Uncategorized, and must send an explicit null: omitting the
+            // key leaves the old category leg in place, so picking Uncategorized would
+            // look like it worked and change nothing. The engine reads a null here as
+            // "clear it" (Transactions.swift, `strOrNil(patch["category"])`).
+            if categoryId != (txn.category ?? "") {
+                patch["category"] = categoryId.isEmpty ? .null : .string(categoryId)
+            }
         }
         if kindChanged { patch["kind"] = .string(selectedKind.rawValue) }
         if status != (txn.pending == true ? .pending : .confirmed) { patch["status"] = .string(status.rawValue) }

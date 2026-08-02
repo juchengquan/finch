@@ -301,6 +301,10 @@ struct AddTransactionSheet: View {
                 .accessibilityIdentifier("addtx.account")
             amountField
             CategoryPickerRow(title: "Category", glyph: .category, categories: categories(for: k), selection: $categoryId,
+                // A transaction may legitimately have no category — the engine stores a
+                // nil category leg — so the picker offers it rather than making the
+                // field impossible to clear once set.
+                noneLabel: String(localized: "Uncategorized"),
                 splitSummary: splitSummaryText(categoryNames: splitAlloc.payload.map { store.categoryName($0.categoryId) ?? "Uncategorized" }),
                 splitting: k == .refund ? nil : $splitAlloc,
                 currency: currencyCode.isEmpty ? currency(of: accountId) : currencyCode)
