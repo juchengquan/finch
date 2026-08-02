@@ -110,19 +110,6 @@ final class ActivityFeedVC: UIViewController {
     private struct HeaderContent { var title: String?; var subtitle: String? }
     private var headerContent: [SectionID: HeaderContent] = [:]
 
-    /// A header that remembers WHICH section it is drawing.
-    ///
-    /// Without this the only way to ask a visible header what it shows is
-    /// `sectionIDs[ip.section]`, which is only true once the collection view's
-    /// indices already match the array — i.e. after an apply has landed. That is why
-    /// the refresh used to run in the apply's completion, and why the figures changed
-    /// a frame after the rows moved. Carrying the id makes the lookup independent of
-    /// index paths, so the refresh can run in the same runloop turn as the apply and
-    /// commit with it. (#702)
-    private final class HeaderCell: UICollectionViewListCell {
-        var sectionID: SectionID?
-    }
-
     private let store = FinchStore.shared
 
     /// Selection mode. `nil` → the pushed screen: a row opens the edit sheet. Non-nil →
@@ -353,7 +340,7 @@ final class ActivityFeedVC: UIViewController {
             cell.accessories = accessories
         }
 
-        let header = UICollectionView.SupplementaryRegistration<HeaderCell>(
+        let header = UICollectionView.SupplementaryRegistration<UICollectionViewListCell>(
             elementKind: UICollectionView.elementKindSectionHeader
         ) { [weak self] view, _, ip in
             self?.configureHeader(view, at: ip)
@@ -380,20 +367,10 @@ final class ActivityFeedVC: UIViewController {
     /// row moved it into its month but left the month's income/spent unchanged).
     /// Verified on the simulator; it survived a re-dequeue, which ruled out a
     /// display-refresh cause.
-    ///
-    /// The index path is trusted ONCE, here, where diffable has just handed over a
-    /// freshly dequeued header and the two are known to agree. The id is stored on
-    /// the view, so nothing afterwards has to trust an index path again.
-    private func configureHeader(_ view: HeaderCell, at ip: IndexPath) {
+    private func configureHeader(_ view: UICollectionViewListCell, at ip: IndexPath) {
         guard sectionIDs.indices.contains(ip.section) else { return }
-        let id = sectionIDs[ip.section]
-        view.sectionID = id
-        draw(id, into: view)
-    }
-
-    private func draw(_ id: SectionID, into view: HeaderCell) {
         var cfg = view.defaultContentConfiguration()
-        if let content = headerContent[id] {
+        if let content = headerContent[sectionIDs[ip.section]] {
             cfg.text = content.title
             cfg.secondaryText = content.subtitle
         }
@@ -407,23 +384,25 @@ final class ActivityFeedVC: UIViewController {
     /// flipping its status left the figures stale. SwiftUI recomputed them for free.
     /// Only the visible headers are refreshed, to stay off `reloadSections` — which
     /// would re-render every row in the section.
+
+    /// Clear a highlight that outlived its row's position.
     ///
-    /// Called immediately BEFORE the apply, not in its completion. Each header is
-    /// addressed by the id it stored for itself, so a section moving or vanishing
-    /// under it cannot misdirect the write, and the new figures commit in the same
-    /// CATransaction as the rows that produced them. From the completion they landed
-    /// a frame later — the row jumped, then the count caught up, which is the
-    /// two-step this screen was reported for. (#702)
-    ///
-    /// A header with no entry in `headerContent` is left alone rather than blanked:
-    /// its section is on its way out in the apply that follows, and emptying it first
-    /// would paint a frame of stripped header before it goes.
+    /// Tapping a swipe action highlights the cell. Diffable MOVES that cell to its
+    /// new index path rather than re-dequeuing it, so `prepareForReuse` never fires
+    /// and the highlight arrives with the row — the arriving row rendered grey for
+    /// ~0.5s before de-highlighting, which reads as a blink (see #702).
+    private func clearStuckHighlight() {
+        for cell in collectionView.visibleCells where cell.isHighlighted {
+            cell.isHighlighted = false
+        }
+    }
+
     private func refreshVisibleHeaders() {
         let kind = UICollectionView.elementKindSectionHeader
         for ip in collectionView.indexPathsForVisibleSupplementaryElements(ofKind: kind) {
-            guard let view = collectionView.supplementaryView(forElementKind: kind, at: ip) as? HeaderCell,
-                  let id = view.sectionID, headerContent[id] != nil else { continue }
-            draw(id, into: view)
+            guard let view = collectionView.supplementaryView(forElementKind: kind, at: ip)
+                    as? UICollectionViewListCell else { continue }
+            configureHeader(view, at: ip)
         }
     }
 
@@ -496,8 +475,10 @@ final class ActivityFeedVC: UIViewController {
             snap.reconfigureItems(snap.itemIdentifiers.filter(carried.contains))
             headerContent = headers
             sectionIDs = snap.sectionIdentifiers
-            refreshVisibleHeaders()
-            dataSource.apply(snap, animatingDifferences: false)
+            dataSource.apply(snap, animatingDifferences: false) { [weak self] in
+                self?.refreshVisibleHeaders()
+            self?.clearStuckHighlight()
+            }
             configureToolbar()
             return
         }
@@ -550,8 +531,9 @@ final class ActivityFeedVC: UIViewController {
         snap.reconfigureItems(snap.itemIdentifiers.filter(carried.contains))
         headerContent = headers
         sectionIDs = snap.sectionIdentifiers
-        refreshVisibleHeaders()
         dataSource.apply(snap, animatingDifferences: false) { [weak self] in
+            self?.refreshVisibleHeaders()
+            self?.clearStuckHighlight()
             // `apply` clears the selection, so in column mode the row would stop
             // looking selected every time a figure changed underneath it.
             self?.reassertSelection()
