@@ -59,6 +59,21 @@ final class ActivityFeedVC: UIViewController {
         /// The picker, the chip row and the grid are bare rows in the SwiftUI
         /// screen — no `Section` header. Reserving header space for them (which a
         /// uniform `.supplementary` config does) added ~17pt above the picker.
+        /// PROTOTYPE: sections that draw their own card (`ListCard`) instead of
+        /// taking the system `.insetGrouped` one, so their corner radius is ours.
+        /// Only the transaction rows — the layout closure runs per section, so the
+        /// rest of the screen keeps the system card and nothing else has to move.
+        var drawsOwnCard: Bool {
+            switch self {
+            // `.empty` and `.loadMore` are part of the transaction list too — the
+            // "no transactions" row and the paging spinner sit where the rows would.
+            // Left out, they kept the system card and read as a stray old-radius
+            // block under the new ones.
+            case .pending, .month, .day, .all, .empty, .loadMore, .calendar: return true
+            default: return false
+            }
+        }
+
         var wantsHeader: Bool {
             switch self {
             case .modePicker, .savedSearch, .calendar, .loadMore: return false
@@ -187,9 +202,17 @@ final class ActivityFeedVC: UIViewController {
         // reserves header space above the bare rows. `sectionIDs` is set before each
         // apply, so the provider can ask what kind of section it is laying out.
         let layout = UICollectionViewCompositionalLayout { [weak self] index, env in
-            var config = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
             let kind: SectionID? = self?.sectionIDs.indices.contains(index) == true
                 ? self?.sectionIDs[index] : nil
+            // The rounded card and its ~21pt radius come from `.insetGrouped`, which
+            // also CLIPS anything a cell draws to that shape — so the radius cannot be
+            // changed while it is in use. Transaction sections therefore use
+            // `.grouped`, which draws no card, and `ListCard` draws one at our radius.
+            // `.grouped` rather than `.plain` because it keeps headers non-sticky,
+            // which is how this screen already behaves.
+            let ownCard = kind?.drawsOwnCard ?? false
+            var config = UICollectionLayoutListConfiguration(appearance: ownCard ? .grouped : .insetGrouped)
+            if ownCard { config.itemSeparatorHandler = listCardSeparatorHandler { [weak self] in self?.collectionView } }
             config.headerMode = (kind?.wantsHeader ?? true) ? .supplementary : .none
             config.leadingSwipeActionsConfigurationProvider = { [weak self] ip in
                 self?.rowActions(at: ip).map { $0.actions.leading($0.tx) }
@@ -198,6 +221,7 @@ final class ActivityFeedVC: UIViewController {
                 self?.rowActions(at: ip).map { $0.actions.trailing($0.tx) }
             }
             let section = NSCollectionLayoutSection.list(using: config, layoutEnvironment: env)
+            if ownCard { applyListCardInsets(section) }
             // The picker's own section padding, not just the row's margin: an
             // insetGrouped section pads top and bottom on top of the inter-section
             // spacing, which is most of the gap under the toggle. Zeroing the top
@@ -224,6 +248,25 @@ final class ActivityFeedVC: UIViewController {
     private func configureDataSource() {
         let cell = UICollectionView.CellRegistration<UICollectionViewListCell, String> { [weak self] cell, _, id in
             guard let self else { return }
+            // A section is ONE card, so EVERY cell in an opted-in section draws it —
+            // not just the interesting rows. Carding only transaction rows left the
+            // empty-state row with no card at all, full-width and square.
+            if let sec = self.dataSource?.snapshot().sectionIdentifier(containingItem: id),
+               sec.drawsOwnCard {
+                let items = self.dataSource.snapshot().itemIdentifiers(inSection: sec)
+                let i = items.firstIndex(of: id) ?? 0
+                cell.backgroundConfiguration = listCardBackground(
+                    isFirst: i == 0, isLast: i == items.count - 1)
+            }
+            // Where this row sits in its section decides which corners round.
+            let snap = self.dataSource.snapshot()
+            var isFirst = true, isLast = true
+            if let section = snap.sectionIdentifier(containingItem: id) {
+                let items = snap.itemIdentifiers(inSection: section)
+                if let i = items.firstIndex(of: id) {
+                    isFirst = (i == 0); isLast = (i == items.count - 1)
+                }
+            }
             if id == Self.loadingID {
                 TxnsLoadingCell.configure(cell)
                 return
@@ -323,7 +366,6 @@ final class ActivityFeedVC: UIViewController {
             // once per day-run, which also swallowed the TIME — several transactions
             // on one day rendered as identical rows with no way to tell them apart or
             // order them. Every other screen already showed all of them.
-            if self.onSelect == nil { cell.backgroundConfiguration = txRowBackground() }
             TxRowCell.configure(cell, tx: tx, store: self.store,
                                 showRunningBalance: false,
                                 onPreviewReceipt: self.isSelecting ? nil

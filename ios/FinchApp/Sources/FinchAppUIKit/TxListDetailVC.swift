@@ -73,7 +73,14 @@ final class TxListDetailVC: UIViewController {
     private let store = FinchStore.shared
     private var cancellables = Set<AnyCancellable>()
 
-    private enum SectionID: Hashable { case summary, pending, transactions }
+    private enum SectionID: Hashable {
+        case summary, pending, transactions
+
+        /// PROTOTYPE: transaction sections draw their own card (`ListCard`) so the
+        /// corner radius is ours; `summary` keeps the system one. Mixing is possible
+        /// because the layout closure runs per section.
+        var drawsOwnCard: Bool { self != .summary }
+    }
 
     private static let countID = "__count__"
     private static let totalID = "__total__"
@@ -113,7 +120,13 @@ final class TxListDetailVC: UIViewController {
 
     private func configureCollectionView() {
         let layout = UICollectionViewCompositionalLayout { [weak self] index, env in
-            var config = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
+            let kindForCard: SectionID? = self?.sectionIDs.indices.contains(index) == true
+                ? self?.sectionIDs[index] : nil
+            let ownCard = kindForCard?.drawsOwnCard ?? false
+            // `.insetGrouped` clips whatever a cell draws to its own card shape, so a
+            // smaller radius is only possible without it — see `ListCard`.
+            var config = UICollectionLayoutListConfiguration(appearance: ownCard ? .grouped : .insetGrouped)
+            if ownCard { config.itemSeparatorHandler = listCardSeparatorHandler { [weak self] in self?.collectionView } }
             // The summary block is a bare `Section { }` in SwiftUI — no header.
             let kind: SectionID? = self?.sectionIDs.indices.contains(index) == true
                 ? self?.sectionIDs[index] : nil
@@ -124,7 +137,9 @@ final class TxListDetailVC: UIViewController {
             config.trailingSwipeActionsConfigurationProvider = { [weak self] ip in
                 self?.rowActions(at: ip).map { $0.actions.trailing($0.tx) }
             }
-            return NSCollectionLayoutSection.list(using: config, layoutEnvironment: env)
+            let section = NSCollectionLayoutSection.list(using: config, layoutEnvironment: env)
+            if ownCard { applyListCardInsets(section) }
+            return section
         }
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         collectionView.delegate = self
@@ -141,6 +156,16 @@ final class TxListDetailVC: UIViewController {
     private func configureDataSource() {
         let cell = UICollectionView.CellRegistration<UICollectionViewListCell, String> { [weak self] cell, _, id in
             guard let self else { return }
+            // A section is ONE card, so EVERY cell in an opted-in section draws it —
+            // not just the interesting rows. Carding only transaction rows left the
+            // empty-state row with no card at all, full-width and square.
+            if let sec = self.dataSource?.snapshot().sectionIdentifier(containingItem: id),
+               sec.drawsOwnCard {
+                let items = self.dataSource.snapshot().itemIdentifiers(inSection: sec)
+                let i = items.firstIndex(of: id) ?? 0
+                cell.backgroundConfiguration = listCardBackground(
+                    isFirst: i == 0, isLast: i == items.count - 1)
+            }
             cell.accessories = []
 
             switch id {

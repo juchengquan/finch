@@ -52,6 +52,34 @@ enum Metrics {
     /// the common failure. `ExpandChevronTapTargetTests` makes the floor a tripwire.
     static let tapTargetMin: CGFloat = 44
 
+    // MARK: List cards
+    //
+    // The rounded card behind list rows. On screens still using UIKit's
+    // `.insetGrouped` these are IGNORED — that appearance draws the card itself and
+    // clips anything a cell draws to its own shape, so its radius (measured ~21pt)
+    // cannot be overridden. These apply only where a screen has opted out via
+    // `.grouped` and draws the card itself through `ListCard`.
+
+    /// Corner radius of a list card. **The knob to turn.**
+    ///
+    /// Measured, not nominal: a `.continuous` corner reaches its straight edge before
+    /// its nominal radius, so 10 here renders as ~7.3pt of arc against the system's
+    /// ~21pt. Raise it toward 14 for something nearer half the system curve.
+    static let listCardCornerRadius: CGFloat = 10
+
+    /// The card's inset from the screen edge. 16 reproduces where `.insetGrouped`
+    /// put it, so opted-out screens line up with the ones still using the system card.
+    static let listCardInset: CGFloat = 16
+
+    /// Inner padding, replacing the margins `UIHostingConfiguration` supplied before
+    /// they were zeroed. Zeroing them is what lets rows in a section stack seamlessly;
+    /// left in place, each card stops short of the cell edge and the section renders
+    /// as separate lozenges. 7 is what keeps a transaction row at its documented 52pt.
+    static let listCardContentPadding = EdgeInsets(top: 7, leading: 16, bottom: 7, trailing: 16)
+
+    /// Gap below the last row of a section, replacing `.insetGrouped`'s spacing.
+    static let listCardSectionGap: CGFloat = 18
+
     /// Layout height the expand chevron REPORTS to its row, as distinct from the
     /// `tapTargetMin` box it actually accepts touches in.
     ///

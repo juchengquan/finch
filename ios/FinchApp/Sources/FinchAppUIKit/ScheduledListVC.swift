@@ -57,6 +57,20 @@ final class ScheduledListVC: UIViewController {
         case noResults                  // search matched nothing
         case day(String)                // calendar mode: one section per day with occurrences
         case nothingScheduled
+
+        /// PROTOTYPE: everything but the mode picker draws its own card
+        /// (`listCardBackground`) so the corner radius is ours.
+        ///
+        /// The calendar grid is a single cell in its own section, so it takes the card
+        /// with all four corners rounded — no special case needed. The empty states
+        /// opt in too: left out, a screen with nothing scheduled shows a lone
+        /// old-radius block exactly where the rows would have been.
+        var drawsOwnCard: Bool {
+            switch self {
+            case .modePicker: return false
+            default: return true
+            }
+        }
     }
     private static let modePickerID = "__mode_picker__"
     private static let calendarID = "__calendar__"
@@ -116,8 +130,14 @@ final class ScheduledListVC: UIViewController {
         // Per-section headers: the picker and the calendar are bare rows in SwiftUI,
         // with no `Section` header, so they must not get one here either.
         let layout = UICollectionViewCompositionalLayout { [weak self] index, env in
-            var config = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
             let section = self?.dataSource.sectionIdentifier(for: index)
+            // `.insetGrouped` clips whatever a cell draws to its own card shape, so a
+            // smaller radius is only possible without it — see `ListCard`.
+            let ownCard = section?.drawsOwnCard ?? false
+            var config = UICollectionLayoutListConfiguration(appearance: ownCard ? .grouped : .insetGrouped)
+            if ownCard {
+                config.itemSeparatorHandler = listCardSeparatorHandler { [weak self] in self?.collectionView }
+            }
             config.headerMode = (section.flatMap { self?.headers[$0] } != nil) ? .supplementary : .none
             config.trailingSwipeActionsConfigurationProvider = { [weak self] ip in
                 self?.trailingSwipe(at: ip)
@@ -126,6 +146,7 @@ final class ScheduledListVC: UIViewController {
                 self?.leadingSwipe(at: ip)
             }
             let listSection = NSCollectionLayoutSection.list(using: config, layoutEnvironment: env)
+            if ownCard { applyListCardInsets(listSection) }
             // See ActivityFeedVC: the picker's own section padding is most of the gap
             // under the toggle, so the token owns it rather than the row margin alone.
             if section == .modePicker {
@@ -196,6 +217,16 @@ final class ScheduledListVC: UIViewController {
 
     private func configureDataSource() {
         let cell = UICollectionView.CellRegistration<UICollectionViewListCell, String> { [weak self] cell, _, id in
+            // A section is ONE card, so EVERY cell in an opted-in section draws it —
+            // not just the occurrence rows. Carding only those left the empty-state
+            // rows with no card at all, full-width and square, on other screens.
+            if let sec = self?.dataSource?.snapshot().sectionIdentifier(containingItem: id),
+               sec.drawsOwnCard, let snap = self?.dataSource.snapshot() {
+                let items = snap.itemIdentifiers(inSection: sec)
+                let i = items.firstIndex(of: id) ?? 0
+                cell.backgroundConfiguration = listCardBackground(
+                    isFirst: i == 0, isLast: i == items.count - 1)
+            }
             guard let self else { return }
             cell.accessories = []
 

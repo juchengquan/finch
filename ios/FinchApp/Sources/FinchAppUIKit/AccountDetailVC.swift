@@ -55,6 +55,20 @@ final class AccountDetailVC: UIViewController {
         case all
         case empty
 
+        /// PROTOTYPE: transaction sections draw their own card (`ListCard`) so the
+        /// corner radius is ours. The balance, holdings and calendar sections keep
+        /// the system card — the layout closure runs per section, so only the rows
+        /// this change is about have to move.
+        var drawsOwnCard: Bool {
+            switch self {
+            // `.empty` carries the "No transactions" row — part of the list, so it
+            // takes the same card. An account with no transactions otherwise showed a
+            // lone system-radius block where the rows would have been.
+            case .pending, .month, .day, .all, .empty, .calendar: return true
+            default: return false
+            }
+        }
+
         /// The picker and the grid are bare rows in SwiftUI — no `Section` header.
         var wantsHeader: Bool {
             switch self {
@@ -182,7 +196,13 @@ final class AccountDetailVC: UIViewController {
         // Per-section header/footer, so the picker and the grid stay bare and only
         // the grid gets the explanatory footer — the SwiftUI `Section` shape.
         let layout = UICollectionViewCompositionalLayout { [weak self] index, env in
-            var config = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
+            let kindForCard: SectionID? = self?.sectionIDs.indices.contains(index) == true
+                ? self?.sectionIDs[index] : nil
+            let ownCard = kindForCard?.drawsOwnCard ?? false
+            // `.insetGrouped` clips whatever a cell draws to its own card shape, so a
+            // smaller radius is only possible without it — see `ListCard`.
+            var config = UICollectionLayoutListConfiguration(appearance: ownCard ? .grouped : .insetGrouped)
+            if ownCard { config.itemSeparatorHandler = listCardSeparatorHandler { [weak self] in self?.collectionView } }
             let kind: SectionID? = self?.sectionIDs.indices.contains(index) == true
                 ? self?.sectionIDs[index] : nil
             config.headerMode = (kind?.wantsHeader ?? true) ? .supplementary : .none
@@ -194,6 +214,7 @@ final class AccountDetailVC: UIViewController {
                 self?.swipe(at: ip)?.trailing
             }
             let section = NSCollectionLayoutSection.list(using: config, layoutEnvironment: env)
+            if ownCard { applyListCardInsets(section) }
             // The picker is the first section and sits right under the search bar.
             // An insetGrouped list opens with a ~35pt top inset meant to separate a
             // first section from a large title — and this screen has no large title
@@ -220,6 +241,16 @@ final class AccountDetailVC: UIViewController {
     private func configureDataSource() {
         let cell = UICollectionView.CellRegistration<UICollectionViewListCell, String> { [weak self] cell, _, id in
             guard let self else { return }
+            // A section is ONE card, so EVERY cell in an opted-in section draws it —
+            // not just the interesting rows. Carding only transaction rows left the
+            // empty-state row with no card at all, full-width and square.
+            if let sec = self.dataSource?.snapshot().sectionIdentifier(containingItem: id),
+               sec.drawsOwnCard {
+                let items = self.dataSource.snapshot().itemIdentifiers(inSection: sec)
+                let i = items.firstIndex(of: id) ?? 0
+                cell.backgroundConfiguration = listCardBackground(
+                    isFirst: i == 0, isLast: i == items.count - 1)
+            }
 
             if id == Self.modePickerID {
                 // The picker is the list's FIRST ROW, not a title view — same reason
@@ -303,7 +334,6 @@ final class AccountDetailVC: UIViewController {
             // The SwiftUI row itself, hosted — it draws the amount and the running
             // balance, so no trailing accessory here. See TxRowCell for why this is
             // hosted rather than rebuilt.
-            cell.backgroundConfiguration = txRowBackground()
             TxRowCell.configure(cell, tx: tx, store: self.store,
                                 onPreviewReceipt: { [weak self] in self?.previewReceipt($0) })
             cell.accessories = []

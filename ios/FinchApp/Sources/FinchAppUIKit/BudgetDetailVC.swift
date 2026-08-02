@@ -50,6 +50,16 @@ final class BudgetDetailVC: UIViewController {
         case thisCycle
         case month(String)
 
+        /// PROTOTYPE: the cycle's ROW LISTS draw their own card (`listCardBackground`)
+        /// so the corner radius is ours. The progress block and the History chart keep
+        /// the system card — they are summary panels, not lists of rows.
+        var drawsOwnCard: Bool {
+            switch self {
+            case .progress, .history: return false
+            default: return true
+            }
+        }
+
         /// The progress block and the pending block are bare `Section { }` in SwiftUI.
         var wantsHeader: Bool {
             switch self {
@@ -155,11 +165,28 @@ final class BudgetDetailVC: UIViewController {
 
     private func configureCollectionView() {
         let layout = UICollectionViewCompositionalLayout { [weak self] index, env in
-            var config = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
+            let kindForCard: SectionID? = self?.sectionIDs.indices.contains(index) == true
+                ? self?.sectionIDs[index] : nil
+            let ownCard = kindForCard?.drawsOwnCard ?? false
+            // `.insetGrouped` clips whatever a cell draws to its own card shape, so a
+            // smaller radius is only possible without it — see `ListCard`.
+            var config = UICollectionLayoutListConfiguration(appearance: ownCard ? .grouped : .insetGrouped)
+            if ownCard {
+                // Keep the system separators but pull them inside the card, rather
+                // than drawing our own: `.grouped` runs them edge to edge otherwise.
+                config.itemSeparatorHandler = listCardSeparatorHandler { [weak self] in self?.collectionView }
+            }
             let kind: SectionID? = self?.sectionIDs.indices.contains(index) == true
                 ? self?.sectionIDs[index] : nil
             config.headerMode = (kind?.wantsHeader ?? true) ? .supplementary : .none
-            return NSCollectionLayoutSection.list(using: config, layoutEnvironment: env)
+            let section = NSCollectionLayoutSection.list(using: config, layoutEnvironment: env)
+            if ownCard {
+                // The card's inset from the screen edge, applied to the whole section
+                // so the content and its trailing amount move with it — matching where
+                // `.insetGrouped` puts the card on the sections that kept it.
+                applyListCardInsets(section)
+            }
+            return section
         }
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         collectionView.delegate = self
@@ -175,6 +202,17 @@ final class BudgetDetailVC: UIViewController {
 
     private func configureDataSource() {
         let cell = UICollectionView.CellRegistration<UICollectionViewListCell, String> { [weak self] cell, _, id in
+            // A section is ONE card, so every cell in an opted-in section must draw it —
+            // not just the transaction rows. Applying it to tx rows alone left the
+            // empty-state row ("No matching transactions") with no card at all,
+            // edge to edge and square.
+            if let self, let sec = self.dataSource?.snapshot().sectionIdentifier(containingItem: id),
+               sec.drawsOwnCard {
+                let items = self.dataSource.snapshot().itemIdentifiers(inSection: sec)
+                let i = items.firstIndex(of: id) ?? 0
+                cell.backgroundConfiguration = listCardBackground(
+                    isFirst: i == 0, isLast: i == items.count - 1)
+            }
             guard let self, let budget = self.budget else { return }
             cell.accessories = []
 
