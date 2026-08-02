@@ -301,6 +301,16 @@ public enum Entries {
             // already guarantees at least one account leg, so nothing weaker is needed
             // here. Invariant I7 never asked for exactly one — see the plan header.
             if plain.count < 1 { throw I18nError("error.entry.needCategory", ["kind": kind.rawValue], "A \(kind.rawValue) entry needs a category leg") }
+            // One entry is split on at most ONE axis. Several payment legs against
+            // several categories is the shape the projection double-counts — it
+            // copies the entry's whole `splits` array onto every account-leg row —
+            // and it is already refused by `setTransactionSplits` and unreachable
+            // from the Add sheet. This is the backstop for both, so no future path
+            // can reintroduce it silently.
+            if acct.count > 1 && plain.count > 1 {
+                throw I18nError("error.split.multiAccount", [:],
+                                "A purchase paid from several accounts takes a single category")
+            }
             if equity.contains(where: { sysOf($0) != "fx" }) { throw I18nError("error.entry.noDirectEquity", [:], "Equity categories cannot be booked directly") }
             // EVERY account leg must be positive, not just the first. `acct[0]` was
             // adequate while there could only be one; with split tender it would wave
@@ -398,7 +408,16 @@ public enum Entries {
                     nativeAmount: sharedCcy != nil ? acctTotal : acctTotalBase, time: e.time, kind: kind.rawValue,
                     counterpartyId: counterpartyId, tags: [], note: notes,
                     sourceTemplateId: e.sourceTemplateId, refundedTransactionId: e.refundedEntryId)
-                let patch = RulesEngine.applyRules(synthetic, rules)
+                // A purchase paid from several accounts takes a single category —
+                // the rule `setTransactionSplits` enforces in as many words
+                // (Transactions.swift:50-53) and the Add sheet enforces by making
+                // the two mutually exclusive. The rules engine was the one path
+                // that broke it, and the projection then copies the whole `splits`
+                // array onto EVERY account-leg row, so the entry's categories are
+                // summed once per payment leg: a $100 purchase reported $140 of one
+                // category and $60 of another, and budgets alerted at twice the
+                // real spend. The rule's other actions still apply.
+                let patch = RulesEngine.applyRules(synthetic, rules, allowSplits: acctLegs.count <= 1)
                 if !patch.appliedRuleIds.isEmpty {
                     if let m = patch.merchant { description = m }
                     if let n = patch.note { notes = n }
