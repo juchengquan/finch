@@ -43,44 +43,14 @@ struct TxRowActions {
     ///
     /// `done` first, mutation on the next runloop turn: the swipe closes against the
     /// row where the user left it, and the data change lands after.
-    ///
-    /// **The instant close is a deliberate trade, and these are the measurements.**
-    /// Read this before "fixing" the fact that the buttons do not slide shut — that
-    /// has now been attempted and withdrawn more than once.
-    ///
-    /// The buttons belong to the cell. If the row relocates while they are still on
-    /// screen they travel WITH it into the destination section, which is the original
-    /// defect in #702. So the choice is genuinely binary: close instantly and the row
-    /// is free to move now, or let the close play and the row must stand still until
-    /// it finishes. There is no third option while the two are attached.
-    ///
-    /// Measured on iOS 26.5, iPhone 17 Pro, by instrumenting the cell and recording:
-    ///
-    /// - The close takes **~254ms**, and that duration is UIKit's. Wrapping `done` in
-    ///   `UIView.animate(withDuration: 0.12)` changes nothing — completion fired at
-    ///   254.2ms wrapped, 254.6ms unwrapped. A short fade is not available.
-    /// - There is **no end-of-swipe callback**. `UITableViewDelegate` has
-    ///   `didEndEditingRowAt`; `UICollectionViewDelegate` has no equivalent.
-    /// - `UICellConfigurationState.isSwiped` flips false **~2ms after the tap**, when
-    ///   the close STARTS. It is not a "finished" signal.
-    /// - A `CATransaction.setCompletionBlock` registered inside the cell's
-    ///   `configurationUpdateHandler` when that flag flips DOES fire at the true end
-    ///   of the close (~254ms), reproducibly. So a wait with no hard-coded constant
-    ///   is buildable — and was rejected anyway, because the wait itself is the
-    ///   defect: on tape the row slides back into the bucket, sits there with a stale
-    ///   count, and only then vanishes. That is what was reported as a jolt.
-    ///
-    /// So: the buttons disappear in one frame. That is the cost of the row, the
-    /// pending count and the month figures all changing together, which is what the
-    /// screen is for. Trading it back buys a quarter-second of dead time.
     func leading(_ tx: Tx) -> UISwipeActionsConfiguration {
         let dup = UIContextualAction(style: .normal, title: String(localized: "Duplicate")) { _, _, done in
             // Close WITHOUT animation, so nothing is still playing when the row
             // relocates. `done(true)` alone starts a ~300ms close; the mutation then
             // lands inside that window and the animation finishes at the row's NEW
             // position, painting action buttons into the section it moved to.
-            UIView.performWithoutAnimation { done(true) }
-            DispatchQueue.main.async { duplicate(tx) }
+            done(true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.swipeCloseDuration) { duplicate(tx) }
         }
         dup.image = UIImage(systemName: "plus.square.on.square")
         dup.backgroundColor = .systemIndigo
@@ -94,8 +64,8 @@ struct TxRowActions {
             // relocates. `done(true)` alone starts a ~300ms close; the mutation then
             // lands inside that window and the animation finishes at the row's NEW
             // position, painting action buttons into the section it moved to.
-            UIView.performWithoutAnimation { done(true) }
-            DispatchQueue.main.async { toggleStatus(tx) }
+            done(true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.swipeCloseDuration) { toggleStatus(tx) }
         }
         status.image = UIImage(systemName: pending ? "checkmark.circle" : "clock.badge.questionmark")
         status.backgroundColor = pending ? .systemGreen : .systemOrange
@@ -134,6 +104,15 @@ struct TxRowActions {
                               attributes: .destructive) { _ in requestDelete(tx) })
         return UIMenu(children: items)
     }
+
+    /// How long UIKit takes to slide a swipe shut. The mutation waits this out so
+    /// the close finishes on the row where the user left it.
+    ///
+    /// Closing INSTANTLY (`performWithoutAnimation`) also stops the buttons
+    /// travelling, but they then vanish in a single frame — which reads as a blink,
+    /// and was reported as one. Every native list slides them shut; the row staying
+    /// put for that third of a second is the animation, not lag.
+    private static let swipeCloseDuration: TimeInterval = 0.33
 
     private func statusTitle(_ pending: Bool) -> String {
         pending ? String(localized: "Confirm") : String(localized: "Set pending")
