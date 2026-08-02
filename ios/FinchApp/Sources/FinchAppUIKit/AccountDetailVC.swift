@@ -663,8 +663,17 @@ final class AccountDetailVC: UIViewController {
     private func confirmDeleteTransaction(_ tx: Tx) {
         // A centered ALERT, not a row-anchored sheet: the row is torn down when the
         // swipe collapses or the cell recycles, which would take the popout with it.
+        // Same multi-leg warning as the feed's delete alert (ActivityFeedVC): a split
+        // purchase (or a transfer) renders as one row per account leg, and deleting
+        // any one row deletes the whole entry.
+        var message = "\(tx.merchant) · \(store.displayMoneyBase(tx.amount))"
+        if tx.transferGroupId != nil {
+            message += " " + ActivityFeedView.transferDeleteHint
+        } else if (tx.accountLegCount ?? 1) > 1 {
+            message += " " + ActivityFeedView.multiLegDeleteHint
+        }
         let alert = UIAlertController(title: String(localized: "Delete transaction?"),
-                                      message: "\(tx.merchant) · \(store.displayMoneyBase(tx.amount))",
+                                      message: message,
                                       preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: String(localized: "Delete"), style: .destructive) { [weak self] _ in
             guard let self else { return }
