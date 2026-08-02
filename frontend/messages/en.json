@@ -1304,6 +1304,7 @@
       "title": "Delete transaction?",
       "description": "{merchant} · {amount} will be permanently removed. This can't be undone.",
       "transferHint": "This deletes both sides of the transfer.",
+      "splitHint": "This deletes every payment in this purchase.",
       "deletedToast": "Transaction deleted"
     }
   },

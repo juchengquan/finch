@@ -6336,6 +6336,16 @@
         }
       }
     },
+    "This also deletes the other payments linked to this purchase.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此笔交易的其他关联付款也会一并删除。"
+          }
+        }
+      }
+    },
     "This cycle": {
       "localizations": {
         "zh-Hans": {
