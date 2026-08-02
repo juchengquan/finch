@@ -674,6 +674,57 @@ const MIGRATIONS: Record<string, string[] | ((exec: ExecFn) => Promise<void>)> =
     'ALTER TABLE budgets ADD COLUMN start_time TEXT',
     'ALTER TABLE budgets ADD COLUMN end_time TEXT',
   ],
+  // A purchase paid from several accounts takes a single category. The rules
+  // engine used to break that (its `split` action ignored the account leg count),
+  // and the projection copies an entry's whole `splits` array onto every
+  // account-leg row — so such an entry had its categories summed once per payment
+  // leg, and a budget alerted at twice the real spend.
+  //
+  // The shape is now refused at write time, which strands any row already in it:
+  // rebuildEntry rebuilds legs when legs are provided OR the date changes, and
+  // validates the result, so changing the date carries the forbidden shape forward
+  // and throws. Merge each such entry's plain category legs into the dominant one
+  // (largest |amount_base|) — already the single category the projection displays
+  // for it — preserving the total so the entry re-seals. Equity legs (the sys:fx
+  // residue) are not part of the split and are left alone.
+  '2026-08-03T00:00:00Z': async (exec) => {
+    // Tolerate a partial database, the way the counterparties rebuild above does:
+    // migrate() is exercised against minimal fixtures that carry only the tables a
+    // given migration touches, so this must be a no-op when there is nothing to
+    // scan rather than throwing "no such table".
+    const present = await exec(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('entries','postings','categories')`,
+      [],
+    );
+    if (present.length < 3) return;
+    const bad = await exec(
+      `SELECT e.id AS id FROM entries e
+        WHERE (SELECT COUNT(*) FROM postings p
+                WHERE p.entry_id = e.id AND p.account_id IS NOT NULL) > 1
+          AND (SELECT COUNT(*) FROM postings p JOIN categories c ON c.id = p.category_id
+                WHERE p.entry_id = e.id AND c.kind != 'equity') > 1`,
+      [],
+    );
+    for (const row of bad) {
+      const entryId = String(row.id);
+      const legs = await exec(
+        `SELECT p.id AS pid, p.amount_base AS ab FROM postings p JOIN categories c ON c.id = p.category_id
+          WHERE p.entry_id = ? AND c.kind != 'equity'
+          ORDER BY ABS(p.amount_base) DESC, p.sort_order`,
+        [entryId],
+      );
+      if (legs.length === 0) continue;
+      const total = legs.reduce((sum, l) => sum + Number(l.ab), 0);
+      // Postings on a sealed entry are immutable, so unseal, merge, reseal. The
+      // total is unchanged, so the seal's balance check still passes.
+      await exec('UPDATE entries SET sealed = 0 WHERE id = ?', [entryId]);
+      for (const l of legs.slice(1)) await exec('DELETE FROM postings WHERE id = ?', [String(l.pid)]);
+      // A category leg is always in ledger base, so `amount` mirrors it.
+      await exec('UPDATE postings SET amount = ?, amount_base = ? WHERE id = ?',
+        [total, total, String(legs[0].pid)]);
+      await exec('UPDATE entries SET sealed = 1 WHERE id = ?', [entryId]);
+    }
+  },
 };
 
 // Additive migrations (ALTER TABLE ADD COLUMN, CREATE ... IF NOT EXISTS) must be

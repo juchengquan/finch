@@ -228,6 +228,13 @@ function validateShape(kind: EntryKind, legs: ResolvedLeg[], meta: Map<string, {
       // already guarantees at least one account leg, so nothing weaker is needed
       // here. Invariant I7 never asked for exactly one — see the plan header.
       if (plain.length < 1) throw new Error(`A ${kind} entry needs a category leg`);
+      // One entry is split on at most ONE axis. Several payment legs against
+      // several categories is the shape the projection double-counts, and it is
+      // already refused by setTransactionSplits and unreachable from the Add
+      // sheet. This is the backstop for both.
+      if (acct.length > 1 && plain.length > 1) {
+        throw new Error('A purchase paid from several accounts takes a single category');
+      }
       if (equity.some((l) => sysOf(l) !== 'fx')) throw new Error('Equity categories cannot be booked directly');
       // EVERY account leg must be positive, not just the first. `acct[0]` was
       // adequate while there could only be one; with split tender it would wave
@@ -327,7 +334,15 @@ export async function postEntry(exec: Exec, e: NewEntry): Promise<{ entryId: str
           refundedTransactionId: e.refundedEntryId ?? undefined,
           counterpartyId: counterpartyId ?? undefined, tags: [],
         };
-        const patch = applyRules(synthetic, rules);
+        // A purchase paid from several accounts takes a single category — the
+        // rule setTransactionSplits enforces in as many words and the Add sheet
+        // enforces by making the two mutually exclusive. The rules engine was the
+        // one path that broke it, and the projection then copies the whole
+        // `splits` array onto EVERY account-leg row, so the entry's categories are
+        // summed once per payment leg: a 100 purchase reported 140 of one category
+        // and 60 of another, and budgets alerted at twice the real spend. The
+        // rule's other actions still apply.
+        const patch = applyRules(synthetic, rules, { allowSplits: acctLegs.length <= 1 });
         if (patch.appliedRuleIds.length > 0) {
           if (patch.merchant !== undefined) description = patch.merchant;
           if (patch.note !== undefined) notes = patch.note;
