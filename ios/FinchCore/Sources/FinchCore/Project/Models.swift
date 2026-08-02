@@ -69,6 +69,16 @@ public struct Tx: Identifiable, Codable, Equatable, Sendable {
     }
 }
 
+public extension Tx {
+    /// Groups this row with the other payment legs of the same purchase.
+    ///
+    /// Falls back to the posting id when `entryId` is absent — a row decoded
+    /// from a fixture written before the field existed — which reproduces the
+    /// pre-fix behaviour of counting each leg separately rather than collapsing
+    /// every such row together under one shared nil key.
+    var purchaseKey: String { entryId ?? id }
+}
+
 public struct TxSplit: Codable, Equatable, Sendable {
     public var id: String?
     public var categoryId: String?

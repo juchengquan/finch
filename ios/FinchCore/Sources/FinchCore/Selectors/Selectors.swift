@@ -602,3 +602,52 @@ public enum Selectors {
         }
     }
 }
+
+public extension Selectors {
+    /// One row per purchase: the payment legs of a split-tender purchase summed
+    /// into a single row carrying the true total.
+    ///
+    /// Use this wherever a statistic or a ranking needs what was actually spent —
+    /// a mean, a variance, a z-score, a "biggest". For counting alone,
+    /// `Tx.purchaseKey` is enough and cheaper.
+    ///
+    /// **`nativeAmount` and `currency` are dropped when the legs disagree.** Split
+    /// tender is explicitly multi-currency, and every consumer reads
+    /// `abs(nativeAmount ?? amount)`; summing raw natives across currencies would
+    /// hand them a number that is not money in any unit, which is worse than the
+    /// ledger-base amount they otherwise fall back to. The engine refuses to sum
+    /// them for the same reason.
+    ///
+    /// **Identity fields are the FIRST leg's** — `id`, `account`, `clearedAt`,
+    /// `pending`. Do not use this where a specific leg's account or reconcile mark
+    /// matters; an account-scoped view should not collapse at all.
+    ///
+    /// **`splits` needs no special handling.** They belong to the entry, and the
+    /// first leg's copy is already the whole set. Collapsing only ever happens for
+    /// an entry with several *account* legs, which may hold at most one category
+    /// leg, so a row being merged in never carries splits of its own.
+    ///
+    /// On a transfer the legs cancel to `amount == 0`. Every current caller filters
+    /// by `kind` first; a new one must.
+    static func byPurchase(_ txns: [Tx]) -> [Tx] {
+        var order: [String] = []
+        var acc: [String: Tx] = [:]
+        for t in txns {
+            let key = t.purchaseKey
+            guard var seen = acc[key] else {
+                order.append(key)
+                acc[key] = t
+                continue
+            }
+            seen.amount = r2(seen.amount + t.amount)
+            if seen.currency == t.currency, let a = seen.nativeAmount, let b = t.nativeAmount {
+                seen.nativeAmount = r2(a + b)
+            } else {
+                seen.currency = nil
+                seen.nativeAmount = nil
+            }
+            acc[key] = seen
+        }
+        return order.compactMap { acc[$0] }
+    }
+}
