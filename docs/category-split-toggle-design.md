@@ -226,3 +226,52 @@ against today's immediate-write behaviour before the change lands.
 | Cascade parent ticks to children | One tap becomes N splits and re-divides everything |
 | Leaf-only ticking | A category assignable with the toggle off becomes unassignable with it on; existing parent splits become uneditable |
 | Keep `SplitEditorView` for repeated-category data | Two editors, and you cannot tell which you will get until it opens |
+
+## Known gaps
+
+Decided after the first version shipped (#694). Recorded here rather than in a chat log,
+next to the reasoning that produced them.
+
+**The tree shifts when you tick a category — accepted, not fixed.** Ticking inserts a
+row into the amounts section above the tree, so everything below moves down by about
+44pt; the first tick moves it ~90pt. It is enough to cause a mis-tap. The fix is not
+free: the amounts sit above the tree by design, so keeping them there and keeping the
+tree still are in tension. The options weighed were pinning the amounts to a bottom
+safe-area inset (stable by construction — a bottom inset reserves space without pushing
+content down), reserving the section's space when the toggle flips rather than on the
+first tick (removes the worst jump only), and putting the amount inline on each ticked
+row (perfectly stable, but scatters the fields down a scrolling tree with nowhere for
+the running total). **Decision: keep the current design.** Revisit if it bites in use.
+
+**A split transaction's total cannot be edited.** `isSplit` selects a form layout with
+no Amount field, so once a transaction is split there is no way to change the figure the
+split divides — you would have to collapse it to a single category, fix the amount, and
+split again. Pre-existing behaviour, inherited from the old split editor; out of scope
+for #694 and deliberately deferred. It is also the constraint that made `isSplit` awkward
+to stage (see the Risks section).
+
+**Uncategorized was briefly unavailable, and is back.** The rewrite moved category
+choice into a tree that only rendered its "none" row when the caller passed a
+`noneLabel`, which the transaction sheets do not — so an uncategorised split leg, which
+the old editor allowed and the engine accepts (a nil category), could not be created.
+Split mode now always offers the row. Single-select is deliberately unchanged: offering
+"no category" on a plain transaction is a separate product decision, not a bug fix.
+
+## Unrelated, found while comparing the two Activity implementations
+
+Not part of this feature; recorded because it was discovered here and is otherwise
+undocumented.
+
+**The SwiftUI Activity screen has a dead setting.** Both implementations read the same
+`finch.feed.groupByMonth` value, and both use it. The UIKit screen exposes it in an
+`ellipsis.circle` overflow menu alongside sort; the SwiftUI screen's `arrow.up.arrow.down`
+menu holds sort *only*, so nothing on that screen can change grouping — it inherits
+whatever the UIKit screen last wrote. The unsettled question is which icon wins: `↑↓`
+names sorting precisely but leaves grouping homeless, while `•••` holds both and
+describes neither. Since UIKit ships, the cheap answer is to give SwiftUI the same
+`•••` menu.
+
+**The shipping filter icon never fills.** The SwiftUI screen swaps to
+`line.3.horizontal.decrease.circle.fill` when a filter is active; the UIKit screen always
+draws the unfilled variant, so on the screen users actually get there is no at-a-glance
+sign that a filter is on.

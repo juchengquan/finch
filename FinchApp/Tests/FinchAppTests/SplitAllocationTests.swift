@@ -204,3 +204,50 @@ extension SplitAllocationTests {
         XCTAssertEqual(p[1].categoryId, "b")
     }
 }
+
+/// Ticking is per-category and never reaches a category's children.
+///
+/// Nothing in `SplitAllocation` could cascade today — `tick` appends exactly one row
+/// — which is precisely why this is worth pinning down: the guarantee currently rests
+/// on an implementation detail rather than on a stated rule, so a later "helpful"
+/// change in the picker has nothing to fail against. A split is one categoryId, and a
+/// parent tick that dragged its children in would silently manufacture a split per
+/// child and re-divide amounts the user had set.
+extension SplitAllocationTests {
+
+    func test_tickingAParentAddsOnlyThatParent() {
+        var a = SplitAllocation(total: 100)
+        a.tick("dining")                       // a parent of coffee/restaurants
+        XCTAssertEqual(a.rows.map(\.id), ["dining"])
+        XCTAssertEqual(a.payload.count, 1)
+        XCTAssertEqual(a.payload[0].categoryId, "dining")
+    }
+
+    func test_tickingAParentAndAChildKeepsThemSeparate() {
+        var a = SplitAllocation(total: 100)
+        a.tick("dining")
+        a.tick("dining.coffee")
+        // Two independent legs, evenly divided — the child is not folded into the
+        // parent, and the parent does not absorb the child.
+        XCTAssertEqual(a.rows.map(\.id), ["dining", "dining.coffee"])
+        XCTAssertEqual(a.rows.map(\.amount), [50, 50])
+    }
+
+    func test_untickingAParentLeavesItsChildTicked() {
+        var a = SplitAllocation(total: 100)
+        a.tick("dining"); a.tick("dining.coffee")
+        a.untick("dining")
+        XCTAssertEqual(a.rows.map(\.id), ["dining.coffee"])
+        XCTAssertEqual(a.rows[0].amount, 100, accuracy: 0.001)
+    }
+
+    // The uncategorised leg, restored after the rewrite dropped it: the old split
+    // editor let a row's category stay unset, and the engine takes a nil category.
+    func test_uncategorisedTicksAndWritesANilCategory() {
+        var a = SplitAllocation(total: 100)
+        a.tick("groceries"); a.tick("")
+        XCTAssertTrue(a.isTicked(""))
+        XCTAssertEqual(a.payload.count, 2)
+        XCTAssertNil(a.payload[1].categoryId, "the uncategorised leg must write a nil category")
+    }
+}
