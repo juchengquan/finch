@@ -180,6 +180,11 @@ export interface ApplyOptions {
   /** Only run rules with runOnEdit=true. Used by the edit path; insert uses
    *  the default of false (all active rules run). */
   onEditOnly?: boolean;
+  /** Defaults to true. Pass false for an entry with several account legs: a
+   *  purchase paid from several accounts takes a single category, so a rule's
+   *  `split` action is dropped there. A rule left with no other action is not
+   *  recorded as applied. */
+  allowSplits?: boolean;
 }
 
 /**
@@ -200,8 +205,21 @@ export function applyRules(t: Tx, rules: Rule[], opts: ApplyOptions = {}): RuleP
     if (!rule.isActive) continue;
     if (opts.onEditOnly && !rule.runOnEdit) continue;
     if (!evaluateCondition(t, rule.condition)) continue;
+    // `allowSplits: false` drops every `split` action. Callers pass it for a
+    // purchase paid from several accounts, which the rest of the app already
+    // requires to take a single category — setTransactionSplits refuses such an
+    // entry in as many words, and the Add sheet makes the two mutually exclusive.
+    // Splitting one anyway produces an entry the projection double-counts, since
+    // it copies the whole `splits` array onto every account-leg row.
+    const actions = opts.allowSplits === false
+      ? rule.actions.filter((a) => a.type !== 'split')
+      : rule.actions;
+    // A rule left with nothing to do is NOT recorded: appliedRuleIds drives the
+    // "matched N times" count, and a rule claiming matches while changing nothing
+    // is worse than one claiming none.
+    if (actions.length === 0) continue;
     patch.appliedRuleIds.push(rule.id);
-    for (const action of rule.actions) applyAction(patch, action);
+    for (const action of actions) applyAction(patch, action);
   }
   return patch;
 }

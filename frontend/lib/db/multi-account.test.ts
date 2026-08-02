@@ -84,13 +84,21 @@ test('a refund across two accounts needs every leg positive, not just the first'
   })).rejects.toThrow('A refund must be positive');
 });
 
-// Mirrors iOS's MultiAccountRulesTests: a splits rule must distribute over
-// the TOTAL of the account legs (100), not the first one (60), or the entry
-// can't balance. Totals alone can't discriminate this — appendResidue
-// force-balances any shortfall into a sys:fx equity leg, which is itself a
-// category leg, so the buggy first-leg-only path's food=42/shop=18/fx=40 and
-// the correct path's food=70/shop=30 both sum to 100. Assert per-category.
-test('a splits rule on a two-account entry distributes over the total, not the first leg', async () => {
+// Mirrors iOS's MultiAccountRulesTests. A rule's `split` action is SKIPPED on a
+// purchase paid from several accounts, because that is the rule the rest of the
+// app already enforces: setTransactionSplits refuses such an entry in as many
+// words, and the Add sheet makes the two mutually exclusive. Only the rules
+// engine broke it.
+//
+// It matters because the projection copies an entry's whole `splits` array onto
+// EVERY account-leg row, so a both-axes entry has its categories summed once per
+// payment leg — categorySpend reported food:140/shop:60 for a 100 purchase, and a
+// budget alert fired at twice the real spend.
+//
+// This test previously asserted the opposite: that the split distributed 70/30
+// over the total. That shape is now refused, so the entry keeps the single
+// category it was posted with.
+test('a splits rule on a two-account entry is skipped, keeping the posted category', async () => {
   const exec = await newDb();
   // Both accounts in the ledger's own base (USD) — no fx conversion in play,
   // so the asserted amounts are exact, not rate-dependent.
@@ -116,8 +124,9 @@ test('a splits rule on a two-account entry distributes over the total, not the f
     [entryId],
   );
   const byCat = new Map(rows.map((r) => [String(r.category_id), Number(r.b)]));
-  expect(byCat.get('food')).toBeCloseTo(70, 2);
-  expect(byCat.get('shop')).toBeCloseTo(30, 2);
+  expect(byCat.size).toBe(1);
+  expect(byCat.get('food')).toBeCloseTo(100, 2);   // the whole purchase, undivided
+  expect(byCat.get('shop')).toBeUndefined();       // the rule's second category was never created
   const fxLegs = await exec(
     `SELECT COUNT(*) AS n FROM postings p JOIN categories c ON c.id = p.category_id
       WHERE p.entry_id = ? AND c.system = 'fx'`,
