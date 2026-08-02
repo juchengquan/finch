@@ -23,6 +23,15 @@ public struct Tx: Identifiable, Codable, Equatable, Sendable {
     /// exposed so callers (e.g. the delete-confirmation dialog) don't have to
     /// re-query it. See Projection.enrichLegTxs.
     public var accountLegCount: Int?
+    /// The `entries.id` this posting belongs to — stamped on EVERY row, so
+    /// grouping by it always reconstructs the purchase. `Tx.id` is the POSTING
+    /// id, so a purchase paid from several accounts is several rows, and
+    /// anything counting rows counts it more than once.
+    ///
+    /// Optional only because the parity fixtures decode `[Tx]` from JSON written
+    /// before this field existed. NOTHING persists `Tx`, so there is no
+    /// migration to write. Prefer `purchaseKey` over reading this directly.
+    public var entryId: String?
     public var counterpartyId: String?
     public var splits: [TxSplit]?
     public var tags: [String]?
@@ -42,7 +51,7 @@ public struct Tx: Identifiable, Codable, Equatable, Sendable {
                 account: String, date: String, pending: Bool? = nil, ledgerId: String? = nil,
                 currency: String? = nil, nativeAmount: Double? = nil, time: String? = nil,
                 kind: String? = nil, transferGroupId: String? = nil, accountLegCount: Int? = nil,
-                counterpartyId: String? = nil,
+                entryId: String? = nil, counterpartyId: String? = nil,
                 splits: [TxSplit]? = nil, tags: [String]? = nil, note: String? = nil,
                 sourceTemplateId: String? = nil, occurrenceDate: String? = nil,
                 refundedTransactionId: String? = nil,
@@ -51,6 +60,7 @@ public struct Tx: Identifiable, Codable, Equatable, Sendable {
         self.account = account; self.date = date; self.pending = pending; self.ledgerId = ledgerId
         self.currency = currency; self.nativeAmount = nativeAmount; self.time = time; self.kind = kind
         self.transferGroupId = transferGroupId; self.accountLegCount = accountLegCount
+        self.entryId = entryId
         self.counterpartyId = counterpartyId; self.splits = splits
         self.tags = tags; self.note = note; self.sourceTemplateId = sourceTemplateId
         self.occurrenceDate = occurrenceDate
