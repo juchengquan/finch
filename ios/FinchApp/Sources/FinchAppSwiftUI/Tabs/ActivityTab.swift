@@ -74,10 +74,14 @@ struct ActivityFeedView: View {
     @State private var confirmingBulkDelete = false
     @State private var pendingDelete: Tx?   // single-row delete awaiting confirmation
     // Appended to the delete-confirmation message when the entry has more than
-    // one account leg (a split purchase or a transfer): deleting any one feed
-    // row deletes the whole entry, so the user should know the other payment(s)
-    // go too.
+    // one account leg: deleting any one feed row deletes the whole entry, so the
+    // user should know the other leg(s) go too. `accountLegCount > 1` is true for
+    // BOTH a split purchase and a transfer, but they need different wording —
+    // `transferGroupId` (set only for transfers; see Projection.enrichLegTxs)
+    // picks the right one. Mirrors the web's deleteDialog transferHint/splitHint
+    // precedence (transaction-detail.tsx).
     static let multiLegDeleteHint = String(localized: "This also deletes the other payments linked to this purchase.")
+    static let transferDeleteHint = String(localized: "This also deletes the other side of the transfer.")
 
     // Calendar lens (List is the default): a month grid of ACTUAL daily
     // income/expense over the filtered transactions — tap a day to see its rows.
@@ -260,8 +264,11 @@ struct ActivityFeedView: View {
             // A split purchase (or a transfer) renders as one feed row per account
             // leg; deleting any one row deletes the whole entry. Warn whenever
             // there's a sibling leg, so the user isn't surprised the other payment
-            // went too.
-            if (txn.accountLegCount ?? 1) > 1 {
+            // went too. Transfers get their own wording (transferGroupId) — "the
+            // other payments linked to this purchase" is wrong for a transfer.
+            if txn.transferGroupId != nil {
+                Text("\(txn.merchant) · \(store.displayMoneyBase(txn.amount))") + Text(" " + Self.transferDeleteHint)
+            } else if (txn.accountLegCount ?? 1) > 1 {
                 Text("\(txn.merchant) · \(store.displayMoneyBase(txn.amount))") + Text(" " + Self.multiLegDeleteHint)
             } else {
                 Text("\(txn.merchant) · \(store.displayMoneyBase(txn.amount))")

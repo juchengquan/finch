@@ -6346,6 +6346,16 @@
         }
       }
     },
+    "This also deletes the other side of the transfer.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "转账的另一侧记录也会一并删除。"
+          }
+        }
+      }
+    },
     "This cycle": {
       "localizations": {
         "zh-Hans": {
