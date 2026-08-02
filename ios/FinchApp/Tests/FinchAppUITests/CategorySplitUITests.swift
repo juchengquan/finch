@@ -166,6 +166,40 @@ final class CategorySplitUITests: XCTestCase {
                        "collapse left more than one category — the row reads \(label)")
     }
 
+    // A transaction can legitimately have NO category, and the picker now offers it
+    // in both modes. The write is the part that can lie: the edit sheet used to skip
+    // the category patch whenever the id was empty, so choosing Uncategorized would
+    // dismiss cleanly, save, and change nothing at all. The engine reads an explicit
+    // null as "clear it"; omitting the key leaves the old leg in place.
+    func testClearingACategoryActuallyClearsIt() throws {
+        openFirstGroceriesTransaction()
+        XCTAssertTrue(categoryRowLabel("edittx.category").contains("Groceries"),
+                      "expected to start from a categorised transaction")
+
+        openCategorySubpage("edittx.category")
+        tickCategory("Uncategorized")
+        confirmSubpage()
+        app.buttons["Save"].firstMatch.tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "edittx.category")
+                        .firstMatch.waitForNonExistence(timeout: 15),
+                      "the edit sheet did not dismiss after saving")
+
+        // Reopen the SAME row and read it back from the store, not from the sheet we
+        // just closed — that is what makes this a write test rather than a UI one.
+        let row = app.staticTexts["Uncategorized"].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 20),
+                      "no uncategorised transaction in the list — the category was not cleared")
+        wait(for: [expectation(for: NSPredicate(format: "isHittable == true"), evaluatedWith: row)],
+             timeout: 15)
+        row.tap()
+        // Asserts the category is GONE, not that the row reads "Uncategorized": an
+        // empty field shows its own name as a placeholder, and it has to, because a
+        // deliberately-uncategorised transaction and a never-categorised one are the
+        // same nil category leg — the UI has nothing to tell them apart with.
+        XCTAssertFalse(categoryRowLabel("edittx.category").contains("Groceries"),
+                       "reopening still shows the old category — clearing it did not stick")
+    }
+
     // Splits used to be written the moment the split editor was confirmed, so
     // cancelling the Edit sheet reverted your notes and date but silently KEPT your
     // splits. Staging them makes Cancel mean cancel.
