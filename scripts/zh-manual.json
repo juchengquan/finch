@@ -731,5 +731,6 @@
   "This month": "本月",
   "Tap + to add an account.": "点按 + 添加账户。",
   "this account": "此账户",
-  "Liabilities": "负债"
+  "Liabilities": "负债",
+  "This also deletes the other payments linked to this purchase.": "此笔交易的其他关联付款也会一并删除。"
 }

@@ -34,6 +34,12 @@ final class MultiAccountAddTests: XCTestCase {
         XCTAssertTrue(problems.isEmpty, "the written entry must be clean: \(problems.map(\.detail))")
     }
 
+    /// Its args carry `accounts` and no top-level `accountId`, so with the
+    /// multi-account feature absent, `AddInput.accountId` (non-optional) would
+    /// fail to decode and this would throw regardless of whether the
+    /// sum-mismatch check itself ran — XCTAssertThrowsError alone is green
+    /// either way. Assert the specific code (mirrors the web twin,
+    /// mutations.test.ts's "throws error.split.accountsMismatch" test).
     func test_addTransaction_withAccountsNotSummingToAmount_throws() throws {
         let q = try seedTwoAccounts()
         XCTAssertThrowsError(try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
@@ -43,7 +49,9 @@ final class MultiAccountAddTests: XCTestCase {
             "accounts": .array([
                 .object(["accountId": .string("a2"), "amount": .double(-60)]),
                 .object(["accountId": .string("a1"), "amount": .double(-30)]),
-            ])])), "shares that don't total the amount must be rejected")
+            ])])), "shares that don't total the amount must be rejected") { error in
+            XCTAssertEqual((error as? I18nError)?.code, "error.split.accountsMismatch")
+        }
     }
 
     /// Balances must move on BOTH accounts.
