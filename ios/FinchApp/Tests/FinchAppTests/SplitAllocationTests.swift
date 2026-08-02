@@ -262,7 +262,7 @@ extension SplitAllocationTests {
         a.tick("dining")                       // a parent of coffee/restaurants
         XCTAssertEqual(a.rows.map(\.id), ["dining"])
         XCTAssertEqual(a.payload.count, 1)
-        XCTAssertEqual(a.payload[0].categoryId, "dining")
+        XCTAssertEqual(a.payload[0].id, "dining")
     }
 
     func test_tickingAParentAndAChildKeepsThemSeparate() {
@@ -290,6 +290,6 @@ extension SplitAllocationTests {
         a.tick("groceries"); a.tick("")
         XCTAssertTrue(a.isTicked(""))
         XCTAssertEqual(a.payload.count, 2)
-        XCTAssertNil(a.payload[1].categoryId, "the uncategorised leg must write a nil category")
+        XCTAssertNil(a.payload[1].id, "the uncategorised leg must write a nil category")
     }
 }
