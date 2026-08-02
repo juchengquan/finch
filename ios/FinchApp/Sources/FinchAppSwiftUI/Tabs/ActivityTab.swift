@@ -189,14 +189,20 @@ struct ActivityFeedView: View {
                 .accessibilityLabel("Filter")
             }
             ToolbarItem(placement: .primaryAction) {
+                // Sort AND grouping, matching the UIKit screen's overflow menu. This
+                // menu used to hold sort alone while `groupByMonth` was still read
+                // below and shared through AppStorage with the UIKit screen — so
+                // grouping was a live setting that nothing here could change, and this
+                // screen silently inherited whatever the UIKit one last wrote.
                 Menu {
                     Picker("Sort", selection: $sort) {
                         ForEach(TxSort.allCases) { Text($0.label).tag($0) }
                     }
+                    Toggle("Group by month", isOn: $groupByMonth)
                 } label: {
-                    Image(systemName: "arrow.up.arrow.down")
+                    Image(systemName: "ellipsis.circle")
                 }
-                .accessibilityLabel("Sort")
+                .accessibilityLabel("Sort and grouping")
             }
             if sizeClass != .compact {
                 ToolbarItem(placement: .primaryAction) {

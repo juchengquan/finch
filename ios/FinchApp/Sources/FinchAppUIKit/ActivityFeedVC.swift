@@ -594,10 +594,20 @@ final class ActivityFeedVC: UIViewController {
         }
         let overflow = UIMenu(children: [sortMenu, groupToggle])
 
+        let overflowItem = UIBarButtonItem(image: UIImage(systemName: "ellipsis.circle"), menu: overflow)
+        overflowItem.accessibilityLabel = String(localized: "Sort and grouping")
+        // The FILLED variant while a filter is on. Without it this screen — the one
+        // that ships — gave no sign at a glance that results were being filtered,
+        // while the SwiftUI screen had shown it all along.
+        let filterItem = UIBarButtonItem(
+            image: UIImage(systemName: filter.isActive ? "line.3.horizontal.decrease.circle.fill"
+                                                       : "line.3.horizontal.decrease.circle"),
+            primaryAction: UIAction { [weak self] _ in self?.presentFilter() })
+        filterItem.accessibilityLabel = String(localized: "Filter")
+
         navigationItem.rightBarButtonItems = [
-            UIBarButtonItem(image: UIImage(systemName: "ellipsis.circle"), menu: overflow),
-            UIBarButtonItem(image: UIImage(systemName: "line.3.horizontal.decrease.circle"),
-                            primaryAction: UIAction { [weak self] _ in self?.presentFilter() }),
+            overflowItem,
+            filterItem,
             UIBarButtonItem(title: String(localized: "Select"), primaryAction: UIAction { [weak self] _ in
                 self?.setSelecting(true)
             }),
@@ -674,6 +684,9 @@ final class ActivityFeedVC: UIViewController {
             FilterSheetHost(initial: filter) { [weak self] updated in
                 self?.filter = updated
                 self?.applySnapshot()
+                // Redraw the bar too: the filter glyph now reflects whether a filter
+                // is on, and applySnapshot only touches the list.
+                self?.configureToolbar()
             }
             .environmentObject(store)
         ), animated: true)
