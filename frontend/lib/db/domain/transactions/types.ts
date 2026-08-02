@@ -25,7 +25,13 @@ export interface ListOptions {
 
 export interface AddInput {
   ledgerId: string;
-  accountId: string;
+  /** Single-account form. Optional only because `accounts` may carry the
+   *  payment sources instead; exactly one of the two must be present. */
+  accountId?: string;
+  /** Split tender: the same purchase paid from several accounts. Each
+   *  share's `amount` is in that account's own currency and they must
+   *  total `amount`. Mirrors iOS's `AddInput.AccountShare`. */
+  accounts?: { accountId: string; amount: number }[];
   amount: number; // signed, native (in `currency`)
   amountBase?: number; // signed, ledger base; defaults to `amount` (same-currency)
   currency?: string; // native currency; defaults to the account's currency

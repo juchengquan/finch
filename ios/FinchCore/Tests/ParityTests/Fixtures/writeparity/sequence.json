@@ -378,6 +378,28 @@
       }
     },
     {
+      "action": "addTransaction",
+      "args": {
+        "ledgerId": "personal",
+        "accounts": [
+          {
+            "accountId": "a1",
+            "amount": -120
+          },
+          {
+            "accountId": "a2",
+            "amount": -80
+          }
+        ],
+        "currency": "USD",
+        "amount": -200,
+        "merchant": "Furniture",
+        "categoryId": "fun",
+        "date": "2026-05-14",
+        "skipRules": true
+      }
+    },
+    {
       "action": "createScheduled",
       "args": {
         "id": "s2",
@@ -1238,6 +1260,63 @@
       },
       {
         "ledger_id": "personal",
+        "date": "2026-05-14",
+        "time": null,
+        "description": "Furniture",
+        "kind": "expense",
+        "status": "confirmed",
+        "counterparty_id": null,
+        "refunded_entry_id": null,
+        "source_template_id": null,
+        "occurrence_date": null,
+        "notes": null,
+        "applied_rule_ids": null,
+        "reviewed": false,
+        "sealed": 1,
+        "postings": [
+          {
+            "account_id": "a1",
+            "category_id": null,
+            "amount": "-120.000000",
+            "currency": "USD",
+            "amount_base": "-109.090000",
+            "exchange_rate": "0.909091",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 0
+          },
+          {
+            "account_id": "a2",
+            "category_id": null,
+            "amount": "-80.000000",
+            "currency": "USD",
+            "amount_base": "-72.730000",
+            "exchange_rate": "0.909091",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 1
+          },
+          {
+            "account_id": null,
+            "category_id": "fun",
+            "amount": "181.820000",
+            "currency": "EUR",
+            "amount_base": "181.820000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 2
+          }
+        ]
+      },
+      {
+        "ledger_id": "personal",
         "date": "2026-05-20",
         "time": "10:15",
         "description": "Gym",
@@ -1540,7 +1619,7 @@
         "name": "Checking",
         "type": "cash",
         "currency": "USD",
-        "current_balance": "-5197.830000",
+        "current_balance": "-5317.830000",
         "sort_order": 3,
         "include_in_net_worth": 1,
         "is_active": 1,
@@ -1554,7 +1633,7 @@
         "name": "Savings",
         "type": "savings",
         "currency": "USD",
-        "current_balance": "4265.000000",
+        "current_balance": "4185.000000",
         "sort_order": 1,
         "include_in_net_worth": 1,
         "is_active": 1,
@@ -1813,6 +1892,12 @@
       },
       {
         "date": "2026-05-13",
+        "currency": "EUR",
+        "rate": "1.100000",
+        "source": "derived"
+      },
+      {
+        "date": "2026-05-14",
         "currency": "EUR",
         "rate": "1.100000",
         "source": "derived"

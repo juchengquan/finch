@@ -316,9 +316,70 @@ export async function addTransaction(exec: Exec, input: AddInput): Promise<strin
 
   const kind: EntryKind = (input.kind ?? (input.amount > 0 ? 'income' : 'expense')) as EntryKind;
 
+  // Split tender: one purchase, several payment sources -> ONE entry with an
+  // account leg per source plus a single auto-balanced category leg. Mirrors
+  // ios/FinchCore/.../Transactions.swift::addTransactionReturningId precisely.
+  // Rejected if the shares don't total the stated amount, so a typo cannot
+  // silently post a different purchase than the one on screen.
+  if (input.accounts && input.accounts.length >= 2) {
+    const shares = input.accounts;
+    // Each share is in ITS OWN account's currency, so the shares and the stated
+    // amount only become comparable in the ledger base. A raw sum would add
+    // incomparable units the moment two accounts hold different currencies —
+    // which is supported. A same-currency split converts at one rate and still
+    // reconciles exactly, within the penny tolerance the double rounding needs.
+    const [l] = await exec('SELECT base_currency FROM ledgers WHERE id = ?', [input.ledgerId]);
+    const base = String(l?.base_currency ?? 'USD');
+    let totalBase = 0;
+    for (const s of shares) {
+      const [a] = await exec('SELECT currency FROM accounts WHERE id = ?', [s.accountId]);
+      if (!a) throw new I18nError('error.notFound.account', {}, 'Account not found');
+      totalBase += (await convertToBase(exec, s.amount, String(a.currency), base, input.date)).amountBase;
+    }
+    // With no single account there is no account currency to default to, so an
+    // omitted `currency` means the amount is already in the ledger base. The Add
+    // sheet sends `currency` explicitly for a split.
+    const statedBase = (await convertToBase(exec, input.amount, input.currency ?? base, base, input.date)).amountBase;
+    // convertToBase rounds to 2dp, so totalBase and statedBase are each a sum of
+    // independently-rounded cents — a flat 0.005 demands EXACT cent equality across
+    // N+1 roundings (N shares + the stated total), which a valid split can miss by a
+    // cent (e.g. 10.01 + 19.59 EUR @ 1.087 rounds to 10.88 + 21.29 = 32.17, but the
+    // combined 29.60 EUR rounds to 32.18 — one cent apart, both correct). Scale the
+    // tolerance by the number of independent roundings involved.
+    if (Math.abs(totalBase - statedBase) >= 0.005 * (shares.length + 1)) {
+      throw new I18nError(
+        'error.split.accountsMismatch',
+        { total: totalBase.toFixed(2), amount: statedBase.toFixed(2) },
+        `The account amounts add up to ${totalBase.toFixed(2)}, not ${statedBase.toFixed(2)}`,
+      );
+    }
+    const { entryId } = await postEntry(exec, {
+      ledgerId: input.ledgerId,
+      date: input.date,
+      time: input.time ?? null,
+      description: input.merchant,
+      kind,
+      status: input.status ?? 'confirmed',
+      notes: input.note || null,
+      counterpartyId,
+      refundedEntryId: input.refundedTransactionId ?? null,
+      skipRules: input.skipRules,
+      sourceTemplateId: input.sourceTemplateId ?? null,
+      occurrenceDate: input.occurrenceDate ?? null,
+      legs: shares.map((s) => ({ accountId: s.accountId, amount: s.amount })),
+      autoBalanceCategoryId: input.categoryId ?? null,
+    });
+    return entryId;
+  }
+
+  if (!input.accountId) {
+    throw new I18nError('error.split.noAccount', {}, 'A transaction needs an account');
+  }
+  const accountId = input.accountId;
+
   // §5.2: if input.currency is set and differs from the account's currency,
   // convert into the account's currency (fixes F3) and carry orig_* fields.
-  const [acct] = await exec('SELECT currency FROM accounts WHERE id = ?', [input.accountId]);
+  const [acct] = await exec('SELECT currency FROM accounts WHERE id = ?', [accountId]);
   const acctCcy = String(acct?.currency ?? 'USD');
   const inputCcy = input.currency ?? acctCcy;
 
@@ -342,7 +403,7 @@ export async function addTransaction(exec: Exec, input: AddInput): Promise<strin
       sourceTemplateId: input.sourceTemplateId ?? null,
       occurrenceDate: input.occurrenceDate ?? null,
       legs: [{
-        accountId: input.accountId,
+        accountId,
         amount: convToAcct.amountBase,  // account-native
         amountBase: convToBase2.amountBase,
         exchangeRate: convToBase2.rate,
@@ -357,7 +418,7 @@ export async function addTransaction(exec: Exec, input: AddInput): Promise<strin
   // Standard same-currency path via postSimple.
   const { entryId } = await postSimple(exec, {
     ledgerId: input.ledgerId,
-    accountId: input.accountId,
+    accountId,
     amount: input.amount,
     date: input.date,
     time: input.time ?? null,
