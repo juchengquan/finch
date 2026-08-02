@@ -81,16 +81,31 @@ public enum Scheduled {
         if type == "income" {
             let splits = try Row.fetchAll(db, sql: "SELECT account_id, amount_pct, amount_abs, description FROM scheduled_splits WHERE template_id = ? ORDER BY sort_order", arguments: [templateId])
             if !splits.isEmpty {
-                var posted = 0
-                for sp in splits {
+                // ONE transaction with an account leg per split — the same shape the Add
+                // sheet produces for a split payment. This used to call postSingle once
+                // per split, so a salary paid into two accounts became two unrelated
+                // transactions while the identical split entered by hand became one.
+                //
+                // A single entry has a single `description`, so each split's own
+                // `description` (e.g. "main" / "savings") has no row of its own to sit
+                // on any more. It is carried onto that leg's `memo` instead of being
+                // dropped: `memo` is already the per-leg label a transfer's "Transfer
+                // to/from" text uses, and the projection surfaces `memo ?? description`
+                // as the leg's display text — so the split's own note is still visible,
+                // just at the leg instead of the (no-longer-existing) row.
+                let legs: [Entries.Leg] = splits.compactMap { sp -> Entries.Leg? in
                     let portion = (sp["amount_abs"] as Double?) ?? (amount * ((sp["amount_pct"] as Double?) ?? 0) / 100)
-                    if portion == 0 { continue }
-                    try postSingle(db, ledgerId: ledgerId, accountId: sp["account_id"], amount: portion,
-                                   description: "\(desc) · \((sp["description"] as String?) ?? "")", date: date,
-                                   time: postTime, sourceTemplateId: templateId, categoryId: categoryId, occurrenceDate: occurrenceDate)
-                    posted += 1
+                    guard portion != 0, let acct = sp["account_id"] as String? else { return nil }
+                    let memo = (sp["description"] as String?).flatMap { $0.isEmpty ? nil : $0 }
+                    return .account(Entries.AccountLeg(accountId: acct, amount: portion, memo: memo))
                 }
-                if posted == 0 { throw I18nError("error.scheduled.noSplits", ["name": name], "No split amounts to post for \"\(name)\"") }
+                if legs.isEmpty {
+                    throw I18nError("error.scheduled.noSplits", ["name": name], "No split amounts to post for \"\(name)\"")
+                }
+                _ = try Entries.postEntry(db, Entries.NewEntry(
+                    ledgerId: ledgerId, date: date, time: postTime, description: desc, kind: .income,
+                    legs: legs, autoBalance: .category(categoryId),
+                    sourceTemplateId: templateId, occurrenceDate: occurrenceDate))
                 return
             }
         }

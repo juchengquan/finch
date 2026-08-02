@@ -3,7 +3,7 @@ import type { ActionName, Args } from '../_args';
 import { I18nError } from '@/lib/i18n-error';
 import { newId } from '../_shared/ids';
 import { postSingle } from '../_shared/post-helpers';
-import { postTransfer, postSimple } from '../../core/entries';
+import { postTransfer, postSimple, postEntry, type LegInput } from '../../core/entries';
 import { resolveCounterpartyIdByName } from '../counterparties/queries';
 import { occurrencesUpTo } from '@/lib/recurrence';
 import type { ScheduledTemplate } from '@/lib/store';
@@ -132,14 +132,29 @@ export const handlers = {
     const sign = t.type === 'income' ? 1 : -1;
 
     if (t.type === 'income' && t.splits?.length) {
-      let posted = 0;
+      // ONE transaction with an account leg per split — the same shape the Add
+      // sheet produces for a split payment (mirrors ios/.../Scheduled.swift). This
+      // used to call postSingle once per split, so a salary paid into two accounts
+      // became two unrelated transactions while the identical split entered by
+      // hand became one.
+      //
+      // A single entry has a single `description`, so each split's own
+      // `description` has no per-row home any more. It is carried onto that leg's
+      // `memo` instead of being dropped: `memo` is already the per-leg label a
+      // transfer's "Transfer to/from" text uses, and the projection surfaces
+      // `memo ?? description` as the leg's display text.
+      const legs: LegInput[] = [];
       for (const sp of t.splits) {
         const portion = sp.abs != null ? sp.abs : (t.amount * (sp.pct ?? 0)) / 100;
         if (!portion) continue;
-        await postSingle(exec, ledgerId, sp.accountId, portion, `${desc} · ${sp.label}`, date, t.id, t.category ?? null, occurrenceDate, postTime);
-        posted++;
+        legs.push({ accountId: sp.accountId, amount: portion, memo: sp.label ? sp.label : null });
       }
-      if (!posted) throw new I18nError('error.scheduled.noSplits', { name: t.name }, `No split amounts to post for "${t.name}"`);
+      if (!legs.length) throw new I18nError('error.scheduled.noSplits', { name: t.name }, `No split amounts to post for "${t.name}"`);
+      await postEntry(exec, {
+        ledgerId, date, time: postTime, description: desc, kind: 'income',
+        legs, autoBalanceCategoryId: t.category ?? null,
+        sourceTemplateId: t.id, occurrenceDate,
+      });
       return;
     }
 
