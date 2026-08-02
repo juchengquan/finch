@@ -84,6 +84,14 @@ final class TxListDetailVC: UIViewController {
     private var sectionIDs: [SectionID] = []
     private var txByID: [String: Tx] = [:]
     private var headerContent: [SectionID: String] = [:]
+
+    /// A header that remembers WHICH section it is drawing — see `ActivityFeedVC` for
+    /// the full reasoning. Short version: `sectionIDs[indexPath.section]` is only true
+    /// once an apply has landed, so a refresh that goes through it has to wait for the
+    /// completion, a frame after the rows moved. (#702)
+    private final class HeaderCell: UICollectionViewListCell {
+        var sectionID: SectionID?
+    }
     /// Recomputed in `applySnapshot`, so the summary cells never re-derive.
     private var summary: (count: Int, total: Double) = (0, 0)
 
@@ -159,18 +167,29 @@ final class TxListDetailVC: UIViewController {
                 // when every row shares one account, which none of these lists do.
                 // Routed through TxRowCell for its row-height margins; this screen
                 // already hosted TxRow, it just sat taller than the SwiftUI original.
+                //
+                // Pinned background, as the feed and the account detail do: tapping a
+                // swipe action highlights the cell, and diffable MOVES that cell to its
+                // new index path rather than re-dequeuing it, so `prepareForReuse` never
+                // fires and the highlight rides along — the arriving row draws grey and
+                // fades over ~0.5s. A row that never paints a highlight has nothing to
+                // leave behind. Safe here because selection is transient: rows deselect
+                // on tap and this screen has no column mode. (#702)
+                cell.backgroundConfiguration = txRowBackground()
                 TxRowCell.configure(cell, tx: tx, store: self.store,
                                     showRunningBalance: false)
             }
         }
 
-        let header = UICollectionView.SupplementaryRegistration<UICollectionViewListCell>(
+        let header = UICollectionView.SupplementaryRegistration<HeaderCell>(
             elementKind: UICollectionView.elementKindSectionHeader
         ) { [weak self] view, _, indexPath in
             guard let self, self.sectionIDs.indices.contains(indexPath.section) else { return }
-            var cfg = view.defaultContentConfiguration()
-            cfg.text = self.headerContent[self.sectionIDs[indexPath.section]]
-            view.contentConfiguration = cfg
+            // The index path is trusted ONCE, here, where diffable has just handed over
+            // a freshly dequeued header. The id is stored so the refresh never has to.
+            let id = self.sectionIDs[indexPath.section]
+            view.sectionID = id
+            self.draw(id, into: view)
         }
 
         dataSource = UICollectionViewDiffableDataSource<SectionID, String>(collectionView: collectionView) {
@@ -225,7 +244,34 @@ final class TxListDetailVC: UIViewController {
 
         headerContent = headers
         sectionIDs = snap.sectionIdentifiers
+        refreshVisibleHeaders()
         dataSource.apply(snap, animatingDifferences: false)
+    }
+
+    /// A diffable data source does NOT re-render a supplementary view when only the
+    /// section's ITEMS change — the section identifier is unchanged, so the header is
+    /// left exactly as it was. `To confirm (N)` is computed FROM those rows, so this
+    /// screen did not merely show the count LATE, as the feed and the account detail
+    /// did: it had no refresh at all, and the count stayed wrong until the header
+    /// happened to be re-created by scrolling. (#702)
+    ///
+    /// Called immediately BEFORE the apply so the count and the row it counts commit
+    /// in the same CATransaction. Each header is addressed by the id it stored for
+    /// itself, so a section appearing or vanishing in the same apply cannot misdirect
+    /// the write. A header with no entry is left alone — its section is on its way out.
+    private func refreshVisibleHeaders() {
+        let kind = UICollectionView.elementKindSectionHeader
+        for indexPath in collectionView.indexPathsForVisibleSupplementaryElements(ofKind: kind) {
+            guard let view = collectionView.supplementaryView(forElementKind: kind, at: indexPath) as? HeaderCell,
+                  let id = view.sectionID, headerContent[id] != nil else { continue }
+            draw(id, into: view)
+        }
+    }
+
+    private func draw(_ id: SectionID, into view: HeaderCell) {
+        var cfg = view.defaultContentConfiguration()
+        cfg.text = headerContent[id]
+        view.contentConfiguration = cfg
     }
 
     // MARK: Row actions
