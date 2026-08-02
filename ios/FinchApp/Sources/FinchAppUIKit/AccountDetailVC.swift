@@ -99,6 +99,14 @@ final class AccountDetailVC: UIViewController {
     }
     private var headerContent: [SectionID: HeaderContent] = [:]
 
+    /// A header that remembers WHICH section it is drawing — see `ActivityFeedVC` for
+    /// the full reasoning. Short version: `sectionIDs[indexPath.section]` is only true
+    /// after an apply has landed, which forced the refresh into the completion and
+    /// made the month figures change a frame after the row moved. (#702)
+    private final class HeaderCell: UICollectionViewListCell {
+        var sectionID: SectionID?
+    }
+
     private var previewURL: URL?
     private var moreItem: UIBarButtonItem?
 
@@ -309,7 +317,7 @@ final class AccountDetailVC: UIViewController {
             cell.accessories = []
         }
 
-        let header = UICollectionView.SupplementaryRegistration<UICollectionViewListCell>(
+        let header = UICollectionView.SupplementaryRegistration<HeaderCell>(
             elementKind: UICollectionView.elementKindSectionHeader
         ) { [weak self] view, _, indexPath in
             self?.configureHeader(view, at: indexPath)
@@ -334,9 +342,19 @@ final class AccountDetailVC: UIViewController {
 
     /// Extracted from the registration so `refreshVisibleHeaders()` can re-run it —
     /// see the comment there for why that is necessary.
-    private func configureHeader(_ view: UICollectionViewListCell, at indexPath: IndexPath) {
+    ///
+    /// The index path is trusted ONCE, here, where diffable has just handed over a
+    /// freshly dequeued header and the two are known to agree. The id is stored on
+    /// the view, so the refresh never has to trust an index path again.
+    private func configureHeader(_ view: HeaderCell, at indexPath: IndexPath) {
         guard sectionIDs.indices.contains(indexPath.section) else { return }
-        switch headerContent[sectionIDs[indexPath.section]] {
+        let id = sectionIDs[indexPath.section]
+        view.sectionID = id
+        draw(id, into: view)
+    }
+
+    private func draw(_ id: SectionID, into view: HeaderCell) {
+        switch headerContent[id] {
         case .month(let label, let trailing, let subtitle):
             view.contentConfiguration = UIHostingConfiguration {
                 MonthSectionHeader(label: label, trailing: trailing, subtitle: subtitle)
@@ -380,25 +398,21 @@ final class AccountDetailVC: UIViewController {
     /// Only the VISIBLE headers are refreshed, which keeps this off `reloadSections`
     /// — that would re-render every row in the section, and this screen is expected
     /// to hold thousands.
-
-    /// Clear a highlight that outlived its row's position.
     ///
-    /// Tapping a swipe action highlights the cell. Diffable MOVES that cell to its
-    /// new index path rather than re-dequeuing it, so `prepareForReuse` never fires
-    /// and the highlight arrives with the row — the arriving row rendered grey for
-    /// ~0.5s before de-highlighting, which reads as a blink (see #702).
-    private func clearStuckHighlight() {
-        for cell in collectionView.visibleCells where cell.isHighlighted {
-            cell.isHighlighted = false
-        }
-    }
-
+    /// Called immediately BEFORE the apply, not in its completion. Each header is
+    /// addressed by the id it stored for itself, so a section moving or vanishing
+    /// under it cannot misdirect the write, and the new figures commit in the same
+    /// CATransaction as the rows that produced them. From the completion they landed
+    /// a frame later — the row jumped, then the month's figures caught up. (#702)
+    ///
+    /// A header with no entry in `headerContent` is left alone rather than blanked:
+    /// its section is on its way out in the apply that follows.
     private func refreshVisibleHeaders() {
         let kind = UICollectionView.elementKindSectionHeader
         for indexPath in collectionView.indexPathsForVisibleSupplementaryElements(ofKind: kind) {
-            guard let view = collectionView.supplementaryView(forElementKind: kind, at: indexPath)
-                    as? UICollectionViewListCell else { continue }
-            configureHeader(view, at: indexPath)
+            guard let view = collectionView.supplementaryView(forElementKind: kind, at: indexPath) as? HeaderCell,
+                  let id = view.sectionID, headerContent[id] != nil else { continue }
+            draw(id, into: view)
         }
     }
 
@@ -491,10 +505,8 @@ final class AccountDetailVC: UIViewController {
         snap.reconfigureItems(snap.itemIdentifiers.filter(carried.contains))
         headerContent = headers                // before apply — the headers read it
         sectionIDs = snap.sectionIdentifiers   // before apply — the layout reads it
-        dataSource.apply(snap, animatingDifferences: false) { [weak self] in
-            self?.refreshVisibleHeaders()
-            self?.clearStuckHighlight()
-        }
+        refreshVisibleHeaders()                // before apply — same turn as the rows
+        dataSource.apply(snap, animatingDifferences: false)
     }
 
     // MARK: Search / bars — the SwiftUI one-liners, expanded
