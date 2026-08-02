@@ -332,6 +332,17 @@ struct EditTransactionSheet: View {
                                 do { try store.deleteTransaction(txn.id); Haptics.warning(); dismiss() }   // also unlinks receipt files
                                 catch { errorMessage = i18nMessage(error) }
                             }
+                        } message: {
+                            // This sheet is where "Delete and re-add this purchase to change how
+                            // it was paid" (error.tx.splitLegEdit, thrown when editing a split's
+                            // amount) sends the user — the worst possible place to then understate
+                            // that deleting takes every leg with it. Same wording/precedence as
+                            // ActivityTab's delete alert.
+                            if txn.transferGroupId != nil {
+                                Text(ActivityFeedView.transferDeleteHint)
+                            } else if (txn.accountLegCount ?? 1) > 1 {
+                                Text(ActivityFeedView.multiLegDeleteHint)
+                            }
                         }
                 }
 
