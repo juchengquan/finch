@@ -251,7 +251,9 @@ Every task below is **"revert the fix, watch the test fail, record it."** These 
 
 **Skip, do not throw.** `setTransactionSplits` throws because the user asked explicitly. A rule runs by itself, so throwing would refuse a legitimate purchase over an unrelated rule. **The rule's other actions still apply** — merchant, tags, a single category, kind. **Record the rule as applied only if something applied**, or `ruleMatchCounts` claims a match that did nothing.
 
-**The migration is not optional, because of a trap.** `rebuildEntry` re-runs `validateShape` (`:718`, `:724`) — and `:724` validates the **existing** legs even for an edit that touches no legs at all. So without a migration, a transaction already in this shape becomes **uneditable**: no date change, no note change, and an error about leg shapes that does not hint that deleting is the only way out.
+**The migration is not optional, because of a trap — though a narrower one than an earlier draft claimed.** That draft said `rebuildEntry` validates the existing legs "even for an edit that touches no legs at all". **Wrong, and corrected by executing it:** the existing-legs validation at `:742-743` fires only on a *kind change*. What actually strands the row is `mustRebuildLegs = legsProvided || dateChanged` (`:682`) — **changing the date** rebuilds the legs, carries the forbidden shape forward, and throws. A notes-only patch validates nothing and still works.
+
+So the row is not frozen, but its date, amount, accounts and categories are all unchangeable, and the doubled category totals persist until the shape is gone. Both boundaries are pinned by tests, in each direction.
 
 **Collapse into the dominant category** — the one with the largest `abs(amount_base)`. That is already the single category the projection displays for such an entry (`Projection.swift:142-144`), so the migration preserves what the user currently *sees* while removing what they cannot see.
 

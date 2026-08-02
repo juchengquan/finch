@@ -120,16 +120,31 @@ public enum RulesEngine {
     }
 
     /// Run the (priority-ordered) active rules against `t`; return the merged
-    /// patch. `appliedRuleIds` lists every rule that matched, in fire order.
-    public static func applyRules(_ t: Tx, _ rules: [Rule], skipIfRuleApplied: Bool = false, onEditOnly: Bool = false) -> RulePatch {
+    /// patch. `appliedRuleIds` lists every rule that matched AND had something to
+    /// do, in fire order.
+    ///
+    /// `allowSplits: false` drops every `split` action. Callers pass it for a
+    /// purchase paid from several accounts, which the rest of the app already
+    /// requires to take a single category — `setTransactionSplits` refuses such an
+    /// entry in as many words, and the Add sheet makes the two mutually exclusive.
+    /// Splitting one anyway produces an entry the projection double-counts, since
+    /// it copies the whole `splits` array onto every account-leg row.
+    ///
+    /// A rule left with no actions after that filter is **not recorded as
+    /// applied**: `appliedRuleIds` drives the "matched N times" count, and a rule
+    /// claiming matches while changing nothing is worse than one claiming none.
+    public static func applyRules(_ t: Tx, _ rules: [Rule], skipIfRuleApplied: Bool = false,
+                                  onEditOnly: Bool = false, allowSplits: Bool = true) -> RulePatch {
         var patch = RulePatch()
         if skipIfRuleApplied && (t.appliedRuleIds?.count ?? 0) > 0 { return patch }
         for rule in rules {
             if !rule.isActive { continue }
             if onEditOnly && !rule.runOnEdit { continue }
             if !evaluateCondition(t, rule.condition) { continue }
+            let actions = allowSplits ? rule.actions : rule.actions.filter { $0.type != "split" }
+            if actions.isEmpty { continue }
             patch.appliedRuleIds.append(rule.id)
-            for action in rule.actions { applyAction(&patch, action) }
+            for action in actions { applyAction(&patch, action) }
         }
         return patch
     }
