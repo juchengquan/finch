@@ -114,7 +114,16 @@ struct CategoryPickerSheet: View {
                 if splitting != nil { splitSection }
                 // The "none" choice isn't a searchable category — hide it while
                 // a query filters the tree.
-                if let noneLabel, query.isEmpty { noneRow(noneLabel) }
+                //
+                // Split mode always offers it, even where the caller passes no
+                // noneLabel: an uncategorised leg is legal (the engine takes a nil
+                // category) and the old split editor let you leave a row's category
+                // unset, so without this the rewrite quietly dropped that. Single-
+                // select is untouched — offering "no category" on a plain transaction
+                // is a separate decision.
+                if query.isEmpty, let label = noneLabel ?? splitNoneLabel {
+                    noneRow(label)
+                }
                 ForEach(visible) { item in row(item) }
             }
             .searchable(text: $query, prompt: "Search")
@@ -231,18 +240,25 @@ struct CategoryPickerSheet: View {
             })
     }
 
+    /// "Uncategorized" in split mode, where the caller offers no none-label of its
+    /// own. nil outside split mode, which leaves single-select exactly as it was.
+    private var splitNoneLabel: String? {
+        splitOn ? String(localized: "Uncategorized") : nil
+    }
+
     /// The empty-selection row: same geometry as `CategoryTreeRow` (26pt glyph
     /// slot, reserved chevron column) so the list reads as one aligned tree.
+    /// Ticks like any other row in split mode — an uncategorised leg is just a leg.
     @ViewBuilder private func noneRow(_ label: String) -> some View {
         HStack(spacing: 8) {
-            Button { staged = "" } label: {
+            Button { tap("") } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "circle.slash")
                         .font(.system(size: 20)).foregroundStyle(.secondary)
                         .frame(width: 26, height: 26)
                     Text(label).foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    if staged.isEmpty { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                    if isChosen("") { Image(systemName: "checkmark").foregroundStyle(.tint) }
                 }
                 .contentShape(Rectangle())
             }
@@ -251,11 +267,15 @@ struct CategoryPickerSheet: View {
         }
     }
 
+    /// Whether a category reads as chosen — ticked in split mode, staged otherwise.
+    private func isChosen(_ id: String) -> Bool {
+        splitOn ? (splitting?.wrappedValue.isTicked(id) ?? false) : id == staged
+    }
+
     @ViewBuilder private func row(_ item: FlatCategory) -> some View {
         CategoryTreeRow(
             item: item, byId: byId,
-            isSelected: splitOn ? (splitting?.wrappedValue.isTicked(item.row.id) ?? false)
-                                : item.row.id == staged,
+            isSelected: isChosen(item.row.id),
             expanded: expanded.contains(item.row.id),
             searchActive: !query.isEmpty,
             onTap: { tap(item.row.id) },
