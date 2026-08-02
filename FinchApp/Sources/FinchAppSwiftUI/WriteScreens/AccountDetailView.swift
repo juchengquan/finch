@@ -138,7 +138,16 @@ struct AccountDetailView: View {
                     Button("Delete", role: .destructive) { deleteTxn(t) }
                     Button("Cancel", role: .cancel) {}
                 } message: { t in
-                    Text("\(t.merchant) · \(store.displayMoneyBase(t.amount))")
+                    // Same multi-leg warning as ActivityTab's delete alert: a split
+                    // purchase (or a transfer) renders as one row per account leg,
+                    // and deleting any one row deletes the whole entry.
+                    if t.transferGroupId != nil {
+                        Text("\(t.merchant) · \(store.displayMoneyBase(t.amount))") + Text(" " + ActivityFeedView.transferDeleteHint)
+                    } else if (t.accountLegCount ?? 1) > 1 {
+                        Text("\(t.merchant) · \(store.displayMoneyBase(t.amount))") + Text(" " + ActivityFeedView.multiLegDeleteHint)
+                    } else {
+                        Text("\(t.merchant) · \(store.displayMoneyBase(t.amount))")
+                    }
         }
     }
 
