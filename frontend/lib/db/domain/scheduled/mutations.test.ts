@@ -140,11 +140,30 @@ test('postScheduled posts a split income template as ONE entry with an account l
   );
   expect(legs.length).toBe(3);
   // Each split's own `description` ("label") has no per-row home on a single
-  // entry any more — it is carried onto that leg's memo rather than dropped.
-  expect(legs.map((l) => String(l.memo))).toEqual(['Daily spending', 'Savings sweep', 'Auto-invest']);
+  // entry any more — it is carried onto that leg's memo, reproducing EXACTLY
+  // the string the old per-split loop used to stamp as that row's own
+  // description ("${desc} · ${label}"; rt-salary has no template description,
+  // so desc falls back to its name, "Acme · salary").
+  expect(legs.map((l) => String(l.memo))).toEqual([
+    'Acme · salary · Daily spending',
+    'Acme · salary · Savings sweep',
+    'Acme · salary · Auto-invest',
+  ]);
   expect(Number(legs[0].amount)).toBeCloseTo(5800 * 0.6, 2);
   expect(Number(legs[1].amount)).toBeCloseTo(5800 * 0.25, 2);
   expect(Number(legs[2].amount)).toBeCloseTo(5800 * 0.15, 2);
+});
+
+test('postScheduled split: a split with no label gets no memo (no dangling separator)', async () => {
+  const exec = await seededAndAudited();
+  await exec("UPDATE scheduled_splits SET description = NULL WHERE template_id = 'rt-salary'");
+  await applyMutation(exec, 'postScheduled', { templateId: 'rt-salary' });
+  const legs = await exec(
+    `SELECT p.memo FROM postings p JOIN entries e ON e.id = p.entry_id
+      WHERE e.source_template_id = 'rt-salary' AND p.account_id IS NOT NULL
+      ORDER BY p.sort_order`,
+  );
+  expect(legs.map((l) => l.memo)).toEqual([null, null, null]);
 });
 
 test('postScheduled split: amount_abs overrides amount_pct when both are set', async () => {

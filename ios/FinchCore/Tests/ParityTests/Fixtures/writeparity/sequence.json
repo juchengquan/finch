@@ -423,6 +423,36 @@
       }
     },
     {
+      "action": "createScheduled",
+      "args": {
+        "id": "s3",
+        "ledgerId": "personal",
+        "name": "Salary",
+        "type": "income",
+        "amount": 3000,
+        "frequency": "monthly",
+        "dayOfMonth": 25,
+        "accountId": "a1",
+        "startDate": "2026-01-25"
+      }
+    },
+    {
+      "action": "addScheduledSplit",
+      "args": {
+        "templateId": "s3",
+        "accountId": "a2",
+        "pct": 60
+      }
+    },
+    {
+      "action": "addScheduledSplit",
+      "args": {
+        "templateId": "s3",
+        "accountId": "a3",
+        "pct": 40
+      }
+    },
+    {
       "action": "generateDueScheduled",
       "args": {
         "today": "2026-04-15",
@@ -444,6 +474,14 @@
         "date": "2026-05-21",
         "time": "10:16",
         "occurrenceDate": "2026-05-18"
+      }
+    },
+    {
+      "action": "postScheduled",
+      "args": {
+        "templateId": "s3",
+        "date": "2026-05-25",
+        "time": "11:00"
       }
     },
     {
@@ -1332,6 +1370,63 @@
       },
       {
         "ledger_id": "personal",
+        "date": "2026-05-25",
+        "time": "11:00",
+        "description": "Salary",
+        "kind": "income",
+        "status": "confirmed",
+        "counterparty_id": null,
+        "refunded_entry_id": null,
+        "source_template_id": "s3",
+        "occurrence_date": "2026-05-25",
+        "notes": null,
+        "applied_rule_ids": null,
+        "reviewed": false,
+        "sealed": 1,
+        "postings": [
+          {
+            "account_id": "a2",
+            "category_id": null,
+            "amount": "1800.000000",
+            "currency": "USD",
+            "amount_base": "1636.360000",
+            "exchange_rate": "0.909091",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 0
+          },
+          {
+            "account_id": "a3",
+            "category_id": null,
+            "amount": "1200.000000",
+            "currency": "USD",
+            "amount_base": "1090.910000",
+            "exchange_rate": "0.909091",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 1
+          },
+          {
+            "account_id": null,
+            "category_id": null,
+            "amount": "-2727.270000",
+            "currency": "EUR",
+            "amount_base": "-2727.270000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 2
+          }
+        ]
+      },
+      {
+        "ledger_id": "personal",
         "date": "2026-05-31",
         "time": "09:15",
         "description": "Reconciliation adjustment",
@@ -1459,7 +1554,7 @@
         "name": "Savings",
         "type": "savings",
         "currency": "USD",
-        "current_balance": "2465.000000",
+        "current_balance": "4265.000000",
         "sort_order": 1,
         "include_in_net_worth": 1,
         "is_active": 1,
@@ -1473,7 +1568,7 @@
         "name": "Brokerage",
         "type": "investment",
         "currency": "USD",
-        "current_balance": "0.000000",
+        "current_balance": "1200.000000",
         "sort_order": 2,
         "include_in_net_worth": 1,
         "is_active": 1,
@@ -1781,6 +1876,20 @@
         "start_date": "2026-01-15",
         "is_active": 1,
         "splits_enabled": 0
+      },
+      {
+        "id": "s3",
+        "ledger_id": "personal",
+        "name": "Salary",
+        "kind": "income",
+        "amount": "3000.000000",
+        "frequency": "monthly",
+        "day_of_month": 25,
+        "account_id": "a1",
+        "from_account_id": null,
+        "start_date": "2026-01-25",
+        "is_active": 1,
+        "splits_enabled": 1
       }
     ],
     "rules": [

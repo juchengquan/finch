@@ -495,6 +495,15 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   // re-deriving amount_base via an FX lookup at the new date.
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: -2000, currency: 'JPY', merchant: 'Relock', categoryId: 'food', date: '2026-05-12', skipRules: true } },
   { action: 'updateTransaction', args: { id: '$lastAccountPosting', patch: { amount: -5000, date: '2026-05-13' } } },
+  // NOT ADDED: a split-tender `addTransaction` (`accounts: [...]` instead of a
+  // single `accountId`) — see task-11-report.md "Correction 1 blocker". Web's
+  // `addTransaction` action (queries/transactions.ts) has no `accounts` branch at
+  // all (only `postEntry` — the core — supports multi-account legs; the action/
+  // mutation layer was never wired for it, unlike iOS's addTransactionReturningId).
+  // Adding this call here makes THIS SCRIPT throw ("Account not found", entries.ts
+  // resolveLegs) while building the oracle, before any JSON is written — it does
+  // not produce a byte-mismatch to adjust around, it prevents fixture regeneration
+  // entirely for every task. Left out until that's fixed at the action-layer.
   // A second template (s2), created BEFORE the split CRUD below so it is still
   // active — and NOT split-enabled — when the generateDueScheduled sweep runs.
   // (s1 becomes splits_enabled=1 in that block, so it's skipped by generateDue;
@@ -505,6 +514,14 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   { action: 'addScheduledSplit', args: { templateId: 's1', accountId: 'a3', pct: 25 } },
   { action: 'updateScheduledSplit', args: { templateId: 's1', index: 0, pct: 30 } },
   { action: 'removeScheduledSplit', args: { templateId: 's1', index: 1 } },
+  // A THIRD template (s3): income + splits_enabled, actually POSTED below — the
+  // path Task 11 changed from "N unrelated entries" to "one entry, N account
+  // legs" (parity fixtures never exercised this before; s1 is expense-typed and
+  // is only ever split-CRUD'd above, never posted, and s2 above is unsplit).
+  // Split-enabled ⇒ generateDueScheduled below skips it too, same as s1.
+  { action: 'createScheduled', args: { id: 's3', ledgerId: 'personal', name: 'Salary', type: 'income', amount: 3000, frequency: 'monthly', dayOfMonth: 25, accountId: 'a1', startDate: '2026-01-25' } },
+  { action: 'addScheduledSplit', args: { templateId: 's3', accountId: 'a2', pct: 60 } },
+  { action: 'addScheduledSplit', args: { templateId: 's3', accountId: 'a3', pct: 40 } },
   // generateDueScheduled with an explicit `today` (deterministic). s1 is
   // skipped entirely — generateDue skips split-enabled templates, and s1 just
   // became one above — so this is NOT "s1's Jan–Apr occurrences" (the old
@@ -520,6 +537,10 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   // before: it used to stamp `new Date()`, making it non-reproducible offline).
   { action: 'postScheduled', args: { templateId: 's2', date: '2026-05-20', time: '10:15' } },
   { action: 'postScheduled', args: { templateId: 's2', date: '2026-05-21', time: '10:16', occurrenceDate: '2026-05-18' } },
+  // s3 (income, 60/40 split across a2/a3) — ONE entry with two account legs plus
+  // the auto-balanced category leg, not two unrelated entries. This is the
+  // Task 11 code path; first parity coverage for it.
+  { action: 'postScheduled', args: { templateId: 's3', date: '2026-05-25', time: '11:00' } },
   // addTransaction/createTransfer carrying sourceTemplateId + occurrenceDate —
   // the write path the shipped UI actually uses ("Post now" on the Scheduled
   // calendar opens a prefilled edit sheet; saving it calls addTransaction /
