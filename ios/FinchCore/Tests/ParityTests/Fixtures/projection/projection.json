@@ -1,7 +1,7 @@
 {
   "expected": [
     {
-      "id": "p-msadl6tc-3bxl",
+      "id": "p-msc130u0-yj2d",
       "merchant": "Pay",
       "category": "c1",
       "amount": 100,
@@ -12,12 +12,13 @@
       "pending": false,
       "kind": "income",
       "ledgerId": "l1",
-      "accountLegCount": 1,
       "clearedAt": null,
-      "reviewedAt": null
+      "reviewedAt": null,
+      "entryId": "e-msc130u0-jtk6",
+      "accountLegCount": 1
     },
     {
-      "id": "p-msadl6tc-fnsz",
+      "id": "p-msc130u0-ybb6",
       "merchant": "Lunch",
       "category": "c1",
       "amount": -10,
@@ -28,12 +29,13 @@
       "pending": false,
       "kind": "expense",
       "ledgerId": "l1",
-      "accountLegCount": 1,
       "clearedAt": null,
-      "reviewedAt": null
+      "reviewedAt": null,
+      "entryId": "e-msc130u0-6135",
+      "accountLegCount": 1
     },
     {
-      "id": "p-msadl6tb-elnu",
+      "id": "p-msc130u0-kgdd",
       "merchant": "Coffee",
       "category": "c1",
       "amount": -25,
@@ -44,9 +46,10 @@
       "pending": false,
       "kind": "expense",
       "ledgerId": "l1",
-      "accountLegCount": 1,
       "clearedAt": null,
-      "reviewedAt": null
+      "reviewedAt": null,
+      "entryId": "e-msc130u0-8p0p",
+      "accountLegCount": 1
     }
   ]
 }

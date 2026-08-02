@@ -39,6 +39,12 @@ export interface Tx {
    *  exposed so callers (e.g. the delete-confirmation dialog) don't have to
    *  re-query it. */
   accountLegCount?: number;
+  /** The `entries.id` this posting belongs to — stamped on EVERY row, so
+   *  grouping by it always reconstructs the purchase. `Tx.id` is the POSTING
+   *  id, so a purchase paid from several accounts is several rows, and anything
+   *  counting rows counts it more than once. Optional only because fixtures
+   *  written before this field existed decode without it. */
+  entryId?: string;
   /** The scheduled template this row was auto-generated from (if any). */
   sourceTemplateId?: string;
   /** The scheduled occurrence this row fulfils (`entries.occurrence_date`).
