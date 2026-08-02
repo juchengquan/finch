@@ -150,6 +150,7 @@ public enum Projection {
             // means transfer. postEntry stamps kind and the audit verifies it, so it
             // is the authority. Shape agrees — a transfer is the only kind with two
             // account legs and NO category leg.
+            rows[i].accountLegCount = acctCount[eid] ?? 1
             if rows[i].kind == "transfer", (acctCount[eid] ?? 1) >= 2 { rows[i].transferGroupId = eid }
             if let ref = rows[i].refundedTransactionId, let resolved = refPostingMap[ref] {
                 rows[i].refundedTransactionId = resolved

@@ -18,6 +18,16 @@ public enum Transfers {
         let patch = args.patchObject
         guard let ref = try Entries.resolveEntryRef(db, id) else { return }
         let entryId = ref.entryId
+        // A split purchase now legally carries ≥2 account legs too (the invariant
+        // this handler was built on — "≥2 account legs means transfer" — no longer
+        // holds). Refuse rather than silently rebuilding the entry down to two
+        // legs, which would drop every category leg and any account leg beyond two
+        // (mirrors updateTransaction's guard in Transactions.swift).
+        let entryKind = try String.fetchOne(db, sql: "SELECT kind FROM entries WHERE id = ?", arguments: [entryId]) ?? ""
+        if entryKind != "transfer" {
+            throw I18nError("error.tx.splitLegEdit", [:],
+                            "Delete and re-add this purchase to change how it was paid")
+        }
         let legs = try Row.fetchAll(db, sql: "SELECT id, account_id, amount, amount_base, exchange_rate, currency, memo, cleared_at FROM postings WHERE entry_id = ? AND account_id IS NOT NULL ORDER BY sort_order", arguments: [entryId])
         if legs.count < 2 { return }
         let fromLeg = legs.first { ($0["amount"] as Double) < 0 } ?? legs[0]

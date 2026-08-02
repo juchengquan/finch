@@ -34,6 +34,11 @@ export interface Tx {
   kind?: 'income' | 'expense' | 'transfer' | 'adjustment' | 'refund';
   ledgerId?: string;
   transferGroupId?: string;
+  /** Number of account legs on this Tx's entry (>= 1). A split purchase has
+   *  several — enrichLegTxs already computes this to derive transferGroupId;
+   *  exposed so callers (e.g. the delete-confirmation dialog) don't have to
+   *  re-query it. */
+  accountLegCount?: number;
   /** The scheduled template this row was auto-generated from (if any). */
   sourceTemplateId?: string;
   /** The scheduled occurrence this row fulfils (`entries.occurrence_date`).

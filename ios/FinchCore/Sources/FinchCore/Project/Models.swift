@@ -18,6 +18,11 @@ public struct Tx: Identifiable, Codable, Equatable, Sendable {
     public var time: String?
     public var kind: String?
     public var transferGroupId: String?
+    /// Number of account legs on this Tx's entry (>= 1). A split purchase has
+    /// several — the projection already computes this for `transferGroupId`;
+    /// exposed so callers (e.g. the delete-confirmation dialog) don't have to
+    /// re-query it. See Projection.enrichLegTxs.
+    public var accountLegCount: Int?
     public var counterpartyId: String?
     public var splits: [TxSplit]?
     public var tags: [String]?
@@ -36,7 +41,8 @@ public struct Tx: Identifiable, Codable, Equatable, Sendable {
     public init(id: String, merchant: String, category: String? = nil, amount: Double,
                 account: String, date: String, pending: Bool? = nil, ledgerId: String? = nil,
                 currency: String? = nil, nativeAmount: Double? = nil, time: String? = nil,
-                kind: String? = nil, transferGroupId: String? = nil, counterpartyId: String? = nil,
+                kind: String? = nil, transferGroupId: String? = nil, accountLegCount: Int? = nil,
+                counterpartyId: String? = nil,
                 splits: [TxSplit]? = nil, tags: [String]? = nil, note: String? = nil,
                 sourceTemplateId: String? = nil, occurrenceDate: String? = nil,
                 refundedTransactionId: String? = nil,
@@ -44,7 +50,8 @@ public struct Tx: Identifiable, Codable, Equatable, Sendable {
         self.id = id; self.merchant = merchant; self.category = category; self.amount = amount
         self.account = account; self.date = date; self.pending = pending; self.ledgerId = ledgerId
         self.currency = currency; self.nativeAmount = nativeAmount; self.time = time; self.kind = kind
-        self.transferGroupId = transferGroupId; self.counterpartyId = counterpartyId; self.splits = splits
+        self.transferGroupId = transferGroupId; self.accountLegCount = accountLegCount
+        self.counterpartyId = counterpartyId; self.splits = splits
         self.tags = tags; self.note = note; self.sourceTemplateId = sourceTemplateId
         self.occurrenceDate = occurrenceDate
         self.refundedTransactionId = refundedTransactionId; self.clearedAt = clearedAt

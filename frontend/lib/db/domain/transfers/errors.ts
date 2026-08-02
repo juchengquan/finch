@@ -6,4 +6,9 @@
 export const TRANSFER_ERROR_CODES = {
   amountGt0: 'error.transfer.amountGt0',
   sameCurrencyMismatch: 'error.transfer.sameCurrencyMismatch',
+  // Same code + namespace as TRANSACTION_ERROR_CODES.splitLegEdit — both stacks
+  // keep updateTransaction's and updateTransfer's split-edit refusals under the
+  // pre-existing 'entry' namespace (iOS mirrors this divergence: its two guards
+  // both use 'error.tx.splitLegEdit').
+  splitLegEdit: 'error.entry.splitLegEdit',
 } as const;

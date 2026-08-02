@@ -12,6 +12,7 @@
       "pending": false,
       "kind": "income",
       "ledgerId": "l1",
+      "accountLegCount": 1,
       "clearedAt": null,
       "reviewedAt": null
     },
@@ -27,6 +28,7 @@
       "pending": false,
       "kind": "expense",
       "ledgerId": "l1",
+      "accountLegCount": 1,
       "clearedAt": null,
       "reviewedAt": null
     },
@@ -42,6 +44,7 @@
       "pending": false,
       "kind": "expense",
       "ledgerId": "l1",
+      "accountLegCount": 1,
       "clearedAt": null,
       "reviewedAt": null
     }
