@@ -100,7 +100,66 @@ public enum Migrations {
             try Self.ensureMetadataRow(db)   // re-stamp schema_version
         }
 
+        // A purchase paid from several accounts takes a single category. The rules
+        // engine used to break that (its `split` action ignored the account leg
+        // count), and the projection copies an entry's whole `splits` array onto
+        // every account-leg row — so such an entry had its categories summed once
+        // per payment leg and budgets alerted at twice the real spend.
+        //
+        // The shape is now refused at write time, which strands any row already in
+        // it. `rebuildEntry` rebuilds legs when `legsProvided || dateChanged`
+        // (:682) and validates the result, so **changing the date** carries the
+        // forbidden shape forward and throws — an ordinary edit, failing with an
+        // error about leg shapes that never hints deleting is the only way out.
+        // A header-only edit still works; the doubled totals persist either way.
+        migrator.registerMigration("2026-08-03-collapse-both-axes-entries") { db in
+            try Self.collapseBothAxesEntries(db)
+            try Self.ensureMetadataRow(db)   // re-stamp schema_version
+        }
+
         return migrator
+    }
+
+    /// Merge every plain category leg of a both-axes entry into its dominant one
+    /// (largest `abs(amount_base)`), preserving the total so the entry re-seals.
+    ///
+    /// The dominant category is already the single one the projection displays for
+    /// such an entry (`Projection.enrichLegTxs`), so this preserves what the user
+    /// currently sees while removing what they cannot. Equity legs — the `sys:fx`
+    /// residue — are left alone: they are not part of the split.
+    ///
+    /// Exposed rather than inlined so it can be tested directly. A migration is
+    /// recorded as applied on a fresh database before any test could insert a row
+    /// for it to find.
+    static func collapseBothAxesEntries(_ db: Database) throws {
+        let entryIds = try String.fetchAll(db, sql: """
+            SELECT e.id FROM entries e
+             WHERE (SELECT COUNT(*) FROM postings p
+                     WHERE p.entry_id = e.id AND p.account_id IS NOT NULL) > 1
+               AND (SELECT COUNT(*) FROM postings p JOIN categories c ON c.id = p.category_id
+                     WHERE p.entry_id = e.id AND c.kind != 'equity') > 1
+            """)
+        for entryId in entryIds {
+            let legs = try Row.fetchAll(db, sql: """
+                SELECT p.id AS pid, p.amount_base FROM postings p JOIN categories c ON c.id = p.category_id
+                 WHERE p.entry_id = ? AND c.kind != 'equity'
+                 ORDER BY ABS(p.amount_base) DESC, p.sort_order
+                """, arguments: [entryId])
+            guard let dominant = legs.first else { continue }
+            let total = legs.reduce(0.0) { $0 + ($1["amount_base"] as Double) }
+            let keepId: String = dominant["pid"]
+
+            // Postings on a sealed entry are immutable, so unseal, merge, reseal.
+            // The total is unchanged, so the seal's balance check still passes.
+            try db.execute(sql: "UPDATE entries SET sealed = 0 WHERE id = ?", arguments: [entryId])
+            for leg in legs.dropFirst() {
+                try db.execute(sql: "DELETE FROM postings WHERE id = ?", arguments: [leg["pid"] as String])
+            }
+            // A category leg is always in ledger base, so `amount` mirrors it.
+            try db.execute(sql: "UPDATE postings SET amount = ?, amount_base = ? WHERE id = ?",
+                           arguments: [total, total, keepId])
+            try db.execute(sql: "UPDATE entries SET sealed = 1 WHERE id = ?", arguments: [entryId])
+        }
     }
 
     /// Port of `ensureMetadataRow` (schema.ts:665): INSERT the id=1 metadata row
