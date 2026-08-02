@@ -4,6 +4,8 @@ import { seededAndAudited, seededDb } from '@/lib/db/core/test-utils';
 import type { Exec } from '@/lib/db/core/repo';
 import { convertToBase } from '@/lib/db/queries/rates';
 import { recomputeAccount, listAccounts } from '@/lib/db/queries/accounts';
+import { I18nError } from '@/lib/i18n-error';
+import { auditLedger } from '@/lib/db/core/entries';
 import {
   addTransaction, updateTransaction, confirmPendingWithMerchant,
 } from '@/lib/db/queries/transactions';
@@ -1061,3 +1063,188 @@ test('duplicate guard: identical addTransaction is rejected with a friendly mess
   );
   expect(Number(n[0].c)).toBe(2);
 });
+
+// ---------------------------------------------------------------------------
+// Split tender: `addTransaction` with `accounts` (fix round 2 — the web
+// action layer never had this branch; only `postEntry` did. Mirrors iOS's
+// MultiAccountAddTests, which exercises the exact same shape through
+// addTransactionReturningId.)
+// ---------------------------------------------------------------------------
+
+test('addTransaction with two accounts makes ONE entry with two account legs', async () => {
+  const exec = await seededAndAudited();
+  const eid = await applyMutationReturningEntryId(exec, {
+    ledgerId: 'personal', amount: -100, merchant: 'Market', categoryId: 'food',
+    date: '2026-05-01',
+    accounts: [{ accountId: 'chk', amount: -60 }, { accountId: 'sav', amount: -40 }],
+  });
+  const [{ n }] = await exec(
+    'SELECT COUNT(*) AS n FROM postings WHERE entry_id = ? AND account_id IS NOT NULL',
+    [eid],
+  );
+  expect(Number(n)).toBe(2);
+
+  const problems = await auditLedger(exec, 'personal', { checkBalances: true });
+  expect(problems).toEqual([]);
+});
+
+test('addTransaction with accounts not summing to amount throws error.split.accountsMismatch', async () => {
+  const exec = await seededAndAudited();
+  expect.assertions(1);
+  try {
+    await applyMutation(exec, 'addTransaction', {
+      ledgerId: 'personal', amount: -100, merchant: 'Market', categoryId: 'food',
+      date: '2026-05-01',
+      accounts: [{ accountId: 'chk', amount: -60 }, { accountId: 'sav', amount: -30 }],
+    });
+  } catch (e) {
+    expect((e as I18nError).code).toBe('error.split.accountsMismatch');
+  }
+});
+
+test('addTransaction with two accounts moves both balances', async () => {
+  const exec = await seededAndAudited();
+  const chkBefore = await balanceOf(exec, 'chk');
+  const savBefore = await balanceOf(exec, 'sav');
+  await applyMutation(exec, 'addTransaction', {
+    ledgerId: 'personal', amount: -100, merchant: 'Market', categoryId: 'food',
+    date: '2026-05-01',
+    accounts: [{ accountId: 'chk', amount: -60 }, { accountId: 'sav', amount: -40 }],
+  });
+  expect(await balanceOf(exec, 'chk')).toBeCloseTo(chkBefore - 60, 2);
+  expect(await balanceOf(exec, 'sav')).toBeCloseTo(savBefore - 40, 2);
+});
+
+// MARK: mixed-currency share validation (the tolerance bug, iOS fix round 2)
+
+test('addTransaction: mixed-currency split — cent-rounding within tolerance is accepted', async () => {
+  // Reconstructs the reviewer's exact false-rejection (see iOS
+  // MultiAccountAddTests): two EUR shares (10.01 + 19.59) each round
+  // independently to 10.88 / 21.29 (@ 1.087) = 32.17 base, one cent off the
+  // combined 29.60 EUR rounding to 32.18. Both are correct; a flat 0.005
+  // tolerance rejects this valid split. 0.005 * (shares.length + 1) = 0.015
+  // covers it.
+  const exec = await seededAndAudited();
+  await exec(
+    `INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+     VALUES ('eur-card','personal','Euro Card','credit_card','EUR',0,90,1,1,datetime('now'),datetime('now'))`,
+  );
+  await exec(
+    `INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+     VALUES ('eur-sav','personal','Euro Savings','savings','EUR',0,91,1,1,datetime('now'),datetime('now'))`,
+  );
+  await exec("INSERT INTO exchange_rates (date,currency,rate,source) VALUES ('2026-05-01','EUR',1.087,'manual')");
+
+  const eid = await applyMutationReturningEntryId(exec, {
+    ledgerId: 'personal', amount: -29.60, currency: 'EUR', merchant: 'Paris Trip',
+    categoryId: 'food', date: '2026-05-01',
+    accounts: [{ accountId: 'eur-card', amount: -10.01 }, { accountId: 'eur-sav', amount: -19.59 }],
+  });
+  const [{ n }] = await exec(
+    'SELECT COUNT(*) AS n FROM postings WHERE entry_id = ? AND account_id IS NOT NULL',
+    [eid],
+  );
+  expect(Number(n)).toBe(2);
+  const problems = await auditLedger(exec, 'personal', { checkBalances: true });
+  expect(problems).toEqual([]);
+});
+
+test('addTransaction: mixed-currency split — a real mismatch is still rejected', async () => {
+  const exec = await seededAndAudited();
+  await exec(
+    `INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+     VALUES ('eur-card','personal','Euro Card','credit_card','EUR',0,90,1,1,datetime('now'),datetime('now'))`,
+  );
+  await exec(
+    `INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+     VALUES ('eur-sav','personal','Euro Savings','savings','EUR',0,91,1,1,datetime('now'),datetime('now'))`,
+  );
+  await exec("INSERT INTO exchange_rates (date,currency,rate,source) VALUES ('2026-05-01','EUR',1.087,'manual')");
+
+  expect.assertions(1);
+  try {
+    await applyMutation(exec, 'addTransaction', {
+      ledgerId: 'personal', amount: -29.60, currency: 'EUR', merchant: 'Paris Trip',
+      categoryId: 'food', date: '2026-05-01',
+      accounts: [{ accountId: 'eur-card', amount: -10.01 }, { accountId: 'eur-sav', amount: -10.00 }],
+    });
+  } catch (e) {
+    expect((e as I18nError).code).toBe('error.split.accountsMismatch');
+  }
+});
+
+test('addTransaction: split across genuinely different currencies (USD identity path + EUR rounded path) is accepted', async () => {
+  // chk is USD (identity conversion, no rounding at all) while the new EUR
+  // account converts through the rounded path — both summed in the same
+  // loop. This is the interaction the two-EUR tests above don't exercise.
+  const exec = await seededAndAudited();
+  await exec(
+    `INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+     VALUES ('eur-card','personal','Euro Card','credit_card','EUR',0,90,1,1,datetime('now'),datetime('now'))`,
+  );
+  await exec("INSERT INTO exchange_rates (date,currency,rate,source) VALUES ('2026-05-01','EUR',1.087,'manual')");
+
+  const eid = await applyMutationReturningEntryId(exec, {
+    ledgerId: 'personal', amount: -32.50, merchant: 'Café + Cash Tip',
+    categoryId: 'food', date: '2026-05-01',
+    accounts: [{ accountId: 'chk', amount: -20.00 }, { accountId: 'eur-card', amount: -11.50 }],
+  });
+  const [{ n }] = await exec(
+    'SELECT COUNT(*) AS n FROM postings WHERE entry_id = ? AND account_id IS NOT NULL',
+    [eid],
+  );
+  expect(Number(n)).toBe(2);
+  const problems = await auditLedger(exec, 'personal', { checkBalances: true });
+  expect(problems).toEqual([]);
+});
+
+test('addTransaction: split across genuinely different currencies — a real mismatch is still rejected', async () => {
+  const exec = await seededAndAudited();
+  await exec(
+    `INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+     VALUES ('eur-card','personal','Euro Card','credit_card','EUR',0,90,1,1,datetime('now'),datetime('now'))`,
+  );
+  await exec("INSERT INTO exchange_rates (date,currency,rate,source) VALUES ('2026-05-01','EUR',1.087,'manual')");
+
+  expect.assertions(1);
+  try {
+    await applyMutation(exec, 'addTransaction', {
+      ledgerId: 'personal', amount: -32.50, merchant: 'Café + Cash Tip',
+      categoryId: 'food', date: '2026-05-01',
+      accounts: [{ accountId: 'chk', amount: -20.00 }, { accountId: 'eur-card', amount: -1.00 }],
+    });
+  } catch (e) {
+    expect((e as I18nError).code).toBe('error.split.accountsMismatch');
+  }
+});
+
+test('addTransaction: a single share in `accounts` (not a split) with no accountId throws error.split.noAccount, not a silent single-account post', async () => {
+  // Mirrors the iOS guard precisely: the split branch only fires at >= 2
+  // shares. A 1-share `accounts` array is not a split and falls through to
+  // the ordinary accountId-based path unchanged — which, given no accountId
+  // was sent either, must reject exactly like an ordinary call with neither.
+  const exec = await seededAndAudited();
+  expect.assertions(1);
+  try {
+    await applyMutation(exec, 'addTransaction', {
+      ledgerId: 'personal', amount: -60, merchant: 'Market', categoryId: 'food',
+      date: '2026-05-01',
+      accounts: [{ accountId: 'chk', amount: -60 }],
+    });
+  } catch (e) {
+    expect((e as I18nError).code).toBe('error.split.noAccount');
+  }
+});
+
+/** applyMutation returns void on the wire — resolve the posted entry id the
+ *  same way other tests in this file do ($lastAccountPosting's SQL form),
+ *  by reading back the newest posting on the FIRST share's account. */
+async function applyMutationReturningEntryId(exec: Exec, args: Record<string, unknown>): Promise<string> {
+  await applyMutation(exec, 'addTransaction', args);
+  const accounts = args.accounts as { accountId: string }[];
+  const [row] = await exec(
+    `SELECT entry_id FROM postings WHERE account_id = ? ORDER BY rowid DESC LIMIT 1`,
+    [accounts[0].accountId],
+  );
+  return String(row.entry_id);
+}
