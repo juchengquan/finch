@@ -281,3 +281,65 @@ test('a money patch on a genuine transfer still throws the transfer message', as
     expect((e as I18nError).code).toBe('error.entry.transferLegEdit');
   }
 });
+
+// updateTransfer — the fifth unguarded-rebuild site (final review, Fix 1).
+//
+// updateTransfer selects ALL account legs, picks fromLeg = first(amount<0) ??
+// postings[0] and toLeg = first(amount>0) ?? postings[last], then rewrites the
+// entry's ENTIRE leg set with just those two. Its only precondition was
+// postings.length >= 2, which a split purchase now satisfies too — so routing
+// a split purchase through updateTransfer would drop the category leg and any
+// account leg beyond two. Refuse it the same way updateTransaction does.
+
+test('a split-tender purchase routed through updateTransfer throws the split message, not a silent rebuild', async () => {
+  const exec = await newDb();
+  await addAccount(exec, 'card', 'USD', 'personal');
+  await addAccount(exec, 'cash', 'USD', 'personal');
+
+  const { updateTransfer } = await import('@/lib/db/queries/transfers');
+  const { entryId } = await postEntry(exec, {
+    ledgerId: 'personal', date: '2026-06-01', time: '12:00',
+    description: 'Market', kind: 'expense', skipRules: true,
+    legs: [
+      { accountId: 'card', amount: -60 },
+      { accountId: 'cash', amount: -40 },
+      { categoryId: 'food', amountBase: 100 },
+    ],
+  });
+
+  expect.assertions(2);
+  try {
+    await updateTransfer(exec, entryId, { fromAmount: 50 });
+  } catch (e) {
+    expect((e as I18nError).code).toBe('error.entry.splitLegEdit');
+  }
+
+  // The refusal must leave the entry exactly as it was.
+  const legs = await exec(
+    'SELECT COUNT(*) AS n FROM postings WHERE entry_id = ? AND account_id IS NOT NULL', [entryId],
+  );
+  expect(Number(legs[0].n)).toBe(2);
+});
+
+test('a genuine transfer still updates successfully through updateTransfer', async () => {
+  const exec = await newDb();
+  await addAccount(exec, 'from-acct', 'USD', 'personal');
+  await addAccount(exec, 'to-acct', 'USD', 'personal');
+
+  const { updateTransfer } = await import('@/lib/db/queries/transfers');
+  const { entryId } = await postEntry(exec, {
+    ledgerId: 'personal', date: '2026-06-02', time: '09:00',
+    description: 'Move funds', kind: 'transfer', skipRules: true,
+    legs: [
+      { accountId: 'from-acct', amount: -50 },
+      { accountId: 'to-acct', amount: 50 },
+    ],
+  });
+
+  await updateTransfer(exec, entryId, { fromAmount: 80 });
+
+  const [from] = await exec('SELECT current_balance FROM accounts WHERE id = ?', ['from-acct']);
+  const [to] = await exec('SELECT current_balance FROM accounts WHERE id = ?', ['to-acct']);
+  expect(Number(from.current_balance)).toBeCloseTo(-80, 5);
+  expect(Number(to.current_balance)).toBeCloseTo(80, 5);
+});

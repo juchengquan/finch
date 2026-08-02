@@ -215,6 +215,7 @@ export async function enrichLegTxs(exec: Exec, rows: Tx[], entryIds: string[]): 
     // is the authority. Shape agrees — a transfer is the only kind with two
     // account legs and NO category leg.
     const acctCount = acctCountMap.get(eid) ?? 1;
+    tx.accountLegCount = acctCount;
     if (tx.kind === 'transfer' && acctCount >= 2) tx.transferGroupId = eid;
 
     // refundedTransactionId: resolve raw entry id → first account-posting id

@@ -96,8 +96,21 @@ export async function updateTransfer(exec: Exec, groupId: string, patch: Transfe
   const entryId = ref.entryId;
 
   // Load current entry + postings.
-  const [entry] = await exec('SELECT date, time, notes FROM entries WHERE id = ?', [entryId]);
+  const [entry] = await exec('SELECT date, time, notes, kind FROM entries WHERE id = ?', [entryId]);
   if (!entry) return;
+
+  // A split purchase now legally carries ≥2 account legs too (the invariant
+  // this function was built on — "≥2 account legs means transfer" — no longer
+  // holds). Refuse rather than silently rebuilding the entry down to two legs,
+  // which would drop every category leg and any account leg beyond two
+  // (mirrors updateTransaction's guard in queries/transactions.ts).
+  if (String(entry.kind) !== 'transfer') {
+    throw new I18nError(
+      TRANSFER_ERROR_CODES.splitLegEdit,
+      {},
+      'Delete and re-add this purchase to change how it was paid',
+    );
+  }
 
   const postings = await exec(
     'SELECT id, account_id, amount, amount_base, exchange_rate, currency, cleared_at, memo FROM postings WHERE entry_id = ? AND account_id IS NOT NULL ORDER BY sort_order',
