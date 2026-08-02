@@ -43,7 +43,10 @@ final class ScheduledSplitEntryTests: XCTestCase {
         XCTAssertEqual(acctLegs, 2, "…carrying both destination accounts")
 
         // Each split's own `description` has no per-row home on a single entry any
-        // more — it is carried onto that leg's `memo` rather than being dropped.
+        // more — it is carried onto that leg's `memo`, reproducing EXACTLY the
+        // string the old per-split loop stamped as that row's own description
+        // ("\(desc) · \(label)"), so an existing template's feed rows look
+        // unchanged after this ships.
         let legRows = try q.read { db in
             try Row.fetchAll(db, sql: """
                 SELECT p.account_id, p.amount, p.memo FROM postings p
@@ -56,12 +59,48 @@ final class ScheduledSplitEntryTests: XCTestCase {
         let a1Leg = legRows.first { ($0["account_id"] as String?) == "a1" }
         let a2Leg = legRows.first { ($0["account_id"] as String?) == "a2" }
         XCTAssertEqual(a1Leg?["amount"] as Double?, 1800, "60% of 3000")
-        XCTAssertEqual(a1Leg?["memo"] as String?, "main")
+        XCTAssertEqual(a1Leg?["memo"] as String?, "Salary · main")
         XCTAssertEqual(a2Leg?["amount"] as Double?, 1200, "40% of 3000")
-        XCTAssertEqual(a2Leg?["memo"] as String?, "savings")
+        XCTAssertEqual(a2Leg?["memo"] as String?, "Salary · savings")
 
         let problems = try Audit.run(on: q)
         XCTAssertTrue(problems.isEmpty, "the posted entry must be clean: \(problems.map(\.detail))")
+    }
+
+    /// A split with NO label gets no memo at all — no dangling " · " separator,
+    /// and no redundant duplicate of the entry's own description either. The
+    /// projection's `memo ?? description` falls through to the entry description
+    /// on its own.
+    func test_splitWithNoLabel_getsNoMemo() throws {
+        let q = try TestSeed.base()
+        try q.write { db in
+            try db.execute(sql: """
+                INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+                VALUES ('a2','l1','Savings','savings','USD',0,1,1,1,datetime('now'),datetime('now'))
+                """)
+            try db.execute(sql: """
+                INSERT INTO scheduled_templates
+                  (id,ledger_id,name,description,kind,amount,amount_varies,splits_enabled,account_id,category_id,
+                   frequency,start_date,auto_post,is_active,created_at,updated_at)
+                VALUES ('t4','l1','Salary','Salary','income',1000,0,1,'a1',NULL,
+                        'monthly','2026-06-01',1,1,datetime('now'),datetime('now'))
+                """)
+            // NULL description on both splits.
+            try db.execute(sql: """
+                INSERT INTO scheduled_splits (id,template_id,account_id,amount_pct,amount_abs,category_id,description,sort_order)
+                VALUES ('s7','t4','a1',50,NULL,NULL,NULL,0), ('s8','t4','a2',50,NULL,NULL,NULL,1)
+                """)
+        }
+        try Apply.apply(dbQueue: q, action: "postScheduled", args: Args([
+            "templateId": .string("t4"), "date": .string("2026-06-01")]))
+
+        let memos = try q.read { db in
+            try Optional<String>.fetchAll(db, sql: """
+                SELECT p.memo FROM postings p JOIN entries e ON e.id = p.entry_id
+                 WHERE e.source_template_id = 't4' AND p.account_id IS NOT NULL
+                """)
+        }
+        XCTAssertEqual(memos, [nil, nil])
     }
 
     /// `amount_abs` overrides `amount_pct` when both are present on a split — the

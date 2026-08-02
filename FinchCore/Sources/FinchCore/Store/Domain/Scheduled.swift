@@ -89,14 +89,17 @@ public enum Scheduled {
                 // A single entry has a single `description`, so each split's own
                 // `description` (e.g. "main" / "savings") has no row of its own to sit
                 // on any more. It is carried onto that leg's `memo` instead of being
-                // dropped: `memo` is already the per-leg label a transfer's "Transfer
-                // to/from" text uses, and the projection surfaces `memo ?? description`
-                // as the leg's display text — so the split's own note is still visible,
-                // just at the leg instead of the (no-longer-existing) row.
+                // dropped — reproducing EXACTLY the string the old per-split loop used
+                // to stamp as that row's own `description` ("\(desc) · \(label)"), so an
+                // existing split template looks unchanged in the feed after this ships.
+                // `memo ?? description` is what the projection shows, so a split with no
+                // label gets no memo at all (falls through to the entry's own
+                // description) rather than a dangling " · " or a redundant duplicate.
                 let legs: [Entries.Leg] = splits.compactMap { sp -> Entries.Leg? in
                     let portion = (sp["amount_abs"] as Double?) ?? (amount * ((sp["amount_pct"] as Double?) ?? 0) / 100)
                     guard portion != 0, let acct = sp["account_id"] as String? else { return nil }
-                    let memo = (sp["description"] as String?).flatMap { $0.isEmpty ? nil : $0 }
+                    let label = sp["description"] as String?
+                    let memo = (label?.isEmpty ?? true) ? nil : "\(desc) · \(label!)"
                     return .account(Entries.AccountLeg(accountId: acct, amount: portion, memo: memo))
                 }
                 if legs.isEmpty {
