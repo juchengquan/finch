@@ -214,6 +214,10 @@ export async function enrichLegTxs(exec: Exec, rows: Tx[], entryIds: string[]): 
     // means transfer. postEntry stamps kind and the audit verifies it, so it
     // is the authority. Shape agrees — a transfer is the only kind with two
     // account legs and NO category leg.
+    // Unconditional, unlike `transferGroupId` below: every row names its entry,
+    // so grouping by it reconstructs the purchase for any kind. `Tx.id` is this
+    // posting's id, which counts a split purchase once per payment leg.
+    tx.entryId = eid;
     const acctCount = acctCountMap.get(eid) ?? 1;
     tx.accountLegCount = acctCount;
     if (tx.kind === 'transfer' && acctCount >= 2) tx.transferGroupId = eid;
