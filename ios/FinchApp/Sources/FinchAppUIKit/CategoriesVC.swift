@@ -478,15 +478,15 @@ final class CategoriesVC: UIViewController {
     /// Choice-independent union of transactions referencing either category.
     private func mergeTxCount(_ a: CategoryRow, _ b: CategoryRow) -> Int {
         let ledger = store.activeLedgerId
-        return Set(Selectors.categoryTransactions(store.txns, a.id, ledger).map(\.id))
-            .union(Selectors.categoryTransactions(store.txns, b.id, ledger).map(\.id))
+        return Set(Selectors.categoryTransactions(store.txns, a.id, ledger).map(\.purchaseKey))
+            .union(Selectors.categoryTransactions(store.txns, b.id, ledger).map(\.purchaseKey))
             .count
     }
 
     private func mergeManyTxCount(_ rows: [CategoryRow]) -> Int {
         let ledger = store.activeLedgerId
         var ids = Set<String>()
-        for row in rows { ids.formUnion(Selectors.categoryTransactions(store.txns, row.id, ledger).map(\.id)) }
+        for row in rows { ids.formUnion(Selectors.categoryTransactions(store.txns, row.id, ledger).map(\.purchaseKey)) }
         return ids.count
     }
 

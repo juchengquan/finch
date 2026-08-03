@@ -314,9 +314,9 @@ final class MerchantsVC: UIViewController {
     private func mergeTxCount(_ a: Counterparty, _ b: Counterparty) -> Int {
         let ledger = store.activeLedgerId
         return Set(Selectors.merchantTransactions(store.txns, store.merchants, a.id, ledger,
-                                                  includePending: true).map(\.id))
+                                                  includePending: true).map(\.purchaseKey))
             .union(Selectors.merchantTransactions(store.txns, store.merchants, b.id, ledger,
-                                                 includePending: true).map(\.id))
+                                                 includePending: true).map(\.purchaseKey))
             .count
     }
 
@@ -325,7 +325,7 @@ final class MerchantsVC: UIViewController {
         var ids = Set<String>()
         for merchant in merchants {
             ids.formUnion(Selectors.merchantTransactions(store.txns, store.merchants, merchant.id,
-                                                         ledger, includePending: true).map(\.id))
+                                                         ledger, includePending: true).map(\.purchaseKey))
         }
         return ids.count
     }
