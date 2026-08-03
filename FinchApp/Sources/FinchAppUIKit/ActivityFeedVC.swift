@@ -30,7 +30,13 @@ import FinchCore
 /// Parity with the SwiftUI feed: pending bucket, month sections, search, sort,
 /// filter (the SwiftUI sheet, hosted), group-by-month, 50-row pagination with
 /// "Load more", multi-select with the bulk confirm / recategorize / delete bar,
-/// "Confirm all N pending", add, edit, duplicate and swipe actions.
+/// add, edit, duplicate and swipe actions.
+///
+/// The pending bucket deliberately has NO "confirm all" affordance. It had one, and
+/// its label counted the FILTERED rows on screen while the action confirmed every
+/// pending row in the ledger — so under a search it offered to confirm 2 and confirmed
+/// 15, on one tap, with no prompt and no undo. Bulk confirming is multi-select's job:
+/// `Confirm N` acts on exactly what you picked and reports anything the engine skipped.
 ///
 /// The query pipeline is not reimplemented: `filteredTxns()` builds the same
 /// `ListOptions` and calls the same `Selectors.selectTransactions` with the same
@@ -70,7 +76,6 @@ final class ActivityFeedVC: UIViewController {
     private enum ViewMode { case list, calendar }
 
     /// Item ids are transaction ids; these two are sentinels for the non-row cells.
-    private static let confirmAllID = "__confirm_all__"
     private static let loadMoreID = "__load_more__"
     /// Appears in the `.empty` section only while the launch txns projection is in
     /// flight, so it can never collide with a transaction id. See TxnsLoadingCell.
@@ -226,26 +231,6 @@ final class ActivityFeedVC: UIViewController {
             guard let self else { return }
             if id == Self.loadingID {
                 TxnsLoadingCell.configure(cell)
-                return
-            }
-            if id == Self.confirmAllID {
-                let n = self.dataSource.snapshot().numberOfItems(inSection: .pending) - 1
-                let title = String(localized: "Confirm all \(n) pending")
-                // Hosted rather than a `defaultContentConfiguration` so it announces as
-                // a BUTTON, which is what the SwiftUI screen's `Button` gives. A content
-                // configuration owns the cell's accessibility, so setting the trait on
-                // the cell afterwards does nothing — this row read as plain text while
-                // the control read it as a button. Same fix as the Accounts screen's
-                // All Transactions row.
-                cell.contentConfiguration = UIHostingConfiguration {
-                    Label(title, systemImage: "checkmark.circle")
-                        .foregroundStyle(Color.accentColor)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                        .accessibilityElement(children: .combine)
-                        .accessibilityAddTraits(.isButton)
-                }
-                cell.accessories = []
                 return
             }
             if id == Self.modePickerID {
@@ -495,8 +480,7 @@ final class ActivityFeedVC: UIViewController {
 
         if !pending.isEmpty {
             snap.appendSections([.pending])
-            snap.appendItems(pending.map(\.id) + [Self.confirmAllID], toSection: .pending)
-            // The count excludes the "Confirm all" row that shares the section.
+            snap.appendItems(pending.map(\.id), toSection: .pending)
             headers[.pending] = HeaderContent(title: String(localized: "To confirm (\(pending.count))"))
         }
         if page.isEmpty {
@@ -656,14 +640,6 @@ final class ActivityFeedVC: UIViewController {
         ), animated: true)
     }
 
-    private func confirmAllPending() {
-        run {
-            for tx in store.txns where tx.pending == true {
-                try store.apply(.confirmTransaction, Args(["id": .string(tx.id)]))
-            }
-        }
-    }
-
     /// The SwiftUI screen used an `.alert` with a `TextField`; same shape here.
     private func promptSaveSearch() {
         let alert = UIAlertController(title: String(localized: "Save search"),
@@ -794,7 +770,6 @@ extension ActivityFeedVC: UICollectionViewDelegate {
     func collectionView(_ cv: UICollectionView, didSelectItemAt ip: IndexPath) {
         cv.deselectItem(at: ip, animated: true)
         guard let id = dataSource.itemIdentifier(for: ip) else { return }
-        if id == Self.confirmAllID { confirmAllPending(); return }
         if id == Self.loadMoreID { visibleCount += 50; applySnapshot(); return }
         if isSelecting {
             if selected.contains(id) { selected.remove(id) } else { selected.insert(id) }
