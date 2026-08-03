@@ -346,6 +346,13 @@ struct ActivityFeedView: View {
                                 isPresented: $confirmingBulkDelete, titleVisibility: .visible) {
                 Button("Delete \(selected.count)", role: .destructive) { bulkDelete() }
                 Button("Cancel", role: .cancel) {}
+            } message: {
+                // The title counts what was SELECTED, which is what the user sees
+                // ticked. Deleting works on whole purchases, so selecting one payment
+                // of a split takes its siblings too — say so rather than let rows
+                // vanish that were never ticked. Deliberately not a second count in
+                // the title: two numbers disagreeing on one dialog reads as a bug.
+                if selectionTakesUnselectedRows { Text(Self.multiLegDeleteHint) }
             }
     }
 
@@ -391,6 +398,14 @@ struct ActivityFeedView: View {
         report(store.confirmTransactions(Array(selected)), of: selected.count)
         isSelecting = false; selected.removeAll()
     }
+    /// Whether deleting the selection would also remove rows the user did not
+    /// tick — a payment whose purchase has a sibling leg outside the selection.
+    /// `selected` holds POSTING ids, and deletion is per purchase.
+    private var selectionTakesUnselectedRows: Bool {
+        let keys = Set(store.txns.filter { selected.contains($0.id) }.map(\.purchaseKey))
+        return store.txns.contains { keys.contains($0.purchaseKey) && !selected.contains($0.id) }
+    }
+
     private func bulkDelete() {
         report(store.deleteTransactions(Array(selected)), of: selected.count)   // also unlinks receipts
         isSelecting = false; selected.removeAll()
