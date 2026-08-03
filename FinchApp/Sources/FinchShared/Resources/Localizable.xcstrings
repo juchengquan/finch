@@ -128,6 +128,16 @@
         }
       }
     },
+    "%@ unaccounted": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚有 %@ 未分配"
+          }
+        }
+      }
+    },
     "%@ used — %@ of %@.": {
       "localizations": {
         "zh-Hans": {
@@ -2510,6 +2520,16 @@
         }
       }
     },
+    "Each card becomes its own transaction, linked as one purchase.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每张卡各生成一笔交易，并作为同一笔消费相互关联。"
+          }
+        }
+      }
+    },
     "Edit": {
       "localizations": {
         "zh-Hans": {
@@ -4753,6 +4773,16 @@
         }
       }
     },
+    "Part of one purchase": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "属于同一笔消费"
+          }
+        }
+      }
+    },
     "Pending": {
       "localizations": {
         "zh-Hans": {
@@ -5199,6 +5229,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "重新启动 finch 以应用新语言。"
+          }
+        }
+      }
+    },
+    "Remove %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除 %@"
           }
         }
       }
