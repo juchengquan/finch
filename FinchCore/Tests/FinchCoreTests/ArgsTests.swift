@@ -14,7 +14,7 @@ final class ArgsTests: XCTestCase {
     ///   that renumbers a sibling group costs ONE reprojection and one round of
     ///   write side-effects instead of one per moved row) = 86.
     func test_actionCount() {
-        XCTAssertEqual(ActionName.allCases.count, 86)
+        XCTAssertEqual(ActionName.allCases.count, 87)   // +saveTransaction
     }
 
     func test_actionNameRawValues() {
