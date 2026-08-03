@@ -327,6 +327,16 @@ struct SettingsAboutView: View {
             Section {
                 LabeledContent("App version", value: FinchCore.version)
                 LabeledContent("Pack format", value: FinchCore.packFormatVersion)
+                // Which commit this build came from — Debug builds only, and only
+                // when the build phase actually stamped it. `Text(verbatim:)` on
+                // both sides keeps this DEBUG-only developer string out of the
+                // string catalog; this file IS compiled into the iOS target, so a
+                // LocalizedStringKey here would reach extraction. See `BuildInfo`.
+                #if DEBUG
+                if let hash = BuildInfo.gitHash {
+                    LabeledContent { Text(verbatim: hash) } label: { Text(verbatim: "Hash") }
+                }
+                #endif
             }
 
             Section("Database") {
