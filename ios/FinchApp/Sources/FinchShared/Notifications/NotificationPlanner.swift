@@ -77,10 +77,20 @@ public enum NotificationPlanner {
 
         if enabled.contains(.anomaly) {
             let stats = Selectors.merchantStats(txns, ledgerId)
-            for t in txns.prefix(recentLimit) {
+            // Score PURCHASES, not payment legs. `anomalyScore` takes a single Tx
+            // and cannot see sibling legs, so it can only ever judge what it is
+            // handed — the fix belongs here. Scored per leg, a purchase paid on two
+            // cards was assessed as two smaller spends: one leg could clear the
+            // threshold on its own, alerting the user about an amount they never
+            // spent in one go, while the purchase itself was never assessed whole.
+            //
+            // The id keys on the PURCHASE too. On a posting id, one purchase could
+            // raise two alerts, and an edit that re-keys a posting would strand an
+            // alert `cancelIDs` can no longer match.
+            for t in Selectors.byPurchase(txns).prefix(recentLimit) {
                 guard let a = Selectors.anomalyScore(t, stats), a.isAnomaly else { continue }
                 out.append(PlannedNotification(
-                    id: "anomaly:\(t.id)", kind: .anomaly,
+                    id: "anomaly:\(t.purchaseKey)", kind: .anomaly,
                     title: String(localized: "Unusual transaction"),
                     body: String(localized: "\(t.merchant) (\(money(t.amount))) looks higher than usual."),
                     tab: .activity, focusId: t.id))

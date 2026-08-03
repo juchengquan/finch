@@ -71,6 +71,10 @@ public final class FinchStore: ObservableObject {
     var budgetOrderByLedger: [String: [String]] = [:]   // per-ledger manual budget order (app_state)
     var trackedCurrencies: [String]?                    // global FX auto-update fetch list (app_state); nil = seeded default
     var merchantStatsCache: [String: MerchantStats]?   // lazily built; invalidated each reproject
+    /// purchaseKeys of purchases flagged as anomalies. Cached because `isAnomaly`
+    /// runs per row per render and collapsing the ledger there would be O(n) per
+    /// row. Invalidated alongside `merchantStatsCache`.
+    var anomalyKeysCache: Set<String>?
     var runningBalanceCache: [String: Double]?          // txn.id → account balance (base) after that txn; lazy, invalidated each reproject
 
     /// A pack that FAILED the audit gate, retained on disk so the iOS-only
@@ -398,6 +402,7 @@ public final class FinchStore: ObservableObject {
             self.trackedCurrencies = trackedCurrencies
             self.rateMap = Money.latestRateMap(exchangeRates)
             self.merchantStatsCache = nil   // recompute on next access
+            self.anomalyKeysCache = nil
             self.dataError = nil
 
             // The txns list (`Projection.run`, per-account-leg grain) is the one slice
