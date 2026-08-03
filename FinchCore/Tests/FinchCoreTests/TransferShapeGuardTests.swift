@@ -169,3 +169,46 @@ final class SaveTransferTests: XCTestCase {
         XCTAssertEqual(stillCleared, 0, "both sides changed, so both ticks go")
     }
 }
+
+/// A transfer has no single "purchase currency": 100 USD leaves one card and 90
+/// EUR arrives at another, and the user types both. So a transfer's cell amounts
+/// are in each CARD's own currency — the one documented exception to Decision 16,
+/// and it follows from what a transfer is rather than working around it.
+final class CrossCurrencyTransferTests: XCTestCase {
+
+    private func seed() throws -> DatabaseQueue {
+        let q = try TestSeed.base()
+        try q.write { db in
+            try db.execute(sql: """
+                INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+                VALUES ('eur','l1','Euro Card','credit_card','EUR',0,1,1,1,datetime('now'),datetime('now'))
+                """)
+            try db.execute(sql: "INSERT INTO exchange_rates (date,currency,rate) VALUES ('2026-06-01','EUR',1.10)")
+        }
+        return q
+    }
+
+    func test_eachSideIsStoredInItsOwnCurrency() throws {
+        let q = try seed()
+        let id = try Apply.applyReturningId(dbQueue: q, action: "saveTransaction", args: Args([
+            "ledgerId": .string("l1"), "date": .string("2026-06-01"), "time": .string("12:00"),
+            "merchant": .string(""), "kind": .string("transfer"), "currency": .string("USD"),
+            "cells": .array([
+                .object(["accountId": .string("a1"), "amount": .double(-110)]),   // USD out
+                .object(["accountId": .string("eur"), "amount": .double(100)]),   // EUR in
+            ]),
+        ]))!
+        let legs = try q.read { db in
+            try Row.fetchAll(db, sql: "SELECT account_id, amount, currency FROM postings WHERE entry_id = ? AND account_id IS NOT NULL ORDER BY amount", arguments: [id])
+        }
+        XCTAssertEqual(legs.count, 2)
+        // The euro side must be 100 EUR — the number the user typed — not 100 USD
+        // converted into euros, which would silently record a different transfer.
+        let eur = legs.first { ($0["account_id"] as String?) == "eur" }
+        XCTAssertEqual(eur?["amount"] as Double? ?? 0, 100, accuracy: 0.001, "the amount as typed, in that card's currency")
+        XCTAssertEqual(eur?["currency"] as String?, "EUR")
+        let usd = legs.first { ($0["account_id"] as String?) == "a1" }
+        XCTAssertEqual(usd?["amount"] as Double? ?? 0, -110, accuracy: 0.001)
+        XCTAssertTrue(try Audit.run(on: q).isEmpty, "and it balances through the FX residue")
+    }
+}

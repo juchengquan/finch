@@ -5,7 +5,7 @@ import FinchCore
 
 /// Add Transaction — the flagship write screen (port of the web add-expense-form).
 /// Expense/income post one account leg + an auto-balanced category leg through
-/// `addTransaction`; transfer posts two account legs through `createTransfer`.
+/// `saveTransaction`; a transfer is the same one write, sending two account cells.
 /// Everything routes the FinchStore.apply chokepoint, which re-derives the base
 /// figure + applies rules. The amount field is in the account's own currency.
 struct AddTransactionSheet: View {
@@ -657,21 +657,36 @@ struct AddTransactionSheet: View {
         do {
             if kind == .transfer {
                 guard fromAccountId != toAccountId else { errorMessage = "Pick two different accounts."; return }
-                var args: [String: JSONValue] = [
-                    "fromAccountId": .string(fromAccountId), "toAccountId": .string(toAccountId),
-                    "fromAmount": .double(abs(value)), "date": .string(ymd), "time": .string(hm),
-                ]
-                if !note.isEmpty { args["note"] = .string(note) }
+                var receivedAmount = abs(value)
                 if transferIsCrossCurrency {
                     guard let recv = DecimalInput.parse(received), recv > 0 else {
                         errorMessage = "Enter the received amount."; return
                     }
-                    args["toAmount"] = .double(recv)
+                    receivedAmount = recv
                 }
-                args["status"] = .string(status.rawValue)
+                // The same one write every other kind uses. A transfer's cells are
+                // each in their OWN card's currency — there is no single purchase
+                // currency when 110 USD leaves one card and 100 EUR arrives at
+                // another, and the user types both numbers — so no `currency` is
+                // sent and the engine takes each amount as given.
+                //
+                // The description and both leg memos are engine-authored, so the
+                // sheet sends an empty merchant rather than inventing feed text.
+                var args: [String: JSONValue] = [
+                    "ledgerId": .string(store.activeLedgerId), "merchant": .string(""),
+                    "date": .string(ymd), "time": .string(hm),
+                    "kind": .string("transfer"), "status": .string(status.rawValue),
+                    "cells": .array([
+                        .object(["accountId": .string(fromAccountId), "categoryId": .null,
+                                 "amount": .double(-abs(value))]),
+                        .object(["accountId": .string(toAccountId), "categoryId": .null,
+                                 "amount": .double(receivedAmount)]),
+                    ]),
+                ]
+                if !note.isEmpty { args["note"] = .string(note) }
                 if !selectedTags.isEmpty { args["tagIds"] = .array(selectedTags.map { .string($0) }) }
                 for (k, v) in Self.scheduledLinkArgs(prefill: prefill, posts: postsScheduledOccurrence) { args[k] = v }
-                try store.apply(.createTransfer, Args(args))
+                try store.apply(.saveTransaction, Args(args))
             } else {
                 let signed = (kind == .income || kind == .refund) ? abs(value) : -abs(value)
                 let sign: Double = signed < 0 ? -1 : 1
