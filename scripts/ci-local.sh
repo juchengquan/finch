@@ -180,6 +180,18 @@ else
   exit 1
 fi
 
+# The diff that decides which platforms fast mode builds. Captured HERE, before
+# any xcodebuild runs — not at the platform step, which is too late.
+#
+# `xcodebuild test` re-serializes the .xcstrings catalogs in place (Xcode's
+# formatting, zero content change — the summary warns about it). Sampling the
+# working tree afterwards therefore saw a dirty
+# FinchApp/Sources/FinchShared/Resources/Localizable.xcstrings and built FinchMac
+# for a change the developer never made. Measured: a run whose only real diff was
+# this script and a doc file still spent 31s on macOS. The script's own output was
+# deciding what the script built.
+CHANGED="$(git -C "$REPO" diff --name-only "$BASE"...HEAD 2>/dev/null; git -C "$REPO" diff --name-only HEAD 2>/dev/null)"
+
 cd "$REPO/ios" || exit 1
 
 # --- 1. i18n guard 1: catalog reproducible (seconds, no Xcode) ---------------
@@ -384,7 +396,6 @@ fi
 # remembered: FinchMac compiles FinchShared + FinchAppSwiftUI + Shared and depends
 # on FinchCore; FinchWatch compiles FinchWatch + Shared and deliberately carries
 # NO FinchCore (the watch payload is Foundation-only).
-CHANGED="$(git -C "$REPO" diff --name-only "$BASE"...HEAD 2>/dev/null; git -C "$REPO" diff --name-only HEAD 2>/dev/null)"
 touches() { printf '%s\n' "$CHANGED" | grep -qE "$1"; }
 want_platform() {   # $1 = human name, $2 = path regex
   [ "$FULL" = "1" ] && return 0
