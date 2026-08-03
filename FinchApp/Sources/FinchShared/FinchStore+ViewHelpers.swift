@@ -192,11 +192,26 @@ extension FinchStore {
         privacyMode ? FinchStore.moneyMask : Money.format(amount, currency: currency)
     }
 
-    /// Whether a transaction is an unusual-spend anomaly (per-merchant z-score).
-    /// merchantStats is computed once per projection and cached.
+    /// Whether a row belongs to a purchase flagged as an unusual spend
+    /// (per-merchant z-score).
+    ///
+    /// Scored per PURCHASE, not per payment leg: `anomalyScore` takes a single Tx
+    /// and cannot see sibling legs, so handing it one leg of a split asks it to
+    /// judge a fraction of what was spent. Both legs of a flagged purchase get the
+    /// badge, which is what makes the feed agree with the notification.
+    ///
+    /// The flagged set is cached, not recomputed: this runs per row per render, so
+    /// collapsing the whole ledger on each call would be O(n) per row. Invalidated
+    /// with `merchantStatsCache` on every reprojection.
     public func isAnomaly(_ tx: Tx) -> Bool {
-        if merchantStatsCache == nil { merchantStatsCache = Selectors.merchantStats(txns, activeLedgerId) }
-        return Selectors.anomalyScore(tx, merchantStatsCache ?? [:])?.isAnomaly ?? false
+        if anomalyKeysCache == nil {
+            if merchantStatsCache == nil { merchantStatsCache = Selectors.merchantStats(txns, activeLedgerId) }
+            let stats = merchantStatsCache ?? [:]
+            anomalyKeysCache = Set(Selectors.byPurchase(txns)
+                .filter { Selectors.anomalyScore($0, stats)?.isAnomaly ?? false }
+                .map(\.purchaseKey))
+        }
+        return anomalyKeysCache?.contains(tx.purchaseKey) ?? false
     }
 
     /// The running balance (ledger base) of a transaction's account immediately
