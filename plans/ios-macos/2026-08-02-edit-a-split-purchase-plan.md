@@ -517,6 +517,60 @@ Implements Decisions 22 and 32.
 - **Mixed-currency splits in the editor** — the engine accepts them; the picker renders one currency symbol per sheet. Parked.
 - **Changing a split's `kind`.**
 
+## Status at PR time
+
+Shipped in this branch (on top of the merged #717, #719, #722):
+
+- Task 4 — transfers moved onto `saveTransaction`. Both sheets. A transfer's
+  cells are the documented exception to Decision 16: each is already in its own
+  card's currency, because a transfer has no single purchase currency and the
+  user types both numbers. Without the exception a typed 100 EUR was stored as
+  90.91 EUR — a different transfer that still balances, so nothing downstream
+  would have flagged it.
+- Task 9 Steps 1, 2, 5 — the Edit sheet's account editor.
+- Task 10 — the glyph, `purchaseKey`, and the message rewrite.
+- Task 11 Steps 1-5 — the equivalence proof, including the mixed-currency split.
+  The two actions take **different units on purpose** (`addTransaction`: each
+  account's own currency; `saveTransaction`: the purchase's), so the test feeds
+  each its own contract and asserts one ledger.
+
+Found while executing, not predicted by the plan:
+
+- **A category screen counted the whole purchase under every category it
+  touched.** A 100 shop split 70/30 reported 100 on both screens. Predates the
+  grid — it fails the same way for an ordinary one-card category split — and the
+  grid widened it from one entry to a whole group. Fixed by `categoryShares`,
+  which narrows before collapsing. Rows now show the share and resolve back to
+  the store before any edit, duplicate or delete.
+- **Editing one card of a grid dropped it out of the purchase.** A single-row
+  rewrite is indistinguishable from a Decision 20 collapse, so `group_id` was
+  cleared and one purchase silently became two — reintroducing the very bug the
+  column exists to prevent. The collapse now only applies to a rewrite covering
+  the whole purchase.
+- **The git-hash build phase had no ordering edge**, so it ran before the plist
+  it writes into and silently no-opped. Nondeterministic: back-to-back clean
+  builds of the same tree ordered it both ways.
+
+**Not in this branch, and why:**
+
+- **Decision 21's grid reopen (Task 9 Step 3).** Editing any row of a group
+  should reopen the whole grid. This is a routing change across every screen that
+  opens the Edit sheet — the grid UI lives in the Add flow — not a change to the
+  sheet, and it is too large to fold in here. The engine fix above is the floor
+  that keeps the ledger honest until it lands: a partial edit is now harmless
+  rather than silently destructive.
+- **Unlinking receipts when an edit removes a grid row.** Attachments hang off
+  the *entry*, so only a grid edit that drops a card can orphan a file — which is
+  reachable only through the reopen flow above. It belongs with that work: the
+  app layer must read the paths before the write and unlink what no longer
+  resolves, as `deleteTransaction` already does.
+- **The two-page entry flow.** `PurchaseFlow.page2` decides list/grid/neither and
+  is tested; splitting page 1 from page 2 is presentation and is not required for
+  correctness.
+- **Rules.** Frozen and flagged for its own design review, as agreed.
+
+---
+
 ## Verification checklist
 
 - [ ] `ci-local.sh` prints `all checks passed`; catalog churn discarded
