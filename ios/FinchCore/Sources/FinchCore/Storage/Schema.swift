@@ -348,6 +348,12 @@ CREATE TABLE IF NOT EXISTS entries (
   -- from a template. NULL for everything else. Lets a transaction dated "when I
   -- actually paid" still resolve the occurrence it was due on.
   occurrence_date    TEXT,
+  -- Links the transactions of ONE grid purchase: a purchase split by card AND by
+  -- category is stored as one entry per card, because a single entry may be split
+  -- on at most one axis. NULL for everything else — an ordinary transaction is not
+  -- a group of one. iOS-only and deliberately outside the parity snapshot: the web
+  -- has no action that writes it, so there is nothing to diverge.
+  group_id           TEXT,
   notes              TEXT,
   applied_rule_ids   TEXT,
   reviewed_at        TEXT,

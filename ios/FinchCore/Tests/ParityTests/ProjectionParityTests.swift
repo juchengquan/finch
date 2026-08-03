@@ -14,6 +14,13 @@ final class ProjectionParityTests: XCTestCase {
             Fixture.self, from: Data(contentsOf: dir.appendingPathComponent("projection.json")))
 
         let dbQueue = try DatabaseQueue(path: dir.appendingPathComponent("projection.sqlite3").path)
+        // Migrate first, exactly as the app does with any database it opens —
+        // including one imported from the web, which is what this fixture is. The
+        // projection selects `entries.group_id`, an iOS-only column the web never
+        // writes, so a web-generated database only has it after migration. This
+        // does not weaken the comparison: the expected `[Tx]` is unchanged, and
+        // `group_id` is NULL throughout, so every row still projects identically.
+        try Migrations.runAll(on: dbQueue)
         let actual = try Projection.run(dbQueue: dbQueue)
 
         XCTAssertEqual(actual, fixture.expected)
