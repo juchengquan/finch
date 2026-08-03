@@ -230,8 +230,8 @@ struct TagsView: View {
     /// Choice-independent union of transactions referencing either tag.
     private func mergeTxCount(_ a: TagRow, _ b: TagRow) -> Int {
         let ledger = store.activeLedgerId
-        let ids = Set(Selectors.tagTransactions(store.txns, a.id, ledger).map(\.id))
-            .union(Selectors.tagTransactions(store.txns, b.id, ledger).map(\.id))
+        let ids = Set(Selectors.tagTransactions(store.txns, a.id, ledger).map(\.purchaseKey))
+            .union(Selectors.tagTransactions(store.txns, b.id, ledger).map(\.purchaseKey))
         return ids.count
     }
 
@@ -244,7 +244,7 @@ struct TagsView: View {
     private func mergeManyTxCount(_ tagRows: [TagRow]) -> Int {
         let ledger = store.activeLedgerId
         var ids = Set<String>()
-        for t in tagRows { ids.formUnion(Selectors.tagTransactions(store.txns, t.id, ledger).map(\.id)) }
+        for t in tagRows { ids.formUnion(Selectors.tagTransactions(store.txns, t.id, ledger).map(\.purchaseKey)) }
         return ids.count
     }
 

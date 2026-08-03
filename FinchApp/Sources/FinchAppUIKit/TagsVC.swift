@@ -309,15 +309,15 @@ final class TagsVC: UIViewController {
     /// Choice-independent union of transactions referencing either tag.
     private func mergeTxCount(_ a: TagRow, _ b: TagRow) -> Int {
         let ledger = store.activeLedgerId
-        return Set(Selectors.tagTransactions(store.txns, a.id, ledger).map(\.id))
-            .union(Selectors.tagTransactions(store.txns, b.id, ledger).map(\.id))
+        return Set(Selectors.tagTransactions(store.txns, a.id, ledger).map(\.purchaseKey))
+            .union(Selectors.tagTransactions(store.txns, b.id, ledger).map(\.purchaseKey))
             .count
     }
 
     private func mergeManyTxCount(_ tags: [TagRow]) -> Int {
         let ledger = store.activeLedgerId
         var ids = Set<String>()
-        for tag in tags { ids.formUnion(Selectors.tagTransactions(store.txns, tag.id, ledger).map(\.id)) }
+        for tag in tags { ids.formUnion(Selectors.tagTransactions(store.txns, tag.id, ledger).map(\.purchaseKey)) }
         return ids.count
     }
 
