@@ -118,7 +118,10 @@ public enum Selectors {
 
     public static func merchantStats(_ txns: [Tx], _ ledgerId: String) -> [String: MerchantStats] {
         var sums: [String: (n: Int, sum: Double, sqSum: Double)] = [:]
-        for t in txns {
+                // One row per PURCHASE. Wrong twice over otherwise: the count is
+        // inflated AND each leg's magnitude is a fraction of what was spent,
+        // so the mean and deviation are distorted, not merely rescaled.
+        for t in byPurchase(txns) {
             if ledgerOf(t) != ledgerId { continue }
             if (t.pending ?? false) { continue }
             if kindOf(t) != "expense" { continue }
@@ -189,7 +192,9 @@ public enum Selectors {
             if !n.isEmpty, byName[n] == nil { byName[n] = c.id }
         }
         var out: [String: Int] = [:]
-        for t in txns {
+                // One row per PURCHASE: a purchase paid from several accounts is
+        // several rows, and counting rows counts it more than once.
+        for t in byPurchase(txns) {
             if ledgerOf(t) != ledgerId { continue }
             if (t.pending ?? false) { continue }
             let cpId: String?
@@ -238,7 +243,9 @@ public enum Selectors {
     /// Keyed by tag id (`tx.tags` holds tag ids); absent for unused tags.
     public static func tagTxCounts(_ txns: [Tx], _ ledgerId: String) -> [String: Int] {
         var out: [String: Int] = [:]
-        for t in txns {
+                // One row per PURCHASE: a purchase paid from several accounts is
+        // several rows, and counting rows counts it more than once.
+        for t in byPurchase(txns) {
             if ledgerOf(t) != ledgerId { continue }
             if (t.pending ?? false) { continue }
             for tagId in (t.tags ?? []) { out[tagId, default: 0] += 1 }
@@ -252,7 +259,9 @@ public enum Selectors {
     /// txn counts once per distinct category. Keyed by category id; absent for unused.
     public static func categoryTxCounts(_ txns: [Tx], _ ledgerId: String) -> [String: Int] {
         var out: [String: Int] = [:]
-        for t in txns {
+                // One row per PURCHASE: a purchase paid from several accounts is
+        // several rows, and counting rows counts it more than once.
+        for t in byPurchase(txns) {
             if ledgerOf(t) != ledgerId { continue }
             if (t.pending ?? false) { continue }
             var cats = Set<String>()
@@ -512,7 +521,9 @@ public enum Selectors {
     /// rule id. Keyed by rule id; absent for rules that never fired.
     public static func ruleMatchCounts(_ txns: [Tx], _ ledgerId: String) -> [String: Int] {
         var out: [String: Int] = [:]
-        for t in txns where ledgerOf(t) == ledgerId {
+                // One row per PURCHASE: a purchase paid from several accounts is
+        // several rows, and counting rows counts it more than once.
+        for t in byPurchase(txns) where ledgerOf(t) == ledgerId {
             for id in (t.appliedRuleIds ?? []) { out[id, default: 0] += 1 }
         }
         return out
@@ -526,7 +537,10 @@ public enum Selectors {
         let scheduledNames = Set(scheduled.map { $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() })
         var groups: [String: [Tx]] = [:]
         var names: [String: String] = [:]
-        for t in txns {
+                // One row per PURCHASE. Wrong twice over otherwise: the count is
+        // inflated AND each leg's magnitude is a fraction of what was spent,
+        // so the mean and deviation are distorted, not merely rescaled.
+        for t in byPurchase(txns) {
             if ledgerOf(t) != ledgerId { continue }
             if (t.pending ?? false) { continue }
             if kindOf(t) != "expense" { continue }
