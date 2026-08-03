@@ -6816,6 +6816,16 @@
         }
       }
     },
+    "Updated %lld of %lld": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已更新 %lld 条，共 %lld 条"
+          }
+        }
+      }
+    },
     "Updated %lld rates": {
       "localizations": {
         "zh-Hans": {

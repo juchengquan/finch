@@ -646,6 +646,7 @@
   "Unarchive": "取消归档",
   "Uncategorized": "未分类",
   "Upcoming": "即将到期",
+  "Updated %lld of %lld": "已更新 %lld 条，共 %lld 条",
   "Updated %lld rates": "已更新 %lld 条汇率",
   "Use system size": "使用系统大小",
   "View all activity": "查看全部动态",

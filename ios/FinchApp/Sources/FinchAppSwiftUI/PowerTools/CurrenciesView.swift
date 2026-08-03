@@ -147,6 +147,9 @@ struct CurrenciesView: View {
             lastUpdated = UserDefaults.standard.object(forKey: RateAutoUpdater.stampKey) as? Date
             switch outcome {
             case .updated(let n): refreshNote = "Updated \(n) rates"
+            // Names the shortfall without guessing its cause — a provider we could
+            // not reach and a currency nobody carries look identical from here.
+            case .partial(let n, let requested): refreshNote = "Updated \(n) of \(requested)"
             case .skipped: refreshNote = "Nothing to update"
             case .failed: errorMessage = String(localized: "Couldn't fetch exchange rates. Check your connection and try again.")
             }
