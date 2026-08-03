@@ -1,0 +1,60 @@
+{
+  "name": "split-tender",
+  "selector": "merchantStats",
+  "input": {
+    "txns": [
+      {
+        "id": "t1",
+        "merchant": "Market",
+        "category": "food",
+        "amount": -50,
+        "account": "a1",
+        "date": "2026-05-01",
+        "pending": false,
+        "ledgerId": "personal",
+        "entryId": "e1"
+      },
+      {
+        "id": "t2",
+        "merchant": "Market",
+        "category": "food",
+        "amount": -70,
+        "account": "a1",
+        "date": "2026-05-01",
+        "pending": false,
+        "ledgerId": "personal",
+        "entryId": "e2"
+      },
+      {
+        "id": "t3",
+        "merchant": "Market",
+        "category": "food",
+        "amount": -60,
+        "account": "a1",
+        "date": "2026-05-01",
+        "pending": false,
+        "ledgerId": "personal",
+        "entryId": "e3"
+      },
+      {
+        "id": "t4",
+        "merchant": "Market",
+        "category": "food",
+        "amount": -40,
+        "account": "a2",
+        "date": "2026-05-01",
+        "pending": false,
+        "ledgerId": "personal",
+        "entryId": "e3"
+      }
+    ],
+    "ledgerId": "personal"
+  },
+  "expected": {
+    "m:market": {
+      "count": 3,
+      "mean": 73.33,
+      "std": 20.55
+    }
+  }
+}
