@@ -75,22 +75,24 @@ enum SimulatorDemoSeed {
         // nothing. Subcategories deliberately set none of their own: they INHERIT from
         // the parent (`effectiveIcon` walks ancestors), and leaving them unset is what
         // exercises that path.
-        let categories: [(id: String, name: String, kind: String, icon: String)] = [
-            ("cat-groceries", "Groceries", "expense", "cart"),
-            ("cat-dining", "Dining", "expense", "fork"),
-            ("cat-transport", "Transport", "expense", "car"),
-            ("cat-shopping", "Shopping", "expense", "bag"),
-            ("cat-entertainment", "Entertainment", "expense", "film"),
-            ("cat-utilities", "Utilities", "expense", "bolt"),
-            ("cat-rent", "Rent", "expense", "home"),
-            ("cat-health", "Health", "expense", "cross"),
-            ("cat-salary", "Salary", "income", "briefcase"),
+        // Colours come from `CategoryPalette.hexes`, in its order, so the demo shows the
+        // palette a user actually picks from rather than arbitrary values.
+        let categories: [(id: String, name: String, kind: String, icon: String, color: String)] = [
+            ("cat-groceries", "Groceries", "expense", "cart", CategoryPalette.hexes[3]),
+            ("cat-dining", "Dining", "expense", "fork", CategoryPalette.hexes[1]),
+            ("cat-transport", "Transport", "expense", "car", CategoryPalette.hexes[5]),
+            ("cat-shopping", "Shopping", "expense", "bag", CategoryPalette.hexes[7]),
+            ("cat-entertainment", "Entertainment", "expense", "film", CategoryPalette.hexes[6]),
+            ("cat-utilities", "Utilities", "expense", "bolt", CategoryPalette.hexes[2]),
+            ("cat-rent", "Rent", "expense", "home", CategoryPalette.hexes[0]),
+            ("cat-health", "Health", "expense", "cross", CategoryPalette.hexes[4]),
+            ("cat-salary", "Salary", "income", "briefcase", CategoryPalette.hexes[3]),
         ]
         for c in categories {
             try apply("createCategory", [
                 "id": .string(c.id), "ledgerId": .string("personal"),
                 "name": .string(c.name), "type": .string(c.kind),
-                "icon": .string(c.icon)])
+                "icon": .string(c.icon), "color": .string(c.color)])
         }
 
         // Subcategories (parent_id) — categories nest up to `Categories.maxDepth`, so the
@@ -351,15 +353,17 @@ enum SimulatorDemoSeed {
                 "id": .string(a.id), "ledgerId": .string("travel"), "name": .string(a.name),
                 "type": .string(a.type), "currency": .string("EUR"), "openingBalance": .double(a.opening)])
         }
-        let travelCategories: [(id: String, name: String, icon: String)] = [
-            ("tcat-flights", "Flights", "plane"), ("tcat-lodging", "Lodging", "hotel"),
-            ("tcat-food", "Food & Drink", "fork"), ("tcat-activities", "Activities", "ticket"),
+        let travelCategories: [(id: String, name: String, icon: String, color: String)] = [
+            ("tcat-flights", "Flights", "plane", CategoryPalette.hexes[5]),
+            ("tcat-lodging", "Lodging", "hotel", CategoryPalette.hexes[6]),
+            ("tcat-food", "Food & Drink", "fork", CategoryPalette.hexes[1]),
+            ("tcat-activities", "Activities", "ticket", CategoryPalette.hexes[7]),
         ]
         for c in travelCategories {
             try apply("createCategory", [
                 "id": .string(c.id), "ledgerId": .string("travel"),
                 "name": .string(c.name), "type": .string("expense"),
-                "icon": .string(c.icon)])
+                "icon": .string(c.icon), "color": .string(c.color)])
         }
         let travelTxns: [(d: Int, acct: String, amt: Double, merchant: String, cat: String)] = [
             (3,  "tvl-card",     -420.00, "Lufthansa",     "tcat-flights"),
@@ -389,18 +393,18 @@ enum SimulatorDemoSeed {
                 "id": .string(a.id), "ledgerId": .string("business"), "name": .string(a.name),
                 "type": .string(a.type), "currency": .string("USD"), "openingBalance": .double(a.opening)])
         }
-        let bizCategories: [(id: String, name: String, kind: String, icon: String)] = [
-            ("bcat-income", "Client Income", "income", "coins"),
-            ("bcat-software", "Software", "expense", "laptop"),
-            ("bcat-office", "Office", "expense", "office"),
-            ("bcat-travel", "Travel", "expense", "suitcase"),
-            ("bcat-marketing", "Marketing", "expense", "analytics"),
+        let bizCategories: [(id: String, name: String, kind: String, icon: String, color: String)] = [
+            ("bcat-income", "Client Income", "income", "coins", CategoryPalette.hexes[3]),
+            ("bcat-software", "Software", "expense", "laptop", CategoryPalette.hexes[6]),
+            ("bcat-office", "Office", "expense", "office", CategoryPalette.hexes[2]),
+            ("bcat-travel", "Travel", "expense", "suitcase", CategoryPalette.hexes[5]),
+            ("bcat-marketing", "Marketing", "expense", "analytics", CategoryPalette.hexes[7]),
         ]
         for c in bizCategories {
             try apply("createCategory", [
                 "id": .string(c.id), "ledgerId": .string("business"),
                 "name": .string(c.name), "type": .string(c.kind),
-                "icon": .string(c.icon)])
+                "icon": .string(c.icon), "color": .string(c.color)])
         }
         // Business categories nest too (Software › SaaS / One-time).
         for (id, name) in [("bcat-software-saas", "SaaS"), ("bcat-software-onetime", "One-time")] {
@@ -445,15 +449,17 @@ enum SimulatorDemoSeed {
                 "id": .string(a.id), "ledgerId": .string("ukflat"), "name": .string(a.name),
                 "type": .string(a.type), "currency": .string("GBP"), "openingBalance": .double(a.opening)])
         }
-        let ukCategories: [(id: String, name: String, icon: String)] = [
-            ("ucat-rent", "Flat Rent", "home"), ("ucat-council", "Council Tax", "doc"),
-            ("ucat-energy", "Energy", "flame"), ("ucat-groceries", "Groceries", "cart"),
+        let ukCategories: [(id: String, name: String, icon: String, color: String)] = [
+            ("ucat-rent", "Flat Rent", "home", CategoryPalette.hexes[0]),
+            ("ucat-council", "Council Tax", "doc", CategoryPalette.hexes[2]),
+            ("ucat-energy", "Energy", "flame", CategoryPalette.hexes[1]),
+            ("ucat-groceries", "Groceries", "cart", CategoryPalette.hexes[3]),
         ]
         for c in ukCategories {
             try apply("createCategory", [
                 "id": .string(c.id), "ledgerId": .string("ukflat"),
                 "name": .string(c.name), "type": .string("expense"),
-                "icon": .string(c.icon)])
+                "icon": .string(c.icon), "color": .string(c.color)])
         }
         let ukTxns: [(d: Int, acct: String, amt: Double, merchant: String, cat: String)] = [
             (3,  "uk-current", -1_200.00, "Flat Rent",   "ucat-rent"),

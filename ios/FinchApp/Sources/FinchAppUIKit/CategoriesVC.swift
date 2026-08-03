@@ -861,10 +861,7 @@ private struct CategoryRowVisual: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            ZStack {
-                Circle().fill(Color(hex: colorHex) ?? .gray).frame(width: 26, height: 26)
-                Image(systemName: symbol).font(.system(size: 12)).foregroundStyle(.white)
-            }
+            RowGlyphView(symbol: symbol, tint: Color(hex: colorHex) ?? .secondary)
             Text(verbatim: name).foregroundStyle(.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if showsCount { CountPill(count: count) }
@@ -892,12 +889,9 @@ private struct MergeTargetPicker: View {
                     ForEach(targets) { item in
                         Button { onPick(item.row) } label: {
                             HStack(spacing: 10) {
-                                ZStack {
-                                    Circle().fill(Color(hex: effectiveColor(item.row, byId)) ?? .gray)
-                                        .frame(width: 24, height: 24)
-                                    Image(systemName: CategoryIcon.symbol(for: effectiveIcon(item.row, byId)))
-                                        .font(.system(size: 11)).foregroundStyle(.white)
-                                }
+                                RowGlyphView(
+                                    symbol: CategoryIcon.symbol(for: effectiveIcon(item.row, byId)),
+                                    tint: Color(hex: effectiveColor(item.row, byId)) ?? .secondary)
                                 Text(verbatim: String(repeating: "   ", count: item.depth) + item.row.name)
                                     .foregroundStyle(.primary)
                             }

@@ -282,9 +282,15 @@ Consequences worth knowing before you touch a row:
   only lever that works. On SwiftUI the 44pt box overflows a clamped `expandChevronLayoutHeight`,
   so those rows still measure 60pt; in UIKit the accessory never drove row height.
 
-Current heights: Accounts · `TxRow` · Merchants · Tags · Scheduled · Ledger = 52pt (capsule);
-Categories = 60pt, Budgets = 75pt (circle, by choice). Measure with
+Current heights: Accounts · `TxRow` · Merchants · Tags · Scheduled · Ledger ·
+**Categories** = 52pt (capsule); Budgets = 75pt (circle, by choice). Measure with
 `idb ui describe-all` rather than eyeballing screenshots.
+
+**Categories dropped 60pt → 52pt** when its 26pt colour disc became an 18pt tinted glyph
+(`RowGlyphView`), so its swipe actions are capsules now, not circles. That is the outcome
+the note above wanted and could not buy: the levers it rejected were truncating the row's
+name and shrinking a tap target, both of which cost something at every text size. Shrinking
+the swatch cost nothing — the glyph carries the same colour and a clearer shape.
 
 ### Write screens (`WriteScreens/`)
 

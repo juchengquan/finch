@@ -326,11 +326,11 @@ struct CategoryTreeRow: View {
         HStack(spacing: 8) {
             Button(action: onTap) {
                 HStack(spacing: 10) {
-                    ZStack {
-                        Circle().fill(Color(hex: effectiveColor(c, byId)) ?? .gray).frame(width: 26, height: 26)
-                        Image(systemName: CategoryIcon.symbol(for: effectiveIcon(c, byId)))
-                            .font(.system(size: 12)).foregroundStyle(.white)
-                    }
+                    // The picker is reached FROM the category editor (its "Parent" row) as
+                    // well as from the transaction sheet, so it has to match the list it
+                    // is opened from — circles here would put two treatments on one screen.
+                    RowGlyphView(symbol: CategoryIcon.symbol(for: effectiveIcon(c, byId)),
+                                 tint: Color(hex: effectiveColor(c, byId)) ?? .secondary)
                     Text(c.name).foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     if isSelected { Image(systemName: "checkmark").foregroundStyle(.tint) }
