@@ -469,38 +469,65 @@ struct EditTransactionSheet: View {
         } else if txn.kind == "refund" {
             patch["refundedTransactionId"] = .null
         }
+        // ONE write, replacing the four this path used to fire — five when
+        // collapsing a split (createCounterparty, updateTransaction,
+        // setTransactionSplits, updateTransaction again, setTransactionTags).
+        // Their ORDER was load-bearing and commented as such, which is the tell:
+        // a failure between any two left the ledger half-updated.
+        //
+        // The cells ARE the purchase, so there is no ordering left to get wrong:
+        // the amount, the categories and the tags land together or not at all.
+        let parsedAmount: Double
+        if isSplit {
+            parsedAmount = abs(splitAlloc.total)
+        } else {
+            guard let parsed = DecimalInput.parse(amountText), parsed > 0 else {
+                errorMessage = "Enter an amount greater than 0."; return
+            }
+            parsedAmount = parsed
+        }
+        let effKind = canReclassify ? selectedKind.rawValue : (txn.kind ?? "expense")
+        let sign: Double = effKind == "expense" ? -1 : 1
+        let targetAccount = accountId.isEmpty ? txn.account : accountId
+        var cells: [JSONValue] = []
+        if splitAlloc.payload.count >= 2 {
+            for share in splitAlloc.payload {
+                cells.append(.object([
+                    "accountId": .string(targetAccount),
+                    "categoryId": share.id.map(JSONValue.string) ?? .null,
+                    "amount": .double(sign * abs(share.amount)),
+                ]))
+            }
+        } else {
+            cells.append(.object([
+                "accountId": .string(targetAccount),
+                "categoryId": categoryId.isEmpty ? .null : .string(categoryId),
+                "amount": .double(sign * parsedAmount),
+            ]))
+        }
+
+        var args: [String: JSONValue] = [
+            "id": .string(txn.id),
+            "ledgerId": .string(store.activeLedgerId),
+            "merchant": .string(merchant.isEmpty ? "Untitled" : merchant),
+            "date": .string(Self.day(date)), "time": .string(Self.time(date)),
+            "kind": .string(effKind),
+            "status": .string(status.rawValue),
+            "currency": .string(currencyCode.isEmpty ? (txn.currency ?? accountCurrency) : currencyCode),
+            "cells": .array(cells),
+            // A set-replace, so clearing every tag actually clears them. The old
+            // path only wrote tags when they had changed, which meant the sheet
+            // and the engine each had to remember what "unchanged" meant.
+            "tagIds": .array(selectedTags.sorted().map { .string($0) }),
+        ]
+        if !note.isEmpty { args["note"] = .string(note) }
+        if effectiveKind == "refund", let refundedTxId { args["refundedTransactionId"] = .string(refundedTxId) }
+
         do {
-            // Remember any unrecognized merchant name as a counterparty.
-            let cpName = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !cpName.isEmpty,
-               !store.counterparties.contains(where: { $0.name.caseInsensitiveCompare(cpName) == .orderedSame }) {
-                try store.apply(.createCounterparty, Args(["name": .string(cpName)]))
-            }
-            try store.apply(.updateTransaction, Args(["id": .string(txn.id), "patch": .object(patch)]))
-            // Splits land in this same save, so cancelling the sheet leaves the ledger
-            // untouched. Ordered AFTER updateTransaction on purpose: the engine
-            // validates the category legs against the account leg's amount, so the new
-            // amount has to be in place before the legs are rebuilt against it.
-            if splitAlloc.payload.count >= 2 {
-                let splitPayload: [JSONValue] = splitAlloc.payload.map { .object([
-                    "categoryId": $0.id.map(JSONValue.string) ?? .null,
-                    "amount": .double($0.amount)]) }
-                try store.apply(.setTransactionSplits,
-                                Args(["id": .string(txn.id), "splits": .array(splitPayload)]))
-            } else if isSplit {
-                // Collapsed back to one category: drop the legs, then name the survivor
-                // (the category patch above is skipped while the stored txn is split).
-                try store.apply(.setTransactionSplits,
-                                Args(["id": .string(txn.id), "splits": .array([])]))
-                if !categoryId.isEmpty {
-                    try store.apply(.updateTransaction, Args(["id": .string(txn.id),
-                        "patch": .object(["category": .string(categoryId)])]))
-                }
-            }
-            if selectedTags != Set(txn.tags ?? []) {
-                try store.apply(.setTransactionTags, Args(["id": .string(txn.id),
-                    "tagIds": .array(selectedTags.sorted().map { .string($0) })]))
-            }
+            // The merchant is resolve-or-created in the same write, so the separate
+            // createCounterparty call is gone — and with it the orphan counterparty
+            // a failed save used to leave behind.
+            try store.apply(.saveTransaction, Args(args))
             Haptics.success()
             dismiss()
         } catch { Haptics.warning(); errorMessage = i18nMessage(error) }
