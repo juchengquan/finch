@@ -96,6 +96,8 @@ final class AccountDetailVC: UIViewController {
     private enum HeaderContent {
         case plain(String?)
         case month(label: String, trailing: String, subtitle: String?)
+        /// Net, in, out on one row under the month name.
+        case figures(label: String, figures: [MonthHeaderFigures.Figure], spoken: String)
     }
     private var headerContent: [SectionID: HeaderContent] = [:]
 
@@ -341,6 +343,10 @@ final class AccountDetailVC: UIViewController {
             view.contentConfiguration = UIHostingConfiguration {
                 MonthSectionHeader(label: label, trailing: trailing, subtitle: subtitle)
             }
+        case .figures(let label, let figures, let spoken):
+            view.contentConfiguration = UIHostingConfiguration {
+                MonthFiguresHeader(label: label, figures: figures, accessibilityText: spoken)
+            }
         case .plain(let text):
             var cfg = view.defaultContentConfiguration()
             cfg.text = text
@@ -350,23 +356,20 @@ final class AccountDetailVC: UIViewController {
         }
     }
 
-    /// Net change · this account's balance at the end of the month. The section is
-    /// date-descending, so the first (newest) row's running balance IS the
-    /// end-of-month figure — the same cache the rows show, so header and rows cannot
-    /// disagree. `withBalance: false` is the calendar fallback, which includes
-    /// pending rows while the running balance is confirmed-only math, so the figure
-    /// deliberately stays out there.
-    private func monthHeader(_ key: String, _ txns: [Tx], withBalance: Bool) -> HeaderContent {
-        let balance = withBalance
-            ? (txns.first.flatMap { t in store.runningBalanceBase(for: t).map { "  ·  " + store.displayMoneyBase($0) } } ?? "")
-            : ""
-        let subtitle = withBalance
-            ? "\(String(localized: "Income")) \(store.displayMoneyBase(MonthGrouping.income(txns)))"
-                + " · \(String(localized: "Spent")) \(store.displayMoneyBase(MonthGrouping.expense(txns)))"
-            : nil
-        return .month(label: MonthGrouping.label(key),
-                      trailing: store.displayMoneyBase(MonthGrouping.net(txns)) + balance,
-                      subtitle: subtitle)
+    /// The month's net, income and spending — the same three figures the Activity feed
+    /// shows, so the two screens read alike.
+    ///
+    /// This header used to carry the account's END-OF-MONTH BALANCE as well, taken from
+    /// the newest row's running balance. That is gone by choice: the balance answered a
+    /// different question from the other figures (what the account was worth, not what
+    /// the month did), and it is the account's own header and rows that carry it now.
+    /// Its removal is also why list and calendar mode no longer need separate shapes —
+    /// the balance was the only thing the calendar fallback had to suppress, since it
+    /// includes pending rows while the running balance is confirmed-only math.
+    private func monthHeader(_ key: String, _ txns: [Tx]) -> HeaderContent {
+        .figures(label: MonthGrouping.label(key),
+                 figures: store.monthHeaderFigures(txns),
+                 spoken: store.monthHeaderSpoken(txns))
     }
 
     /// A diffable data source does NOT re-render a supplementary view when only the
@@ -454,7 +457,7 @@ final class AccountDetailVC: UIViewController {
                 if !monthTx.isEmpty {
                     snap.appendSections([.calMonth(key)])
                     snap.appendItems(monthTx.map(\.id), toSection: .calMonth(key))
-                    headers[.calMonth(key)] = monthHeader(key, monthTx, withBalance: false)
+                    headers[.calMonth(key)] = monthHeader(key, monthTx)
                 }
             }
         } else {
@@ -473,7 +476,7 @@ final class AccountDetailVC: UIViewController {
                 for section in MonthGrouping.sections(confirmed) {
                     snap.appendSections([.month(section.id)])
                     snap.appendItems(section.txns.map(\.id), toSection: .month(section.id))
-                    headers[.month(section.id)] = monthHeader(section.id, section.txns, withBalance: true)
+                    headers[.month(section.id)] = monthHeader(section.id, section.txns)
                 }
             } else {
                 snap.appendSections([.all])

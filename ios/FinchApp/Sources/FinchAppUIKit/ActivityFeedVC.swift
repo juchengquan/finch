@@ -112,7 +112,14 @@ final class ActivityFeedVC: UIViewController {
     /// Section order and header text, both computed in `applySnapshot` and set BEFORE
     /// the apply — see `configureHeader` for why they cannot be derived on demand.
     private var sectionIDs: [SectionID] = []
-    private struct HeaderContent { var title: String?; var subtitle: String? }
+    /// `figures` non-empty ⇒ the month shape (net/in/out under the name); otherwise a
+    /// plain title, used by the pending bucket and the empty state.
+    private struct HeaderContent {
+        var title: String?
+        var subtitle: String?
+        var figures: [MonthHeaderFigures.Figure] = []
+        var spoken: String = ""
+    }
     private var headerContent: [SectionID: HeaderContent] = [:]
 
     private let store = FinchStore.shared
@@ -340,10 +347,12 @@ final class ActivityFeedVC: UIViewController {
     }
 
     private func monthHeader(_ key: String, _ txns: [Tx]) -> HeaderContent {
-        HeaderContent(
-            title: MonthGrouping.label(key),
-            subtitle: "\(String(localized: "Income")) \(store.displayMoneyBase(MonthGrouping.income(txns)))"
-                + " · \(String(localized: "Spent")) \(store.displayMoneyBase(MonthGrouping.expense(txns)))")
+        // Net, in, out on one row under the month name. This screen never showed a net
+        // at all — the SwiftUI feed did, in a trailing slot — so it gains one here, and
+        // the two feeds finally read the same.
+        HeaderContent(title: MonthGrouping.label(key),
+                      figures: store.monthHeaderFigures(txns),
+                      spoken: store.monthHeaderSpoken(txns))
     }
 
     /// Reads text computed in `applySnapshot`, and deliberately does NOT recompute it
@@ -354,11 +363,21 @@ final class ActivityFeedVC: UIViewController {
     /// display-refresh cause.
     private func configureHeader(_ view: UICollectionViewListCell, at ip: IndexPath) {
         guard sectionIDs.indices.contains(ip.section) else { return }
-        var cfg = view.defaultContentConfiguration()
-        if let content = headerContent[sectionIDs[ip.section]] {
-            cfg.text = content.title
-            cfg.secondaryText = content.subtitle
+        let content = headerContent[sectionIDs[ip.section]]
+        // The month shape needs a coloured, per-figure row, which
+        // `UIListContentConfiguration` has no slot for — so it is hosted, like the
+        // account screen's header already was. Everything else stays a plain cell.
+        if let content, !content.figures.isEmpty {
+            view.contentConfiguration = UIHostingConfiguration {
+                MonthFiguresHeader(label: content.title ?? "",
+                                   figures: content.figures,
+                                   accessibilityText: content.spoken)
+            }
+            return
         }
+        var cfg = view.defaultContentConfiguration()
+        cfg.text = content?.title
+        cfg.secondaryText = content?.subtitle
         view.contentConfiguration = cfg
     }
 

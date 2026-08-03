@@ -173,6 +173,36 @@ extension FinchStore {
         let v = Money.convert(baseAmount, from: baseCurrency, to: displayCurrency, rates: rateMap) ?? baseAmount
         return Money.format(v, currency: displayCurrency)
     }
+    /// ledger base → display, ALWAYS signed (+ or −). The month headers use it: their
+    /// figures are told apart by sign rather than by the words they used to carry, and
+    /// income and spending both arrive as positive magnitudes.
+    ///
+    /// Masks first, like its unsigned sibling — so under privacy every figure is the
+    /// same dots and no sign survives to reveal the month's direction.
+    public func displaySignedBase(_ baseAmount: Double) -> String {
+        if privacyMode { return FinchStore.moneyMask }
+        let v = Money.convert(baseAmount, from: baseCurrency, to: displayCurrency, rates: rateMap) ?? baseAmount
+        return Money.format(v, currency: displayCurrency, signed: true)
+    }
+    /// A month section header's three figures for these rows — net, in, out — signed
+    /// and privacy-masked. One helper so every header that shows them (both feeds, in
+    /// list and calendar mode, in UIKit and SwiftUI) cannot drift apart.
+    public func monthHeaderFigures(_ txns: [Tx]) -> [MonthHeaderFigures.Figure] {
+        MonthHeaderFigures.make(net: MonthGrouping.net(txns),
+                                income: MonthGrouping.income(txns),
+                                expense: MonthGrouping.expense(txns),
+                                money: { self.displaySignedBase($0) })
+    }
+
+    /// What VoiceOver reads in place of those figures. Their meaning is carried by
+    /// sign, colour and position — none of which a screen reader conveys — so the words
+    /// the header dropped visually have to come back here.
+    public func monthHeaderSpoken(_ txns: [Tx]) -> String {
+        "\(String(localized: "Net")) \(displaySignedBase(MonthGrouping.net(txns))), "
+            + "\(String(localized: "Income")) \(displayMoneyBase(MonthGrouping.income(txns))), "
+            + "\(String(localized: "Spent")) \(displayMoneyBase(MonthGrouping.expense(txns)))"
+    }
+
     /// account currency → base → display. Inherits privacy masking via
     /// `displayMoneyBase`.
     public func displayMoney(_ amount: Double, from currency: String?) -> String {

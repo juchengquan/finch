@@ -219,15 +219,12 @@ struct AccountDetailView: View {
                 Section {
                     ForEach(monthTx, id: \.id) { t in txRow(t) }
                 } header: {
-                    // Minimal month header (label + net). The running-balance
-                    // figure the list headers carry is confirmed-rows-only math;
-                    // this fallback includes pending rows, so it stays out.
-                    HStack {
-                        Text(MonthGrouping.label(key)).textCase(nil)
-                        Spacer()
-                        Text(store.displayMoneyBase(MonthGrouping.net(monthTx)))
-                            .foregroundStyle(.secondary)
-                    }
+                    // Same shape as the list lens, so the header does not change form
+                    // when you flip to Calendar.
+                    MonthFiguresHeader(label: MonthGrouping.label(key),
+                                       figures: store.monthHeaderFigures(monthTx),
+                                       accessibilityText: store.monthHeaderSpoken(monthTx))
+                        .textCase(nil)
                 }
             }
         }
@@ -264,23 +261,14 @@ struct AccountDetailView: View {
                 Section {
                     ForEach(section.txns, id: \.id) { t in txRow(t) }
                 } header: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack {
-                            Text(MonthGrouping.label(section.id)).textCase(nil)
-                            Spacer()
-                            // net change · this account's balance at the end of the month.
-                            // The section is date-descending, so its first (newest) row's
-                            // running balance IS the end-of-month balance — same cache the
-                            // row shows, so header and row agree exactly.
-                            // No force-unwrap: a month section is never empty in practice,
-                            // but `first!` at render time is a hard crash if it ever is.
-                            Text(store.displayMoneyBase(MonthGrouping.net(section.txns))
-                                 + (section.txns.first.flatMap { t in store.runningBalanceBase(for: t).map { "  ·  " + store.displayMoneyBase($0) } } ?? ""))
-                                .foregroundStyle(.secondary)
-                        }
-                        Text("Income \(store.displayMoneyBase(MonthGrouping.income(section.txns))) · Spent \(store.displayMoneyBase(MonthGrouping.expense(section.txns)))")
-                            .font(.caption2).textCase(nil).foregroundStyle(.secondary)
-                    }
+                    // The account's end-of-month balance used to sit here beside the
+                    // net. It is gone deliberately — it answered a different question
+                    // from the other figures (what the account was worth, not what the
+                    // month did), and the screen's own header and rows carry it.
+                    MonthFiguresHeader(label: MonthGrouping.label(section.id),
+                                       figures: store.monthHeaderFigures(section.txns),
+                                       accessibilityText: store.monthHeaderSpoken(section.txns))
+                        .textCase(nil)
                 }
             }
         } else {
