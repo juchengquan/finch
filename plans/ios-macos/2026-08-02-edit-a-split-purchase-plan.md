@@ -57,14 +57,14 @@ An audit against the codebase found the previous draft wrong in ten places and s
 
    The reason not to coarsen everything: **sync replays operations, so finer commands merge better.** One device renaming a merchant and another re-tagging the same transaction both survive today; a coarse whole-transaction command from each would make the later one overwrite the earlier wholesale. Atomicity and merge granularity pull in opposite directions, and the split above puts each where it matters.
 
-3. **This is also a speed win, independent of correctness.** Every `apply` fires the full side-effect train — *"16 projections + full Spotlight re-index + widget/notification replans"* (`FinchStore.swift:239-242`), which the FX refresh proved can jam the UI for seconds when repeated. A save goes from 3–5 database commits and 3–5 side-effect passes to **one of each**. (The heaviest work is already deferred off the critical path by `scheduleAmbientSideEffects`, but it still runs 3–5 times.)
+3. **This is also a speed win, independent of correctness.** Every `apply` fires the full side-effect train — *"16 projections + full Spotlight re-index + widget/notification replans"* (`FinchStore.swift:245-247`), which the FX refresh proved can jam the UI for seconds when repeated. A save goes from 3–5 database commits and 3–5 side-effect passes to **one of each**. (The heaviest work is already deferred off the critical path by `scheduleAmbientSideEffects`, but it still runs 3–5 times.)
 
 4. **What this decision deletes from the plan.** The earlier draft proposed an `applyAll(ops)` batch wrapper. With one intent-shaped command it is **not needed for the save path**, and three problems evaporate with it:
    - **No id threading.** The draft's central hole was that `setTransactionSplits` needs the id `addTransaction` just minted, which a flat op list cannot express. One command mints and uses it internally.
    - **No opaque sync record.** A batch would have had to reach the outbox as a composite mutation peers could only run-or-not. `saveTransaction` replays as one meaningful, inspectable operation — which also fixes the divergence risk: `applyRemote` catches a replay failure, records `status.lastError` and moves on with no retry or rollback (`CloudKitSyncCoordinator.swift:144-146`), so N ops replayed individually can half-apply on a peer **permanently**.
    - **No `Apply` special-cases to route around.** `applyReturningId` special-cases `.addTransaction` (`:56-58`) and `applyReturningCount` the copy actions (`:77-79`); a naive batch dispatching `registry[name]` would silently drop the new entry id and the copy counts.
 
-   **If a batch wrapper is still wanted for bulk operations, it is a separate piece of work** — and it must not reuse `applyBatch` (`FinchStore.swift:248`), whose documented behaviour is to *skip* failures and continue.
+   **If a batch wrapper is still wanted for bulk operations, it is a separate piece of work** — and it must not reuse `applyBatch` (`FinchStore.swift:252`), whose documented behaviour is to *skip* failures and continue.
 
 5. **Attachments are outside atomicity and the plan says so.** Both writes are `Task { try? await … }` — detached, async, error-swallowing (`AddTransactionSheet.swift:696-701`). They cannot join a synchronous write, and rolling back the database would not unwrite a file. **The promise is: the ledger is atomic; files are best-effort.** Today a failed receipt is discarded silently — the transaction saves looking complete, without it. Surfacing that is desirable but is not what makes the save atomic; treat it as a separate small fix.
 
@@ -222,7 +222,7 @@ An audit against the codebase found the previous draft wrong in ten places and s
 **This plan changes nothing about rules. It freezes today's behaviour and states it, because folding the sheets' commands into one would otherwise change it silently.**
 
 Today's behaviour, which is accidental rather than designed:
-- `addTransaction` runs rules inside `postEntry`, which may **replace the category legs** (`Entries.swift:410-427`); `setTransactionSplits` then overwrites them with the user's. **The user wins because they go last.** One command would invert that unless it is explicit.
+- `addTransaction` runs rules inside `postEntry`, which may **replace the category legs** (`Entries.swift:429-446`); `setTransactionSplits` then overwrites them with the user's. **The user wins because they go last.** One command would invert that unless it is explicit.
 - `applyRules` is called only from `postEntry` and the backfill, so **create runs rules and edit does not**. The same payload with and without an `id` therefore behaves differently.
 
 **`saveTransaction` must preserve both:** an explicit split in the payload stands (a rule's other actions — merchant, tags, kind — still apply), and a payload carrying an `id` does not run rules.
@@ -248,18 +248,18 @@ Today's behaviour, which is accidental rather than designed:
 
 ### What actually moves
 
-**Three guards live in `postTransfer`, not `validateShape`** (`Entries.swift:541-555`). `saveTransaction` reaches `validateShape` but not `postTransfer`, so as written it would accept:
+**Three guards live in `postTransfer`, not `validateShape`** (`Entries.swift:560-573`). `saveTransaction` reaches `validateShape` but not `postTransfer`, so as written it would accept:
 - **a transfer whose two legs are the same account** — `validateShape` only checks `acct.count == 2` and that no plain category leg exists, so it passes
 - a zero amount
 - a same-currency transfer whose two amounts disagree
 
-**There is a fourth:** `error.transfer.receivedGt0` (`Entries.swift:552`), which rejects a non-positive received amount.
+**There is a fourth:** `error.transfer.receivedGt0` (`Entries.swift:571`), which rejects a non-positive received amount.
 
 **Move all four into `validateShape`'s `.transfer` case**, where every path runs them — including the scheduler, which also calls `postTransfer` (`Scheduled.swift:74`, `:160`).
 
 **Moving them changes two error codes, and that must be deliberate.** `postTransfer` checks the zero amount (`:541`) and the same-account case (`:542`) **before** looking the accounts up (`:543`). Run from `validateShape`, the lookup happens first, so a zero-amount transfer naming a bad account now reports `error.notFound.account` instead of `error.transfer.amountGt0`. Assert the new ordering in a test rather than discovering it as a regression.
 
-**`postTransfer` stays.** The scheduler posts transfers with `toAmount` nil (`Scheduled.swift:74`, `:160`) and relies on the engine deriving it via `convertToBase` (`Entries.swift:557`). Sheets have no rate lookup, so that derivation cannot move UI-side. The add-transfer UI never needed it: it already **requires** the received amount when cross-currency (`AddTransactionSheet.swift:637-641`) and omits it only when same-currency, where the conversion is the identity.
+**`postTransfer` stays.** The scheduler posts transfers with `toAmount` nil (`Scheduled.swift:74`, `:160`) and relies on the engine deriving it via `convertToBase` (`Entries.swift:576`). Sheets have no rate lookup, so that derivation cannot move UI-side. The add-transfer UI never needed it: it already **requires** the received amount when cross-currency (`AddTransactionSheet.swift:637-641`) and omits it only when same-currency, where the conversion is the identity.
 
 **Ratio-scaling moves to the caller, but the FX pin does NOT.** `updateTransfer` scales the other side when only one amount is given (`Transfers.swift:40-56`). `saveTransaction` takes complete legs, so the sheet supplies both native amounts — `TransferEditPatch.build` already owns the form's parsing and validation and grows the scaling. Same-currency mirrors; cross-currency the form already collects both.
 
@@ -267,13 +267,13 @@ Today's behaviour, which is accidental rather than designed:
 
 **The rule is: preserve the RATE, recompute the base from it.** For a leg matched by account, `amount_base = newNative × storedRate`. That is exactly what `updateTransfer` achieves by scaling base proportionally to native (`Transfers.swift:51-56`), and it keeps a pinned rate pinned across an amount edit. A leg whose account *changed* is a new posting and re-locks normally.
 
-**Derived memo and description stay engine-side.** `postTransfer` writes description `"Transfer"` and memos `"Transfer to <name>"` / `"Transfer from <name>"` (`Entries.swift:559-564`). Those are engine-authored today and must not become the sheet's job. `saveTransaction` fills them for `kind == .transfer` when absent. This composes with match-by-account: an unchanged leg keeps its stored memo, and changing a leg's account creates a new posting, which gets a freshly derived memo naming the new account.
+**Derived memo and description stay engine-side.** `postTransfer` writes description `"Transfer"` and memos `"Transfer to <name>"` / `"Transfer from <name>"` (`Entries.swift:578-583`). Those are engine-authored today and must not become the sheet's job. `saveTransaction` fills them for `kind == .transfer` when absent. This composes with match-by-account: an unchanged leg keeps its stored memo, and changing a leg's account creates a new posting, which gets a freshly derived memo naming the new account.
 
 ## What `saveTransaction` must carry, and what it cannot reuse
 
 The command replaces every write the two sheets fire today (3 on add, 4-5 on edit). Working out what it has to own:
 
-**The entry header rides on `EntryPatch`, which is sufficient.** It reaches `date`, `time`, `description`, `kind`, `notes`, `counterpartyId`, `refundedEntryId`, `status`, `legs` (`Entries.swift:622-633`) — every field either sheet edits. The `entries` columns it does *not* reach are not gaps: `confirmed_at` and `dedup_hash` are maintained by `rebuildEntry` itself (`:681`, `:733`), `reviewed_at` and `applied_rule_ids` belong to other actions, and `source_template_id`/`occurrence_date` are set at post time and never edited.
+**The entry header rides on `EntryPatch`, which is sufficient.** It reaches `date`, `time`, `description`, `kind`, `notes`, `counterpartyId`, `refundedEntryId`, `status`, `legs` (`Entries.swift:641-652`) — every field either sheet edits. The `entries` columns it does *not* reach are not gaps: `confirmed_at` and `dedup_hash` are maintained by `rebuildEntry` itself (`:681`, `:733`), `reviewed_at` and `applied_rule_ids` belong to other actions, and `source_template_id`/`occurrence_date` are set at post time and never edited.
 
 **Tags do not ride on it.** `entry_tags` is written only by `postEntry` (`:452`) and `postTransfer` (`:568`); `rebuildEntry` never touches it, which is why `setTransactionTags` is a separate write in both sheets today. `saveTransaction` must write `entry_tags` itself, as a set-replace within the same transaction.
 
@@ -288,15 +288,15 @@ The command replaces every write the two sheets fire today (3 on add, 4-5 on edi
 | Field | Why | Proof |
 |---|---|---|
 | `ledgerId` | Required to post at all | `AddTransactionSheet.swift:645` |
-| `sourceTemplateId`, `occurrenceDate` | The scheduled-occurrence link — and they **suppress `dedup_hash`** | `:679`; `Entries.swift:448` |
+| `sourceTemplateId`, `occurrenceDate` | The scheduled-occurrence link — and they **suppress `dedup_hash`** | `:679`; `Entries.swift:467` |
 | `allowDuplicate` | Sent after the duplicate prompt; without it "Add anyway" is refused — a bug already fixed once | `AddTransactionSheet.swift:661`, comment at `:656-660` |
-| `skipRules` | Must be forced `true` for `kind == .transfer`, or transfers begin matching rules | `Entries.swift:566` |
+| `skipRules` | Must be forced `true` for `kind == .transfer`, or transfers begin matching rules | `Entries.swift:585` |
 | A caller-supplied `id` | See the sync note below | `NewEntry.id` exists |
 | `tagIds` | Task 3 already covers this | — |
 
 **`applyReturningId` must special-case `saveTransaction`.** It special-cases `.addTransaction` only (`Apply.swift:56-58`), returning nil for anything else — and the Add sheet needs the new id to attach a receipt (`AddTransactionSheet.swift:688`, `:696-701`). Add it to that switch **and** to `FinchStore.applyReturningId:214`. The plan cites this exact special case as a reason a *batch* would silently fail; it applies no less to a new action.
 
-**A refund link needs id translation.** `refundedTransactionId` arrives as a **posting** id and is resolved to an entry id on the way in (`Transactions.swift:269`, `:446`), then mapped back on the way out (`Projection.swift:155-157`). `EntryPatch.refundedEntryId` takes an entry id, so `saveTransaction` must do the same translation rather than storing what it was handed.
+**A refund link needs id translation.** `refundedTransactionId` arrives as a **posting** id and is resolved to an entry id on the way in (`Transactions.swift:269`, `:446`), then mapped back on the way out (`Projection.swift:160-162`). `EntryPatch.refundedEntryId` takes an entry id, so `saveTransaction` must do the same translation rather than storing what it was handed.
 
 **Sync replay of a create diverges ids unless the payload carries one.** `applyRemote` replays the raw action once, with no retry (`CloudKitSyncCoordinator.swift:137-146`). A `saveTransaction` create with no `id` makes each peer mint a *different* entry id; a later `saveTransaction` carrying the origin's id then resolves to nil on that peer and **silently no-ops**. So the create path must accept a caller-supplied `id` — otherwise the permanent divergence Decision 4 claims to fix reappears one level up.
 
@@ -304,7 +304,7 @@ The command replaces every write the two sheets fire today (3 on add, 4-5 on edi
 
 ## The one genuinely delicate requirement
 
-**A rebuild replaces postings. Identity must survive it.** If a rebuild mints fresh postings, editing a split silently un-reconciles it — balanced, audit-clean, invisible. The codebase solves this twice; copy it: `rebuildEntry`'s date path carries `id`, `memo`, `orig_*` **and `cleared_at`** (`Entries.swift:696-703`), and `setTransactionSplits` does the same (`Transactions.swift:54-59`).
+**A rebuild replaces postings. Identity must survive it.** If a rebuild mints fresh postings, editing a split silently un-reconciles it — balanced, audit-clean, invisible. The codebase solves this twice; copy it: `rebuildEntry`'s date path carries `id`, `memo`, `orig_*` **and `cleared_at`** (`Entries.swift:715-722`), and `setTransactionSplits` does the same (`Transactions.swift:54-59`).
 
 ---
 
@@ -374,7 +374,7 @@ An earlier draft said to widen `canonicalState` "**and** its web twin" so the or
 
 Per "Transfers fold in too". **`createTransfer`/`updateTransfer` are NOT deleted** — they appear in the cross-stack `WRITE_SEQUENCE` (`export-fixtures.ts:432`, `:549`) and this plan is iOS-only. The sheets stop calling them; the actions keep their web callers and parity coverage. Likewise `setTransactionSplits` stays (`:447`).
 
-- [ ] **Step 1: Move three guards from `postTransfer` into `validateShape`'s `.transfer` case** — same-account, zero amount, same-currency mismatch (`Entries.swift:541-555`). **Write the same-account test first**: `validateShape` today counts only `acct.count == 2` and finds no plain category leg, so it passes a transfer whose two legs are the same account. That test must fail before the move.
+- [ ] **Step 1: Move three guards from `postTransfer` into `validateShape`'s `.transfer` case** — same-account, zero amount, same-currency mismatch (`Entries.swift:560-573`). **Write the same-account test first**: `validateShape` today counts only `acct.count == 2` and finds no plain category leg, so it passes a transfer whose two legs are the same account. That test must fail before the move.
 - [ ] **Step 2: `postTransfer` stays.** The scheduler posts with `toAmount` nil (`Scheduled.swift:74`, `:160`) and needs the engine's `convertToBase`; sheets have no rate lookup.
 - [ ] **Step 3: Ratio-scaling moves into `TransferEditPatch`**, which already owns the form's parsing and validation. `saveTransaction` takes complete legs.
 - [ ] **Step 4: Derived memo/description stay engine-side** — `saveTransaction` fills `"Transfer"` and `"Transfer to <name>"` for `kind == .transfer` when absent.
@@ -404,7 +404,7 @@ Implements Decisions 15, 19 and 20.
 
 - [ ] **Step 1: Write the shape-derivation tests first — they are the heart of this task.** (a) Cells on two cards, **one** category → **one** entry with two payment legs and **no** `group_id`. (b) The same two cards across **two** categories → **two** entries sharing a `group_id`. **Without (a) the obvious implementation — one entry per card — silently turns every split-tender purchase into a group**, breaking Decision 14's shipped shape.
 - [ ] **Step 2: Write the atomicity test.** Cells where the last is invalid; assert **no entries exist afterwards**. This is the property the whole design rests on.
-- [ ] **Step 3: Write the rewrite test.** Save a grid, then save it again with changed amounts. Assert the group still has the same number of entries and no duplicate-hash error. **It fails without delete-before-repost:** `dedup_hash` is stamped from `date|time|description|acctLegs` under `UNIQUE(ledger_id, dedup_hash)` (`Entries.swift:733`), and a grid's rows share everything but the account, so a rewrite collides with itself and surfaces as "This looks like a duplicate."
+- [ ] **Step 3: Write the rewrite test.** Save a grid, then save it again with changed amounts. Assert the group still has the same number of entries and no duplicate-hash error. **It fails without delete-before-repost:** `dedup_hash` is stamped from `date|time|description|acctLegs` under `UNIQUE(ledger_id, dedup_hash)` (`Entries.swift:752`), and a grid's rows share everything but the account, so a rewrite collides with itself and surfaces as "This looks like a duplicate."
 - [ ] **Step 4: Write the two conversion tests** (Decision 21). (a) Save a one-row purchase, then save it again with two rows; assert the **original entry kept its id** and only the second is new. (b) The reverse: assert the surviving entry is the original and the removed row's attachments are unlinked. **Without (a) the obvious implementation — delete all, rewrite all — passes every other test in this task while silently destroying receipts and reconcile marks on an ordinary edit.**
 - [ ] **Step 5: Write the group-of-one test** (Decision 20). Rewrite a 2-row grid down to 1 row; assert the surviving entry's `group_id` is **NULL**, so a lone transaction stops claiming to be a group. Enforce at write time — **do not add an audit code**, which would be an 11th and a wire-format change.
 - [ ] **Step 6: Write the budget test.** Assert `Budgets.invalidateForEntry` runs for **every** row. Every existing money path does (`Transactions.swift:316,345,358,393,413`); skipping it leaves the rollover cache stale with no error and no audit finding.
@@ -415,14 +415,14 @@ Implements Decisions 15, 19 and 20.
 ### Task 6: The delete tail
 
 **Files:**
-- Modify: `FinchStore+ViewHelpers.swift:109-114` (attachment unlink), `:136-141` (bulk delete)
-- Modify: `ActivityTab.swift:395`, `ActivityFeedVC.swift:633` (the two bulk paths), `TxListDetailVC.swift:259` (the unwarned site)
+- Modify: `FinchStore+ViewHelpers.swift:110-115` (attachment unlink), `:136-141` (bulk delete)
+- Modify: `ActivityTab.swift:409`, `ActivityFeedVC.swift:633` (the two bulk paths), `TxListDetailVC.swift:265` (the unwarned site)
 
 - [ ] **Step 1: Write the attachment test for the EDIT path.** A two-row group with a receipt on each; edit it down to one row. Assert the removed row's files are unlinked and **the surviving row's are not**. Deleting a row directly is already correct, since it no longer cascades.
 - [ ] **Step 2: Write the group-of-one test for delete.** Delete one member of a two-row group; assert the survivor's `group_id` is cleared (Decision 20) and that **it is still there at all** — the earlier cascading design would have removed it.
 - [ ] **Step 3: Write the bulk-delete test.** Select a group member plus an unrelated row and delete. Assert the count reported matches what actually went. Today `applyBatch` (`:136-141`) reports "2 deleted" while 4 entries vanish — and `applyBatch` is the thing Decision 4 bans, because it **skips failures and continues**.
 - [ ] **Step 4: Run all three, record. Step 5: Implement.**
-- [ ] **Step 6: Add the missing warning** at `TxListDetailVC.swift:259` — eight sites warn via the `accountLegCount > 1` branch, this one does not.
+- [ ] **Step 6: Add the missing warning** at `TxListDetailVC.swift:265` — eight sites warn via the `accountLegCount > 1` branch, this one does not.
 - [ ] **Step 7:** `swift test`, build both UI targets, gate. **Step 8: Commit.**
 
 ---
