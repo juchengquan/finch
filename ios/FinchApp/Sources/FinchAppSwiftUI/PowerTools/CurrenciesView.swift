@@ -21,6 +21,25 @@ struct CurrenciesView: View {
                            fallback: RateAutoUpdater.currenciesInUse(store: store))
     }
 
+    /// `effectiveTracked` as of the moment this screen opened — and the ONLY thing
+    /// deciding ordering and section membership for the rest of the visit.
+    ///
+    /// Toggling a currency used to re-derive the sections from the live set, so the
+    /// row travelled from the lower group up into the active one the instant it was
+    /// switched on, leaving the tap that toggled it and taking the scroll position
+    /// with it. Frozen, the row stays put while its toggle and rate stay live.
+    ///
+    /// Seeded once and never refreshed while the view lives: `drillRow` builds this
+    /// through `NavigationLink(destination:)`, so leaving and returning re-tidies the
+    /// list for free — the guard is what stops a re-`onAppear` (window refocus) from
+    /// regrouping mid-visit.
+    ///
+    /// This is why the two currency sections carry NO headers: a row switched on while
+    /// sitting in the lower group is only honest as long as nothing labels that group
+    /// "Inactive". Don't add section titles — `CurrencyPickerSheet` has them because it
+    /// has no toggles to contradict.
+    @State private var frozenGrouping: [String]?
+
     var body: some View {
         List {
             Section {
@@ -44,11 +63,15 @@ struct CurrenciesView: View {
                 Text("Fetches daily reference rates for your currencies from free reference-rate services. Only currency codes are sent.")
             }
 
-            // Two groups: Active (the hub USD + tracked currencies) and Inactive
-            // (the rest). USD is always Active and can't be toggled off (isHub).
-            let rows = fxFilterRows(fxCurrencyRows(all: Currencies.iso, rates: store.exchangeRates, tracked: effectiveTracked), query: query)
+            // Two groups: Active (the hub USD + the FROZEN group) and Inactive (the
+            // rest). USD is always Active and can't be toggled off (isHub). Grouping
+            // reads `grouped`, not `tracked` — that is what keeps a just-toggled row
+            // in place; see `frozenGrouping` and FxDerive.
+            let rows = fxFilterRows(fxCurrencyRows(all: Currencies.iso, rates: store.exchangeRates,
+                                                   tracked: effectiveTracked,
+                                                   grouping: frozenGrouping ?? effectiveTracked), query: query)
             Section {
-                ForEach(rows.filter { $0.isHub || $0.tracked }, id: \.code) { row in
+                ForEach(rows.filter { $0.isHub || $0.grouped }, id: \.code) { row in
                     NavigationLink {
                         ExchangeRateHistoryView(currency: row.code)
                     } label: {
@@ -56,7 +79,7 @@ struct CurrenciesView: View {
                     }
                 }
             }
-            let inactive = rows.filter { !$0.isHub && !$0.tracked }
+            let inactive = rows.filter { !$0.isHub && !$0.grouped }
             if !inactive.isEmpty {
                 Section {
                     ForEach(inactive, id: \.code) { row in
@@ -72,7 +95,11 @@ struct CurrenciesView: View {
         .searchable(text: $query)
         .navigationTitle("Currencies")
         .errorAlert($errorMessage)
-        .onAppear { lastUpdated = UserDefaults.standard.object(forKey: RateAutoUpdater.stampKey) as? Date }
+        .onAppear {
+            lastUpdated = UserDefaults.standard.object(forKey: RateAutoUpdater.stampKey) as? Date
+            // Once per view lifetime — a second `onAppear` must not regroup mid-visit.
+            if frozenGrouping == nil { frozenGrouping = effectiveTracked }
+        }
     }
 
     private func currencyRow(_ row: FxCurrencyRow) -> some View {

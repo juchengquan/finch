@@ -56,7 +56,8 @@ final class FxCurrencyRowsTests: XCTestCase {
     ]
 
     func test_rows_hubFirst_thenTrackedAZ_thenRestAZ_withRates() {
-        let rows = fxCurrencyRows(all: ["JPY", "EUR", "USD", "CAD", "AED"], rates: rates, tracked: ["JPY", "EUR"])
+        let rows = fxCurrencyRows(all: ["JPY", "EUR", "USD", "CAD", "AED"], rates: rates,
+                                  tracked: ["JPY", "EUR"], grouping: ["JPY", "EUR"])
         XCTAssertEqual(rows.map(\.code), ["USD", "EUR", "JPY", "AED", "CAD"])
         XCTAssertTrue(rows[0].isHub)
         XCTAssertEqual(rows[0].rate, 1.0)
@@ -65,10 +66,45 @@ final class FxCurrencyRowsTests: XCTestCase {
         XCTAssertTrue(rows[1].tracked)
         XCTAssertNil(rows[2].rate)                  // JPY tracked but no rate yet
         XCTAssertFalse(rows[3].tracked)
+        // With nothing frozen apart, grouping matches tracking row for row.
+        XCTAssertEqual(rows.map(\.grouped), rows.map { $0.isHub ? false : $0.tracked })
+    }
+
+    /// The Currencies page freezes `grouping` when it opens, so a currency toggled ON
+    /// mid-visit keeps its position in the lower group while its switch reads ON.
+    /// Ordering must follow the FROZEN set and `tracked` must follow the live one.
+    func test_rows_frozenGrouping_keepsOrder_whileTrackedGoesLive() {
+        let all = ["JPY", "EUR", "USD", "CAD", "AED"]
+        let frozen = ["EUR"]                                  // as the screen opened
+        let rows = fxCurrencyRows(all: all, rates: rates, tracked: ["EUR", "JPY"], grouping: frozen)
+
+        // JPY was just switched on, but it stays down in the A–Z remainder.
+        XCTAssertEqual(rows.map(\.code), ["USD", "EUR", "AED", "CAD", "JPY"])
+        XCTAssertEqual(rows.map(\.grouped), [false, true, false, false, false])
+        XCTAssertEqual(rows.map(\.tracked), [false, true, false, false, true])
+
+        // Sections read `grouped`: JPY is NOT promoted until the screen reopens.
+        XCTAssertEqual(rows.filter { $0.isHub || $0.grouped }.map(\.code), ["USD", "EUR"])
+        XCTAssertEqual(rows.filter { !$0.isHub && !$0.grouped }.map(\.code), ["AED", "CAD", "JPY"])
+
+        // Reopening thaws it: grouping catches up and JPY moves into the active group.
+        let reopened = fxCurrencyRows(all: all, rates: rates, tracked: ["EUR", "JPY"], grouping: ["EUR", "JPY"])
+        XCTAssertEqual(reopened.filter { $0.isHub || $0.grouped }.map(\.code), ["USD", "EUR", "JPY"])
+    }
+
+    /// Toggling OFF is symmetric — the row does not drop out of the active group
+    /// under the finger that just switched it off.
+    func test_rows_frozenGrouping_keepsPosition_whenTrackedGoesOff() {
+        let rows = fxCurrencyRows(all: ["JPY", "EUR", "USD"], rates: rates,
+                                  tracked: [], grouping: ["EUR", "JPY"])
+        XCTAssertEqual(rows.map(\.code), ["USD", "EUR", "JPY"])
+        XCTAssertEqual(rows.filter { $0.isHub || $0.grouped }.map(\.code), ["USD", "EUR", "JPY"])
+        XCTAssertTrue(rows.allSatisfy { !$0.tracked })       // every switch reads OFF
     }
 
     func test_filter_byCodeOrName_caseInsensitive_orderPreserved() {
-        let rows = fxCurrencyRows(all: ["JPY", "EUR", "USD", "CAD"], rates: rates, tracked: ["EUR"])
+        let rows = fxCurrencyRows(all: ["JPY", "EUR", "USD", "CAD"], rates: rates,
+                                  tracked: ["EUR"], grouping: ["EUR"])
         XCTAssertEqual(fxFilterRows(rows, query: "").map(\.code), rows.map(\.code))
         XCTAssertEqual(fxFilterRows(rows, query: "eur").map(\.code), ["EUR"])
         XCTAssertEqual(fxFilterRows(rows, query: "yen").map(\.code), ["JPY"])   // matches localized name
