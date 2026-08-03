@@ -131,16 +131,15 @@ struct ActivityFeedView: View {
                     }
                     // Pending pins above the months regardless of the sort menu —
                     // the same "To confirm" bucket the account detail shows.
-                    // Search/filters apply (the bucket shows only matching rows);
-                    // "Confirm all" still clears every pending row store-wide.
+                    // Search/filters apply, so the bucket shows only matching rows.
+                    //
+                    // No "confirm all" here. It used to sit at the foot of this
+                    // section and clear every pending row store-wide while the
+                    // section header counted only the filtered ones — one tap, no
+                    // prompt, no undo. Bulk confirming is multi-select's job.
                     if !pendingTxns.isEmpty {
                         Section("To confirm (\(pendingTxns.count))") {
                             ForEach(pendingTxns) { txn in row(txn) }
-                            Button {
-                                run { try store.apply(.confirmAllPending, Args([:])) }
-                            } label: {
-                                Label("Confirm all \(pendingCount) pending", systemImage: "checkmark.circle")
-                            }
                         }
                     }
                     if groupByMonth {
@@ -423,7 +422,6 @@ struct ActivityFeedView: View {
     private func run(_ work: () throws -> Void) {
         do { try work() } catch { errorMessage = i18nMessage(error) }
     }
-    private var pendingCount: Int { store.txns.filter { $0.pending == true }.count }
     private var hasActiveQuery: Bool { !searchQuery.isEmpty || filter.isActive }
 
     /// The List/Calendar toggle as a list row — the shared `ViewModePickerRow`
