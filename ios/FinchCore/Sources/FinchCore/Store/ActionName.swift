@@ -10,7 +10,12 @@ import Foundation
 /// has no HTTP server, so it dispatches this local chokepoint write instead. It
 /// is NOT part of the web-parity fixtures.
 public enum ActionName: String, Codable, Sendable, CaseIterable {
-    // --- transactions (15) ---
+    // --- transactions (16) ---
+    /// One command carrying a whole purchase: header, payment legs, category
+    /// legs, tags, merchant. No `id` creates; an `id` replaces that transaction's
+    /// contents wholesale. Use this from a screen where one confirm spans several
+    /// things; use `addTransaction` for a single programmatic write.
+    case saveTransaction
     case addTransaction
     case updateTransaction
     case setCleared
