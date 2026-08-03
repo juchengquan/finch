@@ -212,10 +212,65 @@ else
   fail "xcodegen generate"
 fi
 
+# --- which simulator ---------------------------------------------------------
+# This used to be `grep -oE 'iPhone [0-9]...' | head -1`, i.e. "the first stock
+# device in the list" — which is SHARED. Every session on this machine keeps its
+# own sim (ios-finch-splits, ios-finch-wren, ios-finch-x06 …) precisely so runs do
+# not collide, and the auto-pick quietly ignored all of them and grabbed the same
+# `iPhone 17 Pro` for everyone. `xcodebuild test` installs the app and the demo
+# seed on whatever it is handed, so that is someone else's device state.
+#
+# It also silently ignored SIM_NAME. A session invoking
+# `SIM_NAME=ios-finch-splits ./scripts/ci-local.sh` got the stock device instead
+# and had no way to tell — the env var was never read, and the old line printed a
+# name that looked deliberate. Both spellings are honoured now.
+#
+# Resolution order, first hit wins:
+#   1. --sim
+#   2. $FINCH_CI_SIM / $SIM_NAME
+#   3. an existing sim named for this worktree
+#   4. create that sim
+# Never a device someone else might be holding.
 if [ -z "$SIM" ]; then
-  SIM=$(xcrun simctl list devices available | grep -oE 'iPhone [0-9][0-9A-Za-z ]*' | head -1 | xargs)
+  SIM="${FINCH_CI_SIM:-${SIM_NAME:-}}"
 fi
-echo "  simulator: ${SIM:-<none found>}"
+if [ -z "$SIM" ]; then
+  # `/tmp/finch-wren-hdr` -> `ios-finch-wren-hdr`, matching the convention already
+  # in use by hand. The main checkout gets a name of its own rather than sharing.
+  SIM="ios-$(basename "$REPO")"
+  if ! xcrun simctl list devices | grep -q "$SIM ("; then
+    step "Create this worktree's simulator"
+    # A PREFERENCE LIST, not "the last match". Grepping for any iPhone and taking
+    # the tail picked iPhone-11 here — a 414pt-wide device, when ios/CLAUDE.md
+    # measures this app's layout rules at 390pt and 402pt. The row-height
+    # thresholds that decide swipe-action styling are width-sensitive, so the
+    # device model is a correctness input to the UI tests, not a detail.
+    # Matched up to the CLOSING PAREN, because simctl prints
+    #   iPhone 17 Pro (com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro)
+    # An `$` anchor matches nothing here, and an unanchored `iPhone-17` would
+    # happily select `iPhone-17-Pro-Max`. The paren is what makes it exact.
+    DEV_TYPE=""
+    for want in iPhone-17-Pro iPhone-17 iPhone-16-Pro iPhone-16 iPhone-15-Pro iPhone-15; do
+      DEV_TYPE=$(xcrun simctl list devicetypes \
+                 | grep -oE "com\.apple\.CoreSimulator\.SimDeviceType\.${want}\)" \
+                 | head -1 | tr -d ')')
+      [ -n "$DEV_TYPE" ] && break
+    done
+    RUNTIME=$(xcrun simctl list runtimes | grep -oE 'com\.apple[^ ]*iOS[^ ]*' | tail -1)
+    if [ -n "$DEV_TYPE" ] && [ -n "$RUNTIME" ] \
+       && xcrun simctl create "$SIM" "$DEV_TYPE" "$RUNTIME" >/dev/null 2>&1; then
+      pass "created $SIM"
+    else
+      # Falling back to a shared device is what this block exists to avoid, so
+      # stop instead: a wrong device silently rewrites another session's data.
+      fail "could not create a simulator named $SIM — pass --sim explicitly"
+      echo "      device type: ${DEV_TYPE:-<none found>}"
+      echo "      runtime:     ${RUNTIME:-<none found>}"
+      exit 1
+    fi
+  fi
+fi
+echo "  simulator: $SIM"
 
 # --- 4. FinchApp build + test ------------------------------------------------
 # The three retry flags MATCH CI — see the long comment on that step in
