@@ -67,6 +67,11 @@ struct AddTransactionSheet: View {
     /// `SearchablePickerRow`'s `splitting:` parameter, the account-picker twin of
     /// `CategoryPickerRow`'s.
     @State private var accountAlloc = SplitAllocation(total: 0)
+    /// The grid: one flat allocation over the CELLS, keyed "<accountId>|<categoryId>"
+    /// (Decision 11). Used only when both axes are split — the two allocations above
+    /// each divide one axis, and two sets of margins do not determine the cells
+    /// between them.
+    @State private var gridAlloc = SplitAllocation(total: 0)
     @State private var refundedTxId: String? = nil
     @State private var showingRefundPicker = false
     @State private var targetBalance = ""   // adjust-balance: the account's new balance
@@ -210,8 +215,19 @@ struct AddTransactionSheet: View {
     /// offer both would post the purchase, throw on the second call, and leave
     /// the user's category split silently dropped. Disabling each toggle while
     /// the OTHER already has 2+ funded rows keeps that combination unreachable.
-    private var categorySplitBlocked: Bool { accountAlloc.payload.count >= 2 }
-    private var accountSplitBlocked: Bool { splitAlloc.payload.count >= 2 }
+    // The two splits were mutually exclusive because the ENGINE could not store a
+    // purchase split both ways: the projection copies an entry's splits onto every
+    // account-leg row, so it would double-count. It can now — as one transaction
+    // per card — so the combination routes to the grid instead of being blocked.
+    private var categorySplitBlocked: Bool { false }
+    private var accountSplitBlocked: Bool { false }
+
+    /// Both axes split: the inline per-axis editors cannot express this, because
+    /// two sets of margins do not determine the cells between them.
+    private var usesGrid: Bool {
+        PurchaseFlow.page2(accounts: accountAlloc.payload.count,
+                           categories: splitAlloc.payload.count) == .grid
+    }
 
     var body: some View {
         NavigationStack {
@@ -268,6 +284,7 @@ struct AddTransactionSheet: View {
                 let total = abs(DecimalInput.parse(newValue) ?? 0)
                 splitAlloc.setTotal(total)
                 accountAlloc.setTotal(total)
+                gridAlloc.setTotal(total)
             }
             .sheet(isPresented: $showingRefundPicker) {
                 RefundSourcePickerView { refundedTxId = $0 }
@@ -366,6 +383,17 @@ struct AddTransactionSheet: View {
                 currency: currencyCode.isEmpty ? currency(of: accountId) : currencyCode,
                 splitLocked: categorySplitBlocked)
                 .accessibilityIdentifier("addtx.category")
+            // Both axes split: the per-axis editors above each divide ONE axis, and
+            // two sets of margins do not determine the cells between them — $60/$0/
+            // $10/$30 and $42/$18/$28/$12 give the same card and category totals.
+            // So the cells are typed here instead, and the totals derive from them.
+            if usesGrid {
+                PurchaseGridSection(
+                    alloc: $gridAlloc,
+                    accountIds: accountAlloc.payload.map { $0.id ?? accountId },
+                    categoryIds: splitAlloc.payload.map { $0.id },
+                    currency: currencyCode.isEmpty ? currency(of: accountId) : currencyCode)
+            }
             FieldRow(glyph: .date, title: "Date", showsDefaultTrailing: false) {
                 DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
                     .labelsHidden()
@@ -662,7 +690,13 @@ struct AddTransactionSheet: View {
                 let purchaseCcy = currencyCode.isEmpty ? currency(of: accountId) : currencyCode
                 var cells: [JSONValue] = []
                 let cat: JSONValue = categoryId.isEmpty ? .null : .string(categoryId)
-                if accountAlloc.payload.count >= 2 {
+                if usesGrid {
+                    // Sent as CELLS, not pre-grouped by card: the engine derives the
+                    // shape from the category count (Decision 15), so the sheet does
+                    // not decide whether this is one transaction or several.
+                    cells = PurchaseFlow.cells(from: gridAlloc,
+                                               kind: AddTxKind(rawValue: kind.rawValue) ?? .expense)
+                } else if accountAlloc.payload.count >= 2 {
                     for share in accountAlloc.payload {
                         cells.append(.object([
                             "accountId": .string(share.id ?? accountId),
