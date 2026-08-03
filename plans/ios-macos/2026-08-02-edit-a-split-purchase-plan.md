@@ -139,11 +139,13 @@ An audit against the codebase found the previous draft wrong in ten places and s
 
     **This is the opposite of `addTransaction` today**, which reads a split's amounts as already being in each card's own currency (`Transactions.swift:287-290`). The two only disagree when currencies are mixed — precisely the case in question — so the difference cannot be left implicit.
 
-17. **`addTransaction` becomes a thin adapter over `saveTransaction`'s core.** One implementation, two entry points.
+17. **`addTransaction` keeps its own arg-to-leg resolution. WITHDRAWN — an earlier draft made it a thin adapter over `saveTransaction`'s core, and the premise was wrong.**
 
-    **The action stays** — it is replayed by the cross-stack `WRITE_SEQUENCE` and has 10 non-sheet callers (imports, Siri, Watch, share extension, seeds), so removing it is a two-stack change this plan is not scoped for. But it does not need a *second implementation*: its args convert to cells and delegate.
+    That draft argued two implementations would have to agree about "balancing, rounding, rules and reconcile marks" independently. **They already do.** `addTransactionReturningId` calls `Entries.postEntry` on all three of its paths, and `postEntry` owns balancing, the FX residue, rule application and shape validation. Reconcile marks do not exist on a create path.
 
-    **This is where the currency difference lives** — in the adapter, in one documented place, rather than two commands quietly disagreeing about what a number means. Two implementations would have to agree about balancing, rounding, rules and reconcile marks independently, and they already drifted once: that is what the five data-loss guards in #704 were cleaning up.
+    **What genuinely differs is the one thing that must:** turning args into legs. `addTransaction`'s amounts are in each card's own currency (`Transactions.swift:287-290`); `saveTransaction`'s are in the purchase's (Decision 16). Routing one through the other means converting **card → base → card**, and this file already documents that such round trips can miss exact cent equality across N+1 roundings. `addTransaction` is replayed by the cross-stack oracle, so a one-cent drift reddens the gate — a real cost for a benefit `postEntry` already provides.
+
+    **The two commands still coexist and must each say which is which** (Decision 6): `saveTransaction` for a screen where one confirm spans several things, `addTransaction` for a single programmatic write.
 
 18. **Rows are linked** by nullable `entries.group_id`. Without it the grid is a one-way door: buildable, never revisable, and the information to reconstruct a group is never written, so adding the link later cannot recover it.
 
@@ -364,7 +366,7 @@ An earlier draft said to widen `canonicalState` "**and** its web twin" so the or
 - [ ] **Step 3: Write the tags test.** Change tags and legs in one payload; assert both landed. This one fails for a non-obvious reason — `rebuildEntry` silently ignores tags — so record the failure output.
 - [ ] **Step 4: Run all three, record the failures.**
 - [ ] **Step 5: Implement.**
-- [ ] **Step 6: Make `addTransaction` a thin adapter** (Decision 17). Convert its args to cells and delegate to the same core. **The action stays** — the cross-stack `WRITE_SEQUENCE` replays it and 10 non-sheet callers use it — but there must be only one implementation. **Its args keep today's meaning** (amounts in each card's own currency, `Transactions.swift:287-290`), so the conversion to the purchase's currency happens here, in one documented place. Its existing tests must all still pass, unchanged — that is the proof the adapter is faithful.
+- [ ] **Step 6: Do NOT make `addTransaction` an adapter** (Decision 17, withdrawn). Verify the premise yourself before believing either version: `addTransactionReturningId` already calls `Entries.postEntry` on every path, so balancing, rounding, rules and validation are shared. Only the arg-to-leg resolution differs, and it must — the currencies mean different things.
 - [ ] **Step 7: Write the attachment promise into the code** (Decision 5). `saveTransaction` is *the* atomic command, so the next reader will assume receipts ride along with it. They do not — both writes are `Task { try? await … }`, detached and error-swallowing (`AddTransactionSheet.swift:696-701`), and rolling back the database would not unwrite a file. **Comment it on `saveTransaction` itself: the ledger is atomic; files are best-effort.** Surfacing a failed receipt to the user is a separate small fix and stays out of scope.
 - [ ] **Step 8: Comment both creation paths** (Decision 6). `saveTransaction` and `addTransaction` now coexist. Say on each which is which — `saveTransaction` for a screen where one confirm spans several things, `addTransaction` for a single programmatic write — or the next person picks the wrong one. The ten `addTransaction` call sites across seven files all stay put.
 - [ ] **Step 9:** `swift test`, then the full gate.

@@ -256,6 +256,20 @@ public enum Transactions {
         }
     }
 
+    /// Write ONE transaction from a single programmatic caller — a CSV import row,
+    /// a Siri intent, the Watch, the share extension, a seed. Create-only.
+    ///
+    /// **Not the command a screen should use.** `saveTransaction` carries a whole
+    /// purchase (header, legs, tags, merchant) in one write, so a part-way failure
+    /// cannot leave the ledger half-updated; use that wherever one confirm spans
+    /// several things. Both exist deliberately and neither is deprecated.
+    ///
+    /// **The two read amounts differently, which is why neither wraps the other.**
+    /// Here a split's shares are each in THEIR OWN account's currency;
+    /// `saveTransaction`'s cells are in the purchase's. Converting between them
+    /// round-trips through base and can miss cent equality — see the tolerance
+    /// note in the split-tender branch below. What they DO share is `postEntry`,
+    /// which owns balancing, the FX residue, rules and shape validation.
     static func addTransaction(_ db: Database, _ args: Args) throws {
         _ = try addTransactionReturningId(db, args)
     }
