@@ -30,6 +30,15 @@ targets:
       - name: Stamp git hash (Debug)
         # Always run: the commit can change without any input file changing.
         basedOnDependencyAnalysis: false
+        # Names the built plist the script writes into, which is what ORDERS this
+        # phase after `ProcessInfoPlistFile`. Without it the build system, which
+        # schedules on declared inputs rather than phase position, is free to run
+        # the script first — it then finds no plist, exits 0 by design, and the
+        # plist is written fresh with no hash. The ordering was genuinely
+        # nondeterministic: back-to-back clean builds of the same tree put the
+        # script before the plist and after it, so it read as flakiness.
+        inputFiles:
+          - $(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)
         script: |
           "$SRCROOT/scripts/stamp-git-hash.sh"
     settings:

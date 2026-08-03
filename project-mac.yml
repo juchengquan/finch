@@ -51,6 +51,9 @@ targets:
       # Same script the iOS project runs, so the two cannot drift.
       - name: Stamp git hash (Debug)
         basedOnDependencyAnalysis: false
+        # Orders this phase after the plist exists — see project.yml.
+        inputFiles:
+          - $(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)
         script: |
           "$SRCROOT/scripts/stamp-git-hash.sh"
     settings:
