@@ -257,7 +257,7 @@ Today's behaviour, which is accidental rather than designed:
 
 **Move all four into `validateShape`'s `.transfer` case**, where every path runs them — including the scheduler, which also calls `postTransfer` (`Scheduled.swift:74`, `:160`).
 
-**Moving them changes two error codes, and that must be deliberate.** `postTransfer` checks the zero amount (`:541`) and the same-account case (`:542`) **before** looking the accounts up (`:543`). Run from `validateShape`, the lookup happens first, so a zero-amount transfer naming a bad account now reports `error.notFound.account` instead of `error.transfer.amountGt0`. Assert the new ordering in a test rather than discovering it as a regression.
+**Moving them changes two error codes, and that must be deliberate.** `postTransfer` checks the zero amount (`:560`) and the same-account case (`:561`) **before** looking the accounts up (`:564`). Run from `validateShape`, the lookup happens first, so a zero-amount transfer naming a bad account now reports `error.notFound.account` instead of `error.transfer.amountGt0`. Assert the new ordering in a test rather than discovering it as a regression.
 
 **`postTransfer` stays.** The scheduler posts transfers with `toAmount` nil (`Scheduled.swift:74`, `:160`) and relies on the engine deriving it via `convertToBase` (`Entries.swift:576`). Sheets have no rate lookup, so that derivation cannot move UI-side. The add-transfer UI never needed it: it already **requires** the received amount when cross-currency (`AddTransactionSheet.swift:637-641`) and omits it only when same-currency, where the conversion is the identity.
 
@@ -275,7 +275,7 @@ The command replaces every write the two sheets fire today (3 on add, 4-5 on edi
 
 **The entry header rides on `EntryPatch`, which is sufficient.** It reaches `date`, `time`, `description`, `kind`, `notes`, `counterpartyId`, `refundedEntryId`, `status`, `legs` (`Entries.swift:641-652`) — every field either sheet edits. The `entries` columns it does *not* reach are not gaps: `confirmed_at` and `dedup_hash` are maintained by `rebuildEntry` itself (`:681`, `:733`), `reviewed_at` and `applied_rule_ids` belong to other actions, and `source_template_id`/`occurrence_date` are set at post time and never edited.
 
-**Tags do not ride on it.** `entry_tags` is written only by `postEntry` (`:452`) and `postTransfer` (`:568`); `rebuildEntry` never touches it, which is why `setTransactionTags` is a separate write in both sheets today. `saveTransaction` must write `entry_tags` itself, as a set-replace within the same transaction.
+**Tags do not ride on it.** `entry_tags` is written only by `postEntry` (`:471`) and `postTransfer` (`:587`); `rebuildEntry` never touches it, which is why `setTransactionTags` is a separate write in both sheets today. `saveTransaction` must write `entry_tags` itself, as a set-replace within the same transaction.
 
 **The merchant must be resolve-or-create, and this fixes a real leak.** `resolveCounterpartyIdByName` **only looks up — it never creates** (`Entries.swift:206-212`). That is precisely why both sheets call `createCounterparty` *before* the update (`EditTransactionSheet.swift:477`, `AddTransactionSheet.swift:673`): write 1 must create the name so write 2 can find it. That ordering dependency cannot survive one command, so `saveTransaction` takes the merchant **name** and does resolve-or-create inside the transaction. Today, if the update fails after the create succeeds, the ledger keeps an orphan counterparty for a transaction that was never saved; one write removes that by construction.
 
@@ -314,10 +314,10 @@ The command replaces every write the two sheets fire today (3 on add, 4-5 on edi
 
 **Files — this list was wrong in the draft and is the plan's highest-risk correction:**
 - Modify: `Schema.swift`, `Migrations.swift` (a new dated migration registering **after** `2026-08-01-budget-cycle-time`; `2026-07-22-entry-occurrence-date` is the shape to copy)
-- Modify: `Entries.swift` — `postEntry`'s **explicit 19-column `entries` INSERT** (`:443-448`) and `NewEntry`
+- Modify: `Entries.swift` — `postEntry`'s **explicit 19-column `entries` INSERT** (`:462-467`) and `NewEntry`
 - Modify: `Projection.swift` — `selectSQL` names `entries` columns explicitly (`:14-22`)
 - Modify: `Models.swift` — `Tx` gains `groupId`, as `String?` for the same reason the prerequisite makes `entryId` optional (the parity fixtures decode `[Tx]` from JSON written before the field existed)
-- Modify: `WriteParityTests.swift` — `canonicalState` builds an **explicit** entry object (`:74-84`)
+- **Do NOT modify `WriteParityTests.swift`.** An earlier draft listed it here; Task 2 deliberately keeps `group_id` out of the parity snapshot, and `canonicalState` builds an **explicit** entry object (`:74-84`) so it ignores a new column on its own.
 - **Do NOT touch `Pack.swift` or `DownSync.swift`** — both are column-agnostic and need nothing.
 
 - [ ] **Step 1: Write tests that can fail.** A migration test, and — critically — a test asserting `group_id` **survives into `Tx`**, since that is what every later task reads. **Do not write an export/import round-trip test as the primary evidence: it passes without any change**, because Pack and DownSync are already generic. The draft named that as "the one that matters"; it was the one that proved nothing.
