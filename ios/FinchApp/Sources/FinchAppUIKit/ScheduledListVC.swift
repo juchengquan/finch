@@ -46,7 +46,14 @@ final class ScheduledListVC: UIViewController {
     private var monthAnchor = MonthCashCalendar.firstOfMonth(forISO: nil)
     private var selectedDay: String?
     /// Occurrences for the visible month, keyed by day. Rebuilt in `applySnapshot`.
+    /// Drives the day SECTIONS below the grid, so it stays the anchored month alone.
     private var occurrencesByDay: [String: [(date: String, template: ScheduledTemplate)]] = [:]
+    /// The same expansion widened to prev…next — what the GRID is summed from.
+    /// `MonthPager` renders the anchored month AND its neighbours, and each page asks
+    /// `amountsForRange` for its own month, so an anchored-month-only map left the
+    /// incoming page drawing bare day numbers until the swipe settled.
+    /// `ScheduledCalendarView` keeps the same window, for the same reason.
+    private var occurrencesWide: [String: [(date: String, template: ScheduledTemplate)]] = [:]
 
     private enum SectionID: Hashable {
         case modePicker
@@ -463,16 +470,20 @@ final class ScheduledListVC: UIViewController {
     }
 
     /// Occurrences for the visible month, and the per-day amounts the grid colours by.
+    ///
+    /// Expanded ONCE over prev…next, then narrowed. The grid draws the anchored month
+    /// and its neighbours, and asks each page for its own month's totals — expanding
+    /// only the anchored month meant the incoming page rendered bare day numbers under
+    /// the finger and the figures appeared after the swipe settled. The day sections
+    /// below the grid still cover the anchored month alone.
     private func rebuildOccurrences() {
-        let anchor = monthAnchor
-        let y = AppDate.civil.component(.year, from: anchor)
-        let m = AppDate.civil.component(.month, from: anchor)
-        let days = AppDate.civil.range(of: .day, in: .month, for: anchor)?.count ?? 30
-        let start = String(format: "%04d-%02d-01", y, m)
-        let end = String(format: "%04d-%02d-%02d", y, m, days)
-        occurrencesByDay = Dictionary(
-            grouping: Selectors.occurrencesInRange(filteredTemplates(), from: start, through: end),
+        let (start, end) = MonthGrouping.monthBounds(monthAnchor)
+        let wide = MonthGrouping.carouselWindow(monthAnchor)
+        occurrencesWide = Dictionary(
+            grouping: Selectors.occurrencesInRange(filteredTemplates(),
+                                                   from: wide.start, through: wide.end),
             by: { $0.date })
+        occurrencesByDay = occurrencesWide.filter { $0.key >= start && $0.key <= end }
         // A stale selection (month changed under it) must not strand the day section.
         if let d = selectedDay, d < start || d > end { selectedDay = nil }
     }
@@ -487,7 +498,8 @@ final class ScheduledListVC: UIViewController {
     private func dayAmounts() -> [String: (income: Double, expense: Double)] {
         let currencyById = Dictionary(uniqueKeysWithValues: store.accounts.map { ($0.id, $0.currency) })
         var out: [String: (income: Double, expense: Double)] = [:]
-        for (day, occs) in occurrencesByDay {
+        // The WIDE map: the grid's neighbouring pages need their own totals too.
+        for (day, occs) in occurrencesWide {
             var inc = 0.0, exp = 0.0
             for o in occs {
                 guard let amt = o.template.amount else { continue }
