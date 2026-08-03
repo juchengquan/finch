@@ -703,6 +703,7 @@
   "Unusual transactions",
   "Unverify",
   "Upcoming scheduled",
+  "Updated %lld of %lld",
   "Updated %lld rates",
   "Use “%@”",
   "Uses Face ID / Touch ID, falling back to your device passcode. finch never stores a passcode of its own.",
