@@ -16,6 +16,7 @@ enum QuickAddCatalogBuilder {
 
         var accountUse: [String: Int] = [:]
         var categoryUse: [String: Int] = [:]
+        var seenForCategory = Set<String>()
         for t in txns {
             if (t.ledgerId ?? "personal") != ledgerId { continue }
             if (t.pending ?? false) { continue }
@@ -23,8 +24,15 @@ enum QuickAddCatalogBuilder {
             let kind = t.kind ?? (t.transferGroupId != nil ? "transfer" : (t.amount > 0 ? "income" : "expense"))
             guard kind == "expense" else { continue }
             if t.date < since { continue }
+            // accountUse counts PAYMENTS deliberately: a purchase paid on two cards
+            // genuinely did use both, so each should count towards its own card's
+            // ranking. categoryUse counts PURCHASES — the category belongs to the
+            // entry, so both legs carry it and a split purchase would otherwise get
+            // double weight in the shortcut ranking.
             accountUse[t.account, default: 0] += 1
-            if let c = t.category { categoryUse[c, default: 0] += 1 }
+            if let c = t.category, seenForCategory.insert("\(t.purchaseKey)|\(c)").inserted {
+                categoryUse[c, default: 0] += 1
+            }
         }
 
         // Highest use count wins; ties keep the projection's account order.
