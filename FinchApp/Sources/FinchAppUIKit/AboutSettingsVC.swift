@@ -29,6 +29,7 @@ final class AboutSettingsVC: UIViewController {
 
     private static let appVersionID = "__app_version__"
     private static let packVersionID = "__pack_version__"
+    private static let gitHashID = "__git_hash__"
     private static let filenameID = "__filename__"
     private static let sizeID = "__size__"
     private static let schemaID = "__schema__"
@@ -90,6 +91,11 @@ final class AboutSettingsVC: UIViewController {
                 self.configureValueRow(cell, String(localized: "App version"), FinchCore.version)
             case Self.packVersionID:
                 self.configureValueRow(cell, String(localized: "Pack format"), FinchCore.packFormatVersion)
+            case Self.gitHashID:
+                // DEBUG-only developer diagnostic, so the label is deliberately not
+                // localized — a zh-Hans reader never sees this row, and a localized
+                // key here would force a catalog regeneration for nobody's benefit.
+                self.configureValueRow(cell, "Hash", BuildInfo.gitHash ?? "—")  // i18n-ignore
             case Self.filenameID:
                 self.configureValueRow(cell, String(localized: "Filename"), info.filename)
             case Self.sizeID:
@@ -165,7 +171,13 @@ final class AboutSettingsVC: UIViewController {
 
         var snap = NSDiffableDataSourceSnapshot<SectionID, String>()
         snap.appendSections([.versions])
-        snap.appendItems([Self.appVersionID, Self.packVersionID], toSection: .versions)
+        var versions = [Self.appVersionID, Self.packVersionID]
+        // Which commit this build came from — Debug builds only, and only when the
+        // build phase actually stamped it. See `BuildInfo`.
+        #if DEBUG
+        if BuildInfo.gitHash != nil { versions.append(Self.gitHashID) }
+        #endif
+        snap.appendItems(versions, toSection: .versions)
 
         snap.appendSections([.database])
         snap.appendItems([Self.filenameID, Self.sizeID, Self.schemaID, Self.lastImportID]

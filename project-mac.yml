@@ -47,6 +47,12 @@ targets:
     dependencies:
       - package: FinchCore
         product: FinchCore
+    postBuildScripts:
+      # Same script the iOS project runs, so the two cannot drift.
+      - name: Stamp git hash (Debug)
+        basedOnDependencyAnalysis: false
+        script: |
+          "$SRCROOT/scripts/stamp-git-hash.sh"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.juchengquan.finch.mac
