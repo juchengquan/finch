@@ -47,9 +47,19 @@ public enum Transactions {
         let acctLegCount = try Int.fetchOne(db, sql:
             "SELECT COUNT(*) FROM postings WHERE entry_id = ? AND account_id IS NOT NULL",
             arguments: [entryId]) ?? 0
+        //
+        // The message points at the grid, which is the thing the user actually
+        // wants. It used to read "a purchase paid from several accounts takes a
+        // single category" — true when written, false once the grid shipped, and
+        // shown on the very screen where someone is doing what it calls
+        // impossible. The GUARD stays: this action rebuilds from one account leg
+        // and cannot express a grid. Only the wording was wrong.
+        //
+        // The web keeps the old sentence deliberately: it has no grid, so there
+        // the original wording is still true and pointing at one would be a lie.
         if acctLegCount > 1 {
             throw I18nError("error.split.multiAccount", [:],
-                            "A single transaction cannot be split by both account and category")
+                            "Use the grid to split by both account and category")
         }
         guard let acct = try Row.fetchOne(db, sql: "SELECT id, account_id, amount, amount_base, exchange_rate, memo, orig_amount, orig_currency, cleared_at FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1", arguments: [entryId]) else { return }
         let acctBase: Double = acct["amount_base"]

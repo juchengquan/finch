@@ -90,7 +90,7 @@ enum ErrorL10n {
         "error.split.accountsMismatch": "账户金额之和必须等于交易金额",
         "error.split.minTwo": "拆分至少需要两行",
         "error.split.signMismatch": "每笔付款的方向必须与交易一致",
-        "error.split.multiAccount": "单笔交易不能同时按账户和类别拆分",
+        "error.split.multiAccount": "要同时按账户和类别拆分，请使用网格",
         "error.split.noAccount": "交易需要一个账户",
         "error.split.sumMismatch": "拆分金额之和必须等于交易总额",
         "error.transfer.fxOnly": "只有汇率残差可用于平衡转账",

@@ -19,8 +19,12 @@ struct CategoryDetailView: View {
     /// account's own screen is the opposite and deliberately does NOT collapse.
     /// Collapsing here also keeps the count, total and average agreeing with the
     /// list they sit above.
+    ///
+    /// Amounts are this CATEGORY's share, not the whole purchase — a 100 shop
+    /// split 70/30 belongs here as 70, or this screen and the household one
+    /// together claim 200 of spend. See `Selectors.categoryShares`.
     private var txns: [Tx] {
-        Selectors.byPurchase(Selectors.categoryTransactions(store.txns, category.id, store.activeLedgerId))
+        Selectors.categoryPurchases(store.txns, category.id, store.activeLedgerId)
     }
     private var total: Double { txns.reduce(0) { $0 + $1.amount } }
     /// Pending items are excluded from `txns` (and so from the summary + the count
@@ -28,8 +32,9 @@ struct CategoryDetailView: View {
     /// rather than silently omitted — the same "To confirm" treatment
     /// AccountDetailView gives them.
     private var pendingTxns: [Tx] {
-        Selectors.byPurchase(Selectors.categoryTransactions(store.txns, category.id, store.activeLedgerId, includePending: true)
-            .filter { $0.pending == true })
+        Selectors.byPurchase(
+            Selectors.categoryShares(store.txns, category.id, store.activeLedgerId, includePending: true)
+                .filter { $0.pending == true })
     }
 
     var body: some View {
@@ -86,14 +91,23 @@ struct CategoryDetailView: View {
         catch { errorMessage = i18nMessage(error) }
     }
 
+    /// The real transaction behind a row.
+    ///
+    /// Rows here carry only this category's share of their purchase, so every
+    /// ACTION has to be handed the whole thing back: an editor opened on a share
+    /// would save a fraction of the purchase, and a delete warning quoting one
+    /// would understate what it is about to remove. `id` survives the narrowing
+    /// precisely so this lookup works.
+    private func actual(_ t: Tx) -> Tx { store.txns.first { $0.id == t.id } ?? t }
+
     @ViewBuilder private func row(_ tx: Tx) -> some View {
-        Button { editing = tx } label: { TxRow(txn: tx, showRunningBalance: false).contentShape(Rectangle()) }
+        Button { editing = actual(tx) } label: { TxRow(txn: tx, showRunningBalance: false).contentShape(Rectangle()) }
             .buttonStyle(.plain)
             .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))   // denser rows
             .txnSwipeActions(tx,
-                             duplicate: { duplicating = $0 },
-                             requestDelete: { pendingDelete = $0 },
-                             toggleStatus: { toggleStatus($0) },
-                             edit: { editing = $0 })
+                             duplicate: { duplicating = actual($0) },
+                             requestDelete: { pendingDelete = actual($0) },
+                             toggleStatus: { toggleStatus(actual($0)) },
+                             edit: { editing = actual($0) })
     }
 }
