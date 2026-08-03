@@ -141,6 +141,12 @@ extension Selectors {
             if ledgerOf(t) != ledgerId { continue }
             if (t.pending ?? false) { continue }
             if kindOf(t) != "expense" { continue }
+            // A split purchase is excluded, not collapsed. This feeds the Watch
+            // quick-add templates, and `quickAddArgs` can only write a SINGLE-card
+            // transaction — so a two-card purchase cannot be repeated in one tap.
+            // Offering both legs ate two of three slots and read like two visits;
+            // offering the total would silently book it all to one card.
+            if (t.accountLegCount ?? 1) > 1 { continue }
             let native = t.nativeAmount ?? t.amount
             if native >= 0 { continue }
             let currency = t.currency ?? "USD"
@@ -167,16 +173,48 @@ extension Selectors {
         let mag = abs(draft.amount)
         if !(mag > 0) { return nil }
         let day = String(draft.date.prefix(10))
+
+        // Compare against the PURCHASE, not one of its payments. A purchase paid
+        // from several accounts has no single account and no single amount, so
+        // matching row-by-row never fired for one: re-adding a $100 shop that
+        // already existed as $60 + $40 found neither a $100 row nor a card that
+        // "the" purchase was on, and got no warning at all.
+        //
+        // `byPurchase` is not enough here, because it keeps only the FIRST leg's
+        // account while the draft may name any of the paying cards. So group
+        // locally, keeping the set of accounts alongside the total.
+        var order: [String] = []
+        var totals: [String: Double] = [:]
+        var accounts: [String: Set<String>] = [:]
+        var first: [String: Tx] = [:]
+        // `excludeId` arrives as a POSTING id, so resolve it to the purchase it
+        // belongs to — otherwise editing one leg of a split makes the sheet warn
+        // about the very purchase being edited.
+        let excludedKey = draft.excludeId.flatMap { ex in txns.first { $0.id == ex }?.purchaseKey }
+
         for t in txns {
             if ledgerOf(t) != ledgerId { continue }
             if (t.pending ?? false) { continue }
-            if let ex = draft.excludeId, t.id == ex { continue }
-            if t.account != draft.accountId { continue }
             let k = kindOf(t)
             if k != "expense" && k != "income" { continue }
             if normalize(t.merchant) != merchant { continue }
-            let native = abs(t.nativeAmount ?? t.amount)
-            if abs(native - mag) > 0.005 { continue }
+            let key = t.purchaseKey
+            if key == excludedKey { continue }
+            if totals[key] == nil { order.append(key); first[key] = t }
+            // Native amounts across legs in different currencies are not a quantity
+            // in any currency, so fall back to base when they disagree — the same
+            // rule `byPurchase` applies.
+            let sameCcy = first[key]?.currency == t.currency
+            totals[key, default: 0] += sameCcy ? (t.nativeAmount ?? t.amount) : t.amount
+            accounts[key, default: []].insert(t.account)
+        }
+
+        for key in order {
+            guard let t = first[key] else { continue }
+            // Any paying card counts: the draft names the card the user is adding
+            // to, which may be either side of an existing split.
+            guard accounts[key]?.contains(draft.accountId) == true else { continue }
+            if abs(abs(totals[key] ?? 0) - mag) > 0.005 { continue }
             if abs(dayDiff(String(t.date.prefix(10)), day)) > 3 { continue }   // DUPLICATE_WINDOW_DAYS
             return DuplicateMatch(id: t.id, merchant: t.merchant, date: t.date)
         }
@@ -192,7 +230,9 @@ extension Selectors {
         if term.isEmpty && counterpartyId == nil { return nil }
         var counts: [String: Int] = [:]
         var total = 0
-        for t in txns {
+        // One row per PURCHASE, so a habitually-split merchant does not get
+        // double weight in the vote. The per-split loop below is unchanged.
+        for t in byPurchase(txns) {
             if ledgerOf(t) != ledgerId { continue }
             if (t.pending ?? false) { continue }
             if kindOf(t) != "expense" { continue }
@@ -232,7 +272,11 @@ extension Selectors {
         var weeksWithData = Set<String>()
         var biggest: WeeklyBiggest?
 
-        for t in txns {
+        // One row per PURCHASE. This fixes `txCount` and `biggest` together: a
+        // purchase paid on two cards was counted twice and each leg was ranked on
+        // its own, so a $200 purchase could lose "biggest" to a $150 one. Every
+        // sum here is unaffected, because the legs add back to the total.
+        for t in byPurchase(txns) {
             if ledgerOf(t) != ledgerId { continue }
             if (t.pending ?? false) { continue }
             everHadConfirmed = true
