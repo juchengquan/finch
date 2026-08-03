@@ -646,53 +646,67 @@ struct AddTransactionSheet: View {
                 try store.apply(.createTransfer, Args(args))
             } else {
                 let signed = (kind == .income || kind == .refund) ? abs(value) : -abs(value)
+                let sign: Double = signed < 0 ? -1 : 1
                 let fallback = kind == .income ? "Income" : (kind == .refund ? "Refund" : "Untitled")
+
+                // ONE write, replacing the three this path used to fire
+                // (createCounterparty, addTransaction, setTransactionSplits). A
+                // part-way failure used to leave the ledger half-updated — the
+                // merchant created without its transaction, or the transaction
+                // posted without its category split.
+                //
+                // The cells ARE the purchase: one per (card, category) pair that
+                // has money against it. The engine derives the shape from the
+                // category count, so the sheet does not decide whether this is one
+                // transaction or several.
+                let purchaseCcy = currencyCode.isEmpty ? currency(of: accountId) : currencyCode
+                var cells: [JSONValue] = []
+                let cat: JSONValue = categoryId.isEmpty ? .null : .string(categoryId)
+                if accountAlloc.payload.count >= 2 {
+                    for share in accountAlloc.payload {
+                        cells.append(.object([
+                            "accountId": .string(share.id ?? accountId),
+                            "categoryId": cat,
+                            "amount": .double(sign * abs(share.amount)),
+                        ]))
+                    }
+                } else if splitAlloc.payload.count >= 2 {
+                    for share in splitAlloc.payload {
+                        cells.append(.object([
+                            "accountId": .string(accountId),
+                            "categoryId": share.id.map(JSONValue.string) ?? .null,
+                            "amount": .double(sign * abs(share.amount)),
+                        ]))
+                    }
+                } else {
+                    cells.append(.object([
+                        "accountId": .string(accountId), "categoryId": cat, "amount": .double(signed),
+                    ]))
+                }
+
                 var args: [String: JSONValue] = [
-                    "ledgerId": .string(store.activeLedgerId), "accountId": .string(accountId),
-                    "amount": .double(signed), "merchant": .string(merchant.isEmpty ? fallback : merchant),
-                    "categoryId": categoryId.isEmpty ? .null : .string(categoryId), "date": .string(ymd), "time": .string(hm),
+                    "ledgerId": .string(store.activeLedgerId),
+                    "merchant": .string(merchant.isEmpty ? fallback : merchant),
+                    "date": .string(ymd), "time": .string(hm),
+                    "currency": .string(purchaseCcy),
+                    "kind": .string(kind == .refund ? "refund" : (kind == .income ? "income" : "expense")),
+                    "status": .string(status.rawValue),
+                    "cells": .array(cells),
                 ]
                 if !note.isEmpty { args["note"] = .string(note) }
                 // The user was shown the possible-duplicate prompt and chose "Add
                 // anyway". Without this the engine's double-submit backstop refuses
                 // the write regardless — the prompt asked and the answer was
-                // ignored, which is the bug this fixes. Reachable only after that
-                // confirmation, so ordinary saves keep the backstop.
+                // ignored, which is the bug this fixes.
                 if dupConfirmed { args["allowDuplicate"] = .bool(true) }
-                // Foreign-currency entry: pass the chosen currency so the engine
-                // carries orig_* + converts to the account/base currency.
-                if !currencyCode.isEmpty, currencyCode != currency(of: accountId) {
-                    args["currency"] = .string(currencyCode)
-                }
-                args["status"] = .string(status.rawValue)
                 if !selectedTags.isEmpty { args["tagIds"] = .array(selectedTags.map { .string($0) }) }
-                // Remember any unrecognized merchant name as a counterparty.
-                let cpName = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !cpName.isEmpty,
-                   !store.counterparties.contains(where: { $0.name.caseInsensitiveCompare(cpName) == .orderedSame }) {
-                    try store.apply(.createCounterparty, Args(["name": .string(cpName)]))
-                }
-                if kind == .refund {
-                    args["kind"] = .string("refund")
-                    if let refundedTxId { args["refundedTransactionId"] = .string(refundedTxId) }
-                }
+                if kind == .refund, let refundedTxId { args["refundedTransactionId"] = .string(refundedTxId) }
                 for (k, v) in Self.scheduledLinkArgs(prefill: prefill, posts: postsScheduledOccurrence) { args[k] = v }
-                // Split tender: several accounts paid for this one purchase. `accountId`
-                // is still sent above — the engine ignores it once `accounts` carries 2+
-                // shares, and keeping it leaves the duplicate check untouched. One funded
-                // row is not a split (a plain single-account save must be byte-identical
-                // to today's), so `accountSplitArgs` yields nothing below 2, exactly like
-                // the category split further down.
-                for (k, v) in Self.accountSplitArgs(accountAlloc: accountAlloc, signed: signed,
-                        currency: currencyCode.isEmpty ? currency(of: accountId) : currencyCode) { args[k] = v }
-                let eid = try store.applyReturningId(.addTransaction, Args(args))
-                // Two funded legs or more is a split; anything less is the plain
-                // single category already carried by `category` in the args above.
-                if let eid, splitAlloc.payload.count >= 2 {
-                    let payload: [JSONValue] = splitAlloc.payload.map { .object([
-                        "categoryId": $0.id.map(JSONValue.string) ?? .null, "amount": .double($0.amount)]) }
-                    try store.apply(.setTransactionSplits, Args(["id": .string(eid), "splits": .array(payload)]))
-                }
+
+                // The merchant is resolve-or-created inside the same write, so the
+                // separate createCounterparty call is gone — with it goes the
+                // orphan counterparty a failed save used to leave behind.
+                let eid = try store.applyReturningId(.saveTransaction, Args(args))
                 if let eid, let photo = pickedPhoto {
                     Task { try? await AttachmentWriter.write(item: photo, entryId: eid, store: store) }
                 }
