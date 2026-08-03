@@ -20,6 +20,7 @@ public enum Apply {
         var all: [ActionName: Handler] = [:]
         // Domains fold in their handlers as they are ported (Tasks 3–15):
         all.merge(Transactions.handlers) { _, new in new }
+        all.merge(SaveTransaction.handlers) { _, new in new }
         all.merge(Counterparties.handlers) { _, new in new }
         all.merge(Tags.handlers) { _, new in new }
         all.merge(AccountGroups.handlers) { _, new in new }
@@ -55,6 +56,12 @@ public enum Apply {
         return try dbQueue.write { db in
             if name == .addTransaction {
                 return try Transactions.addTransactionReturningId(db, args)
+            }
+            // Same reason as above: the Add sheet needs the new entry id to attach
+            // a receipt. Without this the switch returns nil and the receipt is
+            // silently dropped — the very failure this special case exists for.
+            if name == .saveTransaction {
+                return try SaveTransaction.run(db, args)
             }
             try handler(db, args)
             return nil
