@@ -35,11 +35,17 @@ final class TxListDetailVC: UIViewController {
 
         /// Membership matches `categoryTxCounts`: split legs in, pending out.
         static func category(_ row: CategoryRow) -> Source {
+            // `categoryShares`, not `categoryTransactions`: each row carries only
+            // what THIS category took. A 100 shop split 70/30 reported 100 under
+            // both categories, so the two screens together claimed 200 of spend.
+            // Narrowing happens BEFORE `applySnapshot` collapses by purchase,
+            // which is the only order that works for a grid group — its rows are
+            // separate entries that both carry both categories.
             Source(title: row.name,
-                   confirmed: { Selectors.categoryTransactions($0.txns, row.id, $0.activeLedgerId) },
+                   confirmed: { Selectors.categoryShares($0.txns, row.id, $0.activeLedgerId) },
                    pending: {
-                       Selectors.categoryTransactions($0.txns, row.id, $0.activeLedgerId,
-                                                      includePending: true)
+                       Selectors.categoryShares($0.txns, row.id, $0.activeLedgerId,
+                                                includePending: true)
                            .filter { $0.pending == true }
                    })
         }
@@ -83,6 +89,15 @@ final class TxListDetailVC: UIViewController {
     private var dataSource: UICollectionViewDiffableDataSource<SectionID, String>!
     private var sectionIDs: [SectionID] = []
     private var txByID: [String: Tx] = [:]
+
+    /// The real transaction behind a row.
+    ///
+    /// On the category screen a row carries only that category's share, so every
+    /// ACTION must be handed the whole purchase back: an editor opened on a share
+    /// would save a fraction of it, and a delete warning quoting one would
+    /// understate what it removes. `id` survives the narrowing so this resolves.
+    /// On the tag and merchant screens rows are already whole and this is a no-op.
+    private func actual(_ t: Tx) -> Tx { store.txns.first { $0.id == t.id } ?? t }
     private var headerContent: [SectionID: String] = [:]
     /// Recomputed in `applySnapshot`, so the summary cells never re-derive.
     private var summary: (count: Int, total: Double) = (0, 0)
@@ -281,7 +296,8 @@ final class TxListDetailVC: UIViewController {
     /// The SwiftUI rows pass no `previewReceipt` on any of these three screens, so
     /// the menu omits it here too.
     private func rowActions(at indexPath: IndexPath) -> (tx: Tx, actions: TxRowActions)? {
-        guard let id = dataSource.itemIdentifier(for: indexPath), let tx = txByID[id] else { return nil }
+        guard let id = dataSource.itemIdentifier(for: indexPath), let row = txByID[id] else { return nil }
+        let tx = actual(row)
         let actions = TxRowActions(
             duplicate: { [weak self] tx in self?.presentDuplicate(tx) },
             requestDelete: { [weak self] tx in self?.confirmDelete(tx) },
@@ -342,7 +358,7 @@ extension TxListDetailVC: UICollectionViewDelegate {
     func collectionView(_ cv: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         cv.deselectItem(at: indexPath, animated: true)
         guard let id = dataSource.itemIdentifier(for: indexPath), let tx = txByID[id] else { return }
-        presentEdit(tx)
+        presentEdit(actual(tx))
     }
 
     func collectionView(_ cv: UICollectionView,

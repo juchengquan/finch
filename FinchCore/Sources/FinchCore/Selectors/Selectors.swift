@@ -292,6 +292,48 @@ public enum Selectors {
         return matched.sorted { $0.date != $1.date ? $0.date > $1.date : ($0.time ?? "") > ($1.time ?? "") }
     }
 
+    /// `categoryTransactions`, with each row's amount narrowed to what THIS
+    /// category took.
+    ///
+    /// **Why this is not just `categoryTransactions`.** A row's `amount` is the
+    /// whole purchase. On a merchant or tag screen that is the right number — the
+    /// question is what the shop cost. On a category screen it is not: a 100 shop
+    /// split 70 groceries / 30 household reported 100 under BOTH, so the two
+    /// screens together claimed 200 of spend for 100 spent. `spendByCategory` and
+    /// budget matching have always summed the per-split `amountBase`; the detail
+    /// screen was the outlier.
+    ///
+    /// A grid group widens the same error rather than creating it: its rows are
+    /// separate entries that both carry both categories, so they collapse into one
+    /// row holding the whole group.
+    ///
+    /// **The amount is narrowed, the identity is not.** `id` still names the real
+    /// posting, so a screen showing these must resolve the row back to the store
+    /// before handing it to an editor — otherwise the sheet opens on a share.
+    public static func categoryShares(_ txns: [Tx], _ categoryId: String, _ ledgerId: String,
+                                      includePending: Bool = false) -> [Tx] {
+        categoryTransactions(txns, categoryId, ledgerId, includePending: includePending)
+            .map { t in
+                guard let splits = t.splits, !splits.isEmpty else { return t }
+                var out = t
+                out.amount = r2(splits.filter { $0.categoryId == categoryId }
+                                      .reduce(0) { $0 + $1.amount })
+                // Splits carry base amounts only, so a share has no native figure
+                // to show. Cleared rather than left stale — the same rule
+                // `byPurchase` follows when it can no longer trust one.
+                out.nativeAmount = nil
+                out.currency = nil
+                return out
+            }
+    }
+
+    /// One row per PURCHASE, each carrying only this category's share — what a
+    /// category screen's list, count, total and average are all built from.
+    public static func categoryPurchases(_ txns: [Tx], _ categoryId: String, _ ledgerId: String,
+                                         includePending: Bool = false) -> [Tx] {
+        byPurchase(categoryShares(txns, categoryId, ledgerId, includePending: includePending))
+    }
+
     /// Transactions in `ledgerId` tagged with `tagId`, matched the SAME way as
     /// `tagTxCounts` (non-pending; `tx.tags` holds tag ids), so this list agrees
     /// with the count badge. Date-desc sorted (time-desc tiebreak).
@@ -640,6 +682,12 @@ public extension Selectors {
     /// first leg's copy is already the whole set. Collapsing only ever happens for
     /// an entry with several *account* legs, which may hold at most one category
     /// leg, so a row being merged in never carries splits of its own.
+    ///
+    /// **A grid group breaks that.** Its rows are separate entries, each with its
+    /// own category legs, collapsed here by `group_id` — so the merged-in row's
+    /// splits ARE dropped and the survivor's are only its own. That is why a
+    /// category screen must narrow amounts BEFORE collapsing
+    /// (`categoryShares`); reading `splits` off a collapsed grid row is wrong.
     ///
     /// On a transfer the legs cancel to `amount == 0`. Every current caller filters
     /// by `kind` first; a new one must.
