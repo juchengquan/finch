@@ -42,6 +42,24 @@ enum Metrics {
     /// in the app shares — deliberately not narrowed to close the last few points.
     static let modePickerBottomGap: CGFloat = 4
 
+    /// Height of the kind/type stripe at a row's trailing edge, beside the amount —
+    /// `TxRow` in every transaction list, and `ScheduledRow`, which mirrors it.
+    ///
+    /// It is a fixed height because a SwiftUI shape is infinitely flexible: given only
+    /// `.frame(width: 3)` the rectangle fills whatever the tallest sibling is, which
+    /// measured 38pt — the full height of the row's text block. At that length, sitting
+    /// at the trailing edge, it read as a rule between rows rather than a marker on the
+    /// amount. 26pt stops clearly short of the text.
+    ///
+    /// Both rows read this ONE value on purpose. They were deliberately matched when
+    /// the stripe moved to the trailing edge ("mirrors TxRow's move so the two lists
+    /// still scan alike"), and two literals would let that drift silently.
+    ///
+    /// Deliberately not `@ScaledMetric`: nothing else in the app scales a metric that
+    /// way, and at accessibility text sizes a marker that stays put while the row grows
+    /// is the intended reading. Revisit if the rows start looking top-heavy there.
+    static let kindStripeHeight: CGFloat = 26
+
     /// Minimum side of an interactive element, per Apple's HIG.
     ///
     /// Named as a FLOOR, not a size, because the pressure on it is always

@@ -318,10 +318,12 @@ struct ScheduledRow: View {
                 Text("Variable").font(.caption).foregroundStyle(.secondary)
             }
             // Thin type stripe, now at the TRAILING edge beside the amount — mirrors
-            // TxRow's move so the two lists still scan alike.
+            // TxRow's move so the two lists still scan alike, down to the height token.
+            // An installment row is three lines tall, so the marker is proportionally
+            // shorter there; that is the point of a fixed height rather than a fill.
             RoundedRectangle(cornerRadius: 1.5)
                 .fill(typeColor)
-                .frame(width: 3)
+                .frame(width: 3, height: Metrics.kindStripeHeight)
                 .accessibilityHidden(true)
         }
     }

@@ -726,9 +726,14 @@ struct TxRow: View {
             // Fixed width, so every amount shifts left by the same 11pt and the amount
             // column stays aligned across rows. Hidden from VoiceOver — the zero-width
             // element at the leading edge speaks the kind instead, keeping it first.
+            //
+            // Height is fixed too, and has to be: a shape is infinitely flexible, so
+            // width alone let it fill the row's text block (measured 38pt) and read as a
+            // rule between rows. `ScheduledRow` reads the same token — see Metrics.
+            // The enclosing HStack centres it, which is where a marker belongs.
             RoundedRectangle(cornerRadius: 1.5)
                 .fill(kindColor)
-                .frame(width: 3)
+                .frame(width: 3, height: Metrics.kindStripeHeight)
                 .accessibilityHidden(true)
         }
     }
