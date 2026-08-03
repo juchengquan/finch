@@ -39,27 +39,42 @@ func fxEffectiveTracked(stored: [String]?, fallback: [String]) -> [String] {
 }
 
 /// One row of the Currencies page.
+///
+/// `tracked` and `grouped` answer two DIFFERENT questions and are deliberately not
+/// one flag. `tracked` is live — it is what the row's switch shows. `grouped` is the
+/// answer as of whenever the caller froze it, and it alone decides ordering and which
+/// section the row lands in. The Currencies page freezes `grouped` when it opens so a
+/// row never relocates out from under the finger that just toggled it; callers with
+/// nothing to freeze (the base-currency picker) simply pass the same set twice.
 struct FxCurrencyRow: Equatable {
     let code: String
     let label: String     // "Euro (€)" via FxCurrencyInfo
     let rate: Double?     // latest stored USD-per-unit; 1.0 for the hub; nil = none
-    let tracked: Bool
+    let tracked: Bool     // LIVE — drives the switch
+    let grouped: Bool     // FROZEN — drives ordering + section membership
     let isHub: Bool       // USD — pinned first, no toggle
 }
 
-/// USD hub first, then tracked A–Z, then the rest A–Z.
+/// USD hub first, then grouped A–Z, then the rest A–Z.
+///
+/// `grouping` has no default on purpose: every call site has to say whether it is
+/// ordering by the live set or by a frozen one, because defaulting it to `tracked`
+/// would let the Currencies page silently fall back to relocating rows mid-visit.
 @MainActor
-func fxCurrencyRows(all: [String], rates: [ExchangeRate], tracked: [String]) -> [FxCurrencyRow] {
+func fxCurrencyRows(all: [String], rates: [ExchangeRate],
+                    tracked: [String], grouping: [String]) -> [FxCurrencyRow] {
     let trackedSet = Set(tracked)
+    let groupedSet = Set(grouping)
     let codes = all.sorted()
-    func row(_ code: String, tracked: Bool) -> FxCurrencyRow {
+    func row(_ code: String, grouped: Bool) -> FxCurrencyRow {
         FxCurrencyRow(code: code, label: FxCurrencyInfo.label(code),
-                      rate: fxLatest(rates, code)?.rate, tracked: tracked, isHub: false)
+                      rate: fxLatest(rates, code)?.rate, tracked: trackedSet.contains(code),
+                      grouped: grouped, isHub: false)
     }
     var rows = [FxCurrencyRow(code: "USD", label: FxCurrencyInfo.label("USD"),
-                              rate: 1.0, tracked: false, isHub: true)]
-    rows += codes.filter { $0 != "USD" && trackedSet.contains($0) }.map { row($0, tracked: true) }
-    rows += codes.filter { $0 != "USD" && !trackedSet.contains($0) }.map { row($0, tracked: false) }
+                              rate: 1.0, tracked: false, grouped: false, isHub: true)]
+    rows += codes.filter { $0 != "USD" && groupedSet.contains($0) }.map { row($0, grouped: true) }
+    rows += codes.filter { $0 != "USD" && !groupedSet.contains($0) }.map { row($0, grouped: false) }
     return rows
 }
 

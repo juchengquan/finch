@@ -50,6 +50,25 @@ final class CurrenciesVC: UIViewController {
                            fallback: RateAutoUpdater.currenciesInUse(store: store))
     }
 
+    /// `effectiveTracked` as of the moment this screen opened — and the ONLY thing
+    /// that decides ordering and section membership for the rest of the visit.
+    ///
+    /// Toggling a currency used to re-derive the sections from the live set, so the
+    /// row travelled from the lower group up into the active one the instant it was
+    /// switched on: it left the finger that toggled it, took the scroll position with
+    /// it, and threw VoiceOver focus. Freezing the grouping keeps the row exactly
+    /// where it was touched while its switch and rate stay live.
+    ///
+    /// Nothing thaws it. `RootTabBarController` builds a fresh `CurrenciesVC` on every
+    /// push, so leaving and returning re-tidies the list for free — which is also the
+    /// only moment a row is ever seen to move.
+    ///
+    /// This is why the two currency sections carry NO headers: a row switched on while
+    /// sitting in the lower group is only honest as long as nothing labels that group
+    /// "Inactive". Don't add section titles here — `CurrencyPickerSheet` has them
+    /// because it has no toggles to contradict.
+    private var frozenGrouping: [String] = []
+
     /// Absent key == ON — the default-ON semantics shared with `RateAutoUpdater`.
     private var autoUpdateEnabled: Bool {
         UserDefaults.standard.object(forKey: RateAutoUpdater.toggleKey) == nil
@@ -62,6 +81,8 @@ final class CurrenciesVC: UIViewController {
         navigationItem.largeTitleDisplayMode = .always
         // The SwiftUI screen read the stamp in `.onAppear`.
         lastUpdated = UserDefaults.standard.object(forKey: RateAutoUpdater.stampKey) as? Date
+        // Before the first `applySnapshot()` — it is what the sections are built from.
+        frozenGrouping = effectiveTracked
         configureCollectionView()
         configureDataSource()
         configureSearch()
@@ -102,10 +123,30 @@ final class CurrenciesVC: UIViewController {
     private func configureDataSource() {
         let cell = UICollectionView.CellRegistration<UICollectionViewListCell, String> { [weak self] cell, _, id in
             guard let self else { return }
-            // Clear accessories EXCEPT an already-installed switch: removing it from
-            // the hierarchy is what destroyed the glass and swallowed taps. See
-            // ToggleAccessory.
-            if !ToggleAccessory.isInstalled(on: cell) { cell.accessories = [] }
+            // Both tagged accessories are REUSED rather than rebuilt (see
+            // ToggleAccessory / TrailingLabel), so a reused cell may carry either one
+            // over from whatever row it showed last. Carrying them is only correct
+            // when the incoming row wants the same pair — otherwise clear, which drops
+            // the tagged views and lets the installers below build fresh ones.
+            //
+            // Clearing unconditionally is what this dance exists to avoid: it removes
+            // an installed switch from the hierarchy, which kills iOS 26's glass on it
+            // and makes it swallow the tap in progress.
+            let wantsToggle: Bool, wantsLabel: Bool
+            switch id {
+            case Self.autoUpdateID:  wantsToggle = true;  wantsLabel = false
+            case Self.lastUpdatedID: wantsToggle = false; wantsLabel = true
+            // The spinner/note swap needs a real accessory reassignment, so this row
+            // opts out of both tagged accessories and assigns its own below.
+            case Self.refreshID:     wantsToggle = false; wantsLabel = false
+            // The hub (USD) is always active and cannot be toggled off.
+            default:                 wantsToggle = self.rowByCode[id]?.isHub == false
+                                     wantsLabel = true
+            }
+            if ToggleAccessory.isInstalled(on: cell) != wantsToggle
+                || TrailingLabel.isInstalled(on: cell) != wantsLabel {
+                cell.accessories = []
+            }
 
             switch id {
             case Self.autoUpdateID:
@@ -120,12 +161,9 @@ final class CurrenciesVC: UIViewController {
                 var cfg = cell.defaultContentConfiguration()
                 cfg.text = String(localized: "Last updated")
                 cell.contentConfiguration = cfg
-                let value = UILabel()
-                value.text = self.lastUpdated?.formatted(
-                    Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppDate.h24Locale))
-                value.font = .preferredFont(forTextStyle: .body)
-                value.textColor = .secondaryLabel
-                cell.accessories = [.customView(configuration: .init(customView: value, placement: .trailing()))]
+                TrailingLabel.install(on: cell, text: self.lastUpdated?.formatted(
+                    Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppDate.h24Locale)),
+                                      color: .secondaryLabel)
 
             case Self.refreshID:
                 var cfg = cell.defaultContentConfiguration()
@@ -142,6 +180,9 @@ final class CurrenciesVC: UIViewController {
                     label.font = .preferredFont(forTextStyle: .caption1)
                     label.textColor = .secondaryLabel
                     cell.accessories = [.customView(configuration: .init(customView: label, placement: .trailing()))]
+                } else {
+                    // Explicit: a carried-over spinner or note must go.
+                    cell.accessories = []
                 }
 
             default:
@@ -155,16 +196,12 @@ final class CurrenciesVC: UIViewController {
                 cfg.secondaryText = row.isHub ? String(localized: "\(name) · hub") : name
                 cell.contentConfiguration = cfg
 
-                let rate = UILabel()
-                rate.text = row.rate.map { String(format: "%.4f", $0) } ?? "—"
-                rate.font = .preferredFont(forTextStyle: .body)
-                rate.textColor = row.rate == nil ? .secondaryLabel : .label
-                var accessories: [UICellAccessory] = [
-                    .customView(configuration: .init(customView: rate, placement: .trailing()))
-                ]
-                // The hub (USD) is always active and cannot be toggled off.
-                cell.accessories = accessories
-                // The hub (USD) is always active and cannot be toggled off.
+                // Mutated in place on a reconfigure — a fresh rate arriving must not
+                // cost the row its switch.
+                TrailingLabel.install(on: cell,
+                                      text: row.rate.map { String(format: "%.4f", $0) } ?? "—",
+                                      color: row.rate == nil ? .secondaryLabel : .label)
+                // `tracked` is LIVE here; `grouped` decided the section. See FxDerive.
                 if !row.isHub {
                     ToggleAccessory.install(on: cell, isOn: row.tracked,
                                             accessibilityLabel: String(localized: "Activate \(row.code)")) { [weak self] on in
@@ -192,7 +229,8 @@ final class CurrenciesVC: UIViewController {
 
     private func applySnapshot() {
         let rows = fxFilterRows(
-            fxCurrencyRows(all: Currencies.iso, rates: store.exchangeRates, tracked: effectiveTracked),
+            fxCurrencyRows(all: Currencies.iso, rates: store.exchangeRates,
+                           tracked: effectiveTracked, grouping: frozenGrouping),
             query: query)
         rowByCode = Dictionary(uniqueKeysWithValues: rows.map { ($0.code, $0) })
 
@@ -203,13 +241,14 @@ final class CurrenciesVC: UIViewController {
         controls.append(Self.refreshID)
         snap.appendItems(controls, toSection: .controls)
 
-        // Active = the hub plus tracked; Inactive = everything else, omitted entirely
-        // when empty (as the SwiftUI screen did).
-        let active = rows.filter { $0.isHub || $0.tracked }
+        // Active = the hub plus the FROZEN group; Inactive = everything else, omitted
+        // entirely when empty (as the SwiftUI screen did). Grouping deliberately reads
+        // `grouped`, not `tracked` — that is what keeps a just-toggled row in place.
+        let active = rows.filter { $0.isHub || $0.grouped }
         snap.appendSections([.active])
         snap.appendItems(active.map(\.code), toSection: .active)
 
-        let inactive = rows.filter { !$0.isHub && !$0.tracked }
+        let inactive = rows.filter { !$0.isHub && !$0.grouped }
         if !inactive.isEmpty {
             snap.appendSections([.inactive])
             snap.appendItems(inactive.map(\.code), toSection: .inactive)

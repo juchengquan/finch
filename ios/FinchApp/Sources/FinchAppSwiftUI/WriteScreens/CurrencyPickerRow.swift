@@ -58,9 +58,11 @@ private struct CurrencyPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
 
+    /// Nothing to freeze here: this sheet has no toggles, so no row can change group
+    /// while it is open. Grouping and tracking are the same set.
     private var rows: [FxCurrencyRow] {
         fxFilterRows(fxCurrencyRows(all: Currencies.iso, rates: store.exchangeRates,
-                                    tracked: activated), query: query)
+                                    tracked: activated, grouping: activated), query: query)
     }
 
     private func pick(_ picked: String) {
@@ -75,7 +77,7 @@ private struct CurrencyPickerSheet: View {
                 // here: that page can drop the titles because its per-row toggle
                 // shows the state: this sheet has no toggle (tapping selects), so
                 // the headers are what tell the two groups apart.
-                let active = rows.filter { $0.isHub || $0.tracked }
+                let active = rows.filter { $0.isHub || $0.grouped }
                 if !active.isEmpty {
                     Section("Active") {
                         ForEach(active, id: \.code) { row in
@@ -83,7 +85,7 @@ private struct CurrencyPickerSheet: View {
                         }
                     }
                 }
-                let inactive = rows.filter { !$0.isHub && !$0.tracked }
+                let inactive = rows.filter { !$0.isHub && !$0.grouped }
                 if !inactive.isEmpty {
                     Section {
                         ForEach(inactive, id: \.code) { row in
