@@ -26,6 +26,12 @@ targets:
         product: FinchCore
       - target: FinchWidget   # Phase 7 — embed the widget extension
       - target: FinchShare    # Phase 6.5 — embed the share extension
+    postBuildScripts:
+      - name: Stamp git hash (Debug)
+        # Always run: the commit can change without any input file changing.
+        basedOnDependencyAnalysis: false
+        script: |
+          "$SRCROOT/scripts/stamp-git-hash.sh"
     settings:
       base:
         # Reference the hand-authored Info.plist (with the .finch UTI
