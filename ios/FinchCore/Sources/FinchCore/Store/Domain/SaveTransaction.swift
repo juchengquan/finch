@@ -103,11 +103,28 @@ enum SaveTransaction {
                                 "A purchase paid from several accounts takes a single category")
             }
 
+            // A transfer's description and leg memos are ENGINE-authored, not the
+            // sheet's job — they name the other side, so the transfer reads
+            // correctly in each account's feed. Only filled when absent, so an
+            // edit that preserved a leg keeps whatever memo it already had.
+            var transferMemos: [String: String] = [:]
+            var description = a.merchant
+            if kind == .transfer, byAccount.count == 2 {
+                let names = try Row.fetchAll(db, sql: "SELECT id, name FROM accounts WHERE id IN (?, ?)",
+                                             arguments: [byAccount[0].id, byAccount[1].id])
+                    .reduce(into: [String: String]()) { $0[$1["id"]] = $1["name"] }
+                let from = byAccount.first { $0.amount < 0 } ?? byAccount[0]
+                let to = byAccount.first { $0.amount > 0 } ?? byAccount[1]
+                if let toName = names[to.id] { transferMemos[from.id] = "Transfer to \(toName)" }
+                if let fromName = names[from.id] { transferMemos[to.id] = "Transfer from \(fromName)" }
+                if description.trimmingCharacters(in: .whitespaces).isEmpty { description = "Transfer" }
+            }
+
             // Resolve-or-create the merchant. `resolveCounterpartyIdByName` only
             // LOOKS UP, which is why the sheets call `createCounterparty` first —
             // an ordering that cannot survive one command, and that leaves an
             // orphan counterparty behind when the second write fails.
-            let counterpartyId = try resolveOrCreateCounterparty(db, a.merchant)
+            let counterpartyId = kind == .transfer ? nil : try resolveOrCreateCounterparty(db, a.merchant)
 
             let oldLegs = try a.id.flatMap { try Entries.resolveEntryRef(db, $0) }
                 .map { ref in try Row.fetchAll(db, sql: """
@@ -139,15 +156,20 @@ enum SaveTransaction {
                 legs.append(.account(Entries.AccountLeg(
                     accountId: accountId, amount: native,
                     amountBase: Entries.r2(conv.amountBase), exchangeRate: conv.rate,
-                    memo: prior?["memo"], id: prior?["id"],
+                    memo: prior?["memo"] ?? transferMemos[accountId], id: prior?["id"],
                     clearedAt: sameAmount ? prior?["cleared_at"] : nil)))
             }
-            // The caller computes the balancing category legs (Decision 25):
-            // `rebuildEntry` writes exactly what it is handed and has no
-            // auto-balance field — that is a `NewEntry`/`postEntry` concept.
-            for (categoryId, amount) in byCategory {
-                let b = try Entries.convertToBase(db, amount, purchaseCcy, base, a.date).amountBase
-                legs.append(.category(Entries.CategoryLeg(categoryId: categoryId, amountBase: Entries.r2(-b))))
+            // A transfer has NO category leg — that is what makes it a transfer —
+            // so the balancing leg every other kind needs must not be emitted.
+            // Its two account legs already sum to zero.
+            if kind != .transfer {
+                // The caller computes the balancing category legs (Decision 25):
+                // `rebuildEntry` writes exactly what it is handed and has no
+                // auto-balance field — that is a `NewEntry`/`postEntry` concept.
+                for (categoryId, amount) in byCategory {
+                    let b = try Entries.convertToBase(db, amount, purchaseCcy, base, a.date).amountBase
+                    legs.append(.category(Entries.CategoryLeg(categoryId: categoryId, amountBase: Entries.r2(-b))))
+                }
             }
 
             let status = a.status.flatMap(Entries.Status.init(rawValue:))
@@ -158,7 +180,7 @@ enum SaveTransaction {
                 var patch = Entries.EntryPatch()
                 patch.date = .set(a.date)
                 patch.time = .set(a.time)
-                patch.description = .set(a.merchant)
+                patch.description = .set(description)
                 patch.notes = .set(a.note)
                 patch.counterpartyId = .set(counterpartyId)
                 patch.refundedEntryId = .set(refundedEntryId)
@@ -174,7 +196,7 @@ enum SaveTransaction {
 
             let entryId = try Entries.postEntry(db, Entries.NewEntry(
                 ledgerId: a.ledgerId, date: a.date, time: a.time,
-                description: a.merchant, kind: kind, status: status, legs: legs,
+                description: description, kind: kind, status: status, legs: legs,
                 notes: a.note, counterpartyId: counterpartyId, refundedEntryId: refundedEntryId,
                 sourceTemplateId: a.sourceTemplateId, occurrenceDate: a.occurrenceDate,
                 groupId: a.groupId,

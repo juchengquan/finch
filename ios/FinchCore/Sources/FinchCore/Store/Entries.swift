@@ -293,6 +293,32 @@ public enum Entries {
         case .transfer:
             if acct.count != 2 { throw I18nError("error.transfer.twoLegs", [:], "A transfer has exactly two account legs") }
             if !plain.isEmpty { throw I18nError("error.transfer.noCategory", [:], "A transfer has no category leg") }
+            // These four lived in `postTransfer`, which is ONE caller. Here they
+            // run on every write path — `rebuildEntry` and `saveTransaction`
+            // included — so no route can post a shape the create path refuses.
+            //
+            // The same-account case is the one that mattered: the two checks above
+            // are satisfied by a "transfer" from an account to ITSELF, so it posted
+            // happily, moving money nowhere while looking real in the feed.
+            if acct[0].accountId == acct[1].accountId {
+                throw I18nError("error.transfer.sameAccount", [:], "Pick two different accounts")
+            }
+            if acct.contains(where: { r2($0.amount) == 0 }) {
+                throw I18nError("error.transfer.amountGt0", [:], "Transfer amount must be greater than 0")
+            }
+            // One leg out, one leg in. Subsumes postTransfer's `receivedGt0`, and
+            // catches the sign errors that check could not see.
+            if !(acct.contains { $0.amount < 0 } && acct.contains { $0.amount > 0 }) {
+                throw I18nError("error.transfer.receivedGt0", [:], "Received amount must be greater than 0")
+            }
+            // Two accounts in the SAME currency must agree. Otherwise
+            // `appendResidue` force-balances the difference into the FX equity
+            // leg, disguising a typo as an exchange-rate difference between two
+            // accounts that cannot have one.
+            if acct[0].currency == acct[1].currency, abs(r2(acct[0].amount + acct[1].amount)) > 0.005 {
+                throw I18nError("error.transfer.sameCurrencyMismatch", [:],
+                                "Same-currency transfer amounts must match")
+            }
             if equity.contains(where: { sysOf($0) != "fx" }) { throw I18nError("error.transfer.fxOnly", [:], "Only the FX residue may balance a transfer") }
         case .opening, .adjustment:
             let want = kind == .opening ? "opening" : "adjustment"

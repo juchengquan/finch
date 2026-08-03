@@ -10,9 +10,19 @@ public enum Transfers {
     ]
 
     /// Re-amount a transfer's two account legs (ratio-scaling the other side when
-    /// only one is given), preserving pinned rates, then rebuild. Each leg's
-    /// reconcile mark (cleared_at) is carried through, so editing a cleared
-    /// transfer keeps both legs cleared.
+    /// only one is given), preserving pinned rates, then rebuild.
+    ///
+    /// **This action carries each leg's reconcile mark through an amount change.
+    /// `saveTransaction` deliberately does NOT** (Decision 30): a tick asserts "I
+    /// checked this against my statement", and `clearedBalance` is simply the sum
+    /// of ticked legs, so keeping a tick across an amount change silently moves a
+    /// finished reconciliation while the screen still reports it square.
+    ///
+    /// The difference is deliberate and temporary. This action stays for the
+    /// cross-stack `WRITE_SEQUENCE`, which replays it; the sheets move to
+    /// `saveTransaction`, which is where the corrected behaviour lives. Do not
+    /// "fix" this one to match without changing the web too — the oracle compares
+    /// the resulting database state.
     static func update(_ db: Database, _ args: Args) throws {
         guard let id = args.idString else { throw I18nError("error.invalidArgs", [:], "updateTransfer requires an id") }
         let patch = args.patchObject
