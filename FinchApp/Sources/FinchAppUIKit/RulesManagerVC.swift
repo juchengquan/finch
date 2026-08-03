@@ -80,10 +80,16 @@ final class RulesManagerVC: UIViewController {
     private func configureDataSource() {
         let cell = UICollectionView.CellRegistration<UICollectionViewListCell, String> { [weak self] cell, _, id in
             guard let self else { return }
-            // Clear accessories EXCEPT an already-installed switch: removing it from
-            // the hierarchy is what destroyed the glass and swallowed taps. See
-            // ToggleAccessory.
-            if !ToggleAccessory.isInstalled(on: cell) { cell.accessories = [] }
+            // Both tagged accessories are REUSED rather than rebuilt (see
+            // ToggleAccessory / TrailingLabel), so they can only be carried over to a
+            // row that wants the same pair. The empty-state row wants neither; a rule
+            // row wants both. Clearing unconditionally would remove an installed switch
+            // from the hierarchy, killing its glass and swallowing the tap in progress.
+            let wantsAccessories = id != Self.emptyID
+            if ToggleAccessory.isInstalled(on: cell) != wantsAccessories
+                || TrailingLabel.isInstalled(on: cell) != wantsAccessories {
+                cell.accessories = []
+            }
 
             if id == Self.emptyID {
                 var cfg = cell.defaultContentConfiguration()
@@ -100,23 +106,23 @@ final class RulesManagerVC: UIViewController {
             cfg.secondaryTextProperties.font = .preferredFont(forTextStyle: .caption2)
             cell.contentConfiguration = cfg
 
-            var accessories: [UICellAccessory] = []
             // The match count is hidden at zero, as in SwiftUI — a rule that has never
             // matched shows nothing rather than a "0×" that reads like a failure.
-            if let n = self.counts[rule.id], n > 0 {
-                let label = UILabel()
+            // Hidden, not removed: dropping the accessory would mean reassigning
+            // `cell.accessories`, which is what used to destroy the switch beside it.
+            // An empty label has no intrinsic width and sits inboard of the switch, so
+            // it costs nothing visually.
+            let n = self.counts[rule.id] ?? 0
+            TrailingLabel.install(
+                on: cell,
                 // Through the catalog, not a bare literal: the SwiftUI screen's
                 // `Text("\(n)×")` already contributes the key "%lld×", so this reuses
                 // it rather than shipping an unextractable string.
-                label.text = String(localized: "\(n)×")
-                label.font = UIFont.monospacedDigitSystemFont(
-                    ofSize: UIFont.preferredFont(forTextStyle: .caption1).pointSize, weight: .regular)
-                label.textColor = .secondaryLabel
-                label.accessibilityLabel = String(localized: "\(n) transactions")
-                accessories.append(.customView(configuration: .init(customView: label,
-                                                                    placement: .trailing())))
-            }
-            cell.accessories = accessories
+                text: n > 0 ? String(localized: "\(n)×") : nil,
+                font: UIFont.monospacedDigitSystemFont(
+                    ofSize: UIFont.preferredFont(forTextStyle: .caption1).pointSize, weight: .regular),
+                color: .secondaryLabel,
+                accessibilityLabel: n > 0 ? String(localized: "\(n) transactions") : nil)
             // A UISwitch accessory rather than hosted SwiftUI: it must take its own
             // touches while the row stays tappable for the editor.
             ToggleAccessory.install(on: cell, isOn: rule.isActive,
