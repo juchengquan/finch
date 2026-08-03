@@ -182,7 +182,10 @@ below is reference; this is the queue.
 
 - [x] Converted rows announce sensibly — swept 2026-08-01, two real defects found and
       fixed (transaction rows read as fragments; "Confirm all N pending" was not a
-      button). See §3.
+      button). See §3. The second control no longer exists — "Confirm all N pending"
+      was removed from both Activity implementations, because its label counted the
+      filtered rows on screen while the action confirmed the whole ledger. Do not go
+      looking for it on a re-run; bulk confirming is multi-select's `Confirm N`.
 - [x] **Segmented controls — CLOSED 2026-08-01, there was never a defect.** The
       "unlabelled" reading was an `idb` artifact; XCUITest sees every segment properly
       labelled and stateful, in BOTH builds. Detail in §3.
