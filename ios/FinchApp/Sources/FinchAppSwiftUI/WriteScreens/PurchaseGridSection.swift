@@ -53,7 +53,7 @@ struct PurchaseGridSection: View {
                                 Image(systemName: "minus.circle")
                             }
                             .buttonStyle(.borderless)
-                            .accessibilityLabel("Remove \(categoryName(categoryId)) from \(accountName(accountId))")
+                            .accessibilityLabel("Remove \(categoryName(categoryId))")   // the section header already names the card
                         }
                     } else {
                         Button {
