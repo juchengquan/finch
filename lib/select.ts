@@ -14,6 +14,44 @@ import { expandDescendants } from '@/lib/db/domain/categories/queries';
 
 const ledgerOf = (t: Tx) => t.ledgerId ?? 'personal';
 
+/** Groups a row with the other payment legs of the same purchase. Falls back to
+ *  the posting id when `entryId` is absent — a fixture written before the field
+ *  existed — reproducing the pre-fix behaviour of counting each leg separately
+ *  rather than collapsing every such row under one shared undefined key. */
+export const purchaseKey = (t: Tx): string => t.entryId ?? t.id;
+
+/** One row per purchase: the payment legs of a split-tender purchase summed into
+ *  a single row carrying the true total. Mirrors iOS `Selectors.byPurchase`.
+ *
+ *  Use wherever a statistic or ranking needs what was actually spent — a mean, a
+ *  variance, a z-score, a "biggest". For counting alone `purchaseKey` is enough.
+ *
+ *  `nativeAmount`/`currency` are dropped when the legs disagree: split tender is
+ *  multi-currency and consumers read `nativeAmount ?? amount`, so summing raw
+ *  natives across currencies would hand them a number that is not money in any
+ *  unit — worse than the comparable base amount they fall back to.
+ *
+ *  Identity fields (`id`, `account`, `clearedAt`, `pending`) are the FIRST leg's;
+ *  do not use this where a specific leg's account or reconcile mark matters. On a
+ *  transfer the legs cancel to amount 0 — every caller filters by kind first. */
+export function byPurchase(txns: Tx[]): Tx[] {
+  const order: string[] = [];
+  const acc = new Map<string, Tx>();
+  for (const t of txns) {
+    const key = purchaseKey(t);
+    const seen = acc.get(key);
+    if (!seen) { order.push(key); acc.set(key, { ...t }); continue; }
+    seen.amount = r2(seen.amount + t.amount);
+    if (seen.currency === t.currency && seen.nativeAmount != null && t.nativeAmount != null) {
+      seen.nativeAmount = r2(seen.nativeAmount + t.nativeAmount);
+    } else {
+      seen.currency = undefined;
+      seen.nativeAmount = undefined;
+    }
+  }
+  return order.map((k) => acc.get(k)!).filter(Boolean);
+}
+
 /** A transaction's kind, with a fallback for pre-hydration seed rows that
  *  predate the `kind` column (derived from the transfer link + amount sign). */
 export const kindOf = (t: Tx): 'income' | 'expense' | 'transfer' | 'adjustment' | 'refund' =>
@@ -495,6 +533,11 @@ export function recentExpenses(txns: Tx[], ledgerId: string, limit = 5): RecentE
     if (ledgerOf(t) !== ledgerId) continue;
     if (t.pending) continue;
     if (kindOf(t) !== 'expense') continue;
+    // A split purchase is EXCLUDED, not collapsed: this feeds the Watch quick-add
+    // templates, which can only write a single-card transaction, so a two-card
+    // purchase cannot be repeated in one tap. Offering both legs ate two of three
+    // slots; offering the total would silently book it all to one card.
+    if ((t.accountLegCount ?? 1) > 1) continue;
     const native = t.nativeAmount ?? t.amount;
     if (native >= 0) continue; // sanity: an expense must be negative
     const currency = t.currency ?? 'USD';
@@ -554,16 +597,48 @@ export function findDuplicate(
   if (!(mag > 0)) return null;
   const day = draft.date.slice(0, 10);
 
+  // Compare against the PURCHASE, not one of its payments. A purchase paid from
+  // several accounts has no single account and no single amount, so matching
+  // row-by-row never fired for one: re-adding a 100 shop that already existed as
+  // 60 + 40 found neither a 100 row nor a card that "the" purchase was on.
+  //
+  // byPurchase is not enough here, because it keeps only the FIRST leg's account
+  // while the draft may name any of the paying cards — so group locally, keeping
+  // the set of accounts alongside the total.
+  const order: string[] = [];
+  const totals = new Map<string, number>();
+  const accounts = new Map<string, Set<string>>();
+  const first = new Map<string, Tx>();
+  // excludeId arrives as a POSTING id: resolve it to the purchase it belongs to,
+  // or editing one leg of a split makes the sheet warn about itself.
+  const excludedKey = draft.excludeId
+    ? purchaseKey(txns.find((t) => t.id === draft.excludeId) ?? ({ id: draft.excludeId } as Tx))
+    : undefined;
+
   for (const t of txns) {
     if (ledgerOf(t) !== ledgerId) continue;
     if (t.pending) continue;
-    if (draft.excludeId && t.id === draft.excludeId) continue;
-    if (t.account !== draft.accountId) continue;
     const k = kindOf(t);
     if (k !== 'expense' && k !== 'income') continue;
     if (t.merchant.trim().toLowerCase() !== merchant) continue;
-    const native = Math.abs(t.nativeAmount ?? t.amount);
-    if (Math.abs(native - mag) > 0.005) continue;
+    const key = purchaseKey(t);
+    if (key === excludedKey) continue;
+    if (!totals.has(key)) { order.push(key); first.set(key, t); }
+    // Native amounts across legs in different currencies are not a quantity in
+    // any currency, so fall back to base when they disagree — byPurchase's rule.
+    const sameCcy = first.get(key)!.currency === t.currency;
+    totals.set(key, (totals.get(key) ?? 0) + (sameCcy ? (t.nativeAmount ?? t.amount) : t.amount));
+    if (!accounts.has(key)) accounts.set(key, new Set());
+    accounts.get(key)!.add(t.account);
+  }
+
+  for (const key of order) {
+    const t = first.get(key);
+    if (!t) continue;
+    // Any paying card counts: the draft names the card being added to, which may
+    // be either side of an existing split.
+    if (!accounts.get(key)?.has(draft.accountId)) continue;
+    if (Math.abs(Math.abs(totals.get(key) ?? 0) - mag) > 0.005) continue;
     if (Math.abs(dayDiff(t.date.slice(0, 10), day)) > DUPLICATE_WINDOW_DAYS) continue;
     return { id: t.id, merchant: t.merchant, date: t.date };
   }
@@ -658,7 +733,11 @@ export function weeklyDigest(txns: Tx[], ledgerId: string, anchor: string): Week
   const weeksWithData = new Set<string>();
   let biggest: { txId: string; merchant: string; amount: number; date: string } | null = null;
 
-  for (const t of txns) {
+  // One row per PURCHASE. Fixes `txCount` and `biggest` together: a purchase
+  // paid on two cards was counted twice and each leg ranked on its own, so a
+  // $200 purchase could lose "biggest" to a $150 one. Sums are unaffected — the
+  // legs add back to the total.
+  for (const t of byPurchase(txns)) {
     if (ledgerOf(t) !== ledgerId) continue;
     if (t.pending) continue;
     everHadConfirmed = true;
@@ -853,7 +932,10 @@ function merchantKey(t: Tx): string | null {
  */
 export function merchantStats(txns: Tx[], ledgerId: string): Map<string, MerchantStats> {
   const sums = new Map<string, { n: number; sum: number; sqSum: number }>();
-  for (const t of txns) {
+  // One row per PURCHASE. Wrong twice over otherwise: the count is inflated AND
+  // each leg's magnitude is a fraction of what was spent, so the mean and
+  // deviation are distorted rather than merely rescaled.
+  for (const t of byPurchase(txns)) {
     if (ledgerOf(t) !== ledgerId) continue;
     if (t.pending) continue;
     if (kindOf(t) !== 'expense') continue;
@@ -970,7 +1052,9 @@ export function suggestCategory(
 
   const counts = new Map<string, number>();
   let total = 0;
-  for (const t of txns) {
+  // One row per PURCHASE, so a habitually-split merchant does not get double
+  // weight in the vote. The per-split loop below is unchanged.
+  for (const t of byPurchase(txns)) {
     if (ledgerOf(t) !== ledgerId) continue;
     if (t.pending) continue;
     if (kindOf(t) !== 'expense') continue;
