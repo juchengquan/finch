@@ -667,6 +667,19 @@ struct TxRow: View {
                         Image(systemName: "exclamationmark.triangle.fill").font(.caption2).foregroundStyle(.orange)
                             .accessibilityLabel("Unusual amount")
                     }
+                    // One purchase, several rows — either several payments on one
+                    // transaction, or a grid's several transactions. The feed shows
+                    // a row per payment deliberately (it is what you check against a
+                    // statement), so this is what says the rows belong together.
+                    //
+                    // ONE symbol, one meaning: "part of one purchase". Deliberately
+                    // NOT a promise about deleting — a grid row deletes on its own,
+                    // while a split-tender payment takes its siblings. Neutral, and
+                    // chosen not to read as the reconcile tick.
+                    if (txn.accountLegCount ?? 1) > 1 || txn.groupId != nil {
+                        Image(systemName: "square.on.square").font(.caption2).foregroundStyle(.secondary)
+                            .accessibilityLabel("Part of one purchase")
+                    }
                     // Tags: show chips while they fit, then a +N count for the
                     // hidden rest (ViewThatFits cascade, capped at 3 chips).
                     if !rowTags.isEmpty {
