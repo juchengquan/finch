@@ -120,6 +120,11 @@ public enum Entries {
         /// The scheduled occurrence this entry fulfils (yyyy-MM-dd). NULL unless posted
         /// from a template. Lets the occurrence resolve even when `date` differs.
         public var occurrenceDate: String?
+        /// Links this entry to the other transactions of one grid purchase — a
+        /// purchase split by card AND by category, stored as one entry per card
+        /// because a single entry may be split on at most one axis. NULL for
+        /// everything else: an ordinary transaction is not a group of one.
+        public var groupId: String?
         public var timestamp: String?
         public var skipRules: Bool
         /// Store no dedup hash for this entry, exempting it from the
@@ -130,13 +135,13 @@ public enum Entries {
                     description: String, kind: Kind, status: Status? = nil, legs: [Leg],
                     autoBalance: AutoBalance = .none, notes: String? = nil, counterpartyId: String? = nil,
                     refundedEntryId: String? = nil, sourceTemplateId: String? = nil,
-                    occurrenceDate: String? = nil,
+                    occurrenceDate: String? = nil, groupId: String? = nil,
                     timestamp: String? = nil, skipRules: Bool = false, allowDuplicate: Bool = false) {
             self.id = id; self.ledgerId = ledgerId; self.date = date; self.time = time
             self.description = description; self.kind = kind; self.status = status; self.legs = legs
             self.autoBalance = autoBalance; self.notes = notes; self.counterpartyId = counterpartyId
             self.refundedEntryId = refundedEntryId; self.sourceTemplateId = sourceTemplateId
-            self.occurrenceDate = occurrenceDate
+            self.occurrenceDate = occurrenceDate; self.groupId = groupId
             self.timestamp = timestamp; self.skipRules = skipRules
             self.allowDuplicate = allowDuplicate
         }
@@ -459,11 +464,11 @@ public enum Entries {
         do {
             let appliedJson = appliedRuleIds.flatMap { try? String(data: JSONEncoder().encode($0), encoding: .utf8) } ?? nil
             try db.execute(sql: """
-                INSERT INTO entries (id,ledger_id,date,time,description,kind,status,confirmed_at,counterparty_id,refunded_entry_id,source_template_id,occurrence_date,notes,applied_rule_ids,reviewed_at,dedup_hash,sealed,created_at,updated_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?)
+                INSERT INTO entries (id,ledger_id,date,time,description,kind,status,confirmed_at,counterparty_id,refunded_entry_id,source_template_id,occurrence_date,group_id,notes,applied_rule_ids,reviewed_at,dedup_hash,sealed,created_at,updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?)
                 """, arguments: [entryId, e.ledgerId, e.date, e.time, description, kind.rawValue, status.rawValue,
                                  status == .confirmed ? ts : nil, counterpartyId, e.refundedEntryId, e.sourceTemplateId, e.occurrenceDate,
-                                 notes, appliedJson, reviewedAt,
+                                 e.groupId, notes, appliedJson, reviewedAt,
                                  (e.allowDuplicate || e.sourceTemplateId != nil) ? nil : dedupHash(e.date, e.time, description, legs), ts, ts])
             try insertPostings(db, entryId, legs)
             // Rule-added tags land inside the same SAVEPOINT (the entry row exists).

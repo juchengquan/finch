@@ -117,7 +117,23 @@ public enum Migrations {
             try Self.ensureMetadataRow(db)   // re-stamp schema_version
         }
 
+        // Links the transactions of one grid purchase (see Schema's `group_id`).
+        // Additive + nullable; tolerant of a duplicate column, since an imported
+        // web pack may already carry it while lacking GRDB's bookkeeping table.
+        migrator.registerMigration("2026-08-03-entry-group-id") { db in
+            try Self.addEntryGroupId(db)
+            try Self.ensureMetadataRow(db)   // re-stamp schema_version
+        }
+
         return migrator
+    }
+
+    /// Add `entries.group_id`, tolerating a database that already has it.
+    /// Exposed so it can be tested directly — a migration is recorded as applied
+    /// on a fresh database before any test could exercise it.
+    static func addEntryGroupId(_ db: Database) throws {
+        do { try db.execute(sql: "ALTER TABLE entries ADD COLUMN group_id TEXT") }
+        catch { if !"\(error)".contains("duplicate column") { throw error } }
     }
 
     /// Merge every plain category leg of a both-axes entry into its dominant one

@@ -32,6 +32,11 @@ public struct Tx: Identifiable, Codable, Equatable, Sendable {
     /// before this field existed. NOTHING persists `Tx`, so there is no
     /// migration to write. Prefer `purchaseKey` over reading this directly.
     public var entryId: String?
+    /// Links this row to the other transactions of one grid purchase — a purchase
+    /// split by card AND by category, stored as one entry per card. NULL for
+    /// everything else. Optional for the same reason as `entryId`: the parity
+    /// fixtures decode `[Tx]` from JSON written before the field existed.
+    public var groupId: String?
     public var counterpartyId: String?
     public var splits: [TxSplit]?
     public var tags: [String]?
@@ -51,7 +56,7 @@ public struct Tx: Identifiable, Codable, Equatable, Sendable {
                 account: String, date: String, pending: Bool? = nil, ledgerId: String? = nil,
                 currency: String? = nil, nativeAmount: Double? = nil, time: String? = nil,
                 kind: String? = nil, transferGroupId: String? = nil, accountLegCount: Int? = nil,
-                entryId: String? = nil, counterpartyId: String? = nil,
+                entryId: String? = nil, groupId: String? = nil, counterpartyId: String? = nil,
                 splits: [TxSplit]? = nil, tags: [String]? = nil, note: String? = nil,
                 sourceTemplateId: String? = nil, occurrenceDate: String? = nil,
                 refundedTransactionId: String? = nil,
@@ -60,7 +65,7 @@ public struct Tx: Identifiable, Codable, Equatable, Sendable {
         self.account = account; self.date = date; self.pending = pending; self.ledgerId = ledgerId
         self.currency = currency; self.nativeAmount = nativeAmount; self.time = time; self.kind = kind
         self.transferGroupId = transferGroupId; self.accountLegCount = accountLegCount
-        self.entryId = entryId
+        self.entryId = entryId; self.groupId = groupId
         self.counterpartyId = counterpartyId; self.splits = splits
         self.tags = tags; self.note = note; self.sourceTemplateId = sourceTemplateId
         self.occurrenceDate = occurrenceDate
