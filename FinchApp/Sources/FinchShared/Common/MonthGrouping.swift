@@ -10,6 +10,30 @@ enum MonthGrouping {
         let txns: [Tx]
     }
 
+    /// A month's inclusive ISO bounds — `(2026-08-01, 2026-08-31)` for any instant
+    /// inside August 2026. Civil-calendar components, per the `AppDate` rule.
+    static func monthBounds(_ d: Date) -> (start: String, end: String) {
+        let y = AppDate.civil.component(.year, from: d)
+        let m = AppDate.civil.component(.month, from: d)
+        let days = AppDate.civil.range(of: .day, in: .month, for: d)?.count ?? 30
+        return (String(format: "%04d-%02d-01", y, m), String(format: "%04d-%02d-%02d", y, m, days))
+    }
+
+    /// The month calendar's data window: the month BEFORE `d` through the month
+    /// AFTER it.
+    ///
+    /// `MonthCashCalendar` draws the anchored month and its neighbours, and asks its
+    /// caller for each page's totals separately — so a caller that expands only the
+    /// anchored month leaves the incoming page drawing bare day numbers under the
+    /// finger, with the figures appearing after the swipe settles. This lives here
+    /// because that is exactly what happened: `ScheduledCalendarView` had the window
+    /// right and the UIKit port re-derived it a month too narrow.
+    static func carouselWindow(_ d: Date) -> (start: String, end: String) {
+        let prev = AppDate.civil.date(byAdding: .month, value: -1, to: d) ?? d
+        let next = AppDate.civil.date(byAdding: .month, value: 1, to: d) ?? d
+        return (monthBounds(prev).start, monthBounds(next).end)
+    }
+
     /// Group `txns` into month sections. Sections appear in the order each month's
     /// FIRST transaction appears in the input — the grouping never sorts. A
     /// date-descending caller (e.g. account detail) therefore gets newest-month-first;
