@@ -291,12 +291,19 @@ struct ScheduledRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            // Thin type stripe — matches TxRow's leading kind stripe (the icon's
-            // replacement) so Scheduled scans the same as the transaction lists.
-            RoundedRectangle(cornerRadius: 1.5)
-                .fill(typeColor)
-                .frame(width: 3)
+        let glyph = store.rowGlyph(categoryId: template.categoryId, kind: template.type)
+        return HStack(spacing: 8) {
+            // Leading category icon — matches TxRow, so Scheduled still scans the same
+            // as the transaction lists. Here it also ADDS information: this row's title
+            // is the template's name, so the category is not otherwise shown.
+            //
+            // It carries the TYPE label for the same reason TxRow's does: the row is a
+            // combined accessibility element, so a label left on the now-trailing stripe
+            // would be spoken after the amount.
+            Image(systemName: glyph.symbol)
+                .font(.system(size: 18))
+                .foregroundStyle(glyphTint(glyph.tint))
+                .frame(width: 22)
                 .accessibilityLabel(typeA11yLabel)
             VStack(alignment: .leading, spacing: 2) {
                 Text(template.name).fontWeight(.medium)
@@ -313,6 +320,21 @@ struct ScheduledRow: View {
             } else {
                 Text("Variable").font(.caption).foregroundStyle(.secondary)
             }
+            // Thin type stripe, now at the TRAILING edge beside the amount — mirrors
+            // TxRow's move so the two lists still scan alike.
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(typeColor)
+                .frame(width: 3)
+                .accessibilityHidden(true)
+        }
+    }
+
+    /// `RowGlyph.Tint` → a real colour; mirrors `TxRow.glyphTint`.
+    private func glyphTint(_ tint: RowGlyph.Tint) -> Color {
+        switch tint {
+        case .category(let hex): Color(hex: hex) ?? .secondary
+        case .kind:              typeColor
+        case .unset:             .secondary
         }
     }
 }

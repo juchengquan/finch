@@ -641,12 +641,23 @@ struct TxRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            // Thin kind/direction stripe — the leading icon's replacement: near-zero
-            // width, consistent on every row, scannable down the column.
-            RoundedRectangle(cornerRadius: 1.5)
-                .fill(kindColor)
-                .frame(width: 3)
+        let glyph = store.rowGlyph(categoryId: txn.category, kind: txn.kind)
+        return HStack(spacing: 8) {
+            // Leading category icon — what the stripe used to stand in for.
+            //
+            // It carries the KIND label, which is why the stripe below does not. The row
+            // is one combined accessibility element (see `TxRowCell`), so its spoken
+            // label follows LAYOUT order: with the stripe moved to the trailing edge, a
+            // label left on it would announce the amount before saying whether the row
+            // was income, a refund or a transfer — none of which the amount alone tells
+            // you. Hanging it on the leading icon keeps speech opening with the kind, as
+            // it did before, without a phantom zero-width view to carry it. (An empty
+            // `Text` cannot: it contributes nothing to a combined label. Measured — the
+            // kind vanished from the tree entirely.)
+            Image(systemName: glyph.symbol)
+                .font(.system(size: 18))
+                .foregroundStyle(glyphTint(glyph.tint))
+                .frame(width: 22)
                 .accessibilityLabel(kindA11yLabel)
             VStack(alignment: .leading, spacing: 1) {
                 // Top-left: category is the title (merchant lives in edit/detail
@@ -721,6 +732,24 @@ struct TxRow: View {
                         .accessibilityLabel("Balance after")
                 }
             }
+            // Thin kind/direction stripe, now at the TRAILING edge beside the amount.
+            // Fixed width, so every amount shifts left by the same 11pt and the amount
+            // column stays aligned across rows. Hidden from VoiceOver — the zero-width
+            // element at the leading edge speaks the kind instead, keeping it first.
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(kindColor)
+                .frame(width: 3)
+                .accessibilityHidden(true)
+        }
+    }
+
+    /// `RowGlyph.Tint` → a real colour. The tint cases stay colour-free so the glyph
+    /// choice can be unit-tested without a view; this is where they land.
+    private func glyphTint(_ tint: RowGlyph.Tint) -> Color {
+        switch tint {
+        case .category(let hex): Color(hex: hex) ?? .secondary
+        case .kind:              kindColor
+        case .unset:             .secondary
         }
     }
 }
