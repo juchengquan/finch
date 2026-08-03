@@ -102,11 +102,9 @@ struct CategoriesView: View {
                                 mergingFrom = nil
                             } label: {
                                 HStack(spacing: 10) {
-                                    ZStack {
-                                        Circle().fill(Color(hex: effectiveColor(f.row, byId)) ?? .gray).frame(width: 24, height: 24)
-                                        Image(systemName: CategoryIcon.symbol(for: effectiveIcon(f.row, byId)))
-                                            .font(.system(size: 11)).foregroundStyle(.white)
-                                    }
+                                    RowGlyphView(
+                                        symbol: CategoryIcon.symbol(for: effectiveIcon(f.row, byId)),
+                                        tint: Color(hex: effectiveColor(f.row, byId)) ?? .secondary)
                                     Text(String(repeating: "   ", count: f.depth) + f.row.name).foregroundStyle(.primary)
                                 }
                             }
@@ -362,11 +360,8 @@ struct CategoriesView: View {
                 }
             } label: {
                 HStack(spacing: 10) {
-                    ZStack {
-                        Circle().fill(Color(hex: effectiveColor(c, byId)) ?? .gray).frame(width: 26, height: 26)
-                        Image(systemName: CategoryIcon.symbol(for: effectiveIcon(c, byId)))
-                            .font(.system(size: 12)).foregroundStyle(.white)
-                    }
+                    RowGlyphView(symbol: CategoryIcon.symbol(for: effectiveIcon(c, byId)),
+                                 tint: Color(hex: effectiveColor(c, byId)) ?? .secondary)
                     Text(c.name).foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     if !isReordering { CountPill(count: counts[c.id] ?? 0) }

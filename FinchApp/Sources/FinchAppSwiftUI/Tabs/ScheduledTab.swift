@@ -300,10 +300,7 @@ struct ScheduledRow: View {
             // It carries the TYPE label for the same reason TxRow's does: the row is a
             // combined accessibility element, so a label left on the now-trailing stripe
             // would be spoken after the amount.
-            Image(systemName: glyph.symbol)
-                .font(.system(size: 18))
-                .foregroundStyle(glyphTint(glyph.tint))
-                .frame(width: 22)
+            RowGlyphView(symbol: glyph.symbol, tint: glyphTint(glyph.tint))
                 .accessibilityLabel(typeA11yLabel)
             VStack(alignment: .leading, spacing: 2) {
                 Text(template.name).fontWeight(.medium)
