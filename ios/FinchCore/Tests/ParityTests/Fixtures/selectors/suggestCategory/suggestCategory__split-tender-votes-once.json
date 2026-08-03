@@ -1,0 +1,48 @@
+{
+  "name": "split-tender-votes-once",
+  "selector": "suggestCategory",
+  "input": {
+    "txns": [
+      {
+        "id": "v1",
+        "merchant": "Market",
+        "category": "food",
+        "amount": -60,
+        "account": "a1",
+        "date": "2026-05-01",
+        "pending": false,
+        "ledgerId": "personal",
+        "entryId": "e1"
+      },
+      {
+        "id": "v2",
+        "merchant": "Market",
+        "category": "food",
+        "amount": -40,
+        "account": "a2",
+        "date": "2026-05-01",
+        "pending": false,
+        "ledgerId": "personal",
+        "entryId": "e1"
+      },
+      {
+        "id": "v3",
+        "merchant": "Market",
+        "category": "shopping",
+        "amount": -50,
+        "account": "a1",
+        "date": "2026-05-01",
+        "pending": false,
+        "ledgerId": "personal",
+        "entryId": "e2"
+      }
+    ],
+    "ledgerId": "personal",
+    "description": "Market"
+  },
+  "expected": {
+    "categoryId": "food",
+    "count": 1,
+    "confidence": 0.5
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "name": "split-tender-omitted",
+  "selector": "recentExpenses",
+  "input": {
+    "txns": [
+      {
+        "id": "s1",
+        "merchant": "Market",
+        "category": "food",
+        "amount": -60,
+        "account": "a1",
+        "date": "2026-05-05",
+        "pending": false,
+        "ledgerId": "personal",
+        "time": "10:00",
+        "entryId": "e1",
+        "accountLegCount": 2
+      },
+      {
+        "id": "s2",
+        "merchant": "Market",
+        "category": "food",
+        "amount": -40,
+        "account": "a2",
+        "date": "2026-05-05",
+        "pending": false,
+        "ledgerId": "personal",
+        "time": "10:00",
+        "entryId": "e1",
+        "accountLegCount": 2
+      },
+      {
+        "id": "s3",
+        "merchant": "Coffee",
+        "category": "food",
+        "amount": -4,
+        "account": "a1",
+        "date": "2026-05-04",
+        "pending": false,
+        "ledgerId": "personal",
+        "time": "09:00",
+        "entryId": "e2",
+        "accountLegCount": 1
+      }
+    ],
+    "ledgerId": "personal",
+    "limit": 5
+  },
+  "expected": [
+    {
+      "merchant": "Coffee",
+      "amount": 4,
+      "currency": "USD",
+      "accountId": "a1",
+      "categoryId": "food"
+    }
+  ]
+}

@@ -124,6 +124,18 @@ export const CASES: SelectorCase[] = [
       txOf({ id: 't4', merchant: 'Gas', amount: -40 }),
     ], ledgerId: 'personal' } },
 
+  // A purchase paid from TWO accounts: one entry, two rows. Counted per row it is
+  // two spends of 60 and 40; counted per purchase it is one of 100. Without a case
+  // like this the fix is invisible to the oracle — every other case is single-leg,
+  // so both implementations agree whatever they do.
+  { name: 'split-tender', selector: 'merchantStats',
+    input: { txns: [
+      txOf({ id: 't1', merchant: 'Market', amount: -50, entryId: 'e1' }),
+      txOf({ id: 't2', merchant: 'Market', amount: -70, entryId: 'e2' }),
+      txOf({ id: 't3', merchant: 'Market', amount: -60, account: 'a1', entryId: 'e3' }),
+      txOf({ id: 't4', merchant: 'Market', amount: -40, account: 'a2', entryId: 'e3' }),
+    ], ledgerId: 'personal' } },
+
   // ── anomalyScore(tx, stats, opts?) — `stats` authored as a plain object; the
   //    generator rebuilds it into a Map<string, MerchantStats> before calling. ──
   // `stats` keys are the selector's merchant key = `m:<lowercased merchant>`
@@ -200,6 +212,15 @@ export const CASES: SelectorCase[] = [
       txOf({ id: 't2', merchant: 'Gas', category: 'transport', amount: -20, account: 'a1', date: '2026-05-05', time: '12:00' }),
     ], ledgerId: 'personal', limit: 5 } },
 
+  // A split purchase offers no Watch shortcut: quick-add can only write a
+  // single-card transaction, so a two-card purchase cannot be repeated in one tap.
+  { name: 'split-tender-omitted', selector: 'recentExpenses',
+    input: { txns: [
+      txOf({ id: 's1', merchant: 'Market', category: 'food', amount: -60, account: 'a1', date: '2026-05-05', time: '10:00', entryId: 'e1', accountLegCount: 2 }),
+      txOf({ id: 's2', merchant: 'Market', category: 'food', amount: -40, account: 'a2', date: '2026-05-05', time: '10:00', entryId: 'e1', accountLegCount: 2 }),
+      txOf({ id: 's3', merchant: 'Coffee', category: 'food', amount: -4, account: 'a1', date: '2026-05-04', time: '09:00', entryId: 'e2', accountLegCount: 1 }),
+    ], ledgerId: 'personal', limit: 5 } },
+
   // ── findDuplicate(txns, ledgerId, draft) → DuplicateMatch | null ──
   { name: 'near-match', selector: 'findDuplicate',
     input: { txns: [txOf({ id: 'tdup', merchant: 'Coffee', amount: -4.5, account: 'a1', date: '2026-05-09' })],
@@ -210,12 +231,40 @@ export const CASES: SelectorCase[] = [
       ledgerId: 'personal',
       draft: { merchant: 'Zzz', amount: -9.9, accountId: 'a1', date: '2026-05-10' } } },
 
+  // Re-adding a 100 purchase that already exists as 60 + 40. Matching row-by-row
+  // finds neither a 100 row nor a single card the purchase is "on", so no warning
+  // fired at all — the check has to compare the purchase total against the SET of
+  // paying cards. Drafted on the second card, which is the harder half.
+  { name: 'split-tender-by-total', selector: 'findDuplicate',
+    input: { txns: [
+      txOf({ id: 'd1', merchant: 'Market', amount: -60, account: 'a1', date: '2026-05-09', entryId: 'e1' }),
+      txOf({ id: 'd2', merchant: 'Market', amount: -40, account: 'a2', date: '2026-05-09', entryId: 'e1' }),
+    ], ledgerId: 'personal',
+      draft: { merchant: 'Market', amount: -100, accountId: 'a2', date: '2026-05-10' } } },
+  // …and one leg's amount is NOT the purchase, so it must not match.
+  { name: 'split-tender-leg-is-not-a-match', selector: 'findDuplicate',
+    input: { txns: [
+      txOf({ id: 'd1', merchant: 'Market', amount: -60, account: 'a1', date: '2026-05-09', entryId: 'e1' }),
+      txOf({ id: 'd2', merchant: 'Market', amount: -40, account: 'a2', date: '2026-05-09', entryId: 'e1' }),
+    ], ledgerId: 'personal',
+      draft: { merchant: 'Market', amount: -60, accountId: 'a1', date: '2026-05-10' } } },
+
   // ── suggestCategory(txns, ledgerId, description, counterpartyId?, opts?) → CategorySuggestion | null ──
   { name: 'by-merchant', selector: 'suggestCategory',
     input: { txns: [
       txOf({ id: 't1', merchant: 'Coffee', category: 'food', amount: -4 }),
       txOf({ id: 't2', merchant: 'Coffee', category: 'food', amount: -5 }),
     ], ledgerId: 'personal', description: 'Coffee' } },
+
+  // A habitually-split merchant otherwise gets double weight: the split purchase
+  // votes twice for 'food' and the ordinary one once for 'shopping', turning a
+  // genuine tie into a 2:1 win.
+  { name: 'split-tender-votes-once', selector: 'suggestCategory',
+    input: { txns: [
+      txOf({ id: 'v1', merchant: 'Market', category: 'food', amount: -60, account: 'a1', entryId: 'e1' }),
+      txOf({ id: 'v2', merchant: 'Market', category: 'food', amount: -40, account: 'a2', entryId: 'e1' }),
+      txOf({ id: 'v3', merchant: 'Market', category: 'shopping', amount: -50, account: 'a1', entryId: 'e2' }),
+    ], ledgerId: 'personal', description: 'Market' } },
 
   // ── weeklyDigest(txns, ledgerId, anchor) → WeeklyDigest | null ──
   // anchor 2026-05-18 is a Monday → reported week is Mon 05-11 … Sun 05-17.
@@ -228,6 +277,17 @@ export const CASES: SelectorCase[] = [
       txOf({ id: 'w4', category: 'shopping', amount: -80, date: '2026-05-15' }),    // this week (biggest)
       txOf({ id: 'p1', category: 'food', amount: -100, date: '2026-05-06' }),       // prev week
       txOf({ id: 'a1', category: 'food', amount: -60, date: '2026-03-10' }),        // avg window
+    ], ledgerId: 'personal', anchor: '2026-05-18' } },
+
+  // The adversarial "biggest" case. A 200 purchase paid 120 + 80 against an
+  // unsplit 150: each leg ALONE loses to 150, so ranked per row the smaller
+  // purchase wins. Only a purchase-sized comparison gets it right — and txCount
+  // must read 2, not 3.
+  { name: 'split-tender-biggest', selector: 'weeklyDigest',
+    input: { txns: [
+      txOf({ id: 'b1', merchant: 'Market', category: 'food', amount: -120, account: 'a1', date: '2026-05-12', entryId: 'e1' }),
+      txOf({ id: 'b2', merchant: 'Market', category: 'food', amount: -80, account: 'a2', date: '2026-05-12', entryId: 'e1' }),
+      txOf({ id: 'b3', merchant: 'Sofa', category: 'shopping', amount: -150, account: 'a1', date: '2026-05-13', entryId: 'e2' }),
     ], ledgerId: 'personal', anchor: '2026-05-18' } },
 
   // ════════════ Phase 1.5 — batch 3a: account / net worth ════════════

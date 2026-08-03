@@ -1,0 +1,72 @@
+{
+  "name": "split-tender-biggest",
+  "selector": "weeklyDigest",
+  "input": {
+    "txns": [
+      {
+        "id": "b1",
+        "merchant": "Market",
+        "category": "food",
+        "amount": -120,
+        "account": "a1",
+        "date": "2026-05-12",
+        "pending": false,
+        "ledgerId": "personal",
+        "entryId": "e1"
+      },
+      {
+        "id": "b2",
+        "merchant": "Market",
+        "category": "food",
+        "amount": -80,
+        "account": "a2",
+        "date": "2026-05-12",
+        "pending": false,
+        "ledgerId": "personal",
+        "entryId": "e1"
+      },
+      {
+        "id": "b3",
+        "merchant": "Sofa",
+        "category": "shopping",
+        "amount": -150,
+        "account": "a1",
+        "date": "2026-05-13",
+        "pending": false,
+        "ledgerId": "personal",
+        "entryId": "e2"
+      }
+    ],
+    "ledgerId": "personal",
+    "anchor": "2026-05-18"
+  },
+  "expected": {
+    "weekStart": "2026-05-11",
+    "weekEnd": "2026-05-17",
+    "spent": 350,
+    "income": 0,
+    "net": -350,
+    "prevSpent": null,
+    "vsPrevPct": null,
+    "avgSpent": 0,
+    "avgWeeks": 0,
+    "vsAvgPct": null,
+    "topCategories": [
+      {
+        "categoryId": "food",
+        "amount": 200
+      },
+      {
+        "categoryId": "shopping",
+        "amount": 150
+      }
+    ],
+    "biggestExpense": {
+      "txId": "b1",
+      "merchant": "Market",
+      "amount": 200,
+      "date": "2026-05-12"
+    },
+    "txCount": 2
+  }
+}
