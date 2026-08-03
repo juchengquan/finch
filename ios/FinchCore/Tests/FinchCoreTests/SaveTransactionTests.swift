@@ -167,3 +167,74 @@ final class SaveTransactionTests: XCTestCase {
         XCTAssertNotNil(cp, "resolve-or-create, in one write")
     }
 }
+
+/// The guards the Edit sheet's account editor depends on. It can send 1..N cards
+/// for an existing purchase, so the engine has to be exact about what it accepts.
+final class SaveTransactionAccountEditTests: XCTestCase {
+
+    private func seed() throws -> DatabaseQueue {
+        let q = try TestSeed.base()
+        try q.write { db in
+            try db.execute(sql: """
+                INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+                VALUES ('a2','l1','Card','credit_card','USD',0,1,1,1,datetime('now'),datetime('now'))
+                """)
+        }
+        return q
+    }
+
+    private func args(id: String? = nil, cells: [(String, Double)], kind: String = "expense") -> Args {
+        var o: [String: JSONValue] = [
+            "ledgerId": .string("l1"), "date": .string("2026-06-01"), "time": .string("12:00"),
+            "merchant": .string("Market"), "kind": .string(kind), "currency": .string("USD"),
+            "cells": .array(cells.map { .object([
+                "accountId": .string($0.0), "categoryId": .string("c1"), "amount": .double($0.1),
+            ])}),
+        ]
+        if let id { o["id"] = .string(id) }
+        return Args(o)
+    }
+
+    /// Collapsing a split back to one card: the other payment's posting must go,
+    /// not linger with a zero amount.
+    func test_aTwoCardPurchaseCollapsesToOne() throws {
+        let q = try seed()
+        let id = try Apply.applyReturningId(dbQueue: q, action: "saveTransaction",
+                                            args: args(cells: [("a1", -60), ("a2", -40)]))!
+        try Apply.apply(dbQueue: q, action: "saveTransaction", args: args(id: id, cells: [("a1", -100)]))
+
+        let legs = try q.read { db in
+            try Row.fetchAll(db, sql: "SELECT account_id, amount FROM postings WHERE entry_id = ? AND account_id IS NOT NULL", arguments: [id])
+        }
+        XCTAssertEqual(legs.count, 1, "the removed card's posting is gone, not zeroed")
+        XCTAssertEqual(legs[0]["account_id"] as String?, "a1")
+        XCTAssertEqual(legs[0]["amount"] as Double, -100, accuracy: 0.001)
+        XCTAssertTrue(try Audit.run(on: q).isEmpty)
+    }
+
+    /// Zero cards is not a purchase.
+    func test_zeroCardsIsRefused() throws {
+        let q = try seed()
+        XCTAssertThrowsError(try Apply.apply(dbQueue: q, action: "saveTransaction", args: args(cells: [])))
+    }
+
+    /// A share whose sign disagrees with the kind is REJECTED, never coerced.
+    /// Coercing would silently record a purchase the user did not describe — an
+    /// expense leg that adds money, or an income leg that removes it.
+    func test_aShareWhoseSignDisagreesWithTheKindIsRejected() throws {
+        let q = try seed()
+        XCTAssertThrowsError(try Apply.apply(dbQueue: q, action: "saveTransaction",
+                                             args: args(cells: [("a1", -60), ("a2", 40)]))) { error in
+            XCTAssertEqual((error as? I18nError)?.code, "error.split.signMismatch",
+                           "one card cannot pay a negative share of an expense while another receives")
+        }
+    }
+
+    /// …and the same for income, so the rule is about agreement with `kind`
+    /// rather than about negativity.
+    func test_anIncomeShareThatRemovesMoneyIsRejected() throws {
+        let q = try seed()
+        XCTAssertThrowsError(try Apply.apply(dbQueue: q, action: "saveTransaction",
+                                             args: args(cells: [("a1", 60), ("a2", -40)], kind: "income")))
+    }
+}

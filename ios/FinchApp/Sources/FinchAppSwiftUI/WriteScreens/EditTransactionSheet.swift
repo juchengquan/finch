@@ -38,6 +38,14 @@ struct EditTransactionSheet: View {
     @State private var previewURL: URL?
     @State private var status: Entries.Status
     @State private var accountId: String
+    /// How this purchase was PAID — one row per card. Seeded from the entry's own
+    /// account legs, so opening a split-tender purchase shows what it actually is
+    /// rather than the single posting that happened to be tapped.
+    ///
+    /// Without this the sheet bound a single-select picker to one leg and sent
+    /// `patch["account"]`, which the engine refuses on a multi-account entry: the
+    /// engine accepted multi-account edits and nothing sent them.
+    @State private var accountAlloc = SplitAllocation(total: 0)
     @State private var refundedTxId: String?
     @State private var showingRefundPicker = false
     @State private var currencyCode: String
@@ -192,7 +200,9 @@ struct EditTransactionSheet: View {
                 } else {
                     Section {
                         SearchablePickerRow(title: "Account", glyph: .account,
-                            accounts: store.accounts, selection: $accountId)
+                            accounts: store.accounts, selection: $accountId,
+                            splitting: $accountAlloc,
+                            currency: currencyCode.isEmpty ? accountCurrency : currencyCode)
                         FieldRow(glyph: .amount, title: "Amount", trailing: {
                             // Currency lives inline with the amount, always visible.
                             Picker("", selection: $currencyCode) {
@@ -230,7 +240,9 @@ struct EditTransactionSheet: View {
                 if isSplit {
                     Section {
                         SearchablePickerRow(title: "Account", glyph: .account,
-                            accounts: store.accounts, selection: $accountId)
+                            accounts: store.accounts, selection: $accountId,
+                            splitting: $accountAlloc,
+                            currency: currencyCode.isEmpty ? accountCurrency : currencyCode)
                     } header: {
                         finchSectionHeader("Account")
                     }
@@ -393,6 +405,21 @@ struct EditTransactionSheet: View {
             .onAppear {
                 attachments = store.attachments(for: txn.id)
                 if currencyCode.isEmpty { currencyCode = accountCurrency }
+                // Seed the payment split from the entry's OWN legs, so opening a
+                // split-tender purchase shows what it actually is rather than the
+                // single posting that happened to be tapped. Seeded here rather
+                // than in init because `store` is an @EnvironmentObject.
+                //
+                // Rows arrive PINNED via `merging` — they are amounts the user set
+                // before, and must not be re-divided just by opening the sheet.
+                let legs = store.txns.filter { $0.entryId != nil && $0.entryId == txn.entryId }
+                if legs.count >= 2 {
+                    accountAlloc = SplitAllocation.merging(
+                        legs.map { (id: Optional($0.account), amount: abs($0.amount)) },
+                        total: abs(legs.reduce(0) { $0 + $1.amount }))
+                } else {
+                    accountAlloc.setTotal(abs(txn.nativeAmount ?? txn.amount))
+                }
                 if let legs = transferLegs {
                     fromAmountText = String(format: "%g", abs(legs.from.nativeAmount ?? legs.from.amount))
                     toAmountText = String(format: "%g", abs(legs.to.nativeAmount ?? legs.to.amount))
@@ -478,7 +505,9 @@ struct EditTransactionSheet: View {
         // The cells ARE the purchase, so there is no ordering left to get wrong:
         // the amount, the categories and the tags land together or not at all.
         let parsedAmount: Double
-        if isSplit {
+        if accountAlloc.payload.count >= 2 {
+            parsedAmount = abs(accountAlloc.total)
+        } else if isSplit {
             parsedAmount = abs(splitAlloc.total)
         } else {
             guard let parsed = DecimalInput.parse(amountText), parsed > 0 else {
@@ -490,7 +519,19 @@ struct EditTransactionSheet: View {
         let sign: Double = effKind == "expense" ? -1 : 1
         let targetAccount = accountId.isEmpty ? txn.account : accountId
         var cells: [JSONValue] = []
-        if splitAlloc.payload.count >= 2 {
+        if accountAlloc.payload.count >= 2 {
+            // Paid from several cards. One category across them, because a single
+            // transaction is split on at most one axis — both axes is the grid,
+            // which is several transactions and reopens through the Add flow.
+            let cat: JSONValue = categoryId.isEmpty ? .null : .string(categoryId)
+            for share in accountAlloc.payload {
+                cells.append(.object([
+                    "accountId": .string(share.id ?? targetAccount),
+                    "categoryId": cat,
+                    "amount": .double(sign * abs(share.amount)),
+                ]))
+            }
+        } else if splitAlloc.payload.count >= 2 {
             for share in splitAlloc.payload {
                 cells.append(.object([
                     "accountId": .string(targetAccount),
