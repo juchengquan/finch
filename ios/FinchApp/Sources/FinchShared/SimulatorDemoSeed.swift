@@ -68,21 +68,29 @@ enum SimulatorDemoSeed {
         }
 
         // Categories (explicit ids so transactions/budgets can reference them).
-        let categories: [(id: String, name: String, kind: String)] = [
-            ("cat-groceries", "Groceries", "expense"),
-            ("cat-dining", "Dining", "expense"),
-            ("cat-transport", "Transport", "expense"),
-            ("cat-shopping", "Shopping", "expense"),
-            ("cat-entertainment", "Entertainment", "expense"),
-            ("cat-utilities", "Utilities", "expense"),
-            ("cat-rent", "Rent", "expense"),
-            ("cat-health", "Health", "expense"),
-            ("cat-salary", "Salary", "income"),
+        //
+        // ICONS ARE SEEDED. Every transaction row draws its category's icon at the
+        // leading edge, and an icon is optional on a category — so a seed without them
+        // renders the whole feed as one repeated fallback tag, which is a demo of
+        // nothing. Subcategories deliberately set none of their own: they INHERIT from
+        // the parent (`effectiveIcon` walks ancestors), and leaving them unset is what
+        // exercises that path.
+        let categories: [(id: String, name: String, kind: String, icon: String)] = [
+            ("cat-groceries", "Groceries", "expense", "cart"),
+            ("cat-dining", "Dining", "expense", "fork"),
+            ("cat-transport", "Transport", "expense", "car"),
+            ("cat-shopping", "Shopping", "expense", "bag"),
+            ("cat-entertainment", "Entertainment", "expense", "film"),
+            ("cat-utilities", "Utilities", "expense", "bolt"),
+            ("cat-rent", "Rent", "expense", "home"),
+            ("cat-health", "Health", "expense", "cross"),
+            ("cat-salary", "Salary", "income", "briefcase"),
         ]
         for c in categories {
             try apply("createCategory", [
                 "id": .string(c.id), "ledgerId": .string("personal"),
-                "name": .string(c.name), "type": .string(c.kind)])
+                "name": .string(c.name), "type": .string(c.kind),
+                "icon": .string(c.icon)])
         }
 
         // Subcategories (parent_id) — categories nest up to `Categories.maxDepth`, so the
@@ -343,14 +351,15 @@ enum SimulatorDemoSeed {
                 "id": .string(a.id), "ledgerId": .string("travel"), "name": .string(a.name),
                 "type": .string(a.type), "currency": .string("EUR"), "openingBalance": .double(a.opening)])
         }
-        let travelCategories: [(id: String, name: String)] = [
-            ("tcat-flights", "Flights"), ("tcat-lodging", "Lodging"),
-            ("tcat-food", "Food & Drink"), ("tcat-activities", "Activities"),
+        let travelCategories: [(id: String, name: String, icon: String)] = [
+            ("tcat-flights", "Flights", "plane"), ("tcat-lodging", "Lodging", "hotel"),
+            ("tcat-food", "Food & Drink", "fork"), ("tcat-activities", "Activities", "ticket"),
         ]
         for c in travelCategories {
             try apply("createCategory", [
                 "id": .string(c.id), "ledgerId": .string("travel"),
-                "name": .string(c.name), "type": .string("expense")])
+                "name": .string(c.name), "type": .string("expense"),
+                "icon": .string(c.icon)])
         }
         let travelTxns: [(d: Int, acct: String, amt: Double, merchant: String, cat: String)] = [
             (3,  "tvl-card",     -420.00, "Lufthansa",     "tcat-flights"),
@@ -380,17 +389,18 @@ enum SimulatorDemoSeed {
                 "id": .string(a.id), "ledgerId": .string("business"), "name": .string(a.name),
                 "type": .string(a.type), "currency": .string("USD"), "openingBalance": .double(a.opening)])
         }
-        let bizCategories: [(id: String, name: String, kind: String)] = [
-            ("bcat-income", "Client Income", "income"),
-            ("bcat-software", "Software", "expense"),
-            ("bcat-office", "Office", "expense"),
-            ("bcat-travel", "Travel", "expense"),
-            ("bcat-marketing", "Marketing", "expense"),
+        let bizCategories: [(id: String, name: String, kind: String, icon: String)] = [
+            ("bcat-income", "Client Income", "income", "coins"),
+            ("bcat-software", "Software", "expense", "laptop"),
+            ("bcat-office", "Office", "expense", "office"),
+            ("bcat-travel", "Travel", "expense", "suitcase"),
+            ("bcat-marketing", "Marketing", "expense", "analytics"),
         ]
         for c in bizCategories {
             try apply("createCategory", [
                 "id": .string(c.id), "ledgerId": .string("business"),
-                "name": .string(c.name), "type": .string(c.kind)])
+                "name": .string(c.name), "type": .string(c.kind),
+                "icon": .string(c.icon)])
         }
         // Business categories nest too (Software › SaaS / One-time).
         for (id, name) in [("bcat-software-saas", "SaaS"), ("bcat-software-onetime", "One-time")] {
@@ -435,14 +445,15 @@ enum SimulatorDemoSeed {
                 "id": .string(a.id), "ledgerId": .string("ukflat"), "name": .string(a.name),
                 "type": .string(a.type), "currency": .string("GBP"), "openingBalance": .double(a.opening)])
         }
-        let ukCategories: [(id: String, name: String)] = [
-            ("ucat-rent", "Flat Rent"), ("ucat-council", "Council Tax"),
-            ("ucat-energy", "Energy"), ("ucat-groceries", "Groceries"),
+        let ukCategories: [(id: String, name: String, icon: String)] = [
+            ("ucat-rent", "Flat Rent", "home"), ("ucat-council", "Council Tax", "doc"),
+            ("ucat-energy", "Energy", "flame"), ("ucat-groceries", "Groceries", "cart"),
         ]
         for c in ukCategories {
             try apply("createCategory", [
                 "id": .string(c.id), "ledgerId": .string("ukflat"),
-                "name": .string(c.name), "type": .string("expense")])
+                "name": .string(c.name), "type": .string("expense"),
+                "icon": .string(c.icon)])
         }
         let ukTxns: [(d: Int, acct: String, amt: Double, merchant: String, cat: String)] = [
             (3,  "uk-current", -1_200.00, "Flat Rent",   "ucat-rent"),
