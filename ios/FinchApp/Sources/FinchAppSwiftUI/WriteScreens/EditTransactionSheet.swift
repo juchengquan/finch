@@ -574,44 +574,52 @@ struct EditTransactionSheet: View {
         } catch { Haptics.warning(); errorMessage = i18nMessage(error) }
     }
 
-    /// Transfer legs save through the engine's updateTransfer (entry-level:
-    /// amounts/date/time/note — keeps BOTH legs consistent; the old single-leg
-    /// patch path could diverge them). Merchant/status go through the plain
-    /// updateTransaction patch (entry-level on a transfer); tags via
-    /// setTransactionTags.
+    /// A transfer saves through the same one write every other kind uses.
+    ///
+    /// This used to fire up to three commands — `updateTransfer` for the money,
+    /// `updateTransaction` for the status, `setTransactionTags` for the tags — so
+    /// a failure partway left the transfer changed but its status or tags stale.
+    /// One command replaces the transfer's contents wholesale.
+    ///
+    /// The two amounts are each in their OWN card's currency: there is no single
+    /// purchase currency when 110 USD leaves one card and 100 EUR arrives at
+    /// another, and the user types both. No `currency` is sent, so the engine
+    /// takes each as given.
+    ///
+    /// The accounts stay read-only here, as they were — changing which cards a
+    /// transfer moves between is not something this sheet offers.
     private func saveTransfer() {
         errorMessage = nil
         guard let legs = transferLegs else { errorMessage = "Transfer legs not found."; return }
-        let result = TransferEditPatch.build(.init(
-            sameCurrency: transferSameCurrency,
-            originalFrom: abs(legs.from.nativeAmount ?? legs.from.amount),
-            originalTo: abs(legs.to.nativeAmount ?? legs.to.amount),
-            editedFrom: fromAmountText,
-            editedTo: transferSameCurrency ? nil : toAmountText,
-            originalDate: txn.date, originalTime: txn.time, originalNote: txn.note,
-            newDate: Self.day(date), newTime: Self.time(date), newNote: note))
-        switch result {
-        case .failure:
-            errorMessage = "Enter an amount greater than 0."
-        case .success(let patch):
-            do {
-                if !patch.isEmpty {
-                    try store.apply(.updateTransfer, Args(["id": .string(txn.id), "patch": .object(patch)]))
-                }
-                var legPatch: [String: JSONValue] = [:]
-                // (Transfers have no Merchant field in the UI — merchant can't change here.)
-                if status != (txn.pending == true ? .pending : .confirmed) { legPatch["status"] = .string(status.rawValue) }
-                if !legPatch.isEmpty {
-                    try store.apply(.updateTransaction, Args(["id": .string(txn.id), "patch": .object(legPatch)]))
-                }
-                if selectedTags != Set(txn.tags ?? []) {
-                    try store.apply(.setTransactionTags, Args(["id": .string(txn.id),
-                        "tagIds": .array(selectedTags.sorted().map { .string($0) })]))
-                }
-                Haptics.success()
-                dismiss()
-            } catch { Haptics.warning(); errorMessage = i18nMessage(error) }
+        guard let from = DecimalInput.parse(fromAmountText), from > 0 else {
+            errorMessage = "Enter an amount greater than 0."; return
         }
+        var to = from
+        if !transferSameCurrency {
+            guard let typed = DecimalInput.parse(toAmountText), typed > 0 else {
+                errorMessage = "Enter an amount greater than 0."; return
+            }
+            to = typed
+        }
+        do {
+            var args: [String: JSONValue] = [
+                "id": .string(txn.id),
+                "ledgerId": .string(store.activeLedgerId), "merchant": .string(""),
+                "date": .string(Self.day(date)), "time": .string(Self.time(date)),
+                "kind": .string("transfer"), "status": .string(status.rawValue),
+                "cells": .array([
+                    .object(["accountId": .string(legs.from.account), "categoryId": .null,
+                             "amount": .double(-from)]),
+                    .object(["accountId": .string(legs.to.account), "categoryId": .null,
+                             "amount": .double(to)]),
+                ]),
+                "tagIds": .array(selectedTags.sorted().map { .string($0) }),
+            ]
+            if !note.isEmpty { args["note"] = .string(note) }
+            try store.apply(.saveTransaction, Args(args))
+            Haptics.success()
+            dismiss()
+        } catch { Haptics.warning(); errorMessage = i18nMessage(error) }
     }
 
     /// Run a lifecycle action then dismiss (these don't re-edit the open form).

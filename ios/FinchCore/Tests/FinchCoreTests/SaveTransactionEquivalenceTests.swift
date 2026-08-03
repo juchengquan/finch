@@ -137,4 +137,60 @@ final class SaveTransactionEquivalenceTests: XCTestCase {
         ]))
         XCTAssertEqual(try canonical(new), try canonical(old))
     }
+
+    /// A same-currency transfer. The engine authors the description and both leg
+    /// memos, so a sheet that sends only the two amounts still produces the feed
+    /// text `createTransfer` produced.
+    func test_matchesCreateTransfer_forASameCurrencyTransfer() throws {
+        let old = try seed(), new = try seed()
+
+        try Apply.apply(dbQueue: old, action: "createTransfer", args: Args([
+            "fromAccountId": .string("a1"), "toAccountId": .string("a2"),
+            "fromAmount": .double(100),
+            "date": .string("2026-06-01"), "time": .string("12:00"),
+        ]))
+        try Apply.apply(dbQueue: new, action: "saveTransaction", args: Args([
+            "ledgerId": .string("l1"), "merchant": .string(""),
+            "date": .string("2026-06-01"), "time": .string("12:00"),
+            "kind": .string("transfer"), "currency": .string("USD"), "skipRules": .bool(true),
+            "cells": .array([
+                .object(["accountId": .string("a1"), "categoryId": .null, "amount": .double(-100)]),
+                .object(["accountId": .string("a2"), "categoryId": .null, "amount": .double(100)]),
+            ]),
+        ]))
+        XCTAssertEqual(try canonical(new), try canonical(old))
+    }
+
+    /// A cross-currency transfer: 110 USD out, 100 EUR in. Both numbers are typed
+    /// by the user, so both must survive verbatim — this is the case where
+    /// treating cells as purchase-currency would silently store a different
+    /// transfer.
+    func test_matchesCreateTransfer_forACrossCurrencyTransfer() throws {
+        let old = try seed(), new = try seed()
+        for q in [old, new] {
+            try q.write { db in
+                try db.execute(sql: """
+                    INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+                    VALUES ('eur','l1','Euro','cash','EUR',0,2,1,1,datetime('now'),datetime('now'))
+                    """)
+                try db.execute(sql: "INSERT INTO exchange_rates (date,currency,rate) VALUES ('2026-06-01','EUR',1.10)")
+            }
+        }
+
+        try Apply.apply(dbQueue: old, action: "createTransfer", args: Args([
+            "fromAccountId": .string("a1"), "toAccountId": .string("eur"),
+            "fromAmount": .double(110), "toAmount": .double(100),
+            "date": .string("2026-06-01"), "time": .string("12:00"),
+        ]))
+        try Apply.apply(dbQueue: new, action: "saveTransaction", args: Args([
+            "ledgerId": .string("l1"), "merchant": .string(""),
+            "date": .string("2026-06-01"), "time": .string("12:00"),
+            "kind": .string("transfer"), "skipRules": .bool(true),
+            "cells": .array([
+                .object(["accountId": .string("a1"), "categoryId": .null, "amount": .double(-110)]),
+                .object(["accountId": .string("eur"), "categoryId": .null, "amount": .double(100)]),
+            ]),
+        ]))
+        XCTAssertEqual(try canonical(new), try canonical(old))
+    }
 }

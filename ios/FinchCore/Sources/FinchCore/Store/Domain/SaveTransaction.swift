@@ -35,6 +35,11 @@ enum SaveTransaction {
         /// columns add up even when the cards hold different currencies. Converted
         /// to each card's own currency on the way in, because that is what reaches
         /// that card's statement.
+        ///
+        /// **A transfer is the exception**, and it follows from what a transfer is:
+        /// there is no single purchase currency when 110 USD leaves one card and
+        /// 100 EUR arrives at another. The user types both, so a transfer's cells
+        /// are already in each card's own currency and are stored as given.
         let amount: Double
     }
 
@@ -275,8 +280,17 @@ enum SaveTransaction {
             }
             // The cell is in the PURCHASE's currency; the leg is recorded in the
             // card's, because that is what appears on that card's statement.
-            let native = Entries.r2(try Entries.convertToBase(db, amount, purchaseCcy, acctCcy, date).amountBase)
-            let conv = try Entries.convertToBase(db, amount, purchaseCcy, base, date)
+            //
+            // A TRANSFER is the one exception, and it follows from what a transfer
+            // is rather than working around it: there is no single purchase
+            // currency when 110 USD leaves one card and 100 EUR arrives at
+            // another. The user types BOTH numbers, so each cell is already in its
+            // own card's currency. Converting them would store 90.91 EUR for a
+            // typed 100 — a different transfer than the one described, balancing
+            // through the FX residue so nothing downstream would flag it.
+            let cellCcy = kind == .transfer ? acctCcy : purchaseCcy
+            let native = Entries.r2(try Entries.convertToBase(db, amount, cellCcy, acctCcy, date).amountBase)
+            let conv = try Entries.convertToBase(db, amount, cellCcy, base, date)
 
             // Match by account (Decision 29): an unchanged card keeps its posting,
             // its memo and its reconcile mark. A changed card is a NEW posting, so
