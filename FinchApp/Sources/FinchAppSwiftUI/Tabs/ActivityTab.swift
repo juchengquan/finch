@@ -461,19 +461,14 @@ struct ActivityFeedView: View {
         }
     }
 
-    /// The month section header (wide label + net, "Income · Spent" caption) —
-    /// one markup for the list lens and the calendar's month fallback.
+    /// The month section header — the month name, then net, in and out on one row,
+    /// told apart by sign and reinforced by colour. One markup for the list lens and
+    /// the calendar's month fallback.
     private func monthHeader(_ key: String, _ txns: [Tx]) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Text(MonthGrouping.label(key)).textCase(nil)
-                Spacer()
-                Text(store.displayMoneyBase(MonthGrouping.net(txns)))
-                    .foregroundStyle(.secondary)
-            }
-            Text("Income \(store.displayMoneyBase(MonthGrouping.income(txns))) · Spent \(store.displayMoneyBase(MonthGrouping.expense(txns)))")
-                .font(.caption2).textCase(nil).foregroundStyle(.secondary)
-        }
+        MonthFiguresHeader(label: MonthGrouping.label(key),
+                           figures: store.monthHeaderFigures(txns),
+                           accessibilityText: store.monthHeaderSpoken(txns))
+            .textCase(nil)
     }
 
     @ViewBuilder private var savedSearchRow: some View {
