@@ -96,13 +96,6 @@ enum SaveTransaction {
                     byCategory.append((c.categoryId, c.amount))
                 }
             }
-            // One entry is split on at most ONE axis (Decision 27). Both axes at
-            // once is the grid, which is one entry per card — Task 5's job.
-            if byAccount.count > 1 && byCategory.count > 1 {
-                throw I18nError("error.split.multiAccount", [:],
-                                "A purchase paid from several accounts takes a single category")
-            }
-
             // A transfer's description and leg memos are ENGINE-authored, not the
             // sheet's job — they name the other side, so the transfer reads
             // correctly in each account's feed. Only filled when absent, so an
@@ -132,78 +125,178 @@ enum SaveTransaction {
                       FROM postings WHERE entry_id = ? AND account_id IS NOT NULL
                     """, arguments: [ref.entryId]) } ?? []
 
-            var legs: [Entries.Leg] = []
-            for (accountId, amount) in byAccount {
-                guard let acctCcy = try String.fetchOne(db, sql: "SELECT currency FROM accounts WHERE id = ?",
-                                                        arguments: [accountId]) else {
-                    throw I18nError("error.notFound.account", [:], "Account not found")
-                }
-                // The cell is in the purchase's currency; the leg is recorded in
-                // the card's, because that is what appears on its statement.
-                let native = Entries.r2(try Entries.convertToBase(db, amount, purchaseCcy, acctCcy, a.date).amountBase)
-                let conv = try Entries.convertToBase(db, amount, purchaseCcy, base, a.date)
-
-                // Match by account (Decision 29): an unchanged card keeps its
-                // posting, its memo and its reconcile mark. A changed card is a
-                // NEW posting, so the mark goes with the old one — no extra rule.
-                let prior = oldLegs.first { ($0["account_id"] as String?) == accountId }
-                // …and the mark also drops when the AMOUNT changes (Decision 30):
-                // a tick asserts "I checked this against my statement", which a
-                // different amount no longer supports. clearedBalance is just the
-                // sum of ticked legs, so keeping it would silently move a finished
-                // reconciliation.
-                let sameAmount = prior.map { abs(($0["amount"] as Double) - native) < 0.005 } ?? false
-                legs.append(.account(Entries.AccountLeg(
-                    accountId: accountId, amount: native,
-                    amountBase: Entries.r2(conv.amountBase), exchangeRate: conv.rate,
-                    memo: prior?["memo"] ?? transferMemos[accountId], id: prior?["id"],
-                    clearedAt: sameAmount ? prior?["cleared_at"] : nil)))
-            }
-            // A transfer has NO category leg — that is what makes it a transfer —
-            // so the balancing leg every other kind needs must not be emitted.
-            // Its two account legs already sum to zero.
-            if kind != .transfer {
-                // The caller computes the balancing category legs (Decision 25):
-                // `rebuildEntry` writes exactly what it is handed and has no
-                // auto-balance field — that is a `NewEntry`/`postEntry` concept.
-                for (categoryId, amount) in byCategory {
-                    let b = try Entries.convertToBase(db, amount, purchaseCcy, base, a.date).amountBase
-                    legs.append(.category(Entries.CategoryLeg(categoryId: categoryId, amountBase: Entries.r2(-b))))
-                }
-            }
-
             let status = a.status.flatMap(Entries.Status.init(rawValue:))
             let refundedEntryId = try a.refundedTransactionId
                 .flatMap { try Entries.resolveEntryRef(db, $0)?.entryId }
 
-            if let id = a.id, let ref = try Entries.resolveEntryRef(db, id) {
-                var patch = Entries.EntryPatch()
-                patch.date = .set(a.date)
-                patch.time = .set(a.time)
-                patch.description = .set(description)
-                patch.notes = .set(a.note)
-                patch.counterpartyId = .set(counterpartyId)
-                patch.refundedEntryId = .set(refundedEntryId)
-                if let kindV = a.kind.flatMap(Entries.Kind.init(rawValue:)) { patch.kind = .set(kindV) }
-                if let status { patch.status = .set(status) }
-                patch.legs = .set(legs)
-                try Entries.rebuildEntry(db, ref.entryId, patch)
-                // `rebuildEntry` never writes `entry_tags` — which is exactly why
-                // `setTransactionTags` is a separate write in both sheets today.
-                try replaceTags(db, entryId: ref.entryId, tagIds: a.tagIds)
-                return ref.entryId
+            // SHAPE DERIVATION (Decision 15). The CATEGORY count decides, not the
+            // card count:
+            //   one category  -> ONE transaction with a payment leg per card
+            //   several       -> one transaction PER CARD, linked by group_id
+            //
+            // The first is the shape that already ships, and deriving it wrongly
+            // is the trap here: "one entry per card" is the obvious implementation
+            // of a grid and would silently turn every split-tender purchase into a
+            // group. Several categories genuinely cannot be one entry — a single
+            // entry is split on at most one axis, because the projection copies
+            // its whole splits array onto every account-leg row.
+            let isGrid = byCategory.count > 1 && byAccount.count > 1
+
+            // The id may name an ENTRY (ordinary) or a GROUP (grid).
+            var existingIds: [String] = []
+            if let id = a.id {
+                existingIds = try String.fetchAll(db, sql:
+                    "SELECT id FROM entries WHERE group_id = ? ORDER BY created_at", arguments: [id])
+                if existingIds.isEmpty, let ref = try Entries.resolveEntryRef(db, id) {
+                    existingIds = [ref.entryId]
+                }
+            }
+            // Match rows to existing entries BY CARD (Decision 21): a card that is
+            // still here keeps its entry, its id, its receipt and its reconcile
+            // marks. Minting fresh ids instead would destroy all three on an
+            // ordinary edit while every other test here still passed.
+            var entryForAccount: [String: String] = [:]
+            for e in existingIds {
+                for acct in try String.fetchAll(db, sql:
+                    "SELECT account_id FROM postings WHERE entry_id = ? AND account_id IS NOT NULL",
+                    arguments: [e]) where entryForAccount[acct] == nil {
+                    entryForAccount[acct] = e
+                }
             }
 
-            let entryId = try Entries.postEntry(db, Entries.NewEntry(
-                ledgerId: a.ledgerId, date: a.date, time: a.time,
-                description: description, kind: kind, status: status, legs: legs,
-                notes: a.note, counterpartyId: counterpartyId, refundedEntryId: refundedEntryId,
-                sourceTemplateId: a.sourceTemplateId, occurrenceDate: a.occurrenceDate,
-                groupId: a.groupId,
-                skipRules: a.skipRules ?? false, allowDuplicate: a.allowDuplicate ?? false))
-            try replaceTags(db, entryId: entryId, tagIds: a.tagIds)
-            return entryId
+            let rows: [[(id: String, amount: Double)]] = isGrid ? byAccount.map { [$0] } : [byAccount]
+            // A group of one is not a group (Decision 20), so a rewrite that
+            // collapses to a single row clears the link rather than leaving a lone
+            // transaction claiming membership.
+            let groupId: String? = rows.count > 1
+                ? (existingIds.isEmpty ? Entries.newId("grp") : (a.id ?? Entries.newId("grp")))
+                : nil
+
+            var writtenIds: [String] = []
+            for row in rows {
+                let rowAccounts = Set(row.map(\.id))
+                let rowCells = a.cells.filter { rowAccounts.contains($0.accountId) }
+                let legs = try buildLegs(db, row: row, cells: rowCells, kind: kind,
+                                         purchaseCcy: purchaseCcy, base: base, date: a.date,
+                                         transferMemos: transferMemos,
+                                         priorEntryId: isGrid
+                                            ? row.compactMap { entryForAccount[$0.id] }.first
+                                            : existingIds.first)
+                // Matching by card is a GRID rule — there, each entry IS a card,
+                // so a card that vanished takes its entry with it. An ordinary
+                // transaction has no such correspondence: moving its payment to
+                // another card is an EDIT, not a delete-and-recreate, which would
+                // destroy the receipt and change the id of the row on screen.
+                let target = isGrid
+                    ? row.compactMap { entryForAccount[$0.id] }.first
+                    : existingIds.first
+
+                if let target, existingIds.contains(target) {
+                    var patch = Entries.EntryPatch()
+                    patch.date = .set(a.date)
+                    patch.time = .set(a.time)
+                    patch.description = .set(description)
+                    patch.notes = .set(a.note)
+                    patch.counterpartyId = .set(counterpartyId)
+                    patch.refundedEntryId = .set(refundedEntryId)
+                    if let kindV = a.kind.flatMap(Entries.Kind.init(rawValue:)) { patch.kind = .set(kindV) }
+                    if let status { patch.status = .set(status) }
+                    patch.legs = .set(legs)
+                    try Entries.rebuildEntry(db, target, patch)
+                    try db.execute(sql: "UPDATE entries SET group_id = ? WHERE id = ?", arguments: [groupId, target])
+                    // `rebuildEntry` never writes `entry_tags` — which is exactly
+                    // why `setTransactionTags` is a separate write in both sheets.
+                    try replaceTags(db, entryId: target, tagIds: a.tagIds)
+                    writtenIds.append(target)
+                } else {
+                    let newId = try Entries.postEntry(db, Entries.NewEntry(
+                        ledgerId: a.ledgerId, date: a.date, time: a.time,
+                        description: description, kind: kind, status: status, legs: legs,
+                        notes: a.note, counterpartyId: counterpartyId, refundedEntryId: refundedEntryId,
+                        sourceTemplateId: a.sourceTemplateId, occurrenceDate: a.occurrenceDate,
+                        groupId: groupId,
+                        skipRules: a.skipRules ?? false, allowDuplicate: a.allowDuplicate ?? false))
+                    try replaceTags(db, entryId: newId, tagIds: a.tagIds)
+                    writtenIds.append(newId)
+                }
+            }
+
+            // A card the user removed takes its entry with it.
+            for stale in existingIds where !writtenIds.contains(stale) {
+                try Entries.deleteEntry(db, stale)
+            }
+            // Every money path invalidates the rollover cache, and it must run for
+            // EVERY row: skipping one leaves wrong budget numbers with no error and
+            // nothing in the audit.
+            for id in writtenIds { try Budgets.invalidateForEntry(db, id) }
+
+            return writtenIds.first ?? ""
         }
+    }
+
+    /// Build one entry's legs: a payment leg per card in `row`, plus the
+    /// balancing category legs derived from that row's cells.
+    ///
+    /// `priorEntryId` is the entry this row is replacing, if any — its postings
+    /// supply the ids, memos and reconcile marks that survive the edit.
+    private static func buildLegs(_ db: Database, row: [(id: String, amount: Double)],
+                                  cells: [Cell], kind: Entries.Kind,
+                                  purchaseCcy: String, base: String, date: String,
+                                  transferMemos: [String: String],
+                                  priorEntryId: String?) throws -> [Entries.Leg] {
+        let oldLegs = try priorEntryId.map { id in
+            try Row.fetchAll(db, sql: """
+                SELECT id, account_id, amount, memo, cleared_at
+                  FROM postings WHERE entry_id = ? AND account_id IS NOT NULL
+                """, arguments: [id])
+        } ?? []
+
+        var legs: [Entries.Leg] = []
+        for (accountId, amount) in row {
+            guard let acctCcy = try String.fetchOne(db, sql: "SELECT currency FROM accounts WHERE id = ?",
+                                                    arguments: [accountId]) else {
+                throw I18nError("error.notFound.account", [:], "Account not found")
+            }
+            // The cell is in the PURCHASE's currency; the leg is recorded in the
+            // card's, because that is what appears on that card's statement.
+            let native = Entries.r2(try Entries.convertToBase(db, amount, purchaseCcy, acctCcy, date).amountBase)
+            let conv = try Entries.convertToBase(db, amount, purchaseCcy, base, date)
+
+            // Match by account (Decision 29): an unchanged card keeps its posting,
+            // its memo and its reconcile mark. A changed card is a NEW posting, so
+            // the mark goes with the old one — no extra rule needed.
+            let prior = oldLegs.first { ($0["account_id"] as String?) == accountId }
+            // The mark ALSO drops when the amount changes (Decision 30): a tick
+            // asserts "I checked this against my statement", and clearedBalance is
+            // just the sum of ticked legs, so keeping it across an amount change
+            // silently moves a finished reconciliation.
+            let sameAmount = prior.map { abs(($0["amount"] as Double) - native) < 0.005 } ?? false
+            legs.append(.account(Entries.AccountLeg(
+                accountId: accountId, amount: native,
+                amountBase: Entries.r2(conv.amountBase), exchangeRate: conv.rate,
+                memo: prior?["memo"] ?? transferMemos[accountId], id: prior?["id"],
+                clearedAt: sameAmount ? prior?["cleared_at"] : nil)))
+        }
+
+        // A transfer has NO category leg — that is what makes it a transfer — and
+        // its two account legs already sum to zero.
+        if kind != .transfer {
+            var byCategory: [(id: String?, amount: Double)] = []
+            for c in cells {
+                if let i = byCategory.firstIndex(where: { $0.id == c.categoryId }) {
+                    byCategory[i].amount += c.amount
+                } else {
+                    byCategory.append((c.categoryId, c.amount))
+                }
+            }
+            // The caller computes the balancing legs (Decision 25): `rebuildEntry`
+            // writes exactly what it is handed and has no auto-balance field.
+            for (categoryId, amount) in byCategory {
+                let b = try Entries.convertToBase(db, amount, purchaseCcy, base, date).amountBase
+                legs.append(.category(Entries.CategoryLeg(categoryId: categoryId, amountBase: Entries.r2(-b))))
+            }
+        }
+        return legs
     }
 
     /// Look the merchant up, and create it when the ledger has not seen it.
