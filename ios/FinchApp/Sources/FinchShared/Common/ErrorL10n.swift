@@ -89,6 +89,7 @@ enum ErrorL10n {
         "error.scheduled.installmentTotal": "分期总数必须为正整数",
         "error.split.accountsMismatch": "账户金额之和必须等于交易金额",
         "error.split.minTwo": "拆分至少需要两行",
+        "error.split.signMismatch": "每笔付款的方向必须与交易一致",
         "error.split.multiAccount": "单笔交易不能同时按账户和类别拆分",
         "error.split.noAccount": "交易需要一个账户",
         "error.split.sumMismatch": "拆分金额之和必须等于交易总额",
