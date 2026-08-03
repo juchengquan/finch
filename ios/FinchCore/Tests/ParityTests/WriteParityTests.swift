@@ -71,6 +71,14 @@ final class WriteParityTests: XCTestCase {
                     "sort_order": .int(p["sort_order"]),
                 ]))
             }
+            // NOTE: this object names every entry column EXPLICITLY, and that is
+            // load-bearing rather than stylistic. `entries.group_id` is iOS-only —
+            // the web has no action that writes one, so there is nothing for the
+            // oracle to compare and nothing that can diverge. Naming the columns
+            // means a new one is ignored automatically. **Switching this (or the
+            // postings query above) to `SELECT *` would break that**, pulling an
+            // iOS-only column into the snapshot and reddening the gate against a
+            // web that cannot possibly produce it.
             let date: String = e["date"], kind: String = e["kind"], desc = e["description"] as String?
             let ekey = "\(date)|\(kind)|\(desc ?? "")|" + keyParts.joined(separator: ";")
             entries.append((ekey, .object([
