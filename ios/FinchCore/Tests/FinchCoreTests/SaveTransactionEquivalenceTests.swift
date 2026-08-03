@@ -138,6 +138,57 @@ final class SaveTransactionEquivalenceTests: XCTestCase {
         XCTAssertEqual(try canonical(new), try canonical(old))
     }
 
+    /// The case where a currency mistake would hide: one purchase, two cards
+    /// holding DIFFERENT currencies, amounts given in the purchase's.
+    ///
+    /// `addTransaction` and `saveTransaction` are two doors into one core, so
+    /// disagreement here means one of them is lying about currency — and the lie
+    /// would be invisible, because either reading produces a balanced entry.
+    ///
+    /// **The two doors take different units, on purpose.** `addTransaction`'s
+    /// shares are each in their OWN account's currency; `saveTransaction`'s cells
+    /// are all in the PURCHASE's, so a grid's columns add up when the cards hold
+    /// different currencies (Decision 16). The same purchase therefore reaches
+    /// them as different numbers — 36.36 EUR to one, the 40 USD it cost to the
+    /// other — and must land as the same ledger. Handing either one the other's
+    /// units is caught rather than absorbed: fed cells in the purchase currency,
+    /// `addTransaction` refuses, because the shares then sum to 104 against a
+    /// stated 100.
+    func test_matchesAddTransaction_forAMixedCurrencySplit() throws {
+        let old = try seed(), new = try seed()
+        for q in [old, new] {
+            try q.write { db in
+                try db.execute(sql: """
+                    INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+                    VALUES ('eur','l1','Euro','cash','EUR',0,2,1,1,datetime('now'),datetime('now'))
+                    """)
+                try db.execute(sql: "INSERT INTO exchange_rates (date,currency,rate) VALUES ('2026-06-01','EUR',1.10)")
+            }
+        }
+
+        try Apply.apply(dbQueue: old, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "amount": .double(-100), "currency": .string("USD"),
+            "merchant": .string("Market"), "categoryId": .string("c1"),
+            "date": .string("2026-06-01"), "time": .string("12:00"), "skipRules": .bool(true),
+            "accounts": .array([
+                .object(["accountId": .string("a1"), "amount": .double(-60)]),
+                // In the EUR account's own currency: the 40 USD share is
+                // 36.36 EUR, the rate being 1 EUR = 1.10 USD.
+                .object(["accountId": .string("eur"), "amount": .double(-36.36)]),
+            ]),
+        ]))
+        try Apply.apply(dbQueue: new, action: "saveTransaction", args: Args([
+            "ledgerId": .string("l1"), "merchant": .string("Market"),
+            "date": .string("2026-06-01"), "time": .string("12:00"),
+            "kind": .string("expense"), "currency": .string("USD"), "skipRules": .bool(true),
+            "cells": .array([
+                .object(["accountId": .string("a1"), "categoryId": .string("c1"), "amount": .double(-60)]),
+                .object(["accountId": .string("eur"), "categoryId": .string("c1"), "amount": .double(-40)]),
+            ]),
+        ]))
+        XCTAssertEqual(try canonical(new), try canonical(old))
+    }
+
     /// A same-currency transfer. The engine authors the description and both leg
     /// memos, so a sheet that sends only the two amounts still produces the feed
     /// text `createTransfer` produced.

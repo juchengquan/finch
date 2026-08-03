@@ -189,9 +189,26 @@ enum SaveTransaction {
             // A group of one is not a group (Decision 20), so a rewrite that
             // collapses to a single row clears the link rather than leaving a lone
             // transaction claiming membership.
-            let groupId: String? = rows.count > 1
-                ? (existingIds.isEmpty ? Entries.newId("grp") : (a.id ?? Entries.newId("grp")))
-                : nil
+            //
+            // **Only when the rewrite covers the whole purchase.** Editing ONE card
+            // of a grid names a single entry and comes back with a single row, which
+            // looks identical to a collapse from here. Clearing the link there would
+            // quietly split one purchase into two — and `purchaseKey` would then
+            // count it twice, the exact bug `group_id` exists to prevent. Decision 21
+            // wants the whole grid to reopen so this cannot be sent at all; until it
+            // does, membership survives a partial edit.
+            let groupId: String?
+            if rows.count > 1 {
+                groupId = existingIds.isEmpty ? Entries.newId("grp") : (a.id ?? Entries.newId("grp"))
+            } else if existingIds.count == 1,
+                      let held = try String.fetchOne(db, sql: "SELECT group_id FROM entries WHERE id = ?",
+                                                     arguments: [existingIds[0]]),
+                      (try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries WHERE group_id = ?",
+                                        arguments: [held]) ?? 0) > 1 {
+                groupId = held
+            } else {
+                groupId = nil
+            }
 
             var writtenIds: [String] = []
             for row in rows {
