@@ -72,7 +72,23 @@ extension FinchStore {
     public var merchants: [Counterparty] { counterparties }
     public func categoryName(_ id: String?) -> String? {
         guard let id else { return nil }
-        return categories.first { $0.id == id }?.name
+        return categoriesById[id]?.name
+    }
+
+    /// The leading glyph for a transaction-shaped row — see `RowGlyph`.
+    ///
+    /// Resolution walks the category's ancestors for an inherited icon/colour, so it
+    /// goes through the cached `categoriesById` map: this runs once per visible row per
+    /// frame while a feed scrolls, and rebuilding a dictionary per row to do it would
+    /// be the expensive way to draw a 18pt symbol.
+    /// Internal, not public: `RowGlyph` is an in-module view concern, and the rows that
+    /// call this compile into the same module.
+    func rowGlyph(categoryId: String?, kind: String?) -> RowGlyph.Glyph {
+        let category = categoryId.flatMap { categoriesById[$0] }
+        return RowGlyph.resolve(
+            kind: kind,
+            categoryIcon: category.flatMap { effectiveIcon($0, categoriesById) },
+            categoryColorHex: category.map { effectiveColor($0, categoriesById) })
     }
 
     public func toBase(_ amount: Double, from currency: String?) -> Double {

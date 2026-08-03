@@ -63,7 +63,20 @@ public final class FinchStore: ObservableObject {
 
     // Shared with the ImportExport / ViewHelpers extensions (hence internal).
     var dbQueue: DatabaseQueue?
-    var categories: [CategoryRow] = []
+    var categories: [CategoryRow] = [] {
+        // Kept in step here rather than at the assignment site: `categories` is written
+        // from reprojection AND from tests, and a map rebuilt in only one of those goes
+        // stale silently. Every transaction row resolves its icon and colour through
+        // this, so a linear scan per row would be paid once per visible row per frame
+        // while the feed scrolls.
+        didSet {
+            categoriesById = Dictionary(categories.map { ($0.id, $0) },
+                                        uniquingKeysWith: { first, _ in first })
+        }
+    }
+    /// `categories` keyed by id. `uniquingKeysWith` rather than `uniqueKeysWithValues`:
+    /// the latter traps on a duplicate id, and a malformed import must not crash a list.
+    private(set) var categoriesById: [String: CategoryRow] = [:]
     var counterparties: [Counterparty] = []
     var budgetGroupNames: [String: String] = [:]
     var rateMap: [String: Double] = [:]
