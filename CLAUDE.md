@@ -106,16 +106,40 @@ still compile on macOS.
 ### Run CI locally before pushing — `ios/scripts/ci-local.sh`
 
 ```bash
-ios/scripts/ci-local.sh                        # the iOS job (what actually breaks)
+ios/scripts/ci-local.sh                        # FAST — the inner loop
+ios/scripts/ci-local.sh --full                 # the pre-push gate (mirrors CI)
 ios/scripts/ci-local.sh --all                  # + the frontend job
-ios/scripts/ci-local.sh --sim "iPhone 17 Pro"  # pin the simulator
+ios/scripts/ci-local.sh --sim "ios-mysim"      # pin the simulator
 ```
 
-Mirrors the CI iOS job step-for-step — the two i18n guards, `swift test`, `xcodegen`,
-FinchApp build+test, FinchMac, FinchWatch — but **fail-fast ordered**: the guards cost
-seconds and catch the drift behind most recent CI failures, the Xcode builds cost minutes.
-`FinchMac` and `FinchWatch` are built but **non-gating** here, matching CI
-(`FINCH_CI_PLATFORMS=1` to gate).
+**Two modes, and a fast green is not a CI prediction.** `--full` mirrors the CI iOS job
+step-for-step — the two i18n guards, `swift test`, `xcodegen`, FinchApp build+test,
+FinchMac, FinchWatch — but **fail-fast ordered**: the guards cost seconds and catch the
+drift behind most recent CI failures, the Xcode builds cost minutes. `FinchMac` and
+`FinchWatch` are built but **non-gating**, matching CI (`FINCH_CI_PLATFORMS=1` to gate).
+
+The **default is now FAST**, for the inner loop. It keeps every check that costs seconds
+and skips the three that cost minutes and prove least mid-change: the 33 UI tests, the
+`FinchCoreTests` the Xcode scheme duplicates (step 2's `swift test` already ran those 434
+methods), and the parked platform builds — those last only when your diff cannot touch
+them, so the "build FinchMac when you touch `FinchShared`/`FinchAppSwiftUI`" rule below
+still holds. Fast lists what it skipped on every run, pass or fail. **Run `--full` before
+you push.**
+
+Fast keeps DerivedData warm per worktree (`ios/DerivedData/ci-local`, already gitignored);
+`--full` is always a cold `mktemp`, because a warm gate can pass on a product that no
+longer matches the source — which has happened here twice.
+
+**One run per machine.** Two of these at once do not take twice as long, they thrash
+(measured: load average 28 on 12 cores with two runs going). A second invocation names the
+holder and waits. If a run "feels slow", check whether another is going before blaming the
+script.
+
+**It uses a simulator named for your worktree**, creating one if needed — `--sim`,
+`$FINCH_CI_SIM` and `$SIM_NAME` all override, first hit wins. It never picks a stock shared
+device: `xcodebuild test` installs the app and demo seed onto whatever it is handed, and
+the old auto-pick silently gave every session the same `iPhone 17 Pro`.
+
 (`act` is no help here: it runs Actions in Docker, and there is no macOS container.)
 
 > **The one thing that makes local runs lie.** CI triggers on `pull_request`, so it builds
