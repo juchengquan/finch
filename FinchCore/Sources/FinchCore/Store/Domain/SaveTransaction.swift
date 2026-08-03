@@ -88,6 +88,22 @@ enum SaveTransaction {
             if byAccount.contains(where: { Entries.r2($0.amount) == 0 }) {
                 throw I18nError("error.split.zeroShare", [:], "Every payment needs an amount")
             }
+            // Every card must move money the same way the kind says (Decision 28).
+            // Rejected, never coerced: a mixed-sign expense records a purchase the
+            // user did not describe — one card paying while another receives — and
+            // it BALANCES, so nothing downstream would ever flag it.
+            //
+            // Scoped to the payment cells only. Applied to a top-level amount it
+            // would break the CSV import, which carries raw signed amounts and no
+            // kind, and App Intents. A transfer is exempt by definition: one leg
+            // out, one leg in, which `validateShape` checks separately.
+            if kind != .transfer {
+                let wantsPositive = (kind == .income || kind == .refund)
+                if byAccount.contains(where: { ($0.amount > 0) != wantsPositive }) {
+                    throw I18nError("error.split.signMismatch", [:],
+                                    "Every payment must match the transaction's direction")
+                }
+            }
             var byCategory: [(id: String?, amount: Double)] = []
             for c in a.cells {
                 if let i = byCategory.firstIndex(where: { $0.id == c.categoryId }) {
