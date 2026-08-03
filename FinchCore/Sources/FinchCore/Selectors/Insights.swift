@@ -229,6 +229,13 @@ extension Selectors {
         let term = normalize(description)
         if term.isEmpty && counterpartyId == nil { return nil }
         var counts: [String: Int] = [:]
+        // Insertion order, tracked explicitly. The winner is chosen with a strict
+        // `>` so the FIRST category seen wins a tie — but a Swift Dictionary's
+        // iteration order is unspecified and hash-seeded per process, so on a tie
+        // this returned a different category from run to run, and a different one
+        // from the web (whose `Map` iterates in insertion order). Same data, same
+        // answer, on both stacks and across launches.
+        var order: [String] = []
         var total = 0
         // One row per PURCHASE, so a habitually-split merchant does not get
         // double weight in the vote. The per-split loop below is unchanged.
@@ -238,15 +245,20 @@ extension Selectors {
             if kindOf(t) != "expense" { continue }
             let matches = counterpartyId != nil ? (t.counterpartyId == counterpartyId) : (normalize(t.merchant) == term)
             if !matches { continue }
+            func bump(_ id: String) {
+                if counts[id] == nil { order.append(id) }
+                counts[id, default: 0] += 1
+                total += 1
+            }
             if let splits = t.splits, !splits.isEmpty {
-                for s in splits where s.categoryId != nil { counts[s.categoryId!, default: 0] += 1; total += 1 }
+                for s in splits where s.categoryId != nil { bump(s.categoryId!) }
             } else if let cat = t.category {
-                counts[cat, default: 0] += 1; total += 1
+                bump(cat)
             }
         }
         if total == 0 { return nil }
         var topId = ""; var topCount = 0
-        for (id, n) in counts where n > topCount { topId = id; topCount = n }
+        for id in order { let n = counts[id] ?? 0; if n > topCount { topId = id; topCount = n } }
         if topId.isEmpty { return nil }
         let confidence = Double(topCount) / Double(total)
         if confidence < minConfidence && topCount < minCount { return nil }
