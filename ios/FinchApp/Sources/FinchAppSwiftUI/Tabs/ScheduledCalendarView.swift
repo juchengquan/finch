@@ -30,12 +30,7 @@ struct ScheduledCalendarView: View {
     @State private var selectedDay: String?
 
     /// The anchored month's inclusive ISO range (for the detail's occurrence map).
-    private var monthRange: (start: String, end: String) {
-        let y = AppDate.civil.component(.year, from: monthAnchor)
-        let m = AppDate.civil.component(.month, from: monthAnchor)
-        let days = AppDate.civil.range(of: .day, in: .month, for: monthAnchor)?.count ?? 30
-        return (String(format: "%04d-%02d-01", y, m), String(format: "%04d-%02d-%02d", y, m, days))
-    }
+    private var monthRange: (start: String, end: String) { MonthGrouping.monthBounds(monthAnchor) }
 
     var body: some View {
         let range = monthRange
@@ -69,15 +64,8 @@ struct ScheduledCalendarView: View {
     }
 
     /// The carousel's full window (prev month start … next month end): the
-    /// three rendered pages all draw from one expansion over this range.
-    private var wideRange: (start: String, end: String) {
-        let prev = AppDate.civil.date(byAdding: .month, value: -1, to: monthAnchor) ?? monthAnchor
-        let next = AppDate.civil.date(byAdding: .month, value: 1, to: monthAnchor) ?? monthAnchor
-        let py = AppDate.civil.component(.year, from: prev), pm = AppDate.civil.component(.month, from: prev)
-        let ny = AppDate.civil.component(.year, from: next), nm = AppDate.civil.component(.month, from: next)
-        let nDays = AppDate.civil.range(of: .day, in: .month, for: next)?.count ?? 30
-        return (String(format: "%04d-%02d-01", py, pm), String(format: "%04d-%02d-%02d", ny, nm, nDays))
-    }
+    /// rendered pages all draw from one expansion over this range.
+    private var wideRange: (start: String, end: String) { MonthGrouping.carouselWindow(monthAnchor) }
 
     /// Per-day SCHEDULED totals from an already-grouped expansion — the
     /// calendar's plan-only cash lines. Template amounts are unsigned
