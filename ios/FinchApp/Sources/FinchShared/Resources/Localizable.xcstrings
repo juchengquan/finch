@@ -4773,6 +4773,16 @@
         }
       }
     },
+    "Part of one purchase": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "属于同一笔消费"
+          }
+        }
+      }
+    },
     "Pending": {
       "localizations": {
         "zh-Hans": {

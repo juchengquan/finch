@@ -340,7 +340,7 @@ public enum Entries {
             // can reintroduce it silently.
             if acct.count > 1 && plain.count > 1 {
                 throw I18nError("error.split.multiAccount", [:],
-                                "A purchase paid from several accounts takes a single category")
+                                "A single transaction cannot be split by both account and category")
             }
             if equity.contains(where: { sysOf($0) != "fx" }) { throw I18nError("error.entry.noDirectEquity", [:], "Equity categories cannot be booked directly") }
             // EVERY account leg must be positive, not just the first. `acct[0]` was
@@ -439,7 +439,7 @@ public enum Entries {
                     nativeAmount: sharedCcy != nil ? acctTotal : acctTotalBase, time: e.time, kind: kind.rawValue,
                     counterpartyId: counterpartyId, tags: [], note: notes,
                     sourceTemplateId: e.sourceTemplateId, refundedTransactionId: e.refundedEntryId)
-                // A purchase paid from several accounts takes a single category —
+                // A single transaction cannot be split by both account and category —
                 // the rule `setTransactionSplits` enforces in as many words
                 // (Transactions.swift:50-53) and the Add sheet enforces by making
                 // the two mutually exclusive. The rules engine was the one path

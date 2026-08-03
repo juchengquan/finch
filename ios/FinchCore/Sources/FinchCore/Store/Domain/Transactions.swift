@@ -49,7 +49,7 @@ public enum Transactions {
             arguments: [entryId]) ?? 0
         if acctLegCount > 1 {
             throw I18nError("error.split.multiAccount", [:],
-                            "A purchase paid from several accounts takes a single category")
+                            "A single transaction cannot be split by both account and category")
         }
         guard let acct = try Row.fetchOne(db, sql: "SELECT id, account_id, amount, amount_base, exchange_rate, memo, orig_amount, orig_currency, cleared_at FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1", arguments: [entryId]) else { return }
         let acctBase: Double = acct["amount_base"]

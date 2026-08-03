@@ -80,3 +80,34 @@ final class ByPurchaseTests: XCTestCase {
         XCTAssertEqual(out[0].currency, "EUR")
     }
 }
+
+/// A grid purchase is several ENTRIES, so `entryId` alone would count it several
+/// times — reintroducing, for the shape this branch adds, exactly the bug the
+/// counting work fixed.
+final class GroupPurchaseKeyTests: XCTestCase {
+
+    private func row(_ id: String, entry: String, group: String?) -> Tx {
+        Tx(id: id, merchant: "Market", amount: -50, account: "a1", date: "2026-06-01",
+           entryId: entry, groupId: group)
+    }
+
+    func test_aGridGroupCountsAsOnePurchase() {
+        let grid = [row("p1", entry: "e1", group: "g1"), row("p2", entry: "e2", group: "g1")]
+        XCTAssertEqual(Set(grid.map(\.purchaseKey)).count, 1,
+                       "two transactions, one purchase — the group is what the user bought")
+    }
+
+    /// The fallback chain has to stay ordered: a grid row has all three, and the
+    /// group has to win, or the count is wrong again.
+    func test_theKeyPrefersGroupThenEntryThenPosting() {
+        XCTAssertEqual(row("p1", entry: "e1", group: "g1").purchaseKey, "g1")
+        XCTAssertEqual(row("p1", entry: "e1", group: nil).purchaseKey, "e1")
+        XCTAssertEqual(Tx(id: "p1", merchant: "X", amount: -1, account: "a1", date: "d").purchaseKey, "p1")
+    }
+
+    /// Two separate purchases that happen to be ungrouped must stay separate.
+    func test_ungroupedPurchasesStayDistinct() {
+        let rows = [row("p1", entry: "e1", group: nil), row("p2", entry: "e2", group: nil)]
+        XCTAssertEqual(Set(rows.map(\.purchaseKey)).count, 2)
+    }
+}
