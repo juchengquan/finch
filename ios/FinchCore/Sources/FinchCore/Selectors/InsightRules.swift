@@ -78,7 +78,9 @@ extension Selectors {
     }
 
     private static func pendingInsight(_ c: InsightContext, _ fmt: (Double) -> String) -> Insight? {
-        let pend = c.txns.filter { ledgerOf($0) == c.ledgerId && ($0.pending ?? false) }
+        // One row per PURCHASE: a pending purchase paid on two cards is one thing
+        // to confirm, not two.
+        let pend = byPurchase(c.txns.filter { ledgerOf($0) == c.ledgerId && ($0.pending ?? false) })
         guard !pend.isEmpty else { return nil }
         let total = pend.reduce(0.0) { $0 + abs($1.nativeAmount ?? $1.amount) }
         return Insight(tone: .neut, icon: "doc",
@@ -111,8 +113,12 @@ extension Selectors {
     /// Confirmed expense rows in the ledger — the shared filter every pattern
     /// rule uses (web: `ledgerOf(t) !== ledgerId || t.pending || kindOf(t) !== 'expense'`;
     /// note: plain expenses only, refunds excluded, matching the web rules).
+    /// One row per PURCHASE — five insights read this, and `quietestDayInsight`
+    /// counts rows (its "at least 25 expense rows" gate tripped early on a ledger
+    /// full of split purchases). The other four only sum amounts, which collapsing
+    /// leaves untouched since a purchase's legs add back to its total.
     private static func patternExpenses(_ c: InsightContext) -> [Tx] {
-        c.txns.filter { ledgerOf($0) == c.ledgerId && !($0.pending ?? false) && kindOf($0) == "expense" }
+        byPurchase(c.txns.filter { ledgerOf($0) == c.ledgerId && !($0.pending ?? false) && kindOf($0) == "expense" })
     }
 
     /// Days since 1970-01-01 for a "YYYY-MM-DD" string (Howard Hinnant's civil
