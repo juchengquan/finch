@@ -654,10 +654,7 @@ struct TxRow: View {
             // it did before, without a phantom zero-width view to carry it. (An empty
             // `Text` cannot: it contributes nothing to a combined label. Measured — the
             // kind vanished from the tree entirely.)
-            Image(systemName: glyph.symbol)
-                .font(.system(size: 18))
-                .foregroundStyle(glyphTint(glyph.tint))
-                .frame(width: 22)
+            RowGlyphView(symbol: glyph.symbol, tint: glyphTint(glyph.tint))
                 .accessibilityLabel(kindA11yLabel)
             VStack(alignment: .leading, spacing: 1) {
                 // Top-left: category is the title (merchant lives in edit/detail
