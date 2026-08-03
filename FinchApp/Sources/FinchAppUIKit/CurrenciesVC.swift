@@ -308,6 +308,9 @@ final class CurrenciesVC: UIViewController {
             lastUpdated = UserDefaults.standard.object(forKey: RateAutoUpdater.stampKey) as? Date
             switch outcome {
             case .updated(let n): refreshNote = String(localized: "Updated \(n) rates")
+            // Names the shortfall without guessing its cause — a provider we could
+            // not reach and a currency nobody carries look identical from here.
+            case .partial(let n, let requested): refreshNote = String(localized: "Updated \(n) of \(requested)")
             case .skipped: refreshNote = String(localized: "Nothing to update")
             case .failed:
                 refreshNote = nil
