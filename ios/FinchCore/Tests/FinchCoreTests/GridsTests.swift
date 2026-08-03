@@ -197,3 +197,51 @@ final class GridsTests: XCTestCase {
         XCTAssertNil(lastRolled, "the second card's row must invalidate too, not just the first")
     }
 }
+
+/// Deleting removes what you pointed at (Decision 19) — a grid's rows are
+/// independently valid transactions, so removing one leaves the others. What it
+/// must NOT leave is a lone transaction still claiming to be part of a group.
+final class GridDeleteTests: XCTestCase {
+
+    func test_deletingOneGridRow_leavesTheOtherAndClearsItsGroup() throws {
+        let q = try TestSeed.base()
+        try q.write { db in
+            try db.execute(sql: """
+                INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+                VALUES ('a2','l1','Card','credit_card','USD',0,1,1,1,datetime('now'),datetime('now'))
+                """)
+            try db.execute(sql: """
+                INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at)
+                VALUES ('c2','l1',NULL,'Household','expense',1,datetime('now'),datetime('now'))
+                """)
+        }
+        try Apply.apply(dbQueue: q, action: "saveTransaction", args: Args([
+            "ledgerId": .string("l1"), "date": .string("2026-06-01"), "time": .string("12:00"),
+            "merchant": .string("Market"), "kind": .string("expense"), "currency": .string("USD"),
+            "cells": .array([
+                .object(["accountId": .string("a1"), "categoryId": .string("c1"), "amount": .double(-40)]),
+                .object(["accountId": .string("a1"), "categoryId": .string("c2"), "amount": .double(-20)]),
+                .object(["accountId": .string("a2"), "categoryId": .string("c1"), "amount": .double(-30)]),
+                .object(["accountId": .string("a2"), "categoryId": .string("c2"), "amount": .double(-10)]),
+            ]),
+        ]))
+        let rows = try q.read { db in
+            try Row.fetchAll(db, sql: "SELECT id, group_id FROM entries WHERE group_id IS NOT NULL ORDER BY id")
+        }
+        XCTAssertEqual(rows.count, 2)
+
+        // Delete via the posting id, as the feed does.
+        let posting = try q.read { db in
+            try String.fetchOne(db, sql: "SELECT id FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1",
+                                arguments: [rows[0]["id"] as String])
+        }
+        try Apply.apply(dbQueue: q, action: "deleteTransaction", args: Args(["id": .string(posting!)]))
+
+        let after = try q.read { db in
+            try Row.fetchAll(db, sql: "SELECT id, group_id FROM entries WHERE kind != 'opening'")
+        }
+        XCTAssertEqual(after.count, 1, "the other row survives — deleting takes what you pointed at")
+        XCTAssertNil(after[0]["group_id"] as String?, "…and stops claiming to be part of a group")
+        XCTAssertTrue(try Audit.run(on: q).isEmpty)
+    }
+}

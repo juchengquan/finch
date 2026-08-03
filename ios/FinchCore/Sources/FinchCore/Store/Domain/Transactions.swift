@@ -404,10 +404,29 @@ public enum Transactions {
     static func deleteTransaction(_ db: Database, _ args: Args) throws {
         let a = try args.to(IdArg.self)
         guard let ref = try Entries.resolveEntryRef(db, a.id) else { return }
+        // Deleting takes what you pointed at (Decision 19) — a grid's rows are
+        // independently valid transactions, so the others survive. What must NOT
+        // survive is a lone transaction still claiming to be part of a group, so
+        // note the group now and clear it below if only one member is left.
+        let groupId = try String.fetchOne(db, sql: "SELECT group_id FROM entries WHERE id = ?",
+                                          arguments: [ref.entryId])
+        defer { try? Self.clearGroupIfAlone(db, groupId) }
         try Budgets.invalidateForEntry(db, ref.entryId)   // touches read before the cascade delete
         try Entries.deleteEntry(db, ref.entryId)
         // Attachment on-disk file cleanup is handled app-side (the engine is
         // filesystem-agnostic): FinchStore unlinks files for deleted entries.
+    }
+
+    /// A group of one is not a group (Decision 20). Enforced at write time rather
+    /// than by the audit: `Audit.Code` is documented as the web's exact ten-code
+    /// union, so an eleventh would be a wire-format change.
+    static func clearGroupIfAlone(_ db: Database, _ groupId: String?) throws {
+        guard let groupId else { return }
+        let remaining = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries WHERE group_id = ?",
+                                         arguments: [groupId]) ?? 0
+        if remaining <= 1 {
+            try db.execute(sql: "UPDATE entries SET group_id = NULL WHERE group_id = ?", arguments: [groupId])
+        }
     }
 
     // MARK: updateTransaction (header-only path → rebuildEntry)
