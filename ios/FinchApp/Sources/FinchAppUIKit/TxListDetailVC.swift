@@ -193,8 +193,14 @@ final class TxListDetailVC: UIViewController {
     }
 
     private func applySnapshot() {
-        let txns = source.confirmed(store)
-        let pending = source.pending(store)
+        // One row per PURCHASE, not per payment — the UIKit twin of the same rule
+        // the three SwiftUI detail views follow. This screen answers "what did I
+        // spend on this": a purchase paid on two cards is one shop, and which card
+        // paid is not the question here. Collapsing at the source keeps the count,
+        // total, average, the pending header and the list itself all agreeing.
+        // An account's own screen is the opposite and deliberately does NOT.
+        let txns = Selectors.byPurchase(source.confirmed(store))
+        let pending = Selectors.byPurchase(source.pending(store))
 
         summary = (txns.count, txns.reduce(0) { $0 + $1.amount })
         txByID = Dictionary(uniqueKeysWithValues: (txns + pending).map { ($0.id, $0) })

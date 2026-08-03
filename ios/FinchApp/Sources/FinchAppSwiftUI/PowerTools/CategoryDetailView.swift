@@ -13,8 +13,14 @@ struct CategoryDetailView: View {
     @State private var pendingDelete: Tx?   // delete awaiting confirmation
     @State private var errorMessage: String?
 
+    /// One row per PURCHASE, not per payment. This screen answers "what did I
+    /// spend on this" — a purchase paid on two cards is one shop, not two half
+    /// shops, and which card paid is not the question being asked here. An
+    /// account's own screen is the opposite and deliberately does NOT collapse.
+    /// Collapsing here also keeps the count, total and average agreeing with the
+    /// list they sit above.
     private var txns: [Tx] {
-        Selectors.categoryTransactions(store.txns, category.id, store.activeLedgerId)
+        Selectors.byPurchase(Selectors.categoryTransactions(store.txns, category.id, store.activeLedgerId))
     }
     private var total: Double { txns.reduce(0) { $0 + $1.amount } }
     /// Pending items are excluded from `txns` (and so from the summary + the count
@@ -22,8 +28,8 @@ struct CategoryDetailView: View {
     /// rather than silently omitted — the same "To confirm" treatment
     /// AccountDetailView gives them.
     private var pendingTxns: [Tx] {
-        Selectors.categoryTransactions(store.txns, category.id, store.activeLedgerId, includePending: true)
-            .filter { $0.pending == true }
+        Selectors.byPurchase(Selectors.categoryTransactions(store.txns, category.id, store.activeLedgerId, includePending: true)
+            .filter { $0.pending == true })
     }
 
     var body: some View {

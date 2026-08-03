@@ -73,4 +73,19 @@ final class SplitCountingSelectorTests: XCTestCase {
         XCTAssertEqual(charge.occurrences, 3, "three monthly charges, not six payment legs")
         XCTAssertEqual(charge.averageAmount, 50, accuracy: 0.001, "the subscription costs 50, not 25")
     }
+
+    /// The idiom the six merge-impact functions use, pinned here because they are
+    /// `private` to their views and cannot be called directly.
+    ///
+    /// "N transactions will be combined" sits on a destructive confirmation, and it
+    /// deduplicated by `Tx.id` — a POSTING id — so a purchase paid on two cards was
+    /// counted twice in the number shown before someone merged two categories.
+    func test_mergeImpactIdiom_dedupesByPurchase_notByPosting() {
+        let txns = splitPlusOrdinary(category: "c1")
+        let keys = Set(Selectors.categoryTransactions(txns, "c1", "l1").map(\.purchaseKey))
+        XCTAssertEqual(keys.count, 2, "two purchases behind three payment rows")
+
+        let byPostingId = Set(Selectors.categoryTransactions(txns, "c1", "l1").map(\.id))
+        XCTAssertEqual(byPostingId.count, 3, "…which is what the posting-id version counted")
+    }
 }

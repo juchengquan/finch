@@ -444,8 +444,8 @@ struct CategoriesView: View {
     /// Choice-independent union of transactions referencing either category.
     private func mergeTxCount(_ a: CategoryRow, _ b: CategoryRow) -> Int {
         let ledger = store.activeLedgerId
-        let ids = Set(Selectors.categoryTransactions(store.txns, a.id, ledger).map(\.id))
-            .union(Selectors.categoryTransactions(store.txns, b.id, ledger).map(\.id))
+        let ids = Set(Selectors.categoryTransactions(store.txns, a.id, ledger).map(\.purchaseKey))
+            .union(Selectors.categoryTransactions(store.txns, b.id, ledger).map(\.purchaseKey))
         return ids.count
     }
 
@@ -460,7 +460,7 @@ struct CategoriesView: View {
     private func mergeManyTxCount(_ catRows: [CategoryRow]) -> Int {
         let ledger = store.activeLedgerId
         var ids = Set<String>()
-        for c in catRows { ids.formUnion(Selectors.categoryTransactions(store.txns, c.id, ledger).map(\.id)) }
+        for c in catRows { ids.formUnion(Selectors.categoryTransactions(store.txns, c.id, ledger).map(\.purchaseKey)) }
         return ids.count
     }
 
