@@ -159,6 +159,15 @@ final class TxListDetailVC: UIViewController {
                 // when every row shares one account, which none of these lists do.
                 // Routed through TxRowCell for its row-height margins; this screen
                 // already hosted TxRow, it just sat taller than the SwiftUI original.
+                //
+                // Pinned background, as the feed and the account detail do. Tapping a
+                // swipe action highlights the cell, and diffable MOVES that cell to its
+                // new index path rather than re-dequeuing it, so `prepareForReuse` never
+                // fires and the highlight rides along — the arriving row draws grey and
+                // fades over ~0.5s. A row that never paints a highlight has nothing to
+                // leave behind. Safe here because selection is transient: rows deselect
+                // on tap and this screen has no column mode. (#702)
+                cell.backgroundConfiguration = txRowBackground()
                 TxRowCell.configure(cell, tx: tx, store: self.store,
                                     showRunningBalance: false)
             }
@@ -167,10 +176,7 @@ final class TxListDetailVC: UIViewController {
         let header = UICollectionView.SupplementaryRegistration<UICollectionViewListCell>(
             elementKind: UICollectionView.elementKindSectionHeader
         ) { [weak self] view, _, indexPath in
-            guard let self, self.sectionIDs.indices.contains(indexPath.section) else { return }
-            var cfg = view.defaultContentConfiguration()
-            cfg.text = self.headerContent[self.sectionIDs[indexPath.section]]
-            view.contentConfiguration = cfg
+            self?.configureHeader(view, at: indexPath)
         }
 
         dataSource = UICollectionViewDiffableDataSource<SectionID, String>(collectionView: collectionView) {
@@ -229,9 +235,45 @@ final class TxListDetailVC: UIViewController {
         let carried = Set(dataSource.snapshot().itemIdentifiers)
         snap.reconfigureItems(snap.itemIdentifiers.filter(carried.contains))
 
-        headerContent = headers
-        sectionIDs = snap.sectionIdentifiers
-        dataSource.apply(snap, animatingDifferences: false)
+        headerContent = headers                // before apply — the headers read it
+        sectionIDs = snap.sectionIdentifiers   // before apply — the layout reads it
+        dataSource.apply(snap, animatingDifferences: false) { [weak self] in
+            self?.refreshVisibleHeaders()
+        }
+    }
+
+    /// Extracted from the registration so `refreshVisibleHeaders()` can re-run it.
+    ///
+    /// Reads text computed in `applySnapshot` rather than deriving it from
+    /// `dataSource.snapshot()`, which returns the PRE-apply sections while an apply is
+    /// in flight and would leave every header one generation stale.
+    private func configureHeader(_ view: UICollectionViewListCell, at indexPath: IndexPath) {
+        guard sectionIDs.indices.contains(indexPath.section) else { return }
+        var cfg = view.defaultContentConfiguration()
+        cfg.text = headerContent[sectionIDs[indexPath.section]]
+        view.contentConfiguration = cfg
+    }
+
+    /// A diffable data source does NOT re-render a supplementary view when only the
+    /// section's ITEMS change — the section identifier is unchanged, so the header is
+    /// left exactly as it was. `To confirm (N)` is computed FROM those rows, so this
+    /// screen did not show the count late, it showed it WRONG: confirming a row moved
+    /// it out of the bucket and the header kept the old number until it happened to be
+    /// re-created by scrolling. The feed and the account detail already do this; this
+    /// screen was simply missed. (#702)
+    ///
+    /// Deliberately in the apply's COMPLETION, where the collection view's section
+    /// indices already match `sectionIDs`. Running it earlier would make the figures
+    /// land in the same frame as the rows, but it also means writing a header from
+    /// outside UIKit's update pass — which is the mechanism suspected in the device
+    /// flicker that caused #710 to be reverted. Correct one frame late beats wrong.
+    private func refreshVisibleHeaders() {
+        let kind = UICollectionView.elementKindSectionHeader
+        for indexPath in collectionView.indexPathsForVisibleSupplementaryElements(ofKind: kind) {
+            guard let view = collectionView.supplementaryView(forElementKind: kind, at: indexPath)
+                    as? UICollectionViewListCell else { continue }
+            configureHeader(view, at: indexPath)
+        }
     }
 
     // MARK: Row actions
