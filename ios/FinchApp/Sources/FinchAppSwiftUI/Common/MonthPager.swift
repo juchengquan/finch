@@ -41,12 +41,29 @@ struct MonthPager<Page: View>: View {
     let range: ClosedRange<Int>
     /// Builds one month's grid.
     @ViewBuilder let page: (Int) -> Page
+    /// DISPLAY ONLY: the month the carousel is over right now, updated mid-drag as each
+    /// halfway point is crossed. The header reads it so the month name can follow the
+    /// finger; nothing that redraws the day list or moves the scroll may depend on it.
+    var visible: Binding<Int?>? = nil
 
-    /// `scrollPosition` deals in optionals; the anchor never is. A nil write (which
-    /// SwiftUI can emit mid-gesture) leaves the anchor alone rather than resetting it.
+    /// Drives PROGRAMMATIC paging only — the chevrons, Today, the month-year wheels —
+    /// by reporting where the carousel should be.
+    ///
+    /// Its write-back is deliberately dropped. SwiftUI reports the new month the moment
+    /// the scroll passes the halfway point, which is mid-gesture with the finger still
+    /// down; committing there re-rendered the calendar and the day list beneath it and
+    /// made SwiftUI re-assert the very offset it was bound to, tugging the content.
+    /// Measured: the largest single-frame jump in a slow drag was 3.23 against a 1.36
+    /// average, and removing this write alone dropped it to 2.11. The commit now comes
+    /// from `OneMonthPerSwipe`, which runs once, when the gesture ends.
     private var scrolled: Binding<Int?> {
         Binding(get: { anchorIndex },
-                set: { if let index = $0, index != anchorIndex { anchorIndex = index } })
+                // The write goes to `visible`, never to the anchor. This is the month
+                // the carousel is currently OVER, which SwiftUI reports as the scroll
+                // passes each halfway point — useful for a label that follows the
+                // finger, and exactly the wrong moment to tell the rest of the app the
+                // month has changed.
+                set: { if let index = $0 { visible?.wrappedValue = index } })
     }
 
     var body: some View {
@@ -61,7 +78,13 @@ struct MonthPager<Page: View>: View {
             }
             .scrollTargetLayout()
         }
-        .scrollTargetBehavior(OneMonthPerSwipe())
+        .scrollTargetBehavior(OneMonthPerSwipe(firstPage: range.lowerBound) { landed in
+            guard landed != anchorIndex else { return }
+            // Off the scroll callback: this runs while the scroll view is choosing its
+            // landing point, and mutating observed state inside that is a state-change-
+            // during-update warning waiting to happen.
+            DispatchQueue.main.async { anchorIndex = landed }
+        })
         .scrollIndicators(.hidden)
         .scrollPosition(id: scrolled)
     }
@@ -78,13 +101,26 @@ struct MonthPager<Page: View>: View {
 ///
 /// Working in whole pages is exact — every page is one container width and the stack
 /// has no spacing, so page *k* sits at *k × width* and no fractional drift accumulates.
+///
+/// It is also WHERE THE MONTH IS COMMITTED, because it is the one place that knows the
+/// answer at the right time: it runs once per gesture, as the scroll picks the page it
+/// will settle on. Everything else that could report a month change — `scrollPosition`
+/// especially — reports it halfway through the drag instead.
 private struct OneMonthPerSwipe: ScrollTargetBehavior {
+    /// Absolute month index of the carousel's first page, so a page ordinal can be
+    /// turned back into a month.
+    let firstPage: Int
+    /// The month the scroll is about to settle on.
+    let onLand: (Int) -> Void
+
     func updateTarget(_ target: inout ScrollTarget, context: TargetContext) {
         let width = context.containerSize.width
         guard width > 0 else { return }
         let start = (context.originalTarget.rect.minX / width).rounded()
         let proposed = (target.rect.minX / width).rounded()
-        target.rect.origin.x = min(max(proposed, start - 1), start + 1) * width
+        let page = min(max(proposed, start - 1), start + 1)
+        target.rect.origin.x = page * width
+        onLand(firstPage + Int(page))
     }
 }
 #endif
