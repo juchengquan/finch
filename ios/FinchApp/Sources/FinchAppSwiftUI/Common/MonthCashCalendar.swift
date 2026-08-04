@@ -24,6 +24,10 @@ struct MonthCashCalendar: View {
     let masked: Bool
 
     @State private var showingMonthYearPicker = false
+    /// The month the carousel is over MID-DRAG — the header's label only, so the month
+    /// name follows the finger and flips as the new month takes over half the screen.
+    /// nil ⇒ not dragging, so the label follows the committed anchor.
+    @State private var visibleIndex: Int? = nil
 
     /// Locale-aware three-letter weekday row ("Sun Mon …"; 周日 周一 … in
     /// zh-Hans), Sunday-first to match the grid's weekday math.
@@ -56,7 +60,13 @@ struct MonthCashCalendar: View {
     private static let monthLabelFormatter: DateFormatter = {
         let f = DateFormatter(); f.calendar = AppDate.civil; f.timeZone = AppDate.civil.timeZone; f.dateFormat = "LLLL yyyy"; return f
     }()
-    private var monthLabel: String { Self.monthLabelFormatter.string(from: monthAnchor) }
+    /// Follows the finger: while a drag is in flight this is the month the carousel is
+    /// over, not the one committed. The commit still waits for the gesture to end — see
+    /// MonthPager — so this label is the ONLY thing that moves early.
+    private var monthLabel: String {
+        let date = visibleIndex.map(Self.date(fromMonthIndex:)) ?? monthAnchor
+        return Self.monthLabelFormatter.string(from: date)
+    }
 
     var body: some View {
         VStack(spacing: 16) {
@@ -67,10 +77,14 @@ struct MonthCashCalendar: View {
             // they follow the finger (an after-the-fact .transition can't do that).
             // Each page IS its month — see MonthPager for why the earlier
             // three-page-window-plus-recentre arrangement cost the animation.
-            MonthPager(anchorIndex: monthIndexBinding, range: pageRange) { index in
-                monthPage(for: Self.date(fromMonthIndex: index))
-            }
+            MonthPager(anchorIndex: monthIndexBinding, range: pageRange,
+                       page: { index in monthPage(for: Self.date(fromMonthIndex: index)) },
+                       visible: $visibleIndex)
             .frame(height: Self.gridHeight)
+            // Chevrons, Today and the month-year wheels move the anchor directly; drop
+            // the drag-time label so it follows the anchor again rather than sticking
+            // on whatever the last drag was over.
+            .onChange(of: monthAnchor) { _, _ in visibleIndex = nil }
             #else
             monthPage(for: monthAnchor)
             #endif
