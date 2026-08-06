@@ -205,6 +205,22 @@ final class SplitShellVC: UIViewController {
 
         guard arity == .three else {
             // Sidebar │ full-width content, as the SwiftUI two-column branch does.
+            //
+            // Settings is native at BOTH widths (Phase 4), and the SAME `SettingsListVC`
+            // serves the compact tab root and this column — one screen, one
+            // implementation, which is the reason Budgets was converted both ways in one
+            // go rather than leaving a half-converted tab behind.
+            //
+            // `showsLedgerControl: false` because the sidebar next to it already lists
+            // Ledger; a button here would be a second route to the same place. Insights
+            // is the other two-column tab and stays hosted — it has no native screen yet.
+            if tab == .settings, Self.uikitBudgets {
+                let nav = UINavigationController(rootViewController:
+                    SettingsListVC(showsLedgerControl: false))
+                nav.navigationBar.prefersLargeTitles = true
+                svc.setViewController(nav, for: .secondary)
+                return
+            }
             svc.setViewController(host(TabContentColumn(tab: tab)), for: .secondary)
             return
         }
