@@ -47,11 +47,29 @@ final class SaveTransactionEquivalenceTests: XCTestCase {
                 """) {
                 let eid: String = e["id"]
                 let legs = try Row.fetchAll(db, sql: """
-                    SELECT account_id, category_id, ROUND(amount,2) AS a, currency, ROUND(amount_base,2) AS ab, memo
+                    SELECT account_id, category_id, ROUND(amount,2) AS a, currency,
+                           ROUND(amount_base,2) AS ab, memo,
+                           ROUND(orig_amount,2) AS oa, orig_currency AS oc
                       FROM postings WHERE entry_id = ?
                      ORDER BY COALESCE(account_id,''), COALESCE(category_id,''), ab
                     """, arguments: [eid])
-                    .map { "\($0["account_id"] as String? ?? "")|\($0["category_id"] as String? ?? "")|\($0["a"] as Double)|\($0["currency"] as String? ?? "")|\($0["ab"] as Double)|\($0["memo"] as String? ?? "")" }
+                    .map { r -> String in
+                        let acct = r["account_id"] as String? ?? ""
+                        // orig_amount/orig_currency — what the user TYPED, and the pair
+                        // `Projection.swift:81` displays from. Compared on the ACCOUNT leg
+                        // only: that is the one the old actions also fill, so it is the one
+                        // where a difference means a real disagreement.
+                        //
+                        // Category legs carry a per-cell copy that `addTransaction` has no
+                        // concept of — it writes one auto-balanced category leg, and a grid
+                        // has no old-action equivalent at all. Comparing it here would
+                        // assert a difference that is by design. `TypedAmountTests` covers
+                        // that side instead.
+                        let orig = acct.isEmpty ? "" : "\(r["oa"] as Double? ?? 0)|\(r["oc"] as String? ?? "")"
+                        return "\(acct)|\(r["category_id"] as String? ?? "")|\(r["a"] as Double)"
+                             + "|\(r["currency"] as String? ?? "")|\(r["ab"] as Double)"
+                             + "|\(r["memo"] as String? ?? "")|\(orig)"
+                    }
                 let tags = try String.fetchAll(db, sql: "SELECT tag_id FROM entry_tags WHERE entry_id = ? ORDER BY tag_id", arguments: [eid])
                 out.append("""
                     \(e["date"] as String)|\(e["time"] as String? ?? "")|\(e["description"] as String? ?? "")\
@@ -185,6 +203,36 @@ final class SaveTransactionEquivalenceTests: XCTestCase {
                 .object(["accountId": .string("a1"), "categoryId": .string("c1"), "amount": .double(-60)]),
                 .object(["accountId": .string("eur"), "categoryId": .string("c1"), "amount": .double(-40)]),
             ]),
+        ]))
+        XCTAssertEqual(try canonical(new), try canonical(old))
+    }
+
+    /// A foreign-currency purchase: €100 paid with a USD card, ledger base USD.
+    ///
+    /// The figure the app DISPLAYS is `orig_amount ?? amount`
+    /// (`Projection.swift:81`), so an action that does not record the pair shows
+    /// the converted $110 where the user typed €100 — and the €100 is gone, not
+    /// recoverable from anything else in the row.
+    func test_matchesAddTransaction_forAForeignCurrencyPurchase() throws {
+        let old = try seed(), new = try seed()
+        for q in [old, new] {
+            try q.write { db in
+                try db.execute(sql: "INSERT INTO exchange_rates (date,currency,rate) VALUES ('2026-06-01','EUR',1.10)")
+            }
+        }
+
+        try Apply.apply(dbQueue: old, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "accountId": .string("a1"), "amount": .double(-100),
+            "currency": .string("EUR"), "merchant": .string("Market"), "categoryId": .string("c1"),
+            "date": .string("2026-06-01"), "time": .string("12:00"), "skipRules": .bool(true),
+        ]))
+        try Apply.apply(dbQueue: new, action: "saveTransaction", args: Args([
+            "ledgerId": .string("l1"), "merchant": .string("Market"),
+            "date": .string("2026-06-01"), "time": .string("12:00"),
+            "kind": .string("expense"), "currency": .string("EUR"), "skipRules": .bool(true),
+            "cells": .array([.object([
+                "accountId": .string("a1"), "categoryId": .string("c1"), "amount": .double(-100),
+            ])]),
         ]))
         XCTAssertEqual(try canonical(new), try canonical(old))
     }
