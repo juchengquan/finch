@@ -1,24 +1,28 @@
 import XCTest
 
-/// The Settings toolbar keeps its Ledger control and its privacy toggle.
+/// Settings' privacy toggle exists and actually drives `store.privacyMode`.
 ///
 /// **Written BEFORE the Settings root was converted to UIKit, and passing against the
-/// hosted SwiftUI screen.** That ordering is the point: it proves the test can actually
-/// see these two affordances, so a green run after the conversion means they survived
-/// rather than that the assertions were always vacuous.
+/// hosted SwiftUI screen.** That ordering is the point: it proves the assertion can see
+/// the affordance, so a green run after the conversion means it survived rather than
+/// that the test was always vacuous.
 ///
-/// The two tab-root conversions before this one each lost exactly these:
+/// **Scope, checked rather than assumed.** The Ledger control is NOT tested here,
+/// because `TabChromeUITests.testEveryTabKeepsItsLedgerControl` already iterates all
+/// five tabs — Settings included. That guard was added by `738cbb0c`, the fix for the
+/// Scheduled tab losing its Ledger control, so the lesson was already banked. A second
+/// copy would only cost suite time on a run CI already retries for flakiness.
 ///
-///   738cbb0c  fix(ios): the Scheduled tab lost its Ledger control when it went native
-///   0898bb79  fix(ios): Scheduled lost its hide-amounts button, and ignored privacy mode
+/// What had no guard is the privacy toggle. `0898bb79` ("Scheduled lost its
+/// hide-amounts button, and ignored privacy mode") was never turned into a test, and
+/// `TabRootMechanicsUITests` only taps privacy on ACCOUNTS as a trigger for a selection
+/// assertion — it says nothing about Settings having one.
 ///
-/// Both were found on a device after merging, not by the suite. This is the suite
-/// catching it instead.
-///
-/// It keys on accessibility, not layout, because that is the one contract both
+/// It keys on accessibility, not layout, because that is the contract both
 /// implementations already share: SwiftUI's `PrivacyToggleButton` sets label "Privacy
-/// mode" + value on/off (`AdaptiveShell`), and `AccountsListVC` sets the identical pair
-/// on its `UIBarButtonItem`. Same for "Ledger".
+/// mode" + value on/off (`AdaptiveShell`), and the converted VCs set the identical pair
+/// on their `UIBarButtonItem`. So one test spans both — which is what makes it a
+/// characterization test rather than a description of the new code.
 final class SettingsToolbarUITests: XCTestCase {
 
     private var app: XCUIApplication!
@@ -37,14 +41,10 @@ final class SettingsToolbarUITests: XCTestCase {
         app = nil
     }
 
-    func testSettingsKeepsItsLedgerControl() throws {
+    func testSettingsPrivacyToggleExistsAndFlips() throws {
         XCTAssertTrue(app.staticTexts["Settings"].firstMatch.waitForExistence(timeout: 30),
                       "never reached Settings")
-        XCTAssertTrue(app.buttons["Ledger"].firstMatch.waitForExistence(timeout: 15),
-                      "Settings has no Ledger control — the corner button that opens the ledger")
-    }
 
-    func testSettingsPrivacyToggleExistsAndFlips() throws {
         let privacy = app.buttons["Privacy mode"].firstMatch
         XCTAssertTrue(privacy.waitForExistence(timeout: 30),
                       "Settings has no privacy toggle")
