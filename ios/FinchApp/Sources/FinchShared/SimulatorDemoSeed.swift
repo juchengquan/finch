@@ -297,14 +297,21 @@ enum SimulatorDemoSeed {
         // are what makes it one purchase rather than several transactions that
         // happen to share a date.
 
-        // 1. Split tender: a big shop paid partly on the card, partly from checking.
+        // NOT `checking`. It is a UI-TEST FIXTURE that must stay transaction-free:
+        // `NavigationUITests` drills into it and waits for the "Transactions" header,
+        // which `AccountDetailVC` only renders for an EMPTY account (a populated one
+        // shows month headers instead). Giving it a transaction turns that test red
+        // with a failure that looks like broken navigation. Three more UI tests use
+        // the same row, so prefer `everyday`, which already carries transactions.
+        //
+        // 1. Split tender: a big shop paid partly on the card, partly from Everyday.
         try apply("saveTransaction", [
             "ledgerId": .string("personal"), "merchant": .string("Costco"),
             "date": .string(ymd(9)), "time": .string("14:20"),
-            "kind": .string("expense"), "note": .string("Split across two cards"),
+            "kind": .string("expense"), "note": .string("Split across two accounts"),
             "cells": .array([
                 .object(["accountId": .string("credit"),   "categoryId": .string("cat-groceries"), "amount": .double(-180.00)]),
-                .object(["accountId": .string("checking"), "categoryId": .string("cat-groceries"), "amount": .double(-64.30)]),
+                .object(["accountId": .string("everyday"), "categoryId": .string("cat-groceries"), "amount": .double(-64.30)]),
             ])])
 
         // 2. Category split: one restaurant bill, part dinner and part groceries
@@ -323,13 +330,13 @@ enum SimulatorDemoSeed {
         try apply("saveTransaction", [
             "ledgerId": .string("personal"), "merchant": .string("IKEA"),
             "date": .string(ymd(20)), "time": .string("11:30"),
-            "kind": .string("expense"), "note": .string("Half on the card, half from checking"),
+            "kind": .string("expense"), "note": .string("Half on the card, half from Everyday"),
             "tagIds": .array([.string("tag-vacation")]),
             "cells": .array([
                 .object(["accountId": .string("credit"),   "categoryId": .string("cat-shopping-home-furniture"), "amount": .double(-420.00)]),
                 .object(["accountId": .string("credit"),   "categoryId": .string("cat-shopping-home-decor"),     "amount": .double(-85.00)]),
-                .object(["accountId": .string("checking"), "categoryId": .string("cat-shopping-home-furniture"), "amount": .double(-260.00)]),
-                .object(["accountId": .string("checking"), "categoryId": .string("cat-shopping-home-decor"),     "amount": .double(-45.00)]),
+                .object(["accountId": .string("everyday"), "categoryId": .string("cat-shopping-home-furniture"), "amount": .double(-260.00)]),
+                .object(["accountId": .string("everyday"), "categoryId": .string("cat-shopping-home-decor"),     "amount": .double(-45.00)]),
             ])])
 
         // A real posted transfer (Everyday → Savings) so the transfer kind shows in the feed.
