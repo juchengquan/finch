@@ -77,8 +77,12 @@ public enum Entries {
         public var amountBase: Double      // signed, ledger base
         public var memo: String?
         public var id: String?
-        public init(categoryId: String?, amountBase: Double, memo: String? = nil, id: String? = nil) {
+        public var origAmount: Double?     // foreign-currency entry: this cell as entered
+        public var origCurrency: String?   // …and the currency it was entered in
+        public init(categoryId: String?, amountBase: Double, memo: String? = nil, id: String? = nil,
+                    origAmount: Double? = nil, origCurrency: String? = nil) {
             self.categoryId = categoryId; self.amountBase = amountBase; self.memo = memo; self.id = id
+            self.origAmount = origAmount; self.origCurrency = origCurrency
         }
     }
     public enum Leg: Sendable { case account(AccountLeg), category(CategoryLeg) }
@@ -150,9 +154,11 @@ public enum Entries {
     // MARK: helpers
 
     private static func categoryLeg(_ id: String?, _ categoryId: String?, _ amountBase: Double,
-                                    _ base: String, _ memo: String?) -> ResolvedLeg {
+                                    _ base: String, _ memo: String?,
+                                    _ origAmount: Double? = nil, _ origCurrency: String? = nil) -> ResolvedLeg {
         ResolvedLeg(id: id ?? newId("p"), accountId: nil, categoryId: categoryId,
-                    amount: amountBase, currency: base, amountBase: amountBase, exchangeRate: 1, memo: memo)
+                    amount: amountBase, currency: base, amountBase: amountBase, exchangeRate: 1,
+                    memo: memo, origAmount: origAmount, origCurrency: origCurrency)
     }
 
     private static func ledgerBase(_ db: Database, _ ledgerId: String) throws -> String {
@@ -247,7 +253,8 @@ public enum Entries {
                     }
                     if catLedger != ledgerId { throw I18nError("error.category.differentLedger", [:], "Category is in a different ledger") }
                 }
-                legs.append(categoryLeg(c.id, c.categoryId, r2(c.amountBase), base, c.memo))
+                legs.append(categoryLeg(c.id, c.categoryId, r2(c.amountBase), base, c.memo,
+                                        c.origAmount.map(r2), c.origCurrency))
             }
         }
         return legs
