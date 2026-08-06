@@ -307,7 +307,8 @@ final class AccountDetailVC: UIViewController {
             // hosted rather than rebuilt.
             cell.backgroundConfiguration = txRowBackground()
             TxRowCell.configure(cell, tx: tx, store: self.store,
-                                onPreviewReceipt: { [weak self] in self?.previewReceipt($0) })
+                                onPreviewReceipt: { [weak self] in self?.previewReceipt($0) },
+                                onToggleStatus: { [weak self] in self?.toggleStatus($0) })
             cell.accessories = []
         }
 
@@ -631,12 +632,17 @@ final class AccountDetailVC: UIViewController {
         TxRowActions(
             duplicate: { [weak self] tx in self?.presentDuplicate(tx) },
             requestDelete: { [weak self] tx in self?.confirmDeleteTransaction(tx) },
-            toggleStatus: { [weak self] tx in
-                guard let self else { return }
-                self.run { try txnToggleStatus(tx, store: self.store) }
-            },
+            toggleStatus: { [weak self] tx in self?.toggleStatus(tx) },
             edit: { [weak self] tx in self?.presentEditTransaction(tx) },
             previewReceipt: { [weak self] tx in self?.previewReceipt(tx) })
+    }
+
+    /// Flip pending ⇄ confirmed — shared by the row's status glyph, the swipe action
+    /// and the long-press menu, so the write cannot drift between them. The row's
+    /// move between the pending section and its month is already unanimated:
+    /// `applySnapshot` uses `animatingDifferences: false`.
+    private func toggleStatus(_ tx: Tx) {
+        run { try txnToggleStatus(tx, store: self.store) }
     }
 
     private func swipe(at indexPath: IndexPath)
