@@ -147,6 +147,69 @@ enum PurchaseFlow {
         }
         return out
     }
+
+    // MARK: - Reopening a saved grid
+
+    /// Everything page 1 and page 2 need to reopen a saved grid.
+    struct GridSeed {
+        var alloc: SplitAllocation
+        var accountIds: [String]
+        var categoryIds: [String?]
+        /// The currency the purchase was ENTERED in, when that was not the
+        /// ledger base. `nil` means it was.
+        var currency: String?
+    }
+
+    /// Rebuild the grid a saved group came from.
+    ///
+    /// A grid purchase is several transactions linked by `groupId` — one per
+    /// card, each carrying its own category legs — so reopening means turning
+    /// them back into one flat cell allocation.
+    ///
+    /// **Amounts come back in the PURCHASE's currency**, from the per-cell
+    /// `origAmount` the engine records. Falling back to the base figures would
+    /// reopen a foreign purchase showing back-converted amounts, which drift by
+    /// a cent on awkward rates — and re-saving would bake the drift in as the
+    /// new truth.
+    ///
+    /// Rows arrive PINNED: they are figures the user set before and must not be
+    /// re-divided just by opening the sheet.
+    static func seedGrid(from rows: [Tx]) -> GridSeed {
+        var accountIds: [String] = []
+        var categoryIds: [String?] = []
+        var cells: [(key: String, amount: Double)] = []
+        var currency: String?
+
+        for row in rows {
+            if !accountIds.contains(row.account) { accountIds.append(row.account) }
+            for leg in categoryLegs(of: row) {
+                if !categoryIds.contains(where: { $0 == leg.categoryId }) {
+                    categoryIds.append(leg.categoryId)
+                }
+                cells.append((cellKey(account: row.account, category: leg.categoryId),
+                              abs(leg.amount)))
+                if currency == nil { currency = leg.currency }
+            }
+        }
+
+        var alloc = SplitAllocation(total: SplitAllocation.round2(cells.reduce(0) { $0 + $1.amount }))
+        for cell in cells {
+            alloc.tick(cell.key)
+            alloc.setAmount(cell.key, cell.amount)
+        }
+        return GridSeed(alloc: alloc, accountIds: accountIds,
+                        categoryIds: categoryIds, currency: currency)
+    }
+
+    /// One card's category legs. A card with several categories carries them in
+    /// `splits`; a card with exactly one has no `splits` array at all, because
+    /// the projection puts that category on the row itself.
+    private static func categoryLegs(of row: Tx) -> [(categoryId: String?, amount: Double, currency: String?)] {
+        if let splits = row.splits, !splits.isEmpty {
+            return splits.map { ($0.categoryId, $0.origAmount ?? $0.amountBase, $0.origCurrency) }
+        }
+        return [(row.category, row.nativeAmount ?? row.amount, row.currency)]
+    }
 }
 
 /// The kinds the Add sheet offers. Mirrors the sheet's own `Kind` so the pure
