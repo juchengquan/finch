@@ -51,6 +51,8 @@ struct EditTransactionSheet: View {
     /// The cards that were in this purchase when the sheet opened, so `save()`
     /// can tell which ones an edit is about to drop.
     @State private var openingAccountIds: [String] = []
+    @State private var pendingReceiptLoss: String?
+    @State private var receiptLossConfirmed = false
     @State private var refundedTxId: String?
     @State private var showingRefundPicker = false
     @State private var currencyCode: String
@@ -442,6 +444,18 @@ struct EditTransactionSheet: View {
                 splitAlloc.setTotal(total)
                 accountAlloc.setTotal(total)
             }
+            .alert("Delete transaction?", isPresented: Binding(
+                get: { pendingReceiptLoss != nil }, set: { if !$0 { pendingReceiptLoss = nil } }),
+                presenting: pendingReceiptLoss) { _ in
+                Button("Delete", role: .destructive) {
+                    receiptLossConfirmed = true
+                    pendingReceiptLoss = nil
+                    save()
+                }
+                Button("Cancel", role: .cancel) { pendingReceiptLoss = nil }
+            } message: { names in
+                Text("Removing \(names) also deletes its receipt.")
+            }
             .navigationDestination(isPresented: $showingGrid) {
                 PurchaseGridPage(
                     alloc: $gridAlloc,
@@ -528,6 +542,24 @@ struct EditTransactionSheet: View {
             try store.removeAttachment(id: att.id, relPath: att.relPath)   // also unlinks the file
             attachments = store.attachments(for: txn.id)
         } catch { errorMessage = i18nMessage(error) }
+    }
+
+    /// Cards this save is about to drop from the purchase, paired with the
+    /// receipts that would go with them.
+    ///
+    /// Only reachable for a grid: dropping a card deletes that card's whole
+    /// transaction, and its receipt is not visible from here — the sheet loads
+    /// only the tapped row's. Silently destroying a file the user cannot see is
+    /// the thing this exists to prevent.
+    private var droppedCardsWithReceipts: [(name: String, files: [String])] {
+        guard isGrid else { return [] }
+        let keeping = Set(gridAlloc.payload.map { PurchaseFlow.splitCellKey($0.id ?? "").account })
+        return openingAccountIds.filter { !keeping.contains($0) }.compactMap { accountId in
+            guard let row = groupRows.first(where: { $0.account == accountId }) else { return nil }
+            let files = store.attachments(for: row.id).map(\.relPath)
+            guard !files.isEmpty else { return nil }
+            return (store.accounts.first { $0.id == accountId }?.name ?? accountId, files)
+        }
     }
 
     /// Open page 2, rebuilding the cells for whatever is selected now — keeping
@@ -683,11 +715,24 @@ struct EditTransactionSheet: View {
         if !note.isEmpty { args["note"] = .string(note) }
         if effectiveKind == "refund", let refundedTxId { args["refundedTransactionId"] = .string(refundedTxId) }
 
+        // Saving is the last moment this can be backed out of, so it asks here.
+        // Only when a dropped card actually HAS a receipt, so the ordinary path
+        // stays silent. Paths are read BEFORE the write, while the rows still
+        // resolve — the same order `deleteTransaction` uses.
+        let dropped = droppedCardsWithReceipts
+        if !dropped.isEmpty, !receiptLossConfirmed {
+            pendingReceiptLoss = dropped.map(\.name).joined(separator: ", ")
+            return
+        }
+        let orphaned = dropped.flatMap(\.files)
+
         do {
             // The merchant is resolve-or-created in the same write, so the separate
             // createCounterparty call is gone — and with it the orphan counterparty
             // a failed save used to leave behind.
             try store.apply(.saveTransaction, Args(args))
+            // The ledger rows cascade-delete with their entry; the FILES do not.
+            store.unlinkOrphanedAttachments(relPaths: orphaned)
             Haptics.success()
             dismiss()
         } catch { Haptics.warning(); errorMessage = i18nMessage(error) }

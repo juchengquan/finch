@@ -5253,6 +5253,16 @@
         }
       }
     },
+    "Removing %@ also deletes its receipt.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除%@时会一并删除其收据。"
+          }
+        }
+      }
+    },
     "Rename": {
       "localizations": {
         "zh-Hans": {
