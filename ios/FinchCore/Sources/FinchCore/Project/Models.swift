@@ -97,6 +97,24 @@ public struct TxSplit: Codable, Equatable, Sendable {
     public var amount: Double
     public var amountBase: Double
     public var description: String?
+    /// What the user typed for THIS cell, when the purchase was entered in a
+    /// currency other than the ledger base — and the currency they typed it in.
+    ///
+    /// `amount` and `amountBase` both remain the LEDGER BASE figure. This is a
+    /// separate field rather than a redefinition of `amount` deliberately:
+    /// `Selectors.categoryShares`, the split-sum guard in `Transactions.swift`
+    /// and the Edit sheet's split seeding all read `amount` today, and all three
+    /// want base.
+    ///
+    /// **iOS-only, by decision.** The web's projection
+    /// (`frontend/lib/db/queries/transactions.ts`) does not read the column, so
+    /// it never populates this. Nothing breaks — the web has no grid and no
+    /// `saveTransaction` — but the two stacks do not agree about it, and the
+    /// parity oracle cannot catch that: its fixture contains no split at all
+    /// (3 entries × one account leg + one category leg). If you are adding the
+    /// web side, add a split to the fixture at the same time.
+    public var origAmount: Double?
+    public var origCurrency: String?
 }
 
 public struct AccountRow: Identifiable, Codable, Equatable, Hashable, Sendable {

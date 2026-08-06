@@ -353,9 +353,22 @@ enum SaveTransaction {
             }
             // The caller computes the balancing legs (Decision 25): `rebuildEntry`
             // writes exactly what it is handed and has no auto-balance field.
+            //
+            // A category leg is stored in the LEDGER BASE, so on a foreign-currency
+            // purchase the stored figure is not the one that was entered. Keeping
+            // the typed figure per cell is what lets a grid reopen showing the
+            // numbers the user wrote rather than back-converted ones — which drift
+            // by a cent on awkward rates, and would be baked in on the next save.
+            //
+            // Negated alongside `amountBase` so the two carry one sign convention
+            // and `Projection`'s existing flip restores both together.
+            let typedInAnotherCurrency = purchaseCcy != base
             for (categoryId, amount) in byCategory {
                 let b = try Entries.convertToBase(db, amount, purchaseCcy, base, date).amountBase
-                legs.append(.category(Entries.CategoryLeg(categoryId: categoryId, amountBase: Entries.r2(-b))))
+                legs.append(.category(Entries.CategoryLeg(
+                    categoryId: categoryId, amountBase: Entries.r2(-b),
+                    origAmount: typedInAnotherCurrency ? Entries.r2(-amount) : nil,
+                    origCurrency: typedInAnotherCurrency ? purchaseCcy : nil)))
             }
         }
         return legs
