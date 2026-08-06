@@ -397,8 +397,19 @@ struct EditTransactionSheet: View {
                 Text("The file is deleted permanently.")
             }
             .onChange(of: amountText) { _, newValue in
-                // Keep the split dividing the amount actually on screen.
-                splitAlloc.setTotal(abs(DecimalInput.parse(newValue) ?? 0))
+                // Keep BOTH splits dividing the amount actually on screen.
+                //
+                // `accountAlloc` was seeded in `.onAppear` and never re-totalled,
+                // so typing a new amount changed nothing at all: `save()` sends
+                // `payload`, which still held the old per-card figures. You typed
+                // 120 over a 100 split, tapped ✓, and 100 was saved in silence.
+                //
+                // Re-totalling does not by itself move the cells — a reopened
+                // split's rows arrive pinned — which is why `save()` also refuses
+                // a mismatch rather than trusting this to fix it.
+                let total = abs(DecimalInput.parse(newValue) ?? 0)
+                splitAlloc.setTotal(total)
+                accountAlloc.setTotal(total)
             }
             .quickLookPreview($previewURL)
             .sheet(isPresented: $showingRefundPicker) { RefundSourcePickerView { refundedTxId = $0 } }
@@ -504,6 +515,20 @@ struct EditTransactionSheet: View {
         //
         // The cells ARE the purchase, so there is no ordering left to get wrong:
         // the amount, the categories and the tags land together or not at all.
+        // The amount on screen is the target, and the cells must reach it.
+        //
+        // A reopened split's rows are pinned, so raising the amount leaves them
+        // behind: without this the sheet would post the old figures under the new
+        // total and report success. Refused rather than silently reconciled — the
+        // user is the only one who knows which cell was wrong.
+        if accountAlloc.payload.count >= 2, accountAlloc.problem != nil {
+            errorMessage = String(localized: "Splits must add up to the transaction total.")
+            return
+        }
+        if isSplit, splitAlloc.problem != nil {
+            errorMessage = String(localized: "Splits must add up to the transaction total.")
+            return
+        }
         let parsedAmount: Double
         if accountAlloc.payload.count >= 2 {
             parsedAmount = abs(accountAlloc.total)

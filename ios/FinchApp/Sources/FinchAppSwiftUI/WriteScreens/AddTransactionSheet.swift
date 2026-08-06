@@ -644,6 +644,18 @@ struct AddTransactionSheet: View {
             categoryId = ""
         }
         guard let value = DecimalInput.parse(amount), value != 0 else { errorMessage = "Enter an amount."; return }
+        // Same rule as the Edit sheet: the amount is the target, the cells must
+        // reach it. The grid is the case that could silently under-post — its
+        // footer already SAYS "N unaccounted", and nothing stopped the save.
+        if usesGrid, !PurchaseFlow.isBalanced(gridAlloc) {
+            errorMessage = String(localized: "Splits must add up to the transaction total."); return
+        }
+        if accountAlloc.payload.count >= 2, accountAlloc.problem != nil {
+            errorMessage = String(localized: "Splits must add up to the transaction total."); return
+        }
+        if splitAlloc.payload.count >= 2, splitAlloc.problem != nil {
+            errorMessage = String(localized: "Splits must add up to the transaction total."); return
+        }
         let ymd = Self.day(date)
         let hm = Self.time(date)
         // Soft duplicate nudge (expense/income only) — show once, before posting.
