@@ -4082,6 +4082,16 @@
         }
       }
     },
+    "Next": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下一步"
+          }
+        }
+      }
+    },
     "Next month": {
       "localizations": {
         "zh-Hans": {

@@ -72,6 +72,10 @@ struct AddTransactionSheet: View {
     /// each divide one axis, and two sets of margins do not determine the cells
     /// between them.
     @State private var gridAlloc = SplitAllocation(total: 0)
+    /// Page 2 is pushed, not presented: it is the same purchase being described,
+    /// not a separate decision, and Back must return to page 1 with everything
+    /// still typed.
+    @State private var showingGrid = false
     @State private var refundedTxId: String? = nil
     @State private var showingRefundPicker = false
     @State private var targetBalance = ""   // adjust-balance: the account's new balance
@@ -254,8 +258,12 @@ struct AddTransactionSheet: View {
                         icon: { $0.iconName }, label: { $0.label })
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(action: save) { Image(systemName: "checkmark") }
-                        .accessibilityLabel("Save")
+                    // A grid is described on page 2, so page 1 offers the way there
+                    // instead of a save. Everything else still saves from here.
+                    Button(action: { usesGrid ? openGrid() : save() }) {
+                        if usesGrid { Text("Next") } else { Image(systemName: "checkmark") }
+                    }
+                        .accessibilityLabel(usesGrid ? Text("Next") : Text("Save"))
                         .confirmCheckmarkStyle()
                         // Anchored on ✓ — the save that raised it (iOS 26
                         // positions popouts at their source).
@@ -270,6 +278,14 @@ struct AddTransactionSheet: View {
                 }
             }
             .onAppear(perform: seedDefaults)
+            .navigationDestination(isPresented: $showingGrid) {
+                PurchaseGridPage(
+                    alloc: $gridAlloc,
+                    accountIds: accountAlloc.payload.map { $0.id ?? accountId },
+                    categoryIds: splitAlloc.payload.map { $0.id },
+                    currency: currencyCode.isEmpty ? currency(of: accountId) : currencyCode,
+                    onSave: save)
+            }
             // Auto-categorize from the merchant's history (the user can still override).
             .onChange(of: merchant) { _, m in
                 guard kind != .transfer, !m.isEmpty else { return }
@@ -386,14 +402,7 @@ struct AddTransactionSheet: View {
             // Both axes split: the per-axis editors above each divide ONE axis, and
             // two sets of margins do not determine the cells between them — $60/$0/
             // $10/$30 and $42/$18/$28/$12 give the same card and category totals.
-            // So the cells are typed here instead, and the totals derive from them.
-            if usesGrid {
-                PurchaseGridSection(
-                    alloc: $gridAlloc,
-                    accountIds: accountAlloc.payload.map { $0.id ?? accountId },
-                    categoryIds: splitAlloc.payload.map { $0.id },
-                    currency: currencyCode.isEmpty ? currency(of: accountId) : currencyCode)
-            }
+            // So the cells are typed on page 2, and the totals derive from them.
             FieldRow(glyph: .date, title: "Date", showsDefaultTrailing: false) {
                 DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
                     .labelsHidden()
@@ -621,6 +630,20 @@ struct AddTransactionSheet: View {
         // from a single source account, so it stays empty until the user picks it.
         if fromAccountId.isEmpty { fromAccountId = preferredAccount ?? "" }
         if currencyCode.isEmpty { currencyCode = currency(of: accountId) }
+    }
+
+    /// Open page 2, rebuilding the cells for whatever is selected now.
+    ///
+    /// `reseedGrid` keeps every cell the user already typed and floats the new
+    /// ones, so going back to add a card does not disturb the figures already
+    /// set — it just gives the new card whatever is left.
+    private func openGrid() {
+        let total = abs(DecimalInput.parse(amount) ?? 0)
+        gridAlloc = PurchaseFlow.reseedGrid(gridAlloc,
+                                            accounts: accountAlloc.payload,
+                                            categories: splitAlloc.payload,
+                                            total: total)
+        showingGrid = true
     }
 
     private func save() {
