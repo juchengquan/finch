@@ -19,13 +19,28 @@ enum Haptics {
     static func success() { fire(.success) }
     static func warning() { fire(.warning) }
 
+    /// A control responded — not an outcome. Used by the transaction row's status
+    /// glyph, where the row typically moves to another section on tap and so
+    /// leaves the screen: the haptic is the only confirmation that the press
+    /// landed on the control rather than on the row behind it.
+    ///
+    /// An IMPACT, not `.success`: the notification haptics above announce that
+    /// something finished, and firing one on every toggle — including un-confirming
+    /// — would both overstate the event and read as "saved" in the wrong direction.
+    static func tap() { impact() }
+
     #if os(iOS)
     private static func fire(_ type: UINotificationFeedbackGenerator.FeedbackType) {
         guard enabled else { return }
         UINotificationFeedbackGenerator().notificationOccurred(type)
     }
+    private static func impact() {
+        guard enabled else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
     #else
     private enum Kind { case success, warning }
     private static func fire(_ type: Kind) {}   // no-op on macOS
+    private static func impact() {}             // no-op on macOS
     #endif
 }

@@ -58,10 +58,12 @@ enum TxRowCell {
                           store: FinchStore,
                           showDate: Bool = true,
                           showRunningBalance: Bool = true,
-                          onPreviewReceipt: ((Tx) -> Void)? = nil) {
+                          onPreviewReceipt: ((Tx) -> Void)? = nil,
+                          onToggleStatus: ((Tx) -> Void)? = nil) {
         cell.contentConfiguration = UIHostingConfiguration {
             TxRow(txn: tx,
                   onPreviewReceipt: onPreviewReceipt,
+                  onToggleStatus: onToggleStatus,
                   showDate: showDate,
                   showRunningBalance: showRunningBalance)
                 .environmentObject(store)
@@ -76,11 +78,21 @@ enum TxRowCell {
                 // exposed 40 StaticTexts and ONE labelled control, the SwiftUI feed 15
                 // elements of which every row was a Button.
                 //
-                // Safe to combine: nothing inside `TxRow` is independently tappable —
-                // `onPreviewReceipt` is invoked from the cell's swipe/context actions,
-                // not from a control in the row.
+                // Combining hides any control INSIDE the row from VoiceOver, and since
+                // the status glyph became tappable there now is one. It stays combined
+                // anyway — one stop per row is what the measurement above bought — and
+                // the glyph is re-exposed as a custom action below rather than as a
+                // second stop on every row in the feed.
+                //
+                // (`onPreviewReceipt` is still not a control here: in a cell it is
+                // invoked from the swipe/context actions, not from the row.)
                 .accessibilityElement(children: .combine)
                 .accessibilityAddTraits(.isButton)
+                // The sighted affordance is a tap on the glyph; this is its equivalent.
+                // Named for what the tap WILL do, not for the state the row is in.
+                .accessibilityAction(named: Text(RowStatusStyle.actionTitle(pending: tx.pending == true))) {
+                    onToggleStatus?(tx)
+                }
         }
         // `UIHostingConfiguration`'s default margins are considerably larger than a
         // SwiftUI `List` row's, which would leave the row tall even with the right

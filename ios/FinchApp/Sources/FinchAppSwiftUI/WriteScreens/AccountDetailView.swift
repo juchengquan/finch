@@ -282,7 +282,8 @@ struct AccountDetailView: View {
     // menu give delete + confirm + receipt preview. Reuses the feed's `TxRow`.
     @ViewBuilder private func txRow(_ t: Tx) -> some View {
         Button { editing = t } label: {
-            TxRow(txn: t, onPreviewReceipt: { previewReceipt($0) })
+            TxRow(txn: t, onPreviewReceipt: { previewReceipt($0) },
+                  onToggleStatus: { toggleStatusTxn($0) })
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -302,8 +303,15 @@ struct AccountDetailView: View {
         do { try store.deleteTransaction(txn.id); Haptics.warning() } catch { errorMessage = i18nMessage(error) }
     }
     private func toggleStatusTxn(_ txn: Tx) {
-        do { try txnToggleStatus(txn, store: store) }
-        catch { errorMessage = i18nMessage(error) }
+        // No animation when the row moves. Confirming lifts it out of the
+        // "To confirm" section and into its month, and a SwiftUI List animates
+        // that by default — the UIKit screens do not, because their snapshots
+        // already apply with `animatingDifferences: false`.
+        var t = Transaction(); t.disablesAnimations = true
+        withTransaction(t) {
+            do { try txnToggleStatus(txn, store: store) }
+            catch { errorMessage = i18nMessage(error) }
+        }
     }
     private func duplicateTxn(_ t: Tx) {
         duplicating = t   // opens the Add sheet pre-filled; Save posts it
