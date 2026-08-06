@@ -46,6 +46,11 @@ struct EditTransactionSheet: View {
     /// `patch["account"]`, which the engine refuses on a multi-account entry: the
     /// engine accepted multi-account edits and nothing sent them.
     @State private var accountAlloc = SplitAllocation(total: 0)
+    @State private var gridAlloc = SplitAllocation(total: 0)
+    @State private var showingGrid = false
+    /// The cards that were in this purchase when the sheet opened, so `save()`
+    /// can tell which ones an edit is about to drop.
+    @State private var openingAccountIds: [String] = []
     @State private var refundedTxId: String?
     @State private var showingRefundPicker = false
     @State private var currencyCode: String
@@ -68,6 +73,25 @@ struct EditTransactionSheet: View {
     /// shape — a split layout has no Amount field — and flipping it mid-edit would
     /// remove the very field whose value the split divides.
     private var isSplit: Bool { (liveTxn.splits?.count ?? 0) >= 2 }
+
+    /// A grid purchase: several transactions, one per card, linked by `groupId`.
+    ///
+    /// Detected HERE rather than by the fourteen screens that open this sheet —
+    /// they all construct `EditTransactionSheet(txn:)` and nothing else, so this
+    /// is the one place that has to know.
+    private var isGrid: Bool { liveTxn.groupId != nil }
+
+    /// Every card's transaction in this purchase, the tapped one included.
+    private var groupRows: [Tx] {
+        guard let gid = liveTxn.groupId else { return [] }
+        return store.txns.filter { $0.groupId == gid }
+    }
+
+    /// Both axes split, so the money is divided on page 2.
+    private var usesGrid: Bool {
+        PurchaseFlow.page2(accounts: accountAlloc.payload.count,
+                           categories: splitAlloc.payload.count) == .grid
+    }
     private var refundedSummary: String {
         guard let id = refundedTxId, let t = store.txns.first(where: { $0.id == id }) else { return "Optional" }
         return t.merchant.isEmpty ? t.date : t.merchant
@@ -143,7 +167,11 @@ struct EditTransactionSheet: View {
             Form {
                 // Line items build their own primary section (Account/Amount/
                 // Category/Date) below; split & transfer keep Date here.
-                if isSplit || transferLegs != nil {
+                // A grid keeps the ordinary Account/Amount/Category layout: the
+                // amount is the TARGET its cells must reach (`save()` refuses a
+                // mismatch), so hiding the field the way a category split does
+                // would leave no target and no way to raise the purchase's total.
+                if (isSplit && !isGrid) || transferLegs != nil {
                     Section {
                         FieldRow(glyph: .date, title: "Date", showsDefaultTrailing: false) {
                             DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
@@ -159,7 +187,7 @@ struct EditTransactionSheet: View {
                         }
                     }
                 }
-                if isSplit {
+                if isSplit && !isGrid {
                     // Still the Category row (not a "Split" abstraction) — its value is the
                     // split's category names; tapping it reopens the split editor.
                     Section {
@@ -237,7 +265,7 @@ struct EditTransactionSheet: View {
                 }
 
                 // Split still needs an Account row (line items have it above; transfer doesn't).
-                if isSplit {
+                if isSplit && !isGrid {
                     Section {
                         SearchablePickerRow(title: "Account", glyph: .account,
                             accounts: store.accounts, selection: $accountId,
@@ -382,8 +410,11 @@ struct EditTransactionSheet: View {
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(action: save) { Image(systemName: "checkmark") }
-                        .accessibilityLabel("Save")
+                    // A grid is divided on page 2, so page 1 offers the way there.
+                    Button(action: { usesGrid ? openGrid() : save() }) {
+                        if usesGrid { Text("Next") } else { Image(systemName: "checkmark") }
+                    }
+                        .accessibilityLabel(usesGrid ? Text("Next") : Text("Save"))
                         .confirmCheckmarkStyle()
                 }
             }
@@ -411,6 +442,14 @@ struct EditTransactionSheet: View {
                 splitAlloc.setTotal(total)
                 accountAlloc.setTotal(total)
             }
+            .navigationDestination(isPresented: $showingGrid) {
+                PurchaseGridPage(
+                    alloc: $gridAlloc,
+                    accountIds: accountAlloc.payload.map { $0.id ?? accountId },
+                    categoryIds: splitAlloc.payload.map { $0.id },
+                    currency: currencyCode.isEmpty ? accountCurrency : currencyCode,
+                    onSave: save)
+            }
             .quickLookPreview($previewURL)
             .sheet(isPresented: $showingRefundPicker) { RefundSourcePickerView { refundedTxId = $0 } }
             .onAppear {
@@ -430,6 +469,30 @@ struct EditTransactionSheet: View {
                         total: abs(legs.reduce(0) { $0 + $1.amount }))
                 } else {
                     accountAlloc.setTotal(abs(txn.nativeAmount ?? txn.amount))
+                }
+                // A grid reopens whole: the cells, both margins, and the total.
+                // The margins are DERIVED from the cells rather than stored —
+                // nothing persists "the card split" separately from the purchase.
+                if isGrid {
+                    let seeded = PurchaseFlow.seedGrid(from: groupRows)
+                    gridAlloc = seeded.alloc
+                    openingAccountIds = seeded.accountIds
+                    if let ccy = seeded.currency { currencyCode = ccy }
+                    amountText = String(format: "%g", seeded.alloc.total)
+
+                    var byAccount: [(id: String?, amount: Double)] = []
+                    var byCategory: [(id: String?, amount: Double)] = []
+                    for row in seeded.alloc.rows {
+                        let parts = PurchaseFlow.splitCellKey(row.id)
+                        if let i = byAccount.firstIndex(where: { $0.id == parts.account }) {
+                            byAccount[i].amount += row.amount
+                        } else { byAccount.append((parts.account, row.amount)) }
+                        if let i = byCategory.firstIndex(where: { $0.id == parts.category }) {
+                            byCategory[i].amount += row.amount
+                        } else { byCategory.append((parts.category, row.amount)) }
+                    }
+                    accountAlloc = SplitAllocation.merging(byAccount, total: seeded.alloc.total)
+                    splitAlloc = SplitAllocation.merging(byCategory, total: seeded.alloc.total)
                 }
                 if let legs = transferLegs {
                     fromAmountText = String(format: "%g", abs(legs.from.nativeAmount ?? legs.from.amount))
@@ -465,6 +528,16 @@ struct EditTransactionSheet: View {
             try store.removeAttachment(id: att.id, relPath: att.relPath)   // also unlinks the file
             attachments = store.attachments(for: txn.id)
         } catch { errorMessage = i18nMessage(error) }
+    }
+
+    /// Open page 2, rebuilding the cells for whatever is selected now — keeping
+    /// every cell already typed and floating the new ones.
+    private func openGrid() {
+        gridAlloc = PurchaseFlow.reseedGrid(gridAlloc,
+                                            accounts: accountAlloc.payload,
+                                            categories: splitAlloc.payload,
+                                            total: abs(DecimalInput.parse(amountText) ?? 0))
+        showingGrid = true
     }
 
     private func save() {
@@ -521,13 +594,26 @@ struct EditTransactionSheet: View {
         // behind: without this the sheet would post the old figures under the new
         // total and report success. Refused rather than silently reconciled — the
         // user is the only one who knows which cell was wrong.
-        if accountAlloc.payload.count >= 2, accountAlloc.problem != nil {
-            errorMessage = String(localized: "Splits must add up to the transaction total.")
-            return
-        }
-        if isSplit, splitAlloc.problem != nil {
-            errorMessage = String(localized: "Splits must add up to the transaction total.")
-            return
+        // For a grid the CELLS are what gets written, so they are what must add
+        // up. The margin allocations are seeded FROM the cells and go stale the
+        // moment one is edited on page 2 — and `.onChange(of: amountText)`
+        // re-totals them against pinned rows, which is exactly `.sumMismatch`.
+        // Gating on them here would refuse every grid whose total was changed,
+        // with a message about splits the user never touched.
+        if usesGrid {
+            if !PurchaseFlow.isBalanced(gridAlloc) {
+                errorMessage = String(localized: "Splits must add up to the transaction total.")
+                return
+            }
+        } else {
+            if accountAlloc.payload.count >= 2, accountAlloc.problem != nil {
+                errorMessage = String(localized: "Splits must add up to the transaction total.")
+                return
+            }
+            if isSplit, splitAlloc.problem != nil {
+                errorMessage = String(localized: "Splits must add up to the transaction total.")
+                return
+            }
         }
         let parsedAmount: Double
         if accountAlloc.payload.count >= 2 {
@@ -544,7 +630,15 @@ struct EditTransactionSheet: View {
         let sign: Double = effKind == "expense" ? -1 : 1
         let targetAccount = accountId.isEmpty ? txn.account : accountId
         var cells: [JSONValue] = []
-        if accountAlloc.payload.count >= 2 {
+        if usesGrid {
+            // Cells for the whole purchase, and the id names the GROUP — so the
+            // engine matches rows by card and each surviving card keeps its
+            // transaction id, its receipt and its reconcile mark. Naming the
+            // tapped posting instead would rewrite that one row and leave the
+            // rest of the purchase behind.
+            cells = PurchaseFlow.cells(from: gridAlloc,
+                                       kind: AddTxKind(rawValue: effKind) ?? .expense)
+        } else if accountAlloc.payload.count >= 2 {
             // Paid from several cards. One category across them, because a single
             // transaction is split on at most one axis — both axes is the grid,
             // which is several transactions and reopens through the Add flow.
@@ -573,7 +667,7 @@ struct EditTransactionSheet: View {
         }
 
         var args: [String: JSONValue] = [
-            "id": .string(txn.id),
+            "id": .string(isGrid ? (liveTxn.groupId ?? txn.id) : txn.id),
             "ledgerId": .string(store.activeLedgerId),
             "merchant": .string(merchant.isEmpty ? "Untitled" : merchant),
             "date": .string(Self.day(date)), "time": .string(Self.time(date)),
