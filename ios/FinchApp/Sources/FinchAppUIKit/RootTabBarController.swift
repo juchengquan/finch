@@ -58,15 +58,22 @@ final class RootTabBarController: UITabBarController {
                 let nav = UINavigationController(rootViewController: ScheduledListVC())
                 nav.navigationBar.prefersLargeTitles = true
                 vc = TabChromeVC(content: nav, tab: tab, store: store, router: router)
+            } else if tab == .settings, Self.uikitNavTabs.contains(tab) {
+                // Phase 4: the Settings ROOT is native too now, so this tab no longer
+                // hosts SwiftUI at all — the menu and everything it pushes are UIKit.
+                //
+                // No `TabChromeVC`: Settings never has a FAB (asserted by
+                // `TabChromeUITests.testSettingsHasNoFAB`), so it needs no chrome
+                // container — the same reason the hosted root skipped one.
+                let nav = UINavigationController(rootViewController: SettingsListVC())
+                nav.navigationBar.prefersLargeTitles = true
+                vc = nav
             } else if Self.uikitNavTabs.contains(tab) {
                 // Same treatment Budgets gets: the chrome is hosted OVER the whole
                 // navigation controller, so the FAB floats above pushed screens instead
-                // of being covered by them (§2c). Settings never has a FAB, so it needs
-                // no chrome container.
+                // of being covered by them (§2c).
                 let nav = navigationTab(tab)
-                vc = tab == .settings
-                    ? nav
-                    : TabChromeVC(content: nav, tab: tab, store: store, router: router)
+                vc = TabChromeVC(content: nav, tab: tab, store: store, router: router)
             } else {
                 vc = hostedRoot(tab)
             }
