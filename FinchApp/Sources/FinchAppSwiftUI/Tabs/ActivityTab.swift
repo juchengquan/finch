@@ -367,6 +367,9 @@ struct ActivityFeedView: View {
                         .foregroundStyle(selected.contains(txn.id) ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                 }
                 TxRow(txn: txn, onPreviewReceipt: isSelecting ? nil : { previewReceipt($0) },
+                      // Inert while selecting: a tap must add the row to the
+                      // selection, not write to it.
+                      onToggleStatus: isSelecting ? nil : { toggleStatus($0) },
                       showRunningBalance: false)
             }
             .contentShape(Rectangle())   // make the whole row tappable — without this the Spacer gap (middle) doesn't hit-test
@@ -386,7 +389,12 @@ struct ActivityFeedView: View {
         run { try store.deleteTransaction(txn.id) }   // also unlinks receipt files
     }
     private func toggleStatus(_ txn: Tx) {
-        run { try txnToggleStatus(txn, store: store) }
+        // No animation when the row moves. Confirming lifts it out of the "To confirm"
+        // section and into its month, and a SwiftUI List animates that by default. The
+        // UIKit feed does not need this — its snapshots already apply with
+        // `animatingDifferences: false`.
+        var t = Transaction(); t.disablesAnimations = true
+        withTransaction(t) { run { try txnToggleStatus(txn, store: store) } }
     }
     /// Duplicate opens the Add sheet pre-filled from the source row — the
     /// user tweaks/confirms via Save (no silent write).
@@ -552,6 +560,12 @@ struct TxRow: View {
     @AppStorage("finch.feed.relativeDates") private var relativeDates = true
     let txn: Tx
     var onPreviewReceipt: ((Tx) -> Void)? = nil
+    /// Tapping the leading category glyph flips pending ⇄ confirmed.
+    ///
+    /// Optional for the same reason `onPreviewReceipt` is: a screen that has no
+    /// business mutating status passes nil and the glyph stays inert. Multi-select
+    /// passes nil too — while you are picking rows, a tap must select, not write.
+    var onToggleStatus: ((Tx) -> Void)? = nil
     var showDate: Bool = true
     /// Running account balance under the amount — a ledger-style column that only
     /// reads sensibly when every row shares one account (Account Detail). Mixed-
@@ -634,9 +648,9 @@ struct TxRow: View {
     }
 
     var body: some View {
-        let glyph = store.rowGlyph(categoryId: txn.category, kind: txn.kind)
-        return HStack(spacing: 8) {
-            // Leading category icon — what the stripe used to stand in for.
+        HStack(spacing: 8) {
+            // Leading category icon — what the stripe used to stand in for, and now
+            // also the status control. See `statusGlyph` for the appearance rules.
             //
             // It carries the KIND label, which is why the stripe below does not. The row
             // is one combined accessibility element (see `TxRowCell`), so its spoken
@@ -647,8 +661,26 @@ struct TxRow: View {
             // it did before, without a phantom zero-width view to carry it. (An empty
             // `Text` cannot: it contributes nothing to a combined label. Measured — the
             // kind vanished from the tree entirely.)
-            RowGlyphView(symbol: glyph.symbol, tint: glyphTint(glyph.tint),
-                         a11yLabel: kindA11yLabel)
+            // A tap GESTURE, not a `Button` — and the difference is an accessibility
+            // one, not a styling one. A Button is an interactive child, and
+            // `children: .combine` (see `TxRowCell`) does not merge an interactive
+            // child's label into the row: wrapping this glyph in a Button silently
+            // dropped the kind from every row, so what read
+            // "Expense, Groceries, Aug 4 · 12:00, −$58.20" became
+            // "Groceries, Aug 4 · 12:00, −$58.20". Measured before and after.
+            //
+            // `simultaneousGesture`, because three screens wrap the whole row in a
+            // Button to open the editor; a plain `onTapGesture` there competes with
+            // the row's own gesture instead of coexisting with it.
+            statusGlyph
+                .simultaneousGesture(TapGesture().onEnded {
+                    guard let onToggleStatus else { return }
+                    // The row usually LEAVES the screen on tap — it moves to another
+                    // section — so this is the only confirmation the press landed on
+                    // the control rather than on the row behind it.
+                    Haptics.tap()
+                    onToggleStatus(txn)
+                })
             VStack(alignment: .leading, spacing: 1) {
                 // Top-left: category is the title (merchant lives in edit/detail
                 // only, per user decision) + status flags + tag chips.
@@ -740,6 +772,25 @@ struct TxRow: View {
 
     /// `RowGlyph.Tint` → a real colour. The tint cases stay colour-free so the glyph
     /// choice can be unit-tested without a view; this is where they land.
+    /// The leading glyph, faded while the row is pending.
+    ///
+    /// The clock badge remains the primary pending signal; this is the second one,
+    /// and it exists so the CONTROL differs by state — a button that looks identical
+    /// whatever it will do gives no feedback that a press registered, on a row that
+    /// then leaves the section you were looking at. `RowStatusStyle.pendingOpacity`
+    /// is the single knob if the treatment reads wrong: set it to 1.0 and the glyph
+    /// goes back to looking the same in both states, with no other edit.
+    ///
+    /// The hit area fills the row's height while the glyph keeps its own width, so
+    /// the text column, the tag-chip cascade and the 52pt row height are untouched.
+    private var statusGlyph: some View {
+        let g = store.rowGlyph(categoryId: txn.category, kind: txn.kind)
+        return RowGlyphView(symbol: g.symbol, tint: glyphTint(g.tint), a11yLabel: kindA11yLabel)
+            .opacity(RowStatusStyle.glyphOpacity(pending: txn.pending == true))
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+    }
+
     private func glyphTint(_ tint: RowGlyph.Tint) -> Color {
         switch tint {
         case .category(let hex): Color(hex: hex) ?? .secondary

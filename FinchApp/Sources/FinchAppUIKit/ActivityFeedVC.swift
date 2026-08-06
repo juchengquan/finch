@@ -319,7 +319,11 @@ final class ActivityFeedVC: UIViewController {
             TxRowCell.configure(cell, tx: tx, store: self.store,
                                 showRunningBalance: false,
                                 onPreviewReceipt: self.isSelecting ? nil
-                                    : { [weak self] in self?.previewReceipt($0) })
+                                    : { [weak self] in self?.previewReceipt($0) },
+                                // Inert while selecting, like the receipt above: a tap
+                                // there must add the row to the selection, not write to it.
+                                onToggleStatus: self.isSelecting ? nil
+                                    : { [weak self] in self?.toggleStatus($0) })
             var accessories: [UICellAccessory] = []
             if self.isSelecting {
                 // Multi-select: a leading tick, driven by our own `selected` set so
@@ -707,10 +711,7 @@ final class ActivityFeedVC: UIViewController {
         var actions = TxRowActions(
             duplicate: { [weak self] tx in self?.presentDuplicate(tx) },
             requestDelete: { [weak self] tx in self?.confirmDeleteTransaction(tx) },
-            toggleStatus: { [weak self] tx in
-                guard let self else { return }
-                self.run { try txnToggleStatus(tx, store: self.store) }
-            },
+            toggleStatus: { [weak self] tx in self?.toggleStatus(tx) },
             edit: { [weak self] tx in self?.presentEditTransaction(tx) },
             previewReceipt: { [weak self] tx in self?.previewReceipt(tx) })
         // The item is omitted when the row has no attachment, as in SwiftUI.
@@ -760,6 +761,17 @@ final class ActivityFeedVC: UIViewController {
     }
 
     /// The SwiftUI screen's `.quickLookPreview($previewURL)`.
+    /// Flip pending ⇄ confirmed. One method, three callers: the row's status glyph,
+    /// the swipe action and the long-press menu — so the write cannot drift between
+    /// the ways of reaching it.
+    ///
+    /// No animation suppression needed here: `applySnapshot` already applies with
+    /// `animatingDifferences: false`, so the row's move between the pending section
+    /// and its month is instant. The SwiftUI screens are the ones that need it.
+    private func toggleStatus(_ tx: Tx) {
+        run { try txnToggleStatus(tx, store: self.store) }
+    }
+
     private func previewReceipt(_ tx: Tx) {
         guard let first = store.attachments(for: tx.id).first else { return }
         previewURL = store.attachmentURL(for: first)

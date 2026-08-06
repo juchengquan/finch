@@ -77,8 +77,15 @@ struct TagDetailView: View {
     }
 
     private func toggleStatus(_ tx: Tx) {
-        do { try txnToggleStatus(tx, store: store) }
-        catch { errorMessage = i18nMessage(error) }
+        // No animation when the row moves. Confirming lifts it out of the
+        // "To confirm" section and into its month, and a SwiftUI List animates
+        // that by default — the UIKit screens do not, because their snapshots
+        // already apply with `animatingDifferences: false`.
+        var t = Transaction(); t.disablesAnimations = true
+        withTransaction(t) {
+            do { try txnToggleStatus(tx, store: store) }
+            catch { errorMessage = i18nMessage(error) }
+        }
     }
     private func delete(_ tx: Tx) {
         do { try store.deleteTransaction(tx.id); Haptics.warning() }   // also unlinks receipts
@@ -86,7 +93,8 @@ struct TagDetailView: View {
     }
 
     @ViewBuilder private func row(_ tx: Tx) -> some View {
-        Button { editing = tx } label: { TxRow(txn: tx, showRunningBalance: false).contentShape(Rectangle()) }
+        Button { editing = tx } label: { TxRow(txn: tx, onToggleStatus: { toggleStatus($0) }, showRunningBalance: false)
+                .contentShape(Rectangle()) }
             .buttonStyle(.plain)
             .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
             .txnSwipeActions(tx,
