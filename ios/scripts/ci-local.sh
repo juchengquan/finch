@@ -144,7 +144,14 @@ acquire_lock() {
     printf '\033[33m  waited %ds for the machine\033[0m\n' "$waited"
   fi
 }
+# Timed, and reported separately from the work below. `$SECONDS` runs from script
+# start, so folding the wait into "total" conflates the two things this lock
+# exists to tell apart: how long YOUR run took, and how long it queued behind
+# someone else's. Observed: a run reported 713s total whose steps summed to 131s
+# — the other 582s was waiting, and the headline number hid it.
+_t_lock=$SECONDS
 acquire_lock
+LOCK_WAITED=$((SECONDS - _t_lock))
 
 FAILED=()
 # Per-step wall clock. The script had none, so "it feels slow" could never be
@@ -190,7 +197,22 @@ fi
 # for a change the developer never made. Measured: a run whose only real diff was
 # this script and a doc file still spent 31s on macOS. The script's own output was
 # deciding what the script built.
-CHANGED="$(git -C "$REPO" diff --name-only "$BASE"...HEAD 2>/dev/null; git -C "$REPO" diff --name-only HEAD 2>/dev/null)"
+#
+# `.xcstrings` is excluded for a second reason, and it needs the earlier sampling
+# to not be enough: the churn SURVIVES the run that caused it. Sampling early
+# stops a run contaminating itself, but the next run still opens on a dirty
+# catalog and builds macOS for it — measured, 34s of a 74s run on a tree with no
+# real changes. Discarding it is a manual step the summary can only suggest.
+#
+# Safe to ignore rather than merely convenient: the catalogs are a RESOURCE, and
+# a resource cannot break a compile. Platform builds exist here to catch
+# macOS/watchOS compile breaks (`.topBarTrailing` and friends); a changed string
+# table produces the same object code either way. They are also generated, never
+# hand-edited (see the i18n section of ios/CLAUDE.md), and guard 1 already checks
+# them for real drift on every run — before any of this.
+CHANGED="$( { git -C "$REPO" diff --name-only "$BASE"...HEAD 2>/dev/null
+              git -C "$REPO" diff --name-only HEAD 2>/dev/null
+            } | grep -v '\.xcstrings$' )"
 
 cd "$REPO/ios" || exit 1
 
@@ -448,7 +470,13 @@ _record_step
 printf '\n\033[1m-- summary --\033[0m\n'
 # Guarded for the same bash 3.2 reason as TEST_SCOPE above.
 if [ ${#STEP_LOG[@]} -gt 0 ]; then printf '%s\n' "${STEP_LOG[@]}"; fi
-printf '\033[1m%4ds  total (%s)\033[0m\n' "$SECONDS" "$MODE_LABEL"
+printf '\033[1m%4ds  total (%s)\033[0m\n' "$((SECONDS - LOCK_WAITED))" "$MODE_LABEL"
+# Only when it actually happened — on a quiet machine these two lines would be
+# noise, and the point of them is that a slow run is often not this run's fault.
+if [ "$LOCK_WAITED" -gt 0 ]; then
+  printf '\033[33m%4ds  waiting for another ci-local run (not this run'"'"'s work)\033[0m\n' "$LOCK_WAITED"
+  printf '%4ds  wall clock\n' "$SECONDS"
+fi
 
 # The FinchApp build/test step can re-serialize the string catalogs in place
 # (Xcode's formatting, zero content change) AFTER the reproducibility guard
