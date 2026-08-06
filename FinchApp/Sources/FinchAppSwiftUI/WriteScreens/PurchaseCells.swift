@@ -81,6 +81,72 @@ enum PurchaseFlow {
     static func isBalanced(_ alloc: SplitAllocation) -> Bool {
         abs(unallocated(alloc)) < 0.005
     }
+
+    // MARK: - Seeding page 2
+
+    /// Page 2's starting point: every cell filled from both margins,
+    /// `cell(card, category) = card's share × category's share ÷ total`.
+    ///
+    /// **This does not contradict the reason the grid exists.** Two sets of
+    /// margins genuinely do NOT determine the cells — 60/0/10/30 and
+    /// 42/18/28/12 share the same margins — which is why every cell here stays
+    /// editable and any of them can be crossed out. What the margins DO give is
+    /// a starting point that is balanced on arrival, so ✓ is live immediately
+    /// and the numbers already typed on page 1 are honoured rather than thrown
+    /// away. Opening empty would demand four more entries for a 2×2 and twelve
+    /// for a 3×4.
+    static func seedGrid(accounts: [(id: String?, amount: Double)],
+                         categories: [(id: String?, amount: Double)],
+                         total: Double) -> SplitAllocation {
+        var out = SplitAllocation(total: total)
+        guard total > 0, !accounts.isEmpty, !categories.isEmpty else { return out }
+
+        var cells: [(key: String, amount: Double)] = []
+        for a in accounts {
+            for c in categories {
+                cells.append((cellKey(account: a.id ?? "", category: c.id),
+                              SplitAllocation.round2(a.amount * c.amount / total)))
+            }
+        }
+        // N independent roundings will not generally sum to the total, so the
+        // last cell absorbs the residue — the same trick `redistribute` uses on
+        // its final floating row, and the engine on its final leg.
+        if let last = cells.indices.last {
+            let others = cells.dropLast().reduce(0) { $0 + $1.amount }
+            cells[last].amount = SplitAllocation.round2(total - others)
+        }
+        for cell in cells {
+            out.tick(cell.key)
+            out.setAmount(cell.key, cell.amount)
+        }
+        return out
+    }
+
+    /// Coming back to page 2 after changing the selection on page 1.
+    ///
+    /// Cells that survive keep exactly what the user typed. Cells that are new
+    /// arrive UNPINNED, so `redistribute` hands them whatever is left instead of
+    /// them fighting the figures already set. Cells whose card or category left
+    /// the selection simply are not rebuilt.
+    static func reseedGrid(_ current: SplitAllocation,
+                           accounts: [(id: String?, amount: Double)],
+                           categories: [(id: String?, amount: Double)],
+                           total: Double) -> SplitAllocation {
+        guard !current.rows.isEmpty else {
+            return seedGrid(accounts: accounts, categories: categories, total: total)
+        }
+        var out = SplitAllocation(total: total)
+        for a in accounts {
+            for c in categories {
+                let key = cellKey(account: a.id ?? "", category: c.id)
+                out.tick(key)                                   // unpinned — floats
+                if let prior = current.rows.first(where: { $0.id == key }) {
+                    out.setAmount(key, prior.amount)            // typed before — hold it
+                }
+            }
+        }
+        return out
+    }
 }
 
 /// The kinds the Add sheet offers. Mirrors the sheet's own `Kind` so the pure
