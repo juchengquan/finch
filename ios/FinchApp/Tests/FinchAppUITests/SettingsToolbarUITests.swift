@@ -65,5 +65,12 @@ final class SettingsToolbarUITests: XCTestCase {
         }
         XCTAssertNotEqual(after, before,
                           "privacy toggle did not change state — BEFORE \(before ?? "nil"), AFTER \(after ?? "nil")")
+
+        // Put it back. `privacyMode` is STORE state, not view state: it outlives the
+        // app termination in tearDown, and a later test in the same run then reads
+        // masked amounts. That is not hypothetical — leaving it on failed
+        // `CategorySplitUITests` with "allocated reads Allocated, •••• / ••••", a
+        // failure whose message points nowhere near this file.
+        app.buttons["Privacy mode"].firstMatch.tap()
     }
 }
