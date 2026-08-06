@@ -274,6 +274,64 @@ enum SimulatorDemoSeed {
             try apply("addTransaction", args)
         }
 
+        // SPLIT PURCHASES — one purchase that is several rows in the feed.
+        //
+        // These go through `saveTransaction`, the single write a whole purchase now
+        // takes, and they are the only seeded data that exercises it. Everything
+        // above is one account and one category, so nothing in the demo produced a
+        // `group_id`, a multi-account leg, or a category split: the "part of one
+        // purchase" marker, the grid's account editor, and the counting rules that
+        // must not double-count a split all had no data to appear on.
+        //
+        // Three shapes, because they fail differently:
+        //
+        //   1. SPLIT TENDER — one purchase, two cards, one category. The feed shows
+        //      a row per payment (that is what you check a statement against), and
+        //      the marker is what says they are one thing.
+        //   2. CATEGORY SPLIT — one purchase, one card, two categories. Budgets over
+        //      each category must take their own share and no more.
+        //   3. THE GRID — both at once. This is the shape the Edit sheet's account
+        //      editor exists for, and the one that broke counting.
+        //
+        // Amounts are in the PURCHASE's currency and negative for money out. Cells
+        // are what makes it one purchase rather than several transactions that
+        // happen to share a date.
+
+        // 1. Split tender: a big shop paid partly on the card, partly from checking.
+        try apply("saveTransaction", [
+            "ledgerId": .string("personal"), "merchant": .string("Costco"),
+            "date": .string(ymd(9)), "time": .string("14:20"),
+            "kind": .string("expense"), "note": .string("Split across two cards"),
+            "cells": .array([
+                .object(["accountId": .string("credit"),   "categoryId": .string("cat-groceries"), "amount": .double(-180.00)]),
+                .object(["accountId": .string("checking"), "categoryId": .string("cat-groceries"), "amount": .double(-64.30)]),
+            ])])
+
+        // 2. Category split: one restaurant bill, part dinner and part groceries
+        //    picked up on the way out — one card, two categories.
+        try apply("saveTransaction", [
+            "ledgerId": .string("personal"), "merchant": .string("Whole Foods"),
+            "date": .string(ymd(12)), "time": .string("18:05"),
+            "kind": .string("expense"),
+            "cells": .array([
+                .object(["accountId": .string("credit"), "categoryId": .string("cat-dining-restaurants"), "amount": .double(-38.50)]),
+                .object(["accountId": .string("credit"), "categoryId": .string("cat-groceries"),          "amount": .double(-52.10)]),
+            ])])
+
+        // 3. The grid: a furniture run split by card AND by category — the shape the
+        //    account editor was built to correct.
+        try apply("saveTransaction", [
+            "ledgerId": .string("personal"), "merchant": .string("IKEA"),
+            "date": .string(ymd(20)), "time": .string("11:30"),
+            "kind": .string("expense"), "note": .string("Half on the card, half from checking"),
+            "tagIds": .array([.string("tag-vacation")]),
+            "cells": .array([
+                .object(["accountId": .string("credit"),   "categoryId": .string("cat-shopping-home-furniture"), "amount": .double(-420.00)]),
+                .object(["accountId": .string("credit"),   "categoryId": .string("cat-shopping-home-decor"),     "amount": .double(-85.00)]),
+                .object(["accountId": .string("checking"), "categoryId": .string("cat-shopping-home-furniture"), "amount": .double(-260.00)]),
+                .object(["accountId": .string("checking"), "categoryId": .string("cat-shopping-home-decor"),     "amount": .double(-45.00)]),
+            ])])
+
         // A real posted transfer (Everyday → Savings) so the transfer kind shows in the feed.
         try apply("createTransfer", [
             "fromAccountId": .string("everyday"), "toAccountId": .string("savings"),
