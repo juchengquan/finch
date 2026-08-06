@@ -115,6 +115,18 @@ public struct TxSplit: Codable, Equatable, Sendable {
     /// web side, add a split to the fixture at the same time.
     public var origAmount: Double?
     public var origCurrency: String?
+
+    /// Explicit and public, like `Tx`'s and `AccountRow`'s. A public struct's
+    /// MEMBERWISE init is internal, so without this the app module cannot build
+    /// one — and the error it gets is a confusing "missing argument for
+    /// parameter 'from'", Swift having fallen back to the Codable initialiser.
+    public init(id: String? = nil, categoryId: String? = nil, amount: Double,
+                amountBase: Double, description: String? = nil,
+                origAmount: Double? = nil, origCurrency: String? = nil) {
+        self.id = id; self.categoryId = categoryId
+        self.amount = amount; self.amountBase = amountBase; self.description = description
+        self.origAmount = origAmount; self.origCurrency = origCurrency
+    }
 }
 
 public struct AccountRow: Identifiable, Codable, Equatable, Hashable, Sendable {
