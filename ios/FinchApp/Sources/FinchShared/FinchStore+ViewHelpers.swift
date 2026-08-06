@@ -129,6 +129,19 @@ extension FinchStore {
         unlink(relPaths: files)
     }
 
+    /// Remove files for attachments a write has just orphaned.
+    ///
+    /// The ledger rows cascade-delete with their entry; the FILES do not, and
+    /// the engine is filesystem-agnostic by design. Callers read the paths
+    /// BEFORE the write, while the rows still resolve, then call this after —
+    /// the same order `deleteTransaction` uses above.
+    ///
+    /// Needed because a grid edit can delete a whole card's transaction as a
+    /// side effect of `saveTransaction`, which knows nothing about files.
+    public func unlinkOrphanedAttachments(relPaths: [String]) {
+        unlink(relPaths: relPaths)
+    }
+
     /// Confirm several pending transactions as ONE write.
     ///
     /// The multi-select toolbars used to loop `apply` per row, and every `apply`
