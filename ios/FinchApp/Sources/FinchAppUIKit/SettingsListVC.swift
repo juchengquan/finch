@@ -1,5 +1,6 @@
 #if os(iOS)
 import UIKit
+import SwiftUI
 import Combine
 import FinchCore
 
@@ -185,11 +186,29 @@ final class SettingsListVC: UIViewController {
 
     private func configureDataSource() {
         let cell = UICollectionView.CellRegistration<UICollectionViewListCell, Row> { cell, _, row in
-            var cfg = cell.defaultContentConfiguration()
-            cfg.text = row.title
-            cfg.image = UIImage(systemName: row.symbol)
-            cell.contentConfiguration = cfg
-            cell.accessories = [.disclosureIndicator()]
+            // Hosted rather than a `defaultContentConfiguration`, for two reasons that
+            // only a diff against the `-uikitActivity NO` control build surfaces — both
+            // of which this migration has been caught by before (`AccountsListVC`'s
+            // "All Transactions" row carries the same comment).
+            //
+            // 1. ACCESSIBILITY. The SwiftUI rows are `Button`s, so they announce as
+            //    buttons, and tests drive them as `app.buttons["Categories"]`. A content
+            //    configuration OWNS the cell's accessibility — setting
+            //    `cell.accessibilityTraits` afterwards does nothing — so a plain
+            //    configuration leaves the row announcing as static text. That is not a
+            //    test detail: it is what VoiceOver reads out.
+            //
+            // 2. NO CHEVRON. `SettingsRootList` uses a plain `Button`, which draws no
+            //    disclosure indicator. Adding `.disclosureIndicator()` here looked more
+            //    "native" and was simply a different screen.
+            cell.contentConfiguration = UIHostingConfiguration {
+                Label(row.title, systemImage: row.symbol)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isButton)
+            }
+            cell.accessories = []
         }
 
         let header = UICollectionView.SupplementaryRegistration<UICollectionViewListCell>(
