@@ -318,10 +318,25 @@ enum SaveTransaction {
             // just the sum of ticked legs, so keeping it across an amount change
             // silently moves a finished reconciliation.
             let sameAmount = prior.map { abs(($0["amount"] as Double) - native) < 0.005 } ?? false
+            // What the user TYPED, when that is not already what the leg says.
+            // `Projection.swift:81` displays `orig_amount ?? amount`, so without
+            // this a €100 purchase on a USD card comes back as $110 — and the €100
+            // is gone, recoverable from nothing else in the row.
+            //
+            // Only when the currencies differ, mirroring `addTransaction`
+            // (`Transactions.swift:350`): on a same-currency purchase the pair
+            // would just duplicate `amount`, and a nil is what "not a
+            // foreign-currency entry" means everywhere else in the schema.
+            //
+            // A transfer never qualifies: `cellCcy` IS `acctCcy` above, because a
+            // transfer's two sides are each typed in their own card's currency.
+            let typedInAnotherCurrency = cellCcy != acctCcy
             legs.append(.account(Entries.AccountLeg(
                 accountId: accountId, amount: native,
                 amountBase: Entries.r2(conv.amountBase), exchangeRate: conv.rate,
                 memo: prior?["memo"] ?? transferMemos[accountId], id: prior?["id"],
+                origAmount: typedInAnotherCurrency ? Entries.r2(amount) : nil,
+                origCurrency: typedInAnotherCurrency ? cellCcy : nil,
                 clearedAt: sameAmount ? prior?["cleared_at"] : nil)))
         }
 

@@ -38,7 +38,10 @@ final class SaveTransactionEquivalenceTests: XCTestCase {
     /// The ledger's shape, ignoring anything that cannot match between two runs
     /// (ids and timestamps). Deliberately mirrors what the write-parity oracle
     /// compares: entry header fields plus every posting's money and identity.
-    private func canonical(_ q: DatabaseQueue) throws -> String {
+    /// `comparingTypedAmounts: false` drops `orig_*` from the comparison, for the
+    /// one shape where the two doors are handed DIFFERENT information and so
+    /// cannot be expected to record the same thing. See the mixed-currency split.
+    private func canonical(_ q: DatabaseQueue, comparingTypedAmounts: Bool = true) throws -> String {
         try q.read { db in
             var out: [String] = []
             for e in try Row.fetchAll(db, sql: """
@@ -65,7 +68,8 @@ final class SaveTransactionEquivalenceTests: XCTestCase {
                         // has no old-action equivalent at all. Comparing it here would
                         // assert a difference that is by design. `TypedAmountTests` covers
                         // that side instead.
-                        let orig = acct.isEmpty ? "" : "\(r["oa"] as Double? ?? 0)|\(r["oc"] as String? ?? "")"
+                        let orig = (acct.isEmpty || !comparingTypedAmounts)
+                            ? "" : "\(r["oa"] as Double? ?? 0)|\(r["oc"] as String? ?? "")"
                         return "\(acct)|\(r["category_id"] as String? ?? "")|\(r["a"] as Double)"
                              + "|\(r["currency"] as String? ?? "")|\(r["ab"] as Double)"
                              + "|\(r["memo"] as String? ?? "")|\(orig)"
@@ -204,7 +208,31 @@ final class SaveTransactionEquivalenceTests: XCTestCase {
                 .object(["accountId": .string("eur"), "categoryId": .string("c1"), "amount": .double(-40)]),
             ]),
         ]))
-        XCTAssertEqual(try canonical(new), try canonical(old))
+        // The MONEY must match exactly. The typed record is deliberately excluded:
+        // `addTransaction`'s shares arrive already converted into each account's
+        // own currency, so it was never told what the user typed and records
+        // nothing. `saveTransaction`'s cells arrive in the purchase currency, so it
+        // knows the EUR card's share was typed as $40 and keeps it.
+        //
+        // That is a difference in FIDELITY, not in the ledger: one door was handed
+        // information the other never receives. Asserted below rather than left
+        // implicit, so a future change that drops it fails here.
+        XCTAssertEqual(try canonical(new, comparingTypedAmounts: false),
+                       try canonical(old, comparingTypedAmounts: false))
+
+        let typed = try new.read { db in
+            try Row.fetchOne(db, sql: """
+                SELECT ROUND(orig_amount,2) AS oa, orig_currency AS oc
+                  FROM postings WHERE account_id = 'eur'
+                """)
+        }
+        XCTAssertEqual(typed?["oa"] as Double?, -40, "the share as typed, in the purchase's currency")
+        XCTAssertEqual(typed?["oc"] as String?, "USD")
+
+        let untyped = try old.read { db in
+            try Double.fetchOne(db, sql: "SELECT orig_amount FROM postings WHERE account_id = 'eur'")
+        }
+        XCTAssertNil(untyped, "addTransaction was handed €36.36 and has nothing to remember")
     }
 
     /// A foreign-currency purchase: €100 paid with a USD card, ledger base USD.
