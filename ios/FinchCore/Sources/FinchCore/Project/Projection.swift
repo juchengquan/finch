@@ -89,7 +89,10 @@ public enum Projection {
 
     // MARK: enrichLegTxs (queries/transactions.ts:99) — category/splits/tags + transfer + refund
 
-    private struct Leg { let id: String; let categoryId: String?; let amountBase: Double; let sortOrder: Int }
+    private struct Leg {
+        let id: String; let categoryId: String?; let amountBase: Double; let sortOrder: Int
+        let origAmount: Double?; let origCurrency: String?
+    }
 
     private static func enrichLegTxs(_ db: Database, _ rows: inout [Tx], _ entryIds: [String]) throws {
         if entryIds.isEmpty { return }
@@ -99,7 +102,8 @@ public enum Projection {
 
         var catsByEntry: [String: [Leg]] = [:]
         for r in try Row.fetchAll(db, sql: """
-            SELECT p.id, p.entry_id, p.category_id, p.amount_base, p.sort_order
+            SELECT p.id, p.entry_id, p.category_id, p.amount_base, p.sort_order,
+                   p.orig_amount, p.orig_currency
               FROM postings p
              WHERE p.entry_id IN (\(ph)) AND p.account_id IS NULL
                AND (p.category_id IS NULL OR (SELECT c.kind FROM categories c WHERE c.id = p.category_id) != 'equity')
@@ -107,7 +111,8 @@ public enum Projection {
             """, arguments: args) {
             let eid: String = r["entry_id"]
             catsByEntry[eid, default: []].append(Leg(id: r["id"], categoryId: r["category_id"],
-                                                     amountBase: r["amount_base"], sortOrder: r["sort_order"]))
+                                                     amountBase: r["amount_base"], sortOrder: r["sort_order"],
+                                                     origAmount: r["orig_amount"], origCurrency: r["orig_currency"]))
         }
         var acctCount: [String: Int] = [:]
         for r in try Row.fetchAll(db, sql:
@@ -144,7 +149,9 @@ public enum Projection {
                 for l in legs.dropFirst() where abs(l.amountBase) > abs(dominant.amountBase) { dominant = l }
                 rows[i].category = dominant.categoryId
                 rows[i].splits = legs.sorted { $0.sortOrder < $1.sortOrder }.map {
-                    TxSplit(id: $0.id, categoryId: $0.categoryId, amount: -$0.amountBase, amountBase: -$0.amountBase, description: nil)
+                    TxSplit(id: $0.id, categoryId: $0.categoryId,
+                            amount: -$0.amountBase, amountBase: -$0.amountBase, description: nil,
+                            origAmount: $0.origAmount.map { -$0 }, origCurrency: $0.origCurrency)
                 }
             }
             // `kind`, not the leg count: since split tender, `acct >= 2` no longer
