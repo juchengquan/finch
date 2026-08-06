@@ -86,4 +86,73 @@ final class GridSeedTests: XCTestCase {
         let g = PurchaseFlow.seedGrid(accounts: cards, categories: cats, total: 0)
         XCTAssertTrue(g.rows.isEmpty)
     }
+
+    // MARK: reopening a saved group
+
+    private func gridRow(_ id: String, account: String, group: String,
+                         cells: [(String?, Double)],
+                         origCurrency: String? = nil) -> Tx {
+        let total = cells.reduce(0) { $0 + $1.1 }
+        return Tx(id: id, merchant: "Market", amount: -total, account: account,
+                  date: "2026-06-01", ledgerId: "l1",
+                  currency: origCurrency, nativeAmount: origCurrency == nil ? nil : -total,
+                  entryId: "e-\(id)", groupId: group,
+                  splits: cells.count < 2 ? nil : cells.map {
+                      TxSplit(categoryId: $0.0, amount: -$0.1, amountBase: -$0.1,
+                              origAmount: origCurrency == nil ? nil : -$0.1,
+                              origCurrency: origCurrency)
+                  })
+    }
+
+    /// The whole purchase comes back, not the row that was tapped.
+    func test_aSavedGridReopensAsItsCells() {
+        let rows = [
+            gridRow("p1", account: "a1", group: "g1", cells: [("c1", 40), ("c2", 20)]),
+            gridRow("p2", account: "a2", group: "g1", cells: [("c1", 30), ("c2", 10)]),
+        ]
+        let seed = PurchaseFlow.seedGrid(from: rows)
+        XCTAssertEqual(seed.accountIds, ["a1", "a2"])
+        XCTAssertEqual(seed.categoryIds.map { $0 ?? "" }, ["c1", "c2"])
+        XCTAssertEqual(amount(seed.alloc, "a1|c1"), 40, accuracy: 0.001)
+        XCTAssertEqual(amount(seed.alloc, "a2|c2"), 10, accuracy: 0.001)
+        XCTAssertEqual(seed.alloc.total, 100, accuracy: 0.001, "the purchase, not the tapped card")
+        XCTAssertTrue(PurchaseFlow.isBalanced(seed.alloc))
+    }
+
+    /// A foreign purchase reopens showing the figures the user TYPED. Falling
+    /// back to the base amounts would show back-converted ones, which drift by a
+    /// cent on awkward rates — and saving would bake the drift in as the truth.
+    func test_aForeignGridReopensInThePurchaseCurrency() {
+        let rows = [
+            gridRow("p1", account: "a1", group: "g1", cells: [("c1", 40), ("c2", 20)], origCurrency: "EUR"),
+            gridRow("p2", account: "a2", group: "g1", cells: [("c1", 30), ("c2", 10)], origCurrency: "EUR"),
+        ]
+        let seed = PurchaseFlow.seedGrid(from: rows)
+        XCTAssertEqual(seed.currency, "EUR")
+        XCTAssertEqual(amount(seed.alloc, "a1|c1"), 40, accuracy: 0.001, "€40 as typed")
+    }
+
+    /// A card that bought exactly one category has no `splits` array — the
+    /// projection puts the category on the row itself. It is still a cell.
+    func test_aCardWithOneCategoryStillContributesItsCell() {
+        var single = gridRow("p2", account: "a2", group: "g1", cells: [("c1", 40)])
+        single.category = "c1"
+        let rows = [gridRow("p1", account: "a1", group: "g1", cells: [("c1", 40), ("c2", 20)]), single]
+        let seed = PurchaseFlow.seedGrid(from: rows)
+        XCTAssertEqual(amount(seed.alloc, "a2|c1"), 40, accuracy: 0.001)
+        XCTAssertNil(seed.alloc.rows.first { $0.id == "a2|c2" }, "it bought nothing there")
+        XCTAssertEqual(seed.alloc.total, 100, accuracy: 0.001)
+    }
+
+    /// Reopening must not renumber anything: seeded rows arrive pinned, so
+    /// merely opening the sheet cannot re-divide the purchase.
+    func test_reopeningDoesNotRedivideThePurchase() {
+        let rows = [
+            gridRow("p1", account: "a1", group: "g1", cells: [("c1", 99), ("c2", 1)]),
+            gridRow("p2", account: "a2", group: "g1", cells: [("c1", 50), ("c2", 50)]),
+        ]
+        let seed = PurchaseFlow.seedGrid(from: rows)
+        XCTAssertEqual(amount(seed.alloc, "a1|c2"), 1, accuracy: 0.001, "a lopsided cell stays lopsided")
+        XCTAssertTrue(seed.alloc.rows.allSatisfy(\.pinned))
+    }
 }
