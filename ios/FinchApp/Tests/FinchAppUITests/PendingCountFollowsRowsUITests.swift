@@ -82,8 +82,13 @@ final class PendingCountFollowsRowsUITests: XCTestCase {
         groceries.tap()
     }
 
-    /// Swipe a row in the "Transactions" section and tap "Set pending", moving it into
-    /// the bucket so the count has to change while the section survives.
+    /// Tap the leading glyph of a row in the "Transactions" section, moving it into the
+    /// bucket so the count has to change while the section survives.
+    ///
+    /// This used to swipe and tap "Set pending". That action no longer exists — the
+    /// glyph tap replaced it, and the swipe copy was removed along with the timing
+    /// constant it needed. See `StatusGlyphTapUITests` for why the gesture is a
+    /// coordinate tap rather than a button lookup, and for the offset's derivation.
     private func setFirstConfirmedRowPending() {
         // TWO things on this screen say "Transactions": the summary row at the top
         // ("Transactions  37") and the section header below the pending bucket. Taking
@@ -101,10 +106,8 @@ final class PendingCountFollowsRowsUITests: XCTestCase {
         guard let row = rows.first(where: { $0.frame.minY > header.frame.minY }) else {
             return XCTFail("no row under the Transactions header")
         }
-        row.swipeLeft()
-
-        let setPending = app.buttons["Set pending"].firstMatch
-        XCTAssertTrue(setPending.waitForExistence(timeout: 10), "no Set pending swipe action")
-        setPending.tap()
+        // 10.5% from the leading edge — the glyph's measured span is 8.2%–13.0% of the
+        // width, because the cell spans the full width with the inset card inside it.
+        row.coordinate(withNormalizedOffset: CGVector(dx: 0.105, dy: 0.5)).tap()
     }
 }
