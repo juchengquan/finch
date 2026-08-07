@@ -201,7 +201,7 @@ struct EditTransactionSheet: View {
                         // save() needs it to name the collapsed transaction.
                         CategoryPickerRow(title: "Category", glyph: .category, categories: categories, selection: $categoryId,
                             noneLabel: String(localized: "Uncategorized"),
-                            splitSummary: splitSummaryText(names: splitAlloc.payload.map { store.categoryName($0.id) ?? "Uncategorized" }),
+                            splitSummary: splitSummaryText(names: splitAlloc.selection.map { store.categoryName($0.id) ?? "Uncategorized" }),
                             splitting: $splitAlloc,
                             currency: txn.currency ?? "")
                             .accessibilityIdentifier("edittx.category")
@@ -247,7 +247,7 @@ struct EditTransactionSheet: View {
                         }
                         CategoryPickerRow(title: "Category", glyph: .category, categories: categories, selection: $categoryId,
                             noneLabel: String(localized: "Uncategorized"),
-                            splitSummary: splitSummaryText(names: splitAlloc.payload.map { store.categoryName($0.id) ?? "Uncategorized" }),
+                            splitSummary: splitSummaryText(names: splitAlloc.selection.map { store.categoryName($0.id) ?? "Uncategorized" }),
                             splitting: effectiveKind == "refund" ? nil : $splitAlloc,
                             currency: currencyCode)
                             .accessibilityIdentifier("edittx.category")
@@ -571,8 +571,8 @@ struct EditTransactionSheet: View {
     /// every cell already typed and floating the new ones.
     private func openGrid() {
         gridAlloc = PurchaseFlow.reseedGrid(gridAlloc,
-                                            accounts: accountAlloc.payload,
-                                            categories: splitAlloc.payload,
+                                            accounts: accountAlloc.selection,
+                                            categories: splitAlloc.selection,
                                             total: abs(DecimalInput.parse(amountText) ?? 0))
         showingGrid = true
     }

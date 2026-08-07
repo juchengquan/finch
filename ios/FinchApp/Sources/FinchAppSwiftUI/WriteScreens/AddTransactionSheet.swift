@@ -397,7 +397,7 @@ struct AddTransactionSheet: View {
                 // nil category leg — so the picker offers it rather than making the
                 // field impossible to clear once set.
                 noneLabel: String(localized: "Uncategorized"),
-                splitSummary: splitSummaryText(names: splitAlloc.payload.map { store.categoryName($0.id) ?? "Uncategorized" }),
+                splitSummary: splitSummaryText(names: splitAlloc.selection.map { store.categoryName($0.id) ?? "Uncategorized" }),
                 splitting: k == .refund ? nil : $splitAlloc,
                 currency: currencyCode.isEmpty ? currency(of: accountId) : currencyCode)
                 .accessibilityIdentifier("addtx.category")
@@ -642,8 +642,8 @@ struct AddTransactionSheet: View {
     private func openGrid() {
         let total = abs(DecimalInput.parse(amount) ?? 0)
         gridAlloc = PurchaseFlow.reseedGrid(gridAlloc,
-                                            accounts: accountAlloc.payload,
-                                            categories: splitAlloc.payload,
+                                            accounts: accountAlloc.selection,
+                                            categories: splitAlloc.selection,
                                             total: total)
         showingGrid = true
     }

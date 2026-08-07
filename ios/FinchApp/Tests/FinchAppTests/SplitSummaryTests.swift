@@ -17,27 +17,37 @@ final class SplitSummaryTests: XCTestCase {
         XCTAssertEqual(splitSummaryText(names: ["Checking", "Savings"]), "Checking, Savings")
     }
 
-    // I4 (fix round 1): a ticked-but-UNFUNDED row (its whole share pinned away
-    // to another row) must not count toward the row's summary — `save()` gates
-    // on `payload` (funded rows only), so a two-name summary describing a
-    // transaction that actually saves as single-account would be a lie.
-    // `SearchablePickerRow.namesFor` is what the row's live summary calls, fed
-    // `payload`; feeding it `rows` instead (the bug) is shown here to contrast
-    // with the correct `payload` behaviour on the exact same allocation.
-    func test_namesFor_readsFundedRowsOnly_soAPinnedAwayRowIsExcluded() {
-        var alloc = SplitAllocation(total: 100)
+    // The rule REVERSED when page 2 took over dividing.
+    //
+    // It used to be: the summary reads `payload` (funded rows), because `save()`
+    // gated on `payload.count >= 2` and a two-name summary describing a
+    // transaction that saved as single-account would be a lie.
+    //
+    // The pickers now collect no amounts at all — they select, page 2 divides —
+    // so `payload` is empty until page 2 has been through. Reading it made a
+    // two-account row display ONE name, which is what a user reported as
+    // "it only shows one for each". The summary describes the SELECTION, and
+    // page 2 is where a selection becomes amounts.
+    func test_namesFor_readsTheSelection_notJustFundedRows() {
+        var alloc = SplitAllocation(total: 0)   // straight off the picker: no amounts
         alloc.tick("a1"); alloc.tick("a2")
-        alloc.setAmount("a1", 100)   // pins a1 to the whole total; a2 floats to 0
         let options = [PickerOption(id: "a1", name: "Checking"), PickerOption(id: "a2", name: "Savings")]
 
-        // Correct: `payload` (funded only) yields ONE name — not a split.
-        let fromPayload = SearchablePickerRow<Text>.namesFor(payload: alloc.payload, options: options)
-        XCTAssertEqual(fromPayload, ["Checking"])
+        XCTAssertTrue(alloc.payload.isEmpty, "nothing is funded until page 2")
+        XCTAssertEqual(SearchablePickerRow<Text>.namesFor(payload: alloc.payload, options: options), [],
+                       "reading payload is the bug: the row would name nothing, and fall back to one")
+        XCTAssertEqual(SearchablePickerRow<Text>.namesFor(payload: alloc.selection, options: options),
+                       ["Checking", "Savings"],
+                       "the selection is what the row describes")
+    }
 
-        // The bug this fixes: `rows` (every ticked row, funded or not) would
-        // have shown BOTH names even though only one row is actually funded.
-        let fromRows = SearchablePickerRow<Text>.namesFor(
-            payload: alloc.rows.map { (id: $0.id, amount: $0.amount) }, options: options)
-        XCTAssertEqual(fromRows, ["Checking", "Savings"])
+    /// And a selection still reads correctly once page 2 HAS given it amounts —
+    /// a reopened split arrives that way.
+    func test_namesFor_stillReadsASelectionThatCarriesAmounts() {
+        let alloc = SplitAllocation.merging([(id: Optional("a1"), amount: 60),
+                                             (id: Optional("a2"), amount: 40)], total: 100)
+        let options = [PickerOption(id: "a1", name: "Checking"), PickerOption(id: "a2", name: "Savings")]
+        XCTAssertEqual(SearchablePickerRow<Text>.namesFor(payload: alloc.selection, options: options),
+                       ["Checking", "Savings"])
     }
 }
