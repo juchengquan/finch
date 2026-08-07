@@ -14,10 +14,16 @@ import XCTest
 /// a normalised x-offset is the honest way in. Kept small (6%) so it lands on the glyph
 /// rather than the title beside it.
 ///
-/// The second assertion is the one worth having. `simultaneousGesture` was chosen so the
-/// glyph coexists with the row-wrapping Button that opens the editor — "coexists" is
-/// doing a lot of work in that sentence, and if BOTH fire, tapping to confirm also
-/// throws a sheet in your face. Nothing asserted that.
+/// **Scope, against `TxRowTapTargetsUITests`.** That file guards the two tap targets on
+/// the compact Activity feed — row body opens the editor, glyph confirms — and its
+/// row-body case is the one that fails on the commit before the overlay fix. This file
+/// covers what it does not: the OTHER direction (a confirmed row tapped back INTO the
+/// pending bucket) on a DIFFERENT screen (the account detail).
+///
+/// A second test here originally asserted the glyph tap does not also open the editor.
+/// It was removed: it passed on the build where row selection was broken outright, so
+/// it never detected the defect it appeared to be about. `TxRowTapTargetsUITests` holds
+/// that ground properly.
 final class StatusGlyphTapUITests: XCTestCase {
 
     private var app: XCUIApplication!
@@ -46,22 +52,6 @@ final class StatusGlyphTapUITests: XCTestCase {
         XCTAssertNotEqual(after, header,
                           "header BEFORE: \(header ?? "nil") | AFTER: \(after ?? "nil") — tapping "
                           + "the glyph did not move the row into the pending bucket")
-    }
-
-    /// Tapping the glyph must NOT also open the edit sheet. The gesture is
-    /// `simultaneousGesture` precisely so it can share the row with the editor's Button,
-    /// and "shares" could just as easily mean "both fire".
-    func testTappingTheGlyphDoesNotOpenTheEditor() throws {
-        XCTAssertNotNil(pendingHeader(), "no \"To confirm\" bucket")
-
-        tapGlyphOfFirstConfirmedRow()
-
-        // The edit sheet is a form with a Cancel/Save pair; asserting on Save is enough
-        // to know a sheet came up, and it is not present on the list itself.
-        let sheetAppeared = app.buttons["Save"].firstMatch.waitForExistence(timeout: 3)
-        XCTAssertFalse(sheetAppeared,
-                       "tapping the glyph opened the edit sheet as well as toggling status — "
-                       + "the simultaneousGesture and the row's Button are both firing")
     }
 
     // MARK: Reading the screen

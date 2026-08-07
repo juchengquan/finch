@@ -679,7 +679,9 @@ struct TxRow: View {
             // control, which UIHostingConfiguration arbitrates correctly against
             // cell selection where a bare gesture recognizer is not. It is hidden
             // from accessibility (the row's custom action in `TxRowCell` and the
-            // swipe/menu remain the accessible paths, same words) and exists only
+            // context menu remain the accessible paths, same words — the swipe's
+            // status action was one of them until it was removed as a duplicate of
+            // this control) and exists only
             // when a screen passes `onToggleStatus`, so multi-select and read-only
             // screens keep a fully inert glyph.
             //
