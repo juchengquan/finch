@@ -62,17 +62,18 @@ struct SearchablePickerRow<RowContent: View>: View {
     /// Two-plus FUNDED rows ⇒ the row shows their names joined instead of the
     /// single selection — same rule as `CategoryPickerRow.splitSummary`, derived
     /// here rather than threaded in since `options` already has every name needed.
-    /// Reads `payload` (funded rows), not `rows` (every ticked row): `Save` gates
-    /// on `payload.count >= 2`, so a ticked-but-zero-amount row (e.g. a second tick
-    /// whose whole share was pinned away to another row) must not show as a split
-    /// here when it will save as a single account.
+    /// Reads `selection` (every ticked row), not `payload` (funded ones).
+    ///
+    /// The pickers collect no amounts — page 2 divides — so `payload` is empty
+    /// until page 2 has been through, and reading it here made a two-account row
+    /// display a single name. That is what "it only shows one for each" was.
     private var splitSummary: String? {
         guard let splitting else { return nil }
-        return splitSummaryText(names: Self.namesFor(payload: splitting.wrappedValue.payload, options: options))
+        return splitSummaryText(names: Self.namesFor(payload: splitting.wrappedValue.selection, options: options))
     }
 
     /// Pulled out of `splitSummary` so it's directly testable: the names for a
-    /// split's FUNDED rows, in payload order. Options that no longer resolve are
+    /// split's ticked rows, in selection order. Options that no longer resolve are
     /// dropped rather than shown blank.
     static func namesFor(payload: [(id: String?, amount: Double)], options: [PickerOption]) -> [String] {
         payload.compactMap { row in row.id.flatMap { id in options.first { $0.id == id }?.name } }

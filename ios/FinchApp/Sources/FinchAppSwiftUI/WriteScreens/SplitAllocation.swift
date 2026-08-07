@@ -118,6 +118,16 @@ struct SplitAllocation: Equatable {
         return best?.id
     }
 
+    /// Every ticked row, funded or not — the SELECTION, where `payload` is what
+    /// gets WRITTEN.
+    ///
+    /// The pickers collect no amounts, so a selection straight off page 1 is all
+    /// zeros and `payload` would be empty. Anything deciding *shape* wants this;
+    /// only the save path wants `payload`.
+    var selection: [(id: String?, amount: Double)] {
+        rows.map { (id: $0.id.isEmpty ? nil : $0.id, amount: $0.amount) }
+    }
+
     /// What gets written. Zero rows drop out; `""` becomes a nil (uncategorised) leg
     /// — moot for accounts, which never tick an empty id.
     var payload: [(id: String?, amount: Double)] {
