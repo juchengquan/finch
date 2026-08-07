@@ -70,9 +70,21 @@ enum PurchaseFlow {
     /// A cell the user crossed out is absent from the allocation entirely, and an
     /// absent cell produces no category leg — not a zero-amount one, which would
     /// show as a $0 category on that transaction and pollute category counts.
+    ///
+    /// **Typing `0` means the same thing.** It looks identical on screen to a
+    /// crossed-out cell and used to behave completely differently, because this
+    /// built the payload from every ticked row whatever its amount. What that
+    /// cost depended on the shape, which is why it went unnoticed: a grid or a
+    /// category split wrote the $0 leg the paragraph above forbids, silently;
+    /// an account split tripped the engine's zero-share guard and failed the
+    /// save with "Every payment needs an amount" — on a screen offering no way
+    /// to act on it.
+    ///
+    /// The row STAYS in the allocation either way, so the field is still there
+    /// to type into. Only the payload drops it.
     static func cells(from alloc: SplitAllocation, kind: AddTxKind) -> [JSONValue] {
         let sign: Double = (kind == .income || kind == .refund) ? 1 : -1
-        return alloc.rows.map { row in
+        return alloc.rows.filter { SplitAllocation.round2(abs($0.amount)) > 0 }.map { row in
             let parts = splitCellKey(row.id)
             var o: [String: JSONValue] = [
                 "accountId": .string(parts.account),
