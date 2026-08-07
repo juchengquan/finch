@@ -41,7 +41,6 @@ struct AccountsTab: View {
     /// Non-nil → three-column selection mode (drives the shell's detail column).
     var selection: Binding<String?>? = nil
     @State private var showingReconcile = false
-    @State private var showingImport = false
     @State private var showingAdd = false
     @State private var quickAddFor: AccountRow?    // leading swipe → Add Transaction, prefilled
     @State private var reconcileFor: AccountRow?   // leading swipe → Reconcile, preselected
@@ -94,7 +93,6 @@ struct AccountsTab: View {
                 #endif
             }
             .sheet(isPresented: $showingReconcile) { ReconcileSheet() }
-            .sheet(isPresented: $showingImport) { ImportStatementView() }
             .sheet(isPresented: $showingAdd) { AccountSheet(defaultCurrency: store.baseCurrency) }
             .sheet(item: $editing) { AccountSheet(account: $0, defaultCurrency: store.baseCurrency) }
             .sheet(item: $quickAddFor) { AddTransactionSheet(defaultAccountId: $0.id) }
@@ -216,10 +214,6 @@ struct AccountsTab: View {
         }
         ToolbarItem(placement: .secondaryAction) {
             Button { showingReconcile = true } label: { Label("Reconcile", systemImage: "checkmark.circle") }
-                .disabled(store.accounts.isEmpty)
-        }
-        ToolbarItem(placement: .secondaryAction) {
-            Button { showingImport = true } label: { Label("Import statement (CSV)", systemImage: "doc.badge.plus") }
                 .disabled(store.accounts.isEmpty)
         }
     }
