@@ -115,6 +115,20 @@ enum PurchaseFlow {
         var out = SplitAllocation(total: total)
         guard total > 0, !accounts.isEmpty, !categories.isEmpty else { return out }
 
+        let keys = accounts.flatMap { a in categories.map { c in cellKey(account: a.id ?? "", category: c.id) } }
+
+        // The margins only carry amounts when they came from a SAVED purchase.
+        // Straight off page 1 they are all zeros — the pickers select and nothing
+        // more — and `share × share ÷ total` would seed every cell with 0.
+        //
+        // So: tick everything and leave it FLOATING, which is `redistribute`
+        // dividing the total evenly and exactly. Only when the margins are
+        // genuinely funded is the product a better guess than an even split.
+        let funded = accounts.reduce(0) { $0 + $1.amount } > 0
+            && categories.reduce(0) { $0 + $1.amount } > 0
+        for key in keys { out.tick(key) }
+        guard funded else { return out }
+
         var cells: [(key: String, amount: Double)] = []
         for a in accounts {
             for c in categories {
@@ -129,10 +143,7 @@ enum PurchaseFlow {
             let others = cells.dropLast().reduce(0) { $0 + $1.amount }
             cells[last].amount = SplitAllocation.round2(total - others)
         }
-        for cell in cells {
-            out.tick(cell.key)
-            out.setAmount(cell.key, cell.amount)
-        }
+        for cell in cells { out.setAmount(cell.key, cell.amount) }
         return out
     }
 

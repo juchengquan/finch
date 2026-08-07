@@ -87,6 +87,45 @@ final class GridSeedTests: XCTestCase {
         XCTAssertTrue(g.rows.isEmpty)
     }
 
+    /// The bug a user hit: two accounts and two categories, and page 2 showed
+    /// nothing to fill in.
+    ///
+    /// The margins straight off page 1 carry NO amounts — the pickers select and
+    /// nothing more — so seeding from `share × share ÷ total` gave every cell 0,
+    /// and seeding from `payload` (funded rows) gave no cells at all.
+    func test_aSelectionWithNoAmountsStillFillsTheGrid() {
+        let cards: [(id: String?, amount: Double)] = [(id: "a1", amount: 0), (id: "a2", amount: 0)]
+        let cats: [(id: String?, amount: Double)] = [(id: "c1", amount: 0), (id: "c2", amount: 0)]
+
+        let g = PurchaseFlow.seedGrid(accounts: cards, categories: cats, total: 100)
+        XCTAssertEqual(g.rows.count, 4, "two cards by two categories is four cells")
+        XCTAssertEqual(g.allocated, 100, accuracy: 0.001, "divided evenly, and exactly")
+        XCTAssertTrue(PurchaseFlow.isBalanced(g))
+        for key in ["a1|c1", "a1|c2", "a2|c1", "a2|c2"] {
+            XCTAssertEqual(amount(g, key), 25, accuracy: 0.001, "\(key) got no share")
+        }
+    }
+
+    /// And the same through `reseedGrid`, which is what the sheet actually calls.
+    func test_reseedingAnAmountlessSelectionFillsTheGrid() {
+        let cards: [(id: String?, amount: Double)] = [(id: "a1", amount: 0), (id: "a2", amount: 0)]
+        let cats: [(id: String?, amount: Double)] = [(id: "c1", amount: 0), (id: "c2", amount: 0)]
+
+        let g = PurchaseFlow.reseedGrid(SplitAllocation(total: 0),
+                                        accounts: cards, categories: cats, total: 100)
+        XCTAssertEqual(g.rows.count, 4)
+        XCTAssertEqual(g.allocated, 100, accuracy: 0.001)
+    }
+
+    /// `selection` is every ticked row; `payload` is only the funded ones. Feeding
+    /// the shape decision from `payload` is what emptied the grid.
+    func test_selectionCarriesTickedRowsThatPayloadDrops() {
+        var a = SplitAllocation(total: 0)
+        a.tick("a1"); a.tick("a2")
+        XCTAssertTrue(a.payload.isEmpty, "nothing is funded")
+        XCTAssertEqual(a.selection.count, 2, "but two things are selected")
+    }
+
     // MARK: reopening a saved group
 
     private func gridRow(_ id: String, account: String, group: String,
