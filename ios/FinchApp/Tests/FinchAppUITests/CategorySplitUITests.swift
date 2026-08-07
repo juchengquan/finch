@@ -59,8 +59,19 @@ final class CategorySplitUITests: XCTestCase {
     }
 
     private var splitToggle: XCUIElement { app.switches["category.splitToggle"] }
+    /// Page 2's Allocated line. The pickers no longer carry one — they select,
+    /// page 2 divides — so this lives past the Next hop.
     private var allocated: XCUIElement {
-        app.descendants(matching: .any).matching(identifier: "category.allocated").firstMatch
+        app.descendants(matching: .any).matching(identifier: "split.allocated").firstMatch
+    }
+
+    /// Page 1 selects; page 2 divides. Any split — one axis or two — goes
+    /// through this hop, where the picker used to collect the amounts itself.
+    private func goToPageTwo() {
+        let next = app.buttons["Next"].firstMatch
+        XCTAssertTrue(next.waitForExistence(timeout: 15), "no Next button — the split did not register")
+        next.tap()
+        XCTAssertTrue(allocated.waitForExistence(timeout: 15), "Next did not open page 2")
     }
 
     private func turnSplit(on: Bool) {
@@ -138,6 +149,10 @@ final class CategorySplitUITests: XCTestCase {
 
     // Two ticks divide the amount with no typing at all, and the split survives back
     // out to the form.
+    //
+    // The division now happens on PAGE 2 — the picker selects and nothing more —
+    // so the ticks are confirmed first and the arithmetic is asserted after the
+    // Next hop.
     func testTickingTwoCategoriesDividesTheAmountEvenly() throws {
         openAddSheet()
         enterAmount("100")
@@ -145,16 +160,16 @@ final class CategorySplitUITests: XCTestCase {
         turnSplit(on: true)
         tickCategory("Groceries")
         tickCategory("Dining")
-
-        XCTAssertTrue(allocated.waitForExistence(timeout: 10), "no allocated line")
-        XCTAssertTrue(allocated.label.contains("100"),
-                      "allocated reads \(allocated.label) — the split does not add up to the amount")
-
         confirmSubpage()
 
+        // Back on page 1: the row names both, and the amount is still the target.
         let label = categoryRowLabel()
         XCTAssertTrue(label.contains("Groceries") && label.contains("Dining"),
                       "the category row does not name both splits: \(label)")
+
+        goToPageTwo()
+        XCTAssertTrue(allocated.label.contains("100"),
+                      "allocated reads \(allocated.label) — the split does not add up to the amount")
     }
 
     // Toggling split off keeps the largest leg — the same category the row was already
