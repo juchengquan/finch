@@ -71,6 +71,15 @@ struct MonthCashCalendar: View {
     var body: some View {
         VStack(spacing: 16) {
             header
+            // INLINE, not a popover/sheet. Every screen that shows this calendar
+            // hosts it in a UIHostingConfiguration cell (Activity, account detail,
+            // Scheduled), and a SwiftUI presentation from hosted cell content has
+            // no presenting view controller — the popover this used to be flipped
+            // its state and silently showed nothing. Expanding in place needs no
+            // presentation context, so it works in every host, macOS included.
+            // Guarded by CalendarMonthYearPickerUITests, which runs the HOSTED
+            // calendar — keep it green before redesigning this control.
+            if showingMonthYearPicker { monthYearPicker }
             weekdayRow
             #if os(iOS)
             // Interactive month paging: the neighboring months are REAL pages, so
@@ -93,8 +102,9 @@ struct MonthCashCalendar: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            // Tappable month-year → wheel pickers (jump months/years quickly).
-            Button { showingMonthYearPicker = true } label: {
+            // Tappable month-year → inline wheel pickers (jump months/years
+            // quickly). A TOGGLE: tap again to collapse.
+            Button { showingMonthYearPicker.toggle() } label: {
                 HStack(spacing: 4) {
                     Text(monthLabel).font(.headline)
                     Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(.secondary)
@@ -106,7 +116,6 @@ struct MonthCashCalendar: View {
             // unspoken — VoiceOver read "Month and year, button" wherever you had
             // paged to. The value carries the month the grid is actually showing.
             .accessibilityValue(monthLabel)
-            .popover(isPresented: $showingMonthYearPicker) { monthYearPicker }
             Spacer()
             // .borderless so each button is its own tap target inside the List
             // row (default-styled buttons in a List row fire together / not at all).
@@ -123,8 +132,9 @@ struct MonthCashCalendar: View {
         }
     }
 
-    /// Side-by-side month + year wheels, shown as a popover from the header.
-    /// Both write straight back to `monthAnchor` so the grid updates live.
+    /// Side-by-side month + year wheels, expanded INLINE below the header (see
+    /// the body comment for why a presentation cannot work here). Both write
+    /// straight back to `monthAnchor`, so the grid below follows live.
     private var monthYearPicker: some View {
         HStack(spacing: 0) {
             Picker("Month", selection: monthBinding) {
@@ -143,8 +153,9 @@ struct MonthCashCalendar: View {
             .frame(maxWidth: .infinity)
         }
         .labelsHidden()
-        .frame(width: 300, height: 200)
-        .presentationCompactAdaptation(.popover)
+        #if os(iOS)
+        .frame(height: 190)
+        #endif
     }
 
     private var monthBinding: Binding<Int> {
