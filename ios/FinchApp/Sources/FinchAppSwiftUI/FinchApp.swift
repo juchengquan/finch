@@ -19,6 +19,7 @@ struct FinchApp: App {
     init() {
         // The "Use system size" toggle is gone; seed the slider for anyone
         // upgrading from it BEFORE the first frame reads the preference.
+        AppDate.force24HourClock()
         TextSize.migrateLegacySystemPreference(systemStep: TextSize.currentSystemStep)
         // The DEBUG launch flags (`-initialTab`, `-openAdd`) used to live here and were
         // therefore macOS-only — this file is excluded from the iOS target. They now sit
