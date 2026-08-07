@@ -61,8 +61,9 @@ feed them back to `frontend/`.
   (`CODE_SIGN_IDENTITY = -`, no Development Team). To make team-less signing work its **App
   Group was dropped** from `FinchApp/FinchMac.entitlements` (so there is no Mac widget;
   `AppGroup.containerURL` falls back to Application Support).
-- **CI** builds the simulator **unsigned** (`CODE_SIGNING_ALLOWED: NO`). `FinchMac` and
-  `FinchWatch` build **post-merge only** — they do not gate a PR (see Conventions).
+- **CI** builds the simulator **unsigned** (`CODE_SIGNING_ALLOWED: NO`). The **entire
+  Apple-platform suite runs post-merge only** — no Xcode work gates a PR (see Conventions);
+  the pre-merge gate is `ci-local.sh` on your machine.
   Device builds need a local `DEVELOPMENT_TEAM` (don't commit it).
 
 ### Targets (`ios/project.yml`, XcodeGen)
@@ -103,32 +104,39 @@ still compile on macOS.
     fails the next. (`postScheduled` is fine now — it takes an explicit `date`/`occurrenceDate`,
     so it's reproducible and covered by the gate like everything else.)
 
-### Run CI locally before pushing — `ios/scripts/ci-local.sh`
+### The pre-merge iOS gate — `ios/scripts/ci-local.sh`
 
 ```bash
-ios/scripts/ci-local.sh                        # FAST — the inner loop
-ios/scripts/ci-local.sh --full                 # the pre-push gate (mirrors CI)
+ios/scripts/ci-local.sh                        # the GATE — run before every push (~3-5 min warm)
+ios/scripts/ci-local.sh --ui                   # + the iPhone UI tests (navigation work)
+ios/scripts/ci-local.sh --full                 # cold full rehearsal of the post-merge CI job
 ios/scripts/ci-local.sh --all                  # + the frontend job
 ios/scripts/ci-local.sh --sim "ios-mysim"      # pin the simulator
 ```
 
-**Two modes, and a fast green is not a CI prediction.** `--full` mirrors the CI iOS job
-step-for-step — the two i18n guards, `swift test`, `xcodegen`, FinchApp build+test,
-FinchMac, FinchWatch — but **fail-fast ordered**: the guards cost seconds and catch the
-drift behind most recent CI failures, the Xcode builds cost minutes. `FinchMac` and
-`FinchWatch` are built but **non-gating**, matching CI (`FINCH_CI_PLATFORMS=1` to gate).
+**Pull requests do not run Xcode at all** (2026-08-07): hosted `macos-26` runners queue
+10 min–12 h, so GitHub's PR check is ubuntu-only (frontend + the two cheap guards, ~2 min)
+and the **full Apple-platform suite runs post-merge** as the safety net. **This script, on
+your machine, is what stands between a bug and the base** — run it before every push.
 
-The **default is now FAST**, for the inner loop. It keeps every check that costs seconds
-and skips the three that cost minutes and prove least mid-change: the 33 UI tests, the
+**The default run IS the gate.** It runs every check that costs seconds plus the app
+build + `FinchAppTests`, on a **warm per-worktree DerivedData** (`ios/DerivedData/ci-local`,
+gitignored). It skips the three things that cost minutes: the 33 UI tests (add them with
+`--ui` when the change is navigational — drills, sheets, the split shell), the
 `FinchCoreTests` the Xcode scheme duplicates (step 2's `swift test` already ran those 434
-methods), and the parked platform builds — those last only when your diff cannot touch
-them, so the "build FinchMac when you touch `FinchShared`/`FinchAppSwiftUI`" rule below
-still holds. Fast lists what it skipped on every run, pass or fail. **Run `--full` before
-you push.**
+methods), and the parked platform builds when your diff cannot touch them — so the "build
+FinchMac when you touch `FinchShared`/`FinchAppSwiftUI`" rule below still holds. Every
+skip is listed on every run; all of it runs post-merge in CI, so a skip is deferred
+coverage, not lost coverage.
 
-Fast keeps DerivedData warm per worktree (`ios/DerivedData/ci-local`, already gitignored);
-`--full` is always a cold `mktemp`, because a warm gate can pass on a product that no
-longer matches the source — which has happened here twice.
+**`--full` is the cold rehearsal**: everything, on a cold `mktemp` DerivedData, mirroring
+the post-merge CI job step-for-step but fail-fast ordered. A warm gate can pass on a stale
+product that no longer matches the source (it has happened here twice); that is tolerable
+for the everyday gate **only because the cold post-merge CI run backstops every merge** —
+a warm-cache lie surfaces within one merge. Reach for `--full` before a risky merge, or
+fire the full hosted suite on your branch via the workflow's **`workflow_dispatch`**
+trigger. `FinchMac` and `FinchWatch` are built but **non-gating**, matching CI
+(`FINCH_CI_PLATFORMS=1` to gate).
 
 **One run per machine.** Two of these at once do not take twice as long, they thrash
 (measured: load average 28 on 12 cores with two runs going). A second invocation names the
@@ -142,14 +150,16 @@ the old auto-pick silently gave every session the same `iPhone 17 Pro`.
 
 (`act` is no help here: it runs Actions in Docker, and there is no macOS container.)
 
-> **The one thing that makes local runs lie.** CI triggers on `pull_request`, so it builds
-> the **merge commit** — your branch merged into `feat/frontend` — not your branch. A branch
-> that is behind the base passes locally and fails in CI on strings and code it doesn't own.
-> The script's step 0 refuses to run when you're behind, for exactly this reason; `git rebase
-> origin/feat/frontend` first. Don't diagnose a CI failure as "environmental" until you've
-> ruled this out — that misdiagnosis has cost real time.
+> **The one thing that makes local runs lie.** The post-merge CI run builds the **result of
+> your merge** — your branch combined with everything already on the base — not your branch
+> alone. A branch that is behind the base passes locally and breaks the base after merge, on
+> strings and code it doesn't own. The script's step 0 refuses to run when you're behind,
+> for exactly this reason; `git rebase origin/feat/frontend` first. Don't diagnose a CI
+> failure as "environmental" until you've ruled this out — that misdiagnosis has cost real
+> time.
 
-**The two i18n guards** (also enforced in CI) exist because `Localizable.xcstrings` is
+**The two i18n guards** (also enforced in CI — guard 1 on every PR in the ubuntu `guards`
+job, guard 2 post-merge since it needs a compile) exist because `Localizable.xcstrings` is
 GENERATED and hand-editing it silently destroys work:
 
 | Guard | Catches | Fix |
@@ -168,8 +178,11 @@ extraction entirely, so they render English in every language and no check notic
 localized string — it has to round-trip as `%%` through extraction; pre-format the value and
 interpolate it instead.
 
-**CI is not a required status check**, so a red run does not block merge and drift
-re-accumulates silently. If `ci-local.sh` fails on strings you didn't touch, the base is
+**What a PR's green check means now:** branch protection requires the `ios-required`
+aggregate, which on a PR covers only the frontend job and the cheap guards — no Swift, no
+Xcode. The Apple-platform suite reports **after** merge; a red post-merge run files (or
+updates) a **`post-merge-red` issue** that the next green push run closes — check for that
+issue before diagnosing. If `ci-local.sh` fails on strings you didn't touch, the base is
 probably already red — check `feat/frontend` before assuming it's yours.
 
 ## Architecture
@@ -439,13 +452,15 @@ hand edits belong in `scripts/zh-manual.json` (which pins terminology to the web
   `origin/feat/frontend`** (e.g. `/tmp/finch-<slug>`): the user edits the main tree
   concurrently, so never `git stash` or `git checkout` there. **No `Co-Authored-By`
   trailer** in commits.
-- **macOS and watchOS do NOT gate a PR.** CI builds `FinchMac` and `FinchWatch` on the
-  merge commit, and `ci-local.sh` reports a break in either as a *warning*.
-  `FINCH_CI_PLATFORMS=1 ios/scripts/ci-local.sh` makes them gate again.
-  This required splitting `FinchMac` into its own project: while it was a target in
-  `FinchApp.xcodeproj`, `xcodebuild -exportLocalizations` — the i18n guard that runs on
-  every PR — compiled it regardless of `-scheme`, `-target` or `-destination`, so a
-  macOS break failed an iOS PR no matter what. See `ios/project-mac.yml`.
+- **No Xcode work gates a PR** (2026-08-07). GitHub's PR check is ubuntu-only; the whole
+  Apple-platform suite — build, tests, UI tests, `FinchMac`, `FinchWatch` — runs post-merge
+  (or on demand via `workflow_dispatch`). The pre-merge iOS gate is `ci-local.sh` on your
+  machine, and `ci-local.sh` reports a macOS/watchOS break as a *warning*
+  (`FINCH_CI_PLATFORMS=1` makes them gate again).
+  Decoupling macOS originally required splitting `FinchMac` into its own project: while it
+  was a target in `FinchApp.xcodeproj`, `xcodebuild -exportLocalizations` — the i18n guard
+  step — compiled it regardless of `-scheme`, `-target` or `-destination`, so a macOS break
+  failed an iOS run no matter what. See `ios/project-mac.yml`.
   **Still build `FinchMac` when you touch `FinchShared` or `FinchAppSwiftUI`.** A
   macOS-only break passes the iOS build (`.topBarTrailing` does not exist on macOS), and
   `FinchMac` is the only target compiling `FinchAppSwiftUI/FinchApp.swift` — the SwiftUI
