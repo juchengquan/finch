@@ -123,9 +123,9 @@ struct TransactionFilterSheet: View {
                 }
                 Section("Date range") {
                     Toggle("From", isOn: $useFrom).switchOnlyToggles()
-                    if useFrom { DatePicker("From date", selection: $fromDate, displayedComponents: [.date, .hourAndMinute]).labelsHidden().environment(\.locale, AppDate.h24Locale) }
+                    if useFrom { H24DatePicker("From date", selection: $fromDate) }
                     Toggle("To", isOn: $useTo).switchOnlyToggles()
-                    if useTo { DatePicker("To date", selection: $toDate, displayedComponents: [.date, .hourAndMinute]).labelsHidden().environment(\.locale, AppDate.h24Locale) }
+                    if useTo { H24DatePicker("To date", selection: $toDate) }
                 }
                 Section("Amount range") {
                     HStack { Text("Min"); Spacer(); TextField("0", text: $minText).numericInput($minText).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }

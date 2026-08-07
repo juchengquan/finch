@@ -406,9 +406,7 @@ struct AddTransactionSheet: View {
             // $10/$30 and $42/$18/$28/$12 give the same card and category totals.
             // So the cells are typed on page 2, and the totals derive from them.
             FieldRow(glyph: .date, title: "Date", showsDefaultTrailing: false) {
-                DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                    .labelsHidden()
-                    .environment(\.locale, AppDate.h24Locale)
+                H24DatePicker("Date", selection: $date)
             }
             if k == .refund {
                 Button { showingRefundPicker = true } label: {
@@ -461,9 +459,7 @@ struct AddTransactionSheet: View {
         }
         Section {
             FieldRow(glyph: .date, title: "Date", showsDefaultTrailing: false) {
-                DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                    .labelsHidden()
-                    .environment(\.locale, AppDate.h24Locale)
+                H24DatePicker("Date", selection: $date)
             }
             FieldRow(glyph: .note, title: "Note") {
                 TextField("Note (optional)", text: $note, axis: .vertical)
@@ -488,9 +484,7 @@ struct AddTransactionSheet: View {
             // Transfer has no Merchant/category, so Date + Note live here (the
             // reorder moved the shared Date/Note section into the line-item path).
             FieldRow(glyph: .date, title: "Date", showsDefaultTrailing: false) {
-                DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                    .labelsHidden()
-                    .environment(\.locale, AppDate.h24Locale)
+                H24DatePicker("Date", selection: $date)
             }
             FieldRow(glyph: .note, title: "Note") {
                 TextField("Note (optional)", text: $note, axis: .vertical)
