@@ -140,7 +140,8 @@ struct BudgetSheet: View {
             }
             if hasTargetDate {
                 FieldRow(glyph: .date, title: "Target date", showsDefaultTrailing: false) {
-                    H24DatePicker("Target date", selection: $targetDate)
+                    DatePicker("Target date", selection: $targetDate, displayedComponents: [.date, .hourAndMinute])
+                        .labelsHidden()
                 }
             }
         } footer: {
@@ -206,7 +207,8 @@ struct BudgetSheet: View {
             // Date AND time: the time is when the cycle turns over. Left at midnight
             // it behaves exactly as every budget did before.
             FieldRow(glyph: .date, title: "Start date", showsDefaultTrailing: false) {
-                H24DatePicker("Start date", selection: $startDate)
+                DatePicker("Start date", selection: $startDate, displayedComponents: [.date, .hourAndMinute])
+                    .labelsHidden()
             }
         } header: {
             finchSectionHeader("Cycle")

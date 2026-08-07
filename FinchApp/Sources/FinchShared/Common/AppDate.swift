@@ -13,6 +13,28 @@ enum AppDate {
     /// otherwise unchanged. Use to render times as 24h regardless of the device's
     /// 12/24-hour setting: `.locale(AppDate.h24Locale)` on a `Date.FormatStyle`,
     /// or `.environment(\.locale, AppDate.h24Locale)` on a `DatePicker`.
+    /// Make 24-hour time the app's **ambient** locale, so nothing has to ask for it
+    /// per-view. Call once, before any UI is built.
+    ///
+    /// This exists because of how `UIDatePicker` behaves. The obvious way to get a
+    /// 24-hour picker is `.environment(\.locale, h24Locale)`, but a `UIDatePicker`
+    /// whose locale *differs from the device's* re-measures its label a beat after
+    /// its first layout — and inside a sheet presentation UIKit animates that
+    /// correction, so the Date row visibly slid ~23pt left as the sheet opened
+    /// (measured: 69px of travel with the override, 1px without). That was fixed once
+    /// by replacing the control with our own pills, which cost the system picker's
+    /// pop-out calendar; this gets both. With the ambient locale already 24-hour there
+    /// is no mismatch, so the plain system picker is 24-hour AND does not reflow.
+    ///
+    /// `AppleICUForce24HourTime` is undocumented but is an ordinary preference in our
+    /// own domain, not a private API. If Apple ever stops honouring it the only
+    /// consequence is that the *pickers* follow the device's 12/24-hour setting —
+    /// nothing crashes, and text elsewhere still formats through ``h24Locale``, which
+    /// is why those call sites deliberately keep it rather than relying on this.
+    static func force24HourClock() {
+        UserDefaults.standard.set(true, forKey: "AppleICUForce24HourTime")
+    }
+
     static let h24Locale: Locale = {
         var c = Locale.Components(locale: .current)
         c.hourCycle = .zeroToTwentyThree
