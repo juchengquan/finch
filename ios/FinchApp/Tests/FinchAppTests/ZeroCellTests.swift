@@ -67,6 +67,24 @@ final class ZeroCellTests: XCTestCase {
         XCTAssertTrue(a.isTicked("a1|c2"))
     }
 
+    /// Zeroing everything but ONE cell is refused, with a reason — it is not
+    /// silently saved as a "split" of one.
+    ///
+    /// This is the interaction between dropping zero cells and the page-2 gate:
+    /// the payload would be a single cell, which the engine accepts happily, so
+    /// without the gate a 2x2 selection could save as a plain purchase while
+    /// still claiming to be split. `problem` catches it as `.needsTwo`, and both
+    /// ways out are available from the screen — fund another cell, or go back and
+    /// narrow the selection.
+    func test_zeroingAllButOneCellIsRefusedWithAReason() {
+        let a = alloc([("a1", "c1", 100), ("a1", "c2", 0),
+                       ("a2", "c1", 0), ("a2", "c2", 0)], total: 100)
+        XCTAssertEqual(PurchaseFlow.cells(from: a, kind: .expense).count, 1,
+                       "the payload collapses to the one funded cell")
+        XCTAssertEqual(a.problem, .needsTwo,
+                       "and the page refuses it rather than saving a split of one")
+    }
+
     // MARK: what reaches the ledger
 
     /// A grid with one zeroed cell must write no category leg for it. A $0 leg
