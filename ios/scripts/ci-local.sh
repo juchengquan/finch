@@ -1,41 +1,54 @@
 #!/usr/bin/env bash
-# Run the CI iOS job locally, before pushing.
+# THE pre-merge iOS gate. Run it before every push.
 #
-# WHY THIS EXISTS — the non-obvious part:
-# CI triggers on `pull_request`, which builds the MERGE COMMIT (your branch
-# merged into the base), not your branch. A branch that is behind the base
-# therefore passes locally and fails in CI on code it does not own. Step 0
-# refuses to run when you are behind, because a green result from a stale
-# branch is a false signal rather than a pass.
+# Pull requests do not run Xcode at all (2026-08-07): hosted macos-26 runners
+# queue 10 min-12 h, so GitHub's PR check is ubuntu-only (frontend + the cheap
+# guards) and the full Apple-platform suite runs POST-MERGE as the safety net.
+# What stands between a bug and the base is this script, on this machine.
 #
-#   ios/scripts/ci-local.sh                          # FAST: the inner loop
-#   ios/scripts/ci-local.sh --full                   # the pre-push gate (predicts CI)
+# WHY STEP 0 — the non-obvious part:
+# The post-merge CI run builds the RESULT OF YOUR MERGE — your branch combined
+# with everything already on the base — not your branch alone. A branch that is
+# behind the base therefore passes here and breaks the base after merge, on
+# code it does not own. Step 0 refuses to run when you are behind, because a
+# green result from a stale branch is a false signal rather than a pass.
+#
+#   ios/scripts/ci-local.sh                          # the GATE: run before every push
+#   ios/scripts/ci-local.sh --ui                     # + iPhone UI tests (navigation work)
+#   ios/scripts/ci-local.sh --full                   # cold full rehearsal of post-merge CI
 #   ios/scripts/ci-local.sh --all                    # + the frontend job
 #   ios/scripts/ci-local.sh --sim "iPhone 17 Pro"    # pin the simulator
 #   FINCH_CI_PLATFORMS=1 ios/scripts/ci-local.sh     # make macOS + watchOS gate again
 #
-# TWO MODES, and the difference matters:
+# THREE SHAPES:
 #
-#   FAST (default) answers "did I break something obvious" in the inner loop. It
-#   runs every check that costs seconds and the one build that catches most
-#   breakage, on a WARM per-worktree DerivedData. It SKIPS the UI tests, the
-#   duplicated FinchCoreTests, and the parked platform builds unless your diff
-#   touches them. A green fast run is NOT a prediction of CI, and the summary
-#   says so — it lists what it skipped and tells you to run --full.
+#   GATE (default) is the pre-push run: every check that costs seconds plus
+#   the app build + FinchAppTests, on a WARM per-worktree DerivedData —
+#   minutes, not tens of minutes. It skips the 33 UI tests, the
+#   FinchCoreTests the Xcode scheme duplicates (step 2's swift test already
+#   ran those methods), and the parked platform builds when your diff cannot
+#   touch them. Everything it skips runs post-merge in CI; the summary lists
+#   the skips on every run so deferred coverage stays visible.
 #
-#   --full is the gate this script was written to be: everything, on a COLD
-#   mktemp DerivedData, so a stale build product cannot manufacture a pass. Run
-#   it before you push.
+#   --ui adds the iPhone UI-test leg to the gate. Use it when the change is
+#   navigational — drills, sheets, the split shell — i.e. when the skipped
+#   tests are exactly the ones your diff threatens. (The iPad leg runs only
+#   in post-merge CI.)
 #
-# The split exists because the two jobs have opposite priorities. The inner loop
-# wants speed and tolerates a stale-build risk; the pre-push gate must not lie,
-# and warm DerivedData is exactly how it would (a build phase added by xcodegen
-# never re-ran against an already-built app, and three tests failed against a
-# stale DerivedData that passed clean — both real, both this repo).
+#   --full is the cold rehearsal: everything, on a COLD mktemp DerivedData,
+#   so a stale build product cannot manufacture a pass. Reach for it before
+#   a risky merge, or when you suspect the warm cache is lying.
 #
-# macOS and watchOS are PARKED: still built and reported here, but a failure is a
-# warning, not a failure — matching CI, where both run on the merge commit rather
-# than on pull requests.
+# A warm gate CAN pass on a product that no longer matches the source (a
+# build phase added by xcodegen never re-ran against an already-built app,
+# and three tests failed against a stale DerivedData that passed clean —
+# both real, both this repo). Warm is acceptable for the everyday gate NOW
+# because the cold post-merge CI run backstops every merge: a warm-cache lie
+# surfaces within one merge instead of living on the base silently.
+#
+# macOS and watchOS are PARKED: still built and reported here (diff-gated),
+# but a failure is a warning, not a failure — matching CI, where both build
+# post-merge only.
 #
 # Ordering is fail-fast rather than CI's order: the i18n guards cost seconds and
 # catch the drift behind most recent CI failures; the Xcode builds cost minutes.
@@ -45,18 +58,28 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BASE="${CI_LOCAL_BASE:-origin/feat/frontend}"
 RUN_ALL=0
 FULL=0
+UI=0
 SIM=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --all) RUN_ALL=1 ;;
     --full) FULL=1 ;;
+    --ui) UI=1 ;;
     --sim) SIM="${2:-}"; shift ;;
-    -h|--help) sed -n '2,36p' "$0"; exit 0 ;;
+    # The whole leading comment block, however long it grows — a fixed line
+    # range here silently truncated the help once the header changed.
+    -h|--help) sed -n '2,/^set -uo/p' "$0" | sed '$d'; exit 0 ;;
     *) echo "unknown flag: $1" >&2; exit 2 ;;
   esac
   shift
 done
-MODE_LABEL=$([ "$FULL" = "1" ] && echo "full (pre-push gate)" || echo "fast (inner loop)")
+if [ "$FULL" = "1" ]; then
+  MODE_LABEL="full (cold rehearsal)"
+elif [ "$UI" = "1" ]; then
+  MODE_LABEL="gate + UI tests (pre-push)"
+else
+  MODE_LABEL="gate (pre-push)"
+fi
 SKIPPED=()
 skipped() { SKIPPED+=("$1"); }
 
@@ -179,8 +202,9 @@ else
   behind=$(git -C "$REPO" rev-list --count "HEAD..$BASE")
   fail "branch is $behind commit(s) behind $BASE"
   echo ""
-  echo "  CI builds your branch MERGED INTO $BASE, so it compiles code this run"
-  echo "  never sees. Rebase first, or these results are a false green:"
+  echo "  Merging lands your branch COMBINED WITH $BASE, and the post-merge CI"
+  echo "  run builds that result — code this run never sees. Rebase first, or"
+  echo "  these results are a false green:"
   echo ""
   echo "      git rebase $BASE"
   echo ""
@@ -313,17 +337,18 @@ echo "  simulator: $SIM"
 # They are here so this script keeps predicting CI's verdict: without them a
 # UI-test flake fails locally and passes in CI, which is the false signal this
 # script exists to prevent. A green run costs nothing; only failures are re-run.
-# FAST narrows the test action to FinchAppTests. The scheme also runs
+# The gate narrows the test action to FinchAppTests. The scheme also runs
 # FinchAppUITests and FinchCoreTests:
 #
 #   - the 33 UI tests are simulator automation, the slowest tests here and the
-#     reason the retry flags exist — one flake costs three app launches;
+#     reason the retry flags exist — one flake costs three app launches.
+#     `--ui` adds them back when the change is navigational;
 #   - FinchCoreTests' 434 methods ALREADY ran in step 2 via `swift test`. The
 #     scheme runs the same sources again as an iOS bundle, so the only thing
 #     lost is executing the engine on the simulator rather than on macOS, and
 #     FinchCore is pure Swift with no UIKit.
 #
-# Both come back under --full, which is the run that has to match CI.
+# Both come back under --full, which mirrors the post-merge CI job.
 # Expanded at the call site as ${TEST_SCOPE[@]+"${TEST_SCOPE[@]}"} — macOS ships
 # bash 3.2, where "${arr[@]}" on an EMPTY array under `set -u` is an "unbound
 # variable" error. Plain "${TEST_SCOPE[@]}" would therefore abort --full, the one
@@ -331,7 +356,11 @@ echo "  simulator: $SIM"
 TEST_SCOPE=()
 if [ "$FULL" != "1" ]; then
   TEST_SCOPE=(-only-testing:FinchAppTests)
-  skipped "FinchAppUITests (33 UI tests)"
+  if [ "$UI" = "1" ]; then
+    TEST_SCOPE+=(-only-testing:FinchAppUITests)
+  else
+    skipped "FinchAppUITests (33 UI tests) — add with --ui"
+  fi
   skipped "FinchCoreTests on iOS (434 methods; swift test already ran them)"
 fi
 step "Build + test FinchApp"
@@ -495,20 +524,20 @@ if [ ${#WARNED[@]} -gt 0 ]; then
   printf '\nfull logs: %s\n' "$RUN_DIR"
 fi
 
-# A fast green is NOT a prediction of CI, and the single most likely way this
-# change does harm is someone reading it as one. Say what was skipped, every
-# time, and say it on success too — a green run is exactly when nobody reads.
+# The gate skips work ON PURPOSE, and everything it skips runs post-merge in
+# CI — deferred coverage, not lost coverage. Still say it every time, and on
+# success too: a green run is exactly when nobody reads, and the skip list is
+# how you notice the day your diff IS the thing being skipped (then: --ui).
 if [ ${#SKIPPED[@]} -gt 0 ]; then
-  printf '\n\033[33mFAST MODE — this did NOT run:\033[0m\n'
+  printf '\n\033[33mskipped here — runs post-merge in CI:\033[0m\n'
   printf '  - %s\n' "${SKIPPED[@]}"
-  printf '\033[33mRun before pushing:  ios/scripts/ci-local.sh --full\033[0m\n'
 fi
 
 if [ ${#FAILED[@]} -eq 0 ]; then
   if [ "$FULL" = "1" ]; then
     printf '\033[32mall checks passed\033[0m\n'
   else
-    printf '\033[32mfast checks passed\033[0m\n'
+    printf '\033[32mgate passed\033[0m\n'
   fi
   exit 0
 fi
