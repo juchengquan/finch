@@ -121,6 +121,31 @@ final class PurchaseCellsTests: XCTestCase {
         XCTAssertEqual(a.allocated, 100, accuracy: 0.001, "and the new cell took the rest")
     }
 
+    /// The shape follows what is TICKED, not what is funded.
+    ///
+    /// `payload` returns funded rows only, and the pickers no longer collect
+    /// amounts — so keying the decision off it would leave page 2 unreachable
+    /// for every new purchase, which is exactly the bug this guards.
+    func test_theShapeFollowsTickedRowsNotFundedOnes() {
+        var accounts = SplitAllocation(total: 0)   // no amount typed yet
+        accounts.tick("a1"); accounts.tick("a2")
+        var categories = SplitAllocation(total: 0)
+        categories.tick("c1"); categories.tick("c2")
+
+        XCTAssertTrue(accounts.payload.isEmpty, "nothing is funded yet")
+        XCTAssertEqual(PurchaseFlow.page2(accounts: accounts.rows.count,
+                                          categories: categories.rows.count), .grid)
+    }
+
+    /// Which axis a one-axis split divides — page 2 renders a flat list for it
+    /// rather than N sections of one row each.
+    func test_theSplitAxisNamesWhatIsBeingDivided() {
+        XCTAssertEqual(PurchaseFlow.splitAxis(accounts: 1, categories: 3), .categories)
+        XCTAssertEqual(PurchaseFlow.splitAxis(accounts: 3, categories: 1), .accounts)
+        XCTAssertEqual(PurchaseFlow.splitAxis(accounts: 2, categories: 2), .both)
+        XCTAssertEqual(PurchaseFlow.splitAxis(accounts: 1, categories: 1), .none)
+    }
+
     private func cellAmount(_ v: JSONValue) -> Double? {
         guard case .object(let o) = v, case .double(let d)? = o["amount"] else { return nil }
         return d
