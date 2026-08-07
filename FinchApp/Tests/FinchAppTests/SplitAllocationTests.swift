@@ -292,4 +292,23 @@ extension SplitAllocationTests {
         XCTAssertEqual(a.payload.count, 2)
         XCTAssertNil(a.payload[1].id, "the uncategorised leg must write a nil category")
     }
+    /// Turning a split off keeps the largest leg. With no amounts yet — which is
+    /// every freshly ticked split now the pickers collect none — every row is
+    /// equal, so the tie goes to the LAST ticked: the most recent choice, and
+    /// the one the collapse UI test expects.
+    func test_theDominantRowBreaksTiesByLastTicked() {
+        var a = SplitAllocation(total: 0)
+        a.tick("c1"); a.tick("c2"); a.tick("c3")
+        XCTAssertEqual(a.dominantId, "c3", "all equal, so the newest wins")
+    }
+
+    /// A reopened split HAS amounts, and there the largest still wins outright.
+    func test_theDominantRowIsStillTheLargestWhenAmountsExist() {
+        var a = SplitAllocation.merging([(id: Optional("c1"), amount: 70),
+                                         (id: Optional("c2"), amount: 30)], total: 100)
+        XCTAssertEqual(a.dominantId, "c1")
+        a.setAmount("c2", 90)
+        XCTAssertEqual(a.dominantId, "c2", "the largest, not the newest")
+    }
+
 }

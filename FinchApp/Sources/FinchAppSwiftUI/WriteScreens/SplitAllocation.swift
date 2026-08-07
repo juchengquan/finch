@@ -104,8 +104,18 @@ struct SplitAllocation: Equatable {
     /// The row a collapse keeps — the largest leg, matching the rule the projection
     /// already uses to pick the category a split displays (and, for accounts, the
     /// same "keep the biggest one" rule applied one axis over).
+    ///
+    /// **Ties go to the LAST ticked.** The pickers no longer collect amounts, so
+    /// a freshly ticked split is all zeros and every row ties; the newest choice
+    /// is the most recent thing the user actually said. A REOPENED split does
+    /// carry amounts, and there the largest still wins outright.
+    ///
+    /// `max(by:)` cannot express this — it keeps the first among equals — so the
+    /// scan is explicit.
     var dominantId: String? {
-        rows.max { $0.amount < $1.amount }?.id
+        var best: Row?
+        for row in rows where best == nil || row.amount >= best!.amount { best = row }
+        return best?.id
     }
 
     /// What gets written. Zero rows drop out; `""` becomes a nil (uncategorised) leg

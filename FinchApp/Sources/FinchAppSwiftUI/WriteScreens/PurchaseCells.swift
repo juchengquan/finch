@@ -30,6 +30,20 @@ enum PurchaseFlow {
         return .notNeeded
     }
 
+    /// Which axis a split divides. Page 2 lays a one-axis split out as a flat
+    /// list; three cards against a single category would otherwise render as
+    /// three sections of one row each, which reads as a grid that is not one.
+    enum SplitAxis: Equatable { case none, accounts, categories, both }
+
+    static func splitAxis(accounts: Int, categories: Int) -> SplitAxis {
+        switch (accounts > 1, categories > 1) {
+        case (true, true):   return .both
+        case (true, false):  return .accounts
+        case (false, true):  return .categories
+        case (false, false): return .none
+        }
+    }
+
     /// The key one cell of the grid is allocated under. `SplitAllocation` is reused
     /// UNCHANGED for the grid — one flat allocation over the cells rather than a
     /// two-dimensional widget or one instance per card — and `Row.id` is a plain
