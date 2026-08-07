@@ -157,13 +157,44 @@ enum LaunchSequence {
         }
         try? fm.removeItem(at: AppGroup.widgetSnapshotURL)
         try? fm.removeItem(at: AppGroup.containerURL.appendingPathComponent("pending_attachments"))
-        // The remembered ledger lives in UserDefaults, NOT in the database, so deleting
-        // the file alone does not reset it — and the reseed reuses the same ledger ids,
-        // so a run that switched to "travel" comes back up in Travel on every launch
-        // afterwards, including the next test run. `-resetStore YES` has to mean a clean
-        // slate or it is worse than nothing: a UI suite then fails with "no 'Checking'
-        // row", which reads as the app being broken rather than as leftover state.
-        UserDefaults.standard.removeObject(forKey: FinchStore.activeLedgerKey)
+        // UserDefaults survives the file wipe, so anything persisted there outlives
+        // `-resetStore YES` and leaks into every later launch — including the next test.
+        //
+        // This used to clear ONE key, the remembered ledger, because that is the one
+        // that bit first: the reseed reuses the same ledger ids, so a run that switched
+        // to "travel" came back up in Travel forever after, and the suite failed with
+        // "no 'Checking' row" — which reads as the app being broken rather than as
+        // leftover state.
+        //
+        // It is a CLASS of bug, not one key, and clearing them one at a time is
+        // whack-a-mole. `finch.privacy` proved it: a test toggled privacy mode, left it
+        // on, and `CategorySplitUITests` failed two tests later with "allocated reads
+        // Allocated, •••• / ••••" — masked amounts, a message pointing nowhere near the
+        // test that caused it. There are 30-odd persisted keys and any of them can do
+        // this: a collapsed group hides a row, a saved search filters a list, a text-size
+        // step changes what fits on screen.
+        //
+        // So clear by the RULE instead. Every key the app persists is namespaced
+        // `finch.*`, which makes the prefix a reliable sweep AND makes a future key
+        // covered the day it is added rather than the day it breaks a run.
+        let defaults = UserDefaults.standard
+        let domain = defaults.persistentDomain(forName: Bundle.main.bundleIdentifier ?? "") ?? [:]
+        for key in domain.keys where key.hasPrefix("finch.") {
+            defaults.removeObject(forKey: key)
+        }
+        // The one app-written key outside that namespace. The language picker writes it
+        // to apply a locale override, so a run that switched to zh-Hans would come back
+        // up in Chinese and every string assertion after it would fail for the wrong
+        // reason.
+        defaults.removeObject(forKey: "AppleLanguages")
+
+        // NOT the whole persistent domain. `removePersistentDomain` would also discard
+        // framework-owned state stored under the same bundle id, which is not this
+        // function's business and is not what "reset the app's data" means.
+        //
+        // Launch arguments are untouched either way: `-resetStore YES` and friends live
+        // in the ARGUMENT domain, which is separate from the persistent one — otherwise
+        // this sweep would disable the very flag that triggered it.
     }
     #endif
 }
