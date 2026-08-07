@@ -60,6 +60,23 @@ enum Metrics {
     /// is the intended reading. Revisit if the rows start looking top-heavy there.
     static let kindStripeHeight: CGFloat = 26
 
+    /// The type style for a row's trailing amount — `TxRow` in every transaction list,
+    /// and `ScheduledRow`, which mirrors it.
+    ///
+    /// It was the inherited `.body`, which put it at the SAME size as the category name
+    /// beside it and made the two compete for first glance. A transaction list is
+    /// scanned by category as often as by figure, so the amount steps down one notch
+    /// and the name leads. It keeps `.semibold` at the call sites — still the only
+    /// weighted thing in the row, so it reads as a figure rather than more body text.
+    ///
+    /// Where it sits in the row's scale: category `.body` 17 → **amount 15** → date
+    /// `.footnote` 13 → running balance `.caption2` 11.
+    ///
+    /// A semantic style, not a point size, so Dynamic Type still scales it. Both rows
+    /// read this ONE value for the same reason they share `kindStripeHeight`: they are
+    /// deliberately built to scan alike, and two literals is how that drifts.
+    static let rowAmountFont: Font = .subheadline
+
     /// Minimum side of an interactive element, per Apple's HIG.
     ///
     /// Named as a FLOOR, not a size, because the pressure on it is always
