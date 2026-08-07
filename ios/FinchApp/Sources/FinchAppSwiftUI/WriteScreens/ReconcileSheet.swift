@@ -38,7 +38,7 @@ struct ReconcileSheet: View {
                         }
                         // Date AND time: a statement is cut at a moment, and the
                         // adjustment this sheet posts is dated to it.
-                        H24DatePicker("Statement date", selection: $date, labelsHidden: false)
+                        DatePicker("Statement date", selection: $date, displayedComponents: [.date, .hourAndMinute])
                     } footer: {
                         // The detail page shows only the seal; the checkpoint's
                         // date lives here, where the next reconcile happens.

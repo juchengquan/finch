@@ -26,6 +26,7 @@ final class UIKitAppDelegate: UIResponder, UIApplicationDelegate {
         // THIS is the iOS entry point — `FinchApp.swift` is excluded from the iOS
         // target (project.yml) and only boots FinchMac, so the mirror of this call
         // in `FinchApp.init()` runs on macOS alone.
+        AppDate.force24HourClock()
         TextSize.migrateLegacySystemPreference(systemStep: TextSize.currentSystemStep)
         return true
     }
