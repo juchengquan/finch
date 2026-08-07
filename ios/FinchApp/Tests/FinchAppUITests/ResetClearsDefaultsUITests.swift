@@ -72,10 +72,15 @@ final class ResetClearsDefaultsUITests: XCTestCase {
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 30), "app did not reach foreground")
     }
 
+    /// Privacy is a Settings ROW now, not a toolbar button: the eye came off every
+    /// iPhone screen when hiding amounts moved to a long-press of the ledger
+    /// button. A switch reports "1"/"0" where a button reported "on"/"off", so the
+    /// translation happens HERE and the test body keeps reading in on/off.
     private func privacyValue() -> String? {
-        let button = app.buttons["Privacy mode"].firstMatch
-        guard button.waitForExistence(timeout: 30) else { return nil }
-        return button.value as? String
+        let toggle = app.switches["Privacy mode"].firstMatch
+        guard toggle.waitForExistence(timeout: 30) else { return nil }
+        guard let raw = toggle.value as? String else { return nil }
+        return raw == "1" ? "on" : "off"
     }
 
     /// Tap until the toggle reads `target`, so the test does not depend on which state
@@ -84,7 +89,10 @@ final class ResetClearsDefaultsUITests: XCTestCase {
     private func setPrivacy(to target: String) -> String? {
         guard var current = privacyValue() else { return nil }
         if current == target { return current }
-        app.buttons["Privacy mode"].firstMatch.tap()
+        // The TRAILING edge: a switch inside a cell spans the whole row, and a
+        // centre tap lands on the label and does nothing.
+        app.switches["Privacy mode"].firstMatch
+            .coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
         let deadline = Date().addingTimeInterval(5)
         while current != target && Date() < deadline {
             usleep(100_000)
