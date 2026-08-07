@@ -183,8 +183,21 @@ final class TxListDetailVC: UIViewController {
                 // leave behind. Safe here because selection is transient: rows deselect
                 // on tap and this screen has no column mode. (#702)
                 cell.backgroundConfiguration = txRowBackground()
+                // The glyph tap, which this screen was missed out of. `19f1d32a` wired
+                // it into the SwiftUI Category/Tag/Counterparty views and said it
+                // covered "the tag / category / counterparty detail screens" — but
+                // those ship as this ONE view controller, and it was not wired. Tapping
+                // a glyph here did nothing.
+                //
+                // It matters now rather than later: with the swipe's status action
+                // removed, the glyph is the gesture, and leaving it inert would take
+                // the toggle off these screens entirely bar the context menu.
                 TxRowCell.configure(cell, tx: tx, store: self.store,
-                                    showRunningBalance: false)
+                                    showRunningBalance: false,
+                                    onToggleStatus: { [weak self] tapped in
+                                        guard let self else { return }
+                                        self.run { try txnToggleStatus(tapped, store: self.store) }
+                                    })
             }
         }
 

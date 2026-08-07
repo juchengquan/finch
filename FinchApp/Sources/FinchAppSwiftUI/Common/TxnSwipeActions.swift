@@ -45,8 +45,12 @@ struct TxnSwipeActions: ViewModifier {
             .swipeActions(edge: .leading) {
                 duplicateButton
             }
+            // Delete only. The status action moved to the row's leading glyph in
+            // `19f1d32a` — one tap, and no swipe left open while the row relocates,
+            // which is where every artefact in #702 came from. Delete is now the
+            // full-swipe action; it raises a confirmation rather than deleting, so that
+            // is a dialog rather than data loss.
             .swipeActions(edge: .trailing) {
-                statusButton      // FIRST ⇒ sits at the edge ⇒ the full-swipe action
                 deleteButton
             }
             .contextMenu {        // right-click parity on Mac/iPad (swipe is touch-only)
@@ -66,11 +70,6 @@ struct TxnSwipeActions: ViewModifier {
     private var duplicateButton: some View {
         Button { duplicate(txn) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
             .tint(.indigo)
-    }
-
-    private var statusButton: some View {
-        Button { toggleStatus(txn) } label: { statusLabel }
-            .tint(isPending ? .green : .orange)
     }
 
     @ViewBuilder private var statusLabel: some View {
