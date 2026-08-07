@@ -34,8 +34,7 @@ struct AdjustBalanceSheet: View {
                     Text("Posts an adjustment for the difference from the account's current balance.")
                 }
                 Section {
-                    DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                        .environment(\.locale, AppDate.h24Locale)   // 24-hour wheel regardless of device setting
+                    H24DatePicker("Date", selection: $date, labelsHidden: false)
                     HStack {
                         Text("Note"); Spacer()
                         TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
