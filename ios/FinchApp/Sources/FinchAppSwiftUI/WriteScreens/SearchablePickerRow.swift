@@ -31,7 +31,6 @@ struct SearchablePickerRow<RowContent: View>: View {
     /// (`error.split.multiAccount`, Task 4b), so the UI must not let the user
     /// reach that state rather than surface the engine's refusal after a save
     /// half-applies. Disables the toggle; ignored when `splitting` is nil.
-    var splitLocked = false
     /// Account ids that cannot join a split because their own currency doesn't
     /// match `currency` — the split assumes one currency across every row (see
     /// `AddTransactionSheet.accountSplitArgs`), so mixing would have the engine
@@ -46,7 +45,7 @@ struct SearchablePickerRow<RowContent: View>: View {
     @State private var presented = false
 
     init(title: String, glyph: FieldGlyph, options: [PickerOption], selection: Binding<String>,
-         splitting: Binding<SplitAllocation>? = nil, currency: String = "", splitLocked: Bool = false,
+         splitting: Binding<SplitAllocation>? = nil, currency: String = "",
          splitCurrencyMismatch: Set<String> = [],
          @ViewBuilder rowContent: @escaping (PickerOption) -> RowContent) {
         self.title = title
@@ -55,7 +54,6 @@ struct SearchablePickerRow<RowContent: View>: View {
         self._selection = selection
         self.splitting = splitting
         self.currency = currency
-        self.splitLocked = splitLocked
         self.splitCurrencyMismatch = splitCurrencyMismatch
         self.rowContent = rowContent
     }
@@ -91,7 +89,7 @@ struct SearchablePickerRow<RowContent: View>: View {
         .buttonStyle(.plain)
         .sheet(isPresented: $presented) {
             SearchablePickerSheet(title: title, options: options, selection: $selection,
-                                  splitting: splitting, currency: currency, splitLocked: splitLocked,
+                                  splitting: splitting, currency: currency,
                                   splitCurrencyMismatch: splitCurrencyMismatch, rowContent: rowContent)
                 #if os(iOS)
                 .presentationDetents([.large])
@@ -112,16 +110,16 @@ extension SearchablePickerRow where RowContent == Text {
 extension SearchablePickerRow where RowContent == AccountPickerRowLabel {
     /// The account picker: pass the accounts themselves and the sheet draws the
     /// Accounts list's own row — icon, name, balance. `splitting`/`currency`/
-    /// `splitLocked` are the split-tender affordance — several accounts paying
+    /// The split-tender affordance — several accounts paying
     /// for one purchase; every other account picker (From/To, Adjust Balance,
     /// scheduled templates) leaves all three at their defaults and is unaffected.
     /// `splitCurrencyMismatch` is derived here (from `accounts`), not passed by
     /// the caller — it's purely a function of the account list and `currency`.
     init(title: String, glyph: FieldGlyph, accounts: [AccountRow], selection: Binding<String>,
-         splitting: Binding<SplitAllocation>? = nil, currency: String = "", splitLocked: Bool = false) {
+         splitting: Binding<SplitAllocation>? = nil, currency: String = "") {
         self.init(title: title, glyph: glyph,
                   options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") },
-                  selection: selection, splitting: splitting, currency: currency, splitLocked: splitLocked,
+                  selection: selection, splitting: splitting, currency: currency,
                   splitCurrencyMismatch: Self.currencyMismatchedAccountIds(accounts, transactionCurrency: currency),
                   rowContent: { opt in AccountPickerRowLabel(accounts: accounts, id: opt.id, name: opt.name) })
     }
@@ -163,7 +161,6 @@ private struct SearchablePickerSheet<RowContent: View>: View {
     @Binding var selection: String
     var splitting: Binding<SplitAllocation>? = nil
     var currency: String = ""
-    var splitLocked = false
     var splitCurrencyMismatch: Set<String> = []
     @ViewBuilder let rowContent: (PickerOption) -> RowContent
     /// Needed for `displayNative` in the split section, same as
@@ -173,12 +170,9 @@ private struct SearchablePickerSheet<RowContent: View>: View {
     @State private var query = ""
     @State private var staged: String
     @State private var splitOn = false
-    /// Per-row text while the user is typing. Rows that are not pinned have theirs
-    /// dropped after every mutation so they redisplay the recomputed share.
-    @State private var amountText: [String: String] = [:]
 
     init(title: String, options: [PickerOption], selection: Binding<String>,
-         splitting: Binding<SplitAllocation>? = nil, currency: String = "", splitLocked: Bool = false,
+         splitting: Binding<SplitAllocation>? = nil, currency: String = "",
          splitCurrencyMismatch: Set<String> = [],
          @ViewBuilder rowContent: @escaping (PickerOption) -> RowContent) {
         self.title = title
@@ -186,7 +180,6 @@ private struct SearchablePickerSheet<RowContent: View>: View {
         self._selection = selection
         self.splitting = splitting
         self.currency = currency
-        self.splitLocked = splitLocked
         self.splitCurrencyMismatch = splitCurrencyMismatch
         self.rowContent = rowContent
         self._staged = State(initialValue: selection.wrappedValue)
@@ -224,7 +217,6 @@ private struct SearchablePickerSheet<RowContent: View>: View {
                     if let dominant = splitting.wrappedValue.dominantId { staged = dominant }
                     splitting.wrappedValue = SplitAllocation(total: splitting.wrappedValue.total)
                 }
-                amountText.removeAll()
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -239,69 +231,27 @@ private struct SearchablePickerSheet<RowContent: View>: View {
                     } label: { Image(systemName: "checkmark") }
                         .accessibilityLabel("Confirm")
                         .confirmCheckmarkStyle()
-                        .disabled(splitOn && splitting?.wrappedValue.problem != nil)
                 }
             }
         }
     }
 
-    /// The toggle, and — once it is on — the ticked options with their amounts.
+    /// The toggle. Turning it on makes the list multi-select; the AMOUNTS are
+    /// page 2's job, so nothing here asks for one.
+    ///
+    /// This sheet used to host a second amount editor — per-row fields, an
+    /// Allocated line and a blocking check — duplicating page 2 and disagreeing
+    /// with it the moment either was edited. Page 1 selects; page 2 divides.
     @ViewBuilder private var splitSection: some View {
         Section {
             Toggle("Split across accounts", isOn: $splitOn)
                 .accessibilityIdentifier("account.splitToggle")
-                .disabled(splitLocked)
-            if splitLocked {
-                // The engine refuses an entry split both ways at once
-                // (error.split.multiAccount) — say why the toggle won't move
-                // rather than let the user find out after a half-applied save.
-                Text("Turn off the category split first.").font(.footnote).foregroundStyle(.secondary)
-            } else if splitOn, !splitCurrencyMismatch.isEmpty {
+            if splitOn, !splitCurrencyMismatch.isEmpty {
                 Text("Only \(currency) accounts can be part of a split.").font(.footnote).foregroundStyle(.secondary)
-            }
-        }
-        if splitOn, let splitting {
-            Section {
-                ForEach(Array(splitting.wrappedValue.rows.enumerated()), id: \.element.id) { index, row in
-                    HStack {
-                        Text(name(of: row.id))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        // Symbol + field kept tight so they read as one right-aligned
-                        // unit, matching the Allocated line below.
-                        HStack(spacing: 2) {
-                            Text(Money.symbol(for: currency)).foregroundStyle(.secondary)
-                            TextField("0.00", text: amountBinding(row.id, splitting))
-                                .numericInput(amountBinding(row.id, splitting))
-                                #if os(iOS)
-                                .keyboardType(.decimalPad)
-                                #endif
-                                .fixedSize()
-                                .accessibilityIdentifier("account.splitAmount.\(index)")
-                        }
-                    }
-                }
-                LabeledContent("Allocated") {
-                    Text(verbatim: "\(store.displayNative(splitting.wrappedValue.allocated, currency: currency)) / \(store.displayNative(splitting.wrappedValue.total, currency: currency))")
-                }
-                .accessibilityIdentifier("account.allocated")
-                .foregroundStyle(splitting.wrappedValue.problem == nil ? .primary : .secondary)
-                if let problem = splitting.wrappedValue.problem {
-                    // Say WHY Confirm is blocked, same wording rule as the category
-                    // split — the old affordance explained neither its state nor
-                    // its purpose.
-                    Text(Self.message(for: problem)).font(.footnote).foregroundStyle(.red)
-                }
             }
         }
     }
 
-    private static func message(for problem: SplitAllocation.Problem) -> LocalizedStringKey {
-        switch problem {
-        case .needsAmount: return "Enter an amount to split."
-        case .needsTwo: return "Give at least two accounts an amount."
-        case .sumMismatch: return "Splits must add up to the transaction total."
-        }
-    }
 
     private func name(of id: String) -> String {
         options.first { $0.id == id }?.name ?? "—"
@@ -310,23 +260,6 @@ private struct SearchablePickerSheet<RowContent: View>: View {
     /// Typing pins the row; emptying it unpins so it floats again. After every write
     /// the unpinned rows' buffers are dropped so they show the recomputed share —
     /// except the row being edited, which would otherwise fight the user's keystrokes.
-    private func amountBinding(_ id: String, _ alloc: Binding<SplitAllocation>) -> Binding<String> {
-        Binding(
-            get: {
-                if let typed = amountText[id] { return typed }
-                let amount = alloc.wrappedValue.rows.first { $0.id == id }?.amount ?? 0
-                return amount == 0 ? "" : String(format: "%g", amount)
-            },
-            set: { newValue in
-                amountText[id] = newValue
-                if let parsed = DecimalInput.parse(newValue), parsed > 0 {
-                    alloc.wrappedValue.setAmount(id, parsed)
-                } else {
-                    alloc.wrappedValue.setAmount(id, nil)
-                }
-                for r in alloc.wrappedValue.rows where !r.pinned && r.id != id { amountText[r.id] = nil }
-            })
-    }
 
     @ViewBuilder private func row(_ opt: PickerOption) -> some View {
         // A currency-mismatched account can't join a split — only enforced WHILE
@@ -356,10 +289,8 @@ private struct SearchablePickerSheet<RowContent: View>: View {
         guard splitOn, let splitting else { staged = id; return }
         if splitting.wrappedValue.isTicked(id) {
             splitting.wrappedValue.untick(id)
-            amountText[id] = nil
         } else {
             splitting.wrappedValue.tick(id)
         }
-        for r in splitting.wrappedValue.rows where !r.pinned { amountText[r.id] = nil }
     }
 }

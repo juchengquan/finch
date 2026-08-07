@@ -382,8 +382,7 @@ struct AddTransactionSheet: View {
             SearchablePickerRow(title: "Account", glyph: .account,
                 accounts: accounts, selection: $accountId,
                 splitting: $accountAlloc,
-                currency: currencyCode.isEmpty ? currency(of: accountId) : currencyCode,
-                splitLocked: accountSplitBlocked)
+                currency: currencyCode.isEmpty ? currency(of: accountId) : currencyCode)
                 // A UI test reads this row to prove the FAB seeded the sheet. Without an
                 // identifier the query also matches the "Accounts" tab-bar button and the
                 // budget detail's own Account row sitting behind the sheet.
@@ -396,8 +395,7 @@ struct AddTransactionSheet: View {
                 noneLabel: String(localized: "Uncategorized"),
                 splitSummary: splitSummaryText(names: splitAlloc.payload.map { store.categoryName($0.id) ?? "Uncategorized" }),
                 splitting: k == .refund ? nil : $splitAlloc,
-                currency: currencyCode.isEmpty ? currency(of: accountId) : currencyCode,
-                splitLocked: categorySplitBlocked)
+                currency: currencyCode.isEmpty ? currency(of: accountId) : currencyCode)
                 .accessibilityIdentifier("addtx.category")
             // Both axes split: the per-axis editors above each divide ONE axis, and
             // two sets of margins do not determine the cells between them — $60/$0/

@@ -35,7 +35,6 @@ struct CategoryPickerRow: View {
     /// engine refuses an entry split both ways at once
     /// (`error.split.multiAccount`, Task 4b). Disables the toggle; ignored when
     /// `splitting` is nil.
-    var splitLocked = false
     @State private var presented = false
 
     private var selectedName: String {
@@ -60,8 +59,7 @@ struct CategoryPickerRow: View {
         }
         .sheet(isPresented: $presented) {
             CategoryPickerSheet(title: title, categories: categories, selection: $selection,
-                                noneLabel: noneLabel, splitting: splitting, currency: currency,
-                                splitLocked: splitLocked)
+                                noneLabel: noneLabel, splitting: splitting, currency: currency)
                 #if os(iOS)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -87,8 +85,6 @@ struct CategoryPickerSheet: View {
     var splitting: Binding<SplitAllocation>? = nil
     /// Currency for the amount fields; only read in split mode.
     var currency: String = ""
-    /// See `CategoryPickerRow.splitLocked`.
-    var splitLocked = false
     /// Needed for `displayNative`, which is also what makes these amounts honour
     /// privacy mode rather than printing figures the rest of the app is hiding.
     @EnvironmentObject private var store: FinchStore
@@ -97,19 +93,15 @@ struct CategoryPickerSheet: View {
     @State private var expanded: Set<String> = []
     @State private var staged: String
     @State private var splitOn = false
-    /// Per-row text while the user is typing. Rows that are not pinned have theirs
-    /// dropped after every mutation so they redisplay the recomputed share.
-    @State private var amountText: [String: String] = [:]
 
     init(title: String, categories: [CategoryRow], selection: Binding<String>, noneLabel: String? = nil,
-         splitting: Binding<SplitAllocation>? = nil, currency: String = "", splitLocked: Bool = false) {
+         splitting: Binding<SplitAllocation>? = nil, currency: String = "") {
         self.title = title
         self.categories = categories
         self._selection = selection
         self.noneLabel = noneLabel
         self.splitting = splitting
         self.currency = currency
-        self.splitLocked = splitLocked
         self._staged = State(initialValue: selection.wrappedValue)
     }
 
@@ -154,7 +146,6 @@ struct CategoryPickerSheet: View {
                     if let dominant = splitting.wrappedValue.dominantId { staged = dominant }
                     splitting.wrappedValue = SplitAllocation(total: splitting.wrappedValue.total)
                 }
-                amountText.removeAll()
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Cancel") }
@@ -168,66 +159,20 @@ struct CategoryPickerSheet: View {
                     } label: { Image(systemName: "checkmark") }
                         .accessibilityLabel("Confirm")
                         .confirmCheckmarkStyle()
-                        .disabled(splitOn && splitting?.wrappedValue.problem != nil)
                 }
             }
         }
     }
 
-    /// The toggle, and — once it is on — the ticked categories with their amounts.
+    /// The toggle. Turning it on makes the tree multi-select; the AMOUNTS are
+    /// page 2's job, so nothing here asks for one. See `SearchablePickerRow`.
     @ViewBuilder private var splitSection: some View {
         Section {
             Toggle("Split across categories", isOn: $splitOn)
                 .accessibilityIdentifier("category.splitToggle")
-                .disabled(splitLocked)
-            if splitLocked {
-                // The engine refuses an entry split both ways at once
-                // (error.split.multiAccount) — say why the toggle won't move
-                // rather than let the user find out after a half-applied save.
-                Text("Turn off the account split first.").font(.footnote).foregroundStyle(.secondary)
-            }
-        }
-        if splitOn, let splitting {
-            Section {
-                ForEach(Array(splitting.wrappedValue.rows.enumerated()), id: \.element.id) { index, row in
-                    HStack {
-                        Text(name(of: row.id))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        // Symbol + field kept tight so they read as one right-aligned
-                        // unit, matching the Allocated line below.
-                        HStack(spacing: 2) {
-                            Text(Money.symbol(for: currency)).foregroundStyle(.secondary)
-                            TextField("0.00", text: amountBinding(row.id, splitting))
-                                .numericInput(amountBinding(row.id, splitting))
-                                #if os(iOS)
-                                .keyboardType(.decimalPad)
-                                #endif
-                                .fixedSize()
-                                .accessibilityIdentifier("category.splitAmount.\(index)")
-                        }
-                    }
-                }
-                LabeledContent("Allocated") {
-                    Text(verbatim: "\(store.displayNative(splitting.wrappedValue.allocated, currency: currency)) / \(store.displayNative(splitting.wrappedValue.total, currency: currency))")
-                }
-                .accessibilityIdentifier("category.allocated")
-                .foregroundStyle(splitting.wrappedValue.problem == nil ? .primary : .secondary)
-                if let problem = splitting.wrappedValue.problem {
-                    // Say WHY Confirm is blocked. The old split affordance was a 40%
-                    // opacity icon that explained neither its state nor its purpose.
-                    Text(Self.message(for: problem)).font(.footnote).foregroundStyle(.red)
-                }
-            }
         }
     }
 
-    private static func message(for problem: SplitAllocation.Problem) -> LocalizedStringKey {
-        switch problem {
-        case .needsAmount: return "Enter an amount to split."
-        case .needsTwo: return "Give at least two categories an amount."
-        case .sumMismatch: return "Splits must add up to the transaction total."
-        }
-    }
 
     private func name(of id: String) -> String {
         id.isEmpty ? String(localized: "Uncategorized") : (categories.first { $0.id == id }?.name ?? "—")
@@ -236,23 +181,6 @@ struct CategoryPickerSheet: View {
     /// Typing pins the row; emptying it unpins so it floats again. After every write
     /// the unpinned rows' buffers are dropped so they show the recomputed share —
     /// except the row being edited, which would otherwise fight the user's keystrokes.
-    private func amountBinding(_ id: String, _ alloc: Binding<SplitAllocation>) -> Binding<String> {
-        Binding(
-            get: {
-                if let typed = amountText[id] { return typed }
-                let amount = alloc.wrappedValue.rows.first { $0.id == id }?.amount ?? 0
-                return amount == 0 ? "" : String(format: "%g", amount)
-            },
-            set: { newValue in
-                amountText[id] = newValue
-                if let parsed = DecimalInput.parse(newValue), parsed > 0 {
-                    alloc.wrappedValue.setAmount(id, parsed)
-                } else {
-                    alloc.wrappedValue.setAmount(id, nil)
-                }
-                for r in alloc.wrappedValue.rows where !r.pinned && r.id != id { amountText[r.id] = nil }
-            })
-    }
 
     /// The empty-selection row: same geometry as `CategoryTreeRow` (26pt glyph
     /// slot, reserved chevron column) so the list reads as one aligned tree.
@@ -301,11 +229,9 @@ struct CategoryPickerSheet: View {
         guard splitOn, let splitting else { staged = id; return }
         if splitting.wrappedValue.isTicked(id) {
             splitting.wrappedValue.untick(id)
-            amountText[id] = nil
         } else {
             splitting.wrappedValue.tick(id)
         }
-        for r in splitting.wrappedValue.rows where !r.pinned { amountText[r.id] = nil }
     }
 }
 
