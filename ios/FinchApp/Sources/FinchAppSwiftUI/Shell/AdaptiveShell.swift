@@ -289,25 +289,52 @@ extension View {
 struct LedgerBarButton: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @EnvironmentObject private var router: DeepLinkRouter
+    @EnvironmentObject private var store: FinchStore
     var body: some View {
         if sizeClass == .compact {
-            Button { router.showLedger = true } label: { Image(systemName: "books.vertical") }
-                .accessibilityLabel("Ledger")
+            // Tap opens the ledger picker, hold shows the privacy toggle — the
+            // same contract the converted UIKit screens get from
+            // `UIBarButtonItem`'s primaryAction + menu pair.
+            // `Menu(primaryAction:)` is SwiftUI's equivalent, so Insights (still
+            // a hosted root) behaves exactly like the native tabs.
+            Menu {
+                Button {
+                    store.privacyMode.toggle()
+                } label: {
+                    // A checkmark when on, so a hidden control can be read and
+                    // not only fired — matching `PrivacyMenu`'s UIAction state.
+                    Label(String(localized: "Hide Amounts"),
+                          systemImage: store.privacyMode ? "checkmark" : "eye.slash")
+                }
+            } label: {
+                Image(systemName: "books.vertical")
+            } primaryAction: {
+                router.showLedger = true
+            }
+            .accessibilityLabel("Ledger")
         }
     }
 }
 
-/// The privacy-mode eye toggle shown on every primary tab — one tap masks every
-/// rendered amount as "••••" (web parity: #416). Cross-platform (not compact-gated:
-/// useful on iPad/Mac toolbars too); state lives on FinchStore.privacyMode.
+/// The privacy-mode eye — one tap masks every rendered amount as "••••" (web
+/// parity: #416). State lives on `FinchStore.privacyMode`.
+///
+/// **iPad and Mac only.** On iPhone the toolbar is cramped and hiding amounts
+/// moved to a long-press of the ledger button (`LedgerBarButton`). iPad has no
+/// ledger button — its sidebar lists Ledger itself — so the eye stays there,
+/// which is also where there is room for it. On macOS `sizeClass` is `.regular`,
+/// so the Mac toolbar keeps it too, alongside the existing menu command.
 struct PrivacyToggleButton: View {
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @EnvironmentObject private var store: FinchStore
     var body: some View {
-        Button { store.privacyMode.toggle() } label: {
-            Image(systemName: store.privacyMode ? "eye.slash" : "eye")
+        if sizeClass != .compact {
+            Button { store.privacyMode.toggle() } label: {
+                Image(systemName: store.privacyMode ? "eye.slash" : "eye")
+            }
+            .accessibilityLabel("Privacy mode")
+            .accessibilityValue(store.privacyMode ? "on" : "off")
         }
-        .accessibilityLabel("Privacy mode")
-        .accessibilityValue(store.privacyMode ? "on" : "off")
     }
 }
 
