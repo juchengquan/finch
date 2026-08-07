@@ -26,11 +26,9 @@ struct PurchaseListSection: View {
                     Text(row.label).frame(maxWidth: .infinity, alignment: .leading)
                     HStack(spacing: 2) {
                         Text(Money.symbol(for: currency)).foregroundStyle(.secondary)
-                        TextField("0.00", text: amountBinding(row.key))
-                            .numericInput(amountBinding(row.key))
-                            #if os(iOS)
-                            .keyboardType(.decimalPad)
-                            #endif
+                        TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: currency)),
+                                  text: amountBinding(row.key))
+                            .moneyInput(amountBinding(row.key), currency: currency)
                             .fixedSize()
                             .accessibilityIdentifier("split.amount.\(row.key)")
                     }

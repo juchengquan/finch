@@ -1,4 +1,5 @@
 import SwiftUI
+import FinchCore
 
 /// Parse + live input filtering for numeric text fields. Decimal input uses "." as
 /// the only decimal separator ("," is rejected on input); `parse` reads plain "."
@@ -27,7 +28,17 @@ enum DecimalInput {
     /// removed like any other stray character, along with letters, spaces, currency
     /// symbols, and grouping. Does NOT reformat; intermediate "-"/"." survive so typing
     /// isn't blocked.
-    static func filter(_ s: String, allowsDecimal: Bool) -> String {
+    /// The amount-field placeholder for a currency with `fractionDigits` minor
+    /// units: "0", "0.00", "0.000".
+    static func zeroPlaceholder(fractionDigits: Int) -> String {
+        fractionDigits == 0 ? "0" : "0." + String(repeating: "0", count: fractionDigits)
+    }
+
+    /// `maxFractionDigits` (ISO 4217 minor units) caps the digits AFTER the
+    /// separator — TRIM semantics, distinct from `allowsDecimal: false`'s strip:
+    /// "12.34" clamped to 0 digits is "12" (cut at the separator), never "1234".
+    /// That difference is what makes mid-entry currency switches honest.
+    static func filter(_ s: String, allowsDecimal: Bool, maxFractionDigits: Int? = nil) -> String {
         var out = ""
         var sawSeparator = false
         for (i, ch) in s.enumerated() {
@@ -40,7 +51,11 @@ enum DecimalInput {
             }
             // else: strip
         }
-        return out
+        guard let maxDigits = maxFractionDigits, let dot = out.firstIndex(of: ".") else { return out }
+        if maxDigits == 0 { return String(out[..<dot]) }     // cut AT the separator
+        let fracStart = out.index(after: dot)
+        guard out.distance(from: fracStart, to: out.endIndex) > maxDigits else { return out }
+        return String(out[..<out.index(fracStart, offsetBy: maxDigits)])
     }
 }
 
@@ -56,5 +71,29 @@ extension View {
             let filtered = DecimalInput.filter(newValue, allowsDecimal: allowsDecimal)
             if filtered != newValue { text.wrappedValue = filtered }
         }
+    }
+
+    /// A currency-denominated amount field: clamps typing to the currency's
+    /// ISO 4217 minor units (`Currencies.minorUnits(for:)`), hides the decimal
+    /// key for 0-decimal currencies, and — when the currency CHANGES mid-entry
+    /// (switching the account under the Add sheet) — visibly re-trims what was
+    /// typed, so the field always shows an amount that can exist in the active
+    /// currency ("12.34" USD → JPY becomes "12" the moment you switch).
+    /// Not for rates or quantities — those stay on plain `numericInput`.
+    func moneyInput(_ text: Binding<String>, currency: String) -> some View {
+        let digits = Currencies.minorUnits(for: currency)
+        // allowsDecimal stays true even for 0-digit currencies: the max-0 clamp
+        // CUTS at the separator (trim), where allowsDecimal:false would strip it
+        // and glue the fraction onto the integer ("12.34" → "1234").
+        return keyboardType(digits == 0 ? .numberPad : .decimalPad)
+            .onChange(of: text.wrappedValue) { _, newValue in
+                let filtered = DecimalInput.filter(newValue, allowsDecimal: true, maxFractionDigits: digits)
+                if filtered != newValue { text.wrappedValue = filtered }
+            }
+            .onChange(of: currency) { _, newCurrency in
+                let d = Currencies.minorUnits(for: newCurrency)
+                let filtered = DecimalInput.filter(text.wrappedValue, allowsDecimal: true, maxFractionDigits: d)
+                if filtered != text.wrappedValue { text.wrappedValue = filtered }
+            }
     }
 }

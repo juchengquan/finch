@@ -494,6 +494,13 @@ struct AddTransactionSheet: View {
 
     /// Line-item amount row: Amount + the currency menu inline (currency is
     /// ALWAYS visible, even when only one option exists).
+    /// The currency the typed amount is denominated in — the picker's choice,
+    /// falling back to the selected account's own currency (same precedence the
+    /// save path uses).
+    private var amountCurrency: String {
+        currencyCode.isEmpty ? currency(of: accountId) : currencyCode
+    }
+
     private var amountField: some View {
         FieldRow(glyph: .amount, title: "Amount", trailing: {
             Picker("", selection: $currencyCode) {
@@ -501,7 +508,9 @@ struct AddTransactionSheet: View {
             }
             .pickerStyle(.menu).labelsHidden().fixedSize()
         }) {
-            TextField("0.00", text: $amount).keyboardType(.decimalPad).numericInput($amount)
+            TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: amountCurrency)),
+                      text: $amount)
+                .moneyInput($amount, currency: amountCurrency)
                 .accessibilityIdentifier("addtx.amount")
         }
     }
@@ -512,7 +521,9 @@ struct AddTransactionSheet: View {
         FieldRow(glyph: .amount, title: LocalizedStringKey(label), trailing: {
             Text(currency).foregroundStyle(.secondary)
         }) {
-            TextField("0.00", text: text).numericInput(text).keyboardType(.decimalPad)
+            TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: currency)),
+                      text: text)
+                .moneyInput(text, currency: currency)
         }
     }
 

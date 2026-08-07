@@ -18,6 +18,8 @@ struct ReconcileSheet: View {
     init(preselect: String? = nil) { self.preselect = preselect }
 
     private var account: AccountRow? { store.accounts.first { $0.id == accountId } }
+    /// Statement + quick-add amounts are in the reconciled account's currency.
+    private var reconcileCurrency: String { account?.currency ?? store.baseCurrency }
 
     var body: some View {
         NavigationStack {
@@ -32,7 +34,7 @@ struct ReconcileSheet: View {
                         LabeledContent("Current balance", value: store.displayMoney(a.balance, from: a.currency))
                         HStack {
                             Text("Statement balance"); Spacer()
-                            TextField("0.00", text: $statementBalance).numericInput($statementBalance).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                            TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: reconcileCurrency)), text: $statementBalance).moneyInput($statementBalance, currency: reconcileCurrency).multilineTextAlignment(.trailing)
                         }
                         // Date AND time: a statement is cut at a moment, and the
                         // adjustment this sheet posts is dated to it.
@@ -165,7 +167,7 @@ struct ReconcileSheet: View {
             TextField("Merchant", text: $addMerchant)
             HStack {
                 Text("Amount"); Spacer()
-                TextField("0.00", text: $addAmount).numericInput($addAmount).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: reconcileCurrency)), text: $addAmount).moneyInput($addAmount, currency: reconcileCurrency).multilineTextAlignment(.trailing)
             }
             Button("Add") { quickAdd(a) }
                 .disabled(DecimalInput.parse(addAmount) == nil)
