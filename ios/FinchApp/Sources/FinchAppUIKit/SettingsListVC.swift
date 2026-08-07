@@ -245,10 +245,17 @@ final class SettingsListVC: UIViewController {
         // button here would be a second way to the same place. Same rule as
         // `AccountsListVC` and `BudgetsListVC`.
         if showsLedgerControl {
+            // Tap opens the ledger picker; HOLD shows the privacy toggle.
+            // `UIBarButtonItem` runs `primaryAction` on tap and presents `menu`
+            // on long-press, so this is the feature filling in a property that
+            // was nil — not a gesture recogniser. The tab bar has no equivalent
+            // (`UITabBarItem` has no menu API at all), which is why the toggle
+            // lives here and not down there.
             let ledger = UIBarButtonItem(image: UIImage(systemName: "books.vertical"),
                                          primaryAction: UIAction { [weak self] _ in
                 self?.router.showLedger = true
-            })
+            },
+                                         menu: PrivacyMenu.menu(store: store))
             ledger.accessibilityLabel = String(localized: "Ledger")
             navigationItem.leftBarButtonItems = [ledger]
         } else {
@@ -262,7 +269,11 @@ final class SettingsListVC: UIViewController {
             primaryAction: UIAction { [weak self] _ in self?.store.privacyMode.toggle() })
         privacy.accessibilityLabel = String(localized: "Privacy mode")
         privacy.accessibilityValue = store.privacyMode ? String(localized: "on") : String(localized: "off")
-        navigationItem.rightBarButtonItems = [privacy]
+        // Same rule, different flag: this screen tracks compactness with
+        // `showsLedgerControl` rather than `onSelect`. On iPhone the toolbar is
+        // now empty, which is correct — the row in the list below is the visible
+        // home for privacy.
+        navigationItem.rightBarButtonItems = showsLedgerControl ? [] : [privacy]
     }
 }
 
