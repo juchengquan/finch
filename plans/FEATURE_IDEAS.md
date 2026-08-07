@@ -293,6 +293,23 @@ Read-only CSV import from your bank's downloaded statement. Map columns,
 de-dupe against existing entries, flag conflicts. Closes the "but my bank
 gives me a file" gap for users who don't want manual entry.
 
+> **A sketch of this shipped on iOS and was removed (2026-08).** It predated this
+> entry being chosen and implemented none of the three requirements above: it
+> GUESSED columns rather than mapping them, had no de-duplication, and dropped
+> conflicts silently instead of flagging them. Three defects made it worse than
+> not having it — every created row got `pickableCategories.first`, i.e. an
+> arbitrary category; the matcher's own comment claimed it skipped already-cleared
+> transactions and never checked; and because the candidate list was never consumed,
+> two statement lines with the same amount in the same window both matched the SAME
+> transaction, clearing one twice and dropping the other. `apply()`, the only part
+> that wrote to the database, had no test.
+>
+> If this is picked up, start from the three requirements, not from that code — it
+> is recoverable from history but is not a head start. And note `ReconcileSheet`
+> already covers the manual path end to end (statement balance, tick matches,
+> quick-add what is missing, finish when square), so the gap 9.3 closes is
+> specifically "I have a file and do not want to type it", not "I cannot reconcile".
+
 ### 9.4 Privacy mode (blur amounts) ⚡ S — ✅ shipped
 One-tap blur for showing the app on a train. Lightweight; high
 "feels professional" payoff. Shipped as a mask (••••) at the `useMoney`

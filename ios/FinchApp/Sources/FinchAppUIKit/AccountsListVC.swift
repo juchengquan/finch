@@ -19,15 +19,15 @@ import FinchCore
 ///   entry, which pushes the converted feed rather than opening a sheet;
 /// - **archive**, a third row verb that Budgets has no equivalent of;
 /// - a much larger ⋯ overflow: Add Group, Reorder, Archived Accounts, Holdings,
-///   Reconcile. (Import statement (CSV) was removed from this menu — the screen and
-///   `StatementImport` still exist and compile, they are simply unreachable. See the
-///   follow-up issue for removing the feature outright.)
+///   Reconcile. (There was an "Import statement (CSV)" entry here; the feature is gone
+///   — `ReconcileSheet` already does that job by hand and says when you are square.
+///   See FEATURE_IDEAS 9.3 if it is ever built properly.)
 ///
 /// Hosted SwiftUI is limited to leaves — `AccountRowView`, `StatusSummaryRow`, the group
 /// header — and to sheets, which are presented rather than pushed and so cannot shadow.
 /// The write forms stay SwiftUI on purpose: `AccountSheet`, `ReconcileSheet`,
-/// `ImportStatementView`, `AddAccountGroupSheet`, `ArchivedAccountsView` are the same
-/// ones the Mac renders, and retyping them in UIKit would fork logic that must not drift.
+/// `AddAccountGroupSheet`, `ArchivedAccountsView` are the same ones the Mac renders,
+/// and retyping them in UIKit would fork logic that must not drift.
 final class AccountsListVC: UIViewController {
 
     private let store = FinchStore.shared
