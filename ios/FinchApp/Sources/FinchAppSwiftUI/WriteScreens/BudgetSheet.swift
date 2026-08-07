@@ -121,7 +121,7 @@ struct BudgetSheet: View {
                 TextField("Name", text: $name)
             }
             FieldRow(glyph: .amount, title: "Target") {
-                TextField("0.00", text: $amount).numericInput($amount).keyboardType(.decimalPad)
+                TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: store.baseCurrency)), text: $amount).moneyInput($amount, currency: store.baseCurrency)
             }
             FieldRow(glyph: .group, title: "Group", showsDefaultTrailing: false) {
                 Picker("Group", selection: $groupId) {
@@ -133,7 +133,7 @@ struct BudgetSheet: View {
         }
         Section {
             FieldRow(glyph: .amount, title: "Saved so far") {
-                TextField("0.00", text: $savedText).numericInput($savedText).keyboardType(.decimalPad)
+                TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: store.baseCurrency)), text: $savedText).moneyInput($savedText, currency: store.baseCurrency)
             }
             FieldRow(glyph: .status, title: "Set target date") {
                 Toggle("Set target date", isOn: $hasTargetDate).switchOnlyToggles()
@@ -185,7 +185,7 @@ struct BudgetSheet: View {
                 TextField("Name", text: $name)
             }
             FieldRow(glyph: .amount, title: "Limit") {
-                TextField("0.00", text: $amount).numericInput($amount).keyboardType(.decimalPad)
+                TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: store.baseCurrency)), text: $amount).moneyInput($amount, currency: store.baseCurrency)
             }
             FieldRow(glyph: .group, title: "Group", showsDefaultTrailing: false) {
                 Picker("Group", selection: $groupId) {
@@ -241,7 +241,7 @@ struct BudgetSheet: View {
             }
             if rollover {
                 FieldRow(glyph: .amount, title: "Cap") {
-                    TextField("Optional", text: $rolloverCap).numericInput($rolloverCap)
+                    TextField("Optional", text: $rolloverCap).moneyInput($rolloverCap, currency: store.baseCurrency)
                         .keyboardType(.decimalPad)
                 }
             }

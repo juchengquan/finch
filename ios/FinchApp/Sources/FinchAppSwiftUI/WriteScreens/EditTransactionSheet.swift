@@ -163,7 +163,9 @@ struct EditTransactionSheet: View {
         FieldRow(glyph: .amount, title: LocalizedStringKey(label), trailing: {
             Text(currency).foregroundStyle(.secondary)
         }) {
-            TextField("0.00", text: text).numericInput(text).keyboardType(.decimalPad)
+            TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: currency)),
+                      text: text)
+                .moneyInput(text, currency: currency)
         }
     }
 
@@ -241,7 +243,9 @@ struct EditTransactionSheet: View {
                             }
                             .pickerStyle(.menu).labelsHidden().fixedSize()
                         }) {
-                            TextField("0.00", text: $amountText).keyboardType(.decimalPad).numericInput($amountText)
+                            TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: (currencyCode.isEmpty ? accountCurrency : currencyCode))),
+                                      text: $amountText)
+                                .moneyInput($amountText, currency: currencyCode.isEmpty ? accountCurrency : currencyCode)
                         }
                         CategoryPickerRow(title: "Category", glyph: .category, categories: categories, selection: $categoryId,
                             noneLabel: String(localized: "Uncategorized"),

@@ -6,6 +6,7 @@ import transferGroupsData from '@/data/transfer-groups.json';
 import counterpartiesData from '@/data/counterparties.json';
 import exchangeRatesData from '@/data/exchange-rates.json';
 import currenciesData from '@/data/currencies.json';
+import { minorUnits } from '@/lib/currency';
 
 // Static reference data used as a pre-hydration fallback by a handful of
 // screens. Everything else (monthly spending, cashflow, insights, MoM deltas)
@@ -50,7 +51,7 @@ export const acctById = (id: string) => MOCK.accounts.find((a) => a.id === id) |
 // conversion). Use for ledger data where amounts are stored natively.
 export function fmtNative(amount: number, currency: string, opts: { signed?: boolean } = {}) {
   const c = CURRENCIES[currency as keyof typeof CURRENCIES] || CURRENCIES.USD;
-  const decimals = currency === 'JPY' ? 0 : 2;
+  const decimals = minorUnits(currency);
   const abs = Math.abs(amount).toLocaleString(c.locale, {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,

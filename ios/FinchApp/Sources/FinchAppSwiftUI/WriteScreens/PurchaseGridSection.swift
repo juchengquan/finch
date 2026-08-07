@@ -36,11 +36,9 @@ struct PurchaseGridSection: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             HStack(spacing: 2) {
                                 Text(Money.symbol(for: currency)).foregroundStyle(.secondary)
-                                TextField("0.00", text: amountBinding(key))
-                                    .numericInput(amountBinding(key))
-                                    #if os(iOS)
-                                    .keyboardType(.decimalPad)
-                                    #endif
+                                TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: currency)),
+                                          text: amountBinding(key))
+                                    .moneyInput(amountBinding(key), currency: currency)
                                     .fixedSize()
                                     .accessibilityIdentifier("grid.cell.\(key)")
                             }

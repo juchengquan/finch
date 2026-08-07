@@ -597,10 +597,22 @@ async function writeWriteParityFixture(): Promise<void> {
   driver.close();
 }
 
+/** The ISO 4217 minor-units exceptions table, sorted for byte-stable output.
+ *  CurrencyParityTests compares FinchCore's Swift copy against this file. */
+async function writeCurrencyFixture(): Promise<void> {
+  const { MINOR_UNIT_EXCEPTIONS } = await import('../lib/currency');
+  const sorted = Object.fromEntries(
+    Object.entries(MINOR_UNIT_EXCEPTIONS).sort(([a], [b]) => a.localeCompare(b)),
+  );
+  await fs.writeFile(path.join(OUT, 'currency-minor-units.json'), JSON.stringify(sorted, null, 2) + '\n');
+}
+
 async function main(): Promise<void> {
   await fs.mkdir(OUT, { recursive: true });
   await writeWriteParityFixture();
   console.log('  write-parity fixture: sequence.json');
+  await writeCurrencyFixture();
+  console.log('  currency fixture: currency-minor-units.json');
   const sel = await writeSelectorFixtures();
   const aud = await writeAuditFixtures();
   const proj = await writeProjectionFixture();
