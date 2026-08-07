@@ -40,6 +40,13 @@ struct FieldRow<Content: View, Trailing: View>: View {
                 }
             }
             .accessibilityHidden(isEmpty)
+            // Pin the row separator to the content column instead of letting SwiftUI
+            // infer it. Left to itself it aligns most rows to their leading text but
+            // falls back to the list's default inset for rows whose leading content is
+            // a `TextField` — so the Amount row's separator started 36pt left of every
+            // other row's in the Add and Edit sheets. Anchoring to the content's own
+            // leading edge keeps that in step if the glyph column ever changes width.
+            .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
             trailing
         }
     }
