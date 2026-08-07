@@ -14,24 +14,39 @@ on:
     # NO paths-ignore here, deliberately — the workflow must ALWAYS trigger so the
     # required status check gets reported. Docs-only PRs are made cheap a different
     # way: the `changes` job (below) detects whether any non-docs file changed, and
-    # the expensive `frontend` / `ios` jobs are gated on it. The required check
+    # the `frontend` / `guards` jobs are gated on it. The required check
     # (`iOS + macOS (…)`) is carried by the always-running `ios-required` aggregate,
-    # so a docs-only PR gets a green required check in seconds without a macOS run.
+    # so a docs-only PR gets a green required check in seconds.
     #
     # Do NOT re-add paths-ignore here: it skips the whole workflow, the required
     # check never reports, and the PR blocks forever (a docs-only PR, #579, hit
     # exactly that — `checks: []`, state BLOCKED, admin-override only).
+  # Fire the FULL suite (the `ios` job: build, tests, UI tests, macOS, watchOS)
+  # on any branch, on demand — the pre-merge escape hatch for a risky change now
+  # that pull requests no longer run Xcode at all (see the `ios` job).
+  workflow_dispatch:
 
-# Cancel superseded runs on the same ref
+# The postmerge-alarm job files/updates an issue when a post-merge run goes red.
+permissions:
+  contents: read
+  issues: write
+
+# PR runs supersede each other per ref, as before. PUSH (and dispatch) runs each
+# get a group of their own — the run id — so nothing cancels OR supersedes them.
+# The post-merge run is the only systematic Apple-platform coverage now, and a
+# shared no-cancel group would still lose runs: GitHub keeps at most ONE pending
+# run per group, so a three-merge burst would silently drop the middle one.
+# Per-run groups mean every merge gets covered; runs queue on runner scarcity
+# instead of eating each other.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Cheap gate: did this change touch anything other than docs (**/*.md, plans/**)?
-  # The expensive jobs below run only when it did. This is what makes a docs-only
-  # PR skip the full frontend + macOS build without re-introducing the
-  # required-check deadlock (see the pull_request comment above).
+  # The jobs below run only when it did. This is what makes a docs-only PR skip
+  # the frontend build + guards without re-introducing the required-check
+  # deadlock (see the pull_request comment above).
   changes:
     name: Detect non-docs changes
     runs-on: ubuntu-latest
@@ -66,7 +81,7 @@ jobs:
             echo "→ non-doc files changed; running full CI"
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
-            echo "→ docs-only; skipping frontend + iOS build"
+            echo "→ docs-only; skipping the code jobs"
             echo "code=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -104,16 +119,66 @@ jobs:
       - name: Build
         run: bun run build
 
-  ios:
-    # The real work. Renamed off the required-check context — the always-running
-    # `ios-required` aggregate below carries that name now, so this job can be
-    # skipped on docs-only PRs without leaving the required check unreported.
-    #
-    # On a PULL REQUEST this is iOS + macOS. watchOS is gated to `push` — see
-    # the comment above its step.
-    name: iOS build & test (macOS + watchOS post-merge)
+  # The two i18n checks that need NO Xcode — seconds on a Linux runner. They
+  # lived inside the macOS job until 2026-08-07; moving them here keeps them on
+  # every PULL REQUEST after the Xcode work moved post-merge (see the `ios` job).
+  # They also run on push, so the post-merge run keeps the same coverage.
+  guards:
+    name: Guards (i18n catalog + UIKit strings)
     needs: changes
     if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.11"
+
+      # UIKit takes plain String, so a user-facing literal there is never
+      # extracted and ships English in every language with no other guard
+      # failing. This is the migration's systemic l10n hazard; see
+      # ios/docs/uikit-migration-plan.md.
+      - name: i18n — UIKit strings are localized
+        run: python3 ios/scripts/uikit-strings-guard.py
+
+      # i18n guard 1 of 2 — the CHEAP one (no Xcode, seconds).
+      # Localizable.xcstrings is GENERATED. Hand-editing it is what let 214
+      # translations end up living only in the generated file, where a routine
+      # regenerate silently destroyed 69 of them. Rebuild from the committed
+      # inputs and fail if the result differs from what's checked in.
+      # (Guard 2 of 2 — "extracted keys are current" — needs an Xcode compile,
+      # so it stays in the `ios` job below.)
+      - name: i18n — catalog is reproducible from its inputs
+        working-directory: ios
+        run: |
+          bun run scripts/build-xcstrings.ts
+          if ! git diff --quiet -- FinchApp/Sources/FinchShared/Resources/Localizable.xcstrings; then
+            git diff --stat -- FinchApp/Sources/FinchShared/Resources/Localizable.xcstrings
+            echo "::error file=ios/FinchApp/Sources/FinchShared/Resources/Localizable.xcstrings::Localizable.xcstrings does not match a fresh build from its inputs. It is GENERATED — put translations in ios/scripts/zh-manual.json, then run: bun run ios/scripts/build-xcstrings.ts"
+            exit 1
+          fi
+
+  ios:
+    # The full Apple-platform suite — POST-MERGE ONLY (plus workflow_dispatch).
+    #
+    # Pull requests stopped running Xcode entirely (2026-08-07). Two measured
+    # reasons: the job itself is ~43 min (of which ~40 min is building the app
+    # and driving 33 XCUITests on two simulators), and hosted macos-26 runners
+    # queue 10 min–12 h before the first step runs — so ANY PR gate containing
+    # xcodebuild inherits that queue no matter how fast the job is. The
+    # pre-merge iOS gate is ios/scripts/ci-local.sh (warm, minutes) on the
+    # developer's machine; this job is the cold, systematic safety net that
+    # backstops it within one merge. For a risky change, fire it on the branch
+    # first via workflow_dispatch instead of gating the PR on it.
+    #
+    # The required status check is carried by the always-running `ios-required`
+    # aggregate below, so skipping this job on PRs leaves nothing unreported —
+    # same mechanism that already covered docs-only PRs (#579).
+    name: iOS full suite (build · tests · UI tests · macOS · watchOS)
+    needs: changes
+    if: needs.changes.outputs.code == 'true' && github.event_name != 'pull_request'
     # iOS 26 SDK requires Xcode 26.x — use a runner image that ships it. Adjust
     # the image / Xcode selection here if the hosted images change.
     runs-on: macos-26
@@ -139,28 +204,6 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.3.11"
-
-      # UIKit takes plain String, so a user-facing literal there is never
-      # extracted and ships English in every language with no other guard
-      # failing. This is the migration's systemic l10n hazard; see
-      # ios/docs/uikit-migration-plan.md.
-      - name: i18n — UIKit strings are localized
-        run: python3 ios/scripts/uikit-strings-guard.py
-
-      # i18n guard 1 of 2 — the CHEAP one (no Xcode, seconds).
-      # Localizable.xcstrings is GENERATED. Hand-editing it is what let 214
-      # translations end up living only in the generated file, where a routine
-      # regenerate silently destroyed 69 of them. Rebuild from the committed
-      # inputs and fail if the result differs from what's checked in.
-      - name: i18n — catalog is reproducible from its inputs
-        working-directory: ios
-        run: |
-          bun run scripts/build-xcstrings.ts
-          if ! git diff --quiet -- FinchApp/Sources/FinchShared/Resources/Localizable.xcstrings; then
-            git diff --stat -- FinchApp/Sources/FinchShared/Resources/Localizable.xcstrings
-            echo "::error file=ios/FinchApp/Sources/FinchShared/Resources/Localizable.xcstrings::Localizable.xcstrings does not match a fresh build from its inputs. It is GENERATED — put translations in ios/scripts/zh-manual.json, then run: bun run ios/scripts/build-xcstrings.ts"
-            exit 1
-          fi
 
       - name: Install web deps + generate fixtures (Task 0 oracle)
         working-directory: frontend
@@ -341,10 +384,11 @@ jobs:
           fi
 
       # i18n guard 2 of 2 — needs a compile, so it runs here where /tmp/dd is
-      # already warm from the build above. Catches the OTHER failure mode: a new
-      # UI string that never reaches extracted-keys.json is absent from the
-      # catalog entirely and silently renders English. That is how a 70-string
-      # backlog accumulated before anyone noticed.
+      # already warm from the build above (guard 1, which needs no Xcode, moved
+      # to the `guards` job so pull requests keep it). Catches the OTHER failure
+      # mode: a new UI string that never reaches extracted-keys.json is absent
+      # from the catalog entirely and silently renders English. That is how a
+      # 70-string backlog accumulated before anyone noticed.
       - name: i18n — extracted keys are current
         working-directory: ios
         run: |
@@ -384,25 +428,22 @@ jobs:
       # macOS-only breaks the iOS build cannot catch — e.g. `.topBarTrailing` is
       # unavailable on macOS. Build-only (no signing) — a compile gate, not a release.
       #
-      # PARKED as a PR gate: macOS is not under active work, so this runs on the merge
-      # commit instead. A break still surfaces within one merge, with obvious blame,
-      # without blocking iOS PRs.
+      # This used to carry its own `if: push` while the rest of the job gated PRs;
+      # the WHOLE job is post-merge now, so the step runs whenever the job does.
       #
       # THIS ONLY WORKS BECAUSE FinchMac LIVES IN ITS OWN PROJECT. While it was a
       # target in FinchApp.xcodeproj, `xcodebuild -exportLocalizations` (the i18n step
-      # above) compiled it on every PR regardless of `-scheme`, `-target` or
+      # above) compiled it on every run regardless of `-scheme`, `-target` or
       # `-destination` — all three were tried — so a macOS break failed that step with
       # exit 64 and skipping this one only changed the error message. Splitting the
       # projects is what actually decoupled them; measured before and after.
       # Do NOT move FinchMac back into project.yml without re-reading this.
       #
-      # NOT deleted: macOS work resumes later, and FinchMac is the only target that
+      # NOT deleted even though macOS is parked: FinchMac is the only target that
       # compiles `FinchAppSwiftUI/FinchApp.swift` (the SwiftUI `@main`, which iOS
       # excludes) plus every SwiftUI screen the migration drops from iOS via
       # `excludes:` — a surface that GROWS with each conversion.
-      # TO RESTORE AS A PR GATE: delete the `if:` line below. Nothing else.
       - name: Build FinchMac (macOS)
-        if: github.event_name == 'push'   # parked — delete this line to gate PRs again
         working-directory: ios
         run: |
           xcodebuild build -project FinchMac.xcodeproj -scheme FinchMac \
@@ -416,21 +457,15 @@ jobs:
       # APIs (WidgetKit accessory families, WCSession receive side) can break
       # silently otherwise. Build-only compile gate, no watch tests.
       #
-      # PARKED as a PR gate (2026-08-01): watchOS is not under active work, so
-      # this runs on the merge commit instead — a break still surfaces within one
-      # merge, with obvious blame, without blocking iOS PRs. Unlike FinchMac,
-      # this genuinely un-gates it: `-exportLocalizations` does not build
-      # FinchWatch, so nothing else on the PR path compiles the watch app.
+      # Like FinchMac above, this ran post-merge via its own `if: push` while the
+      # job still gated PRs; the whole job is post-merge now. The old caveat here
+      # — cancel-in-progress eating a merge's watch build when merges landed
+      # back-to-back — is gone with it: push runs no longer share a concurrency
+      # group (see the top of the file), so every merge's run reports.
       #
       # NOT deleted: watchOS work resumes later, and this is the only build of
       # the watch app + complication extension anywhere.
-      # TO RESTORE AS A PR GATE: delete the `if:` line below. Nothing else.
-      #
-      # Caveat: `cancel-in-progress` (top of file) can cancel an in-flight
-      # post-merge run when merges land back-to-back, so a given merge's watch
-      # build may never report. The next merge covers it.
       - name: Build FinchWatch (watchOS)
-        if: github.event_name == 'push'   # parked — delete this line to gate PRs again
         working-directory: ios
         run: |
           xcodebuild build -project FinchApp.xcodeproj -scheme FinchWatch \
@@ -441,20 +476,22 @@ jobs:
 
   # The REQUIRED status check on feat/frontend. Its NAME is what branch protection
   # requires, so it must ALWAYS run and always report — hence `if: always()` and a
-  # cheap ubuntu runner. It passes iff the real `ios` job SUCCEEDED (code changed
-  # and the build/tests were green) or was SKIPPED (docs-only PR, nothing to run).
-  # This is the piece that lets docs-only PRs skip the macOS build while keeping
-  # the required check reported in seconds — no #579-style deadlock.
+  # cheap ubuntu runner. On a pull request it passes iff `frontend` and `guards`
+  # succeeded (or were skipped — docs-only PR); the `ios` job is ALWAYS skipped on
+  # PRs by design since 2026-08-07 (see its comment), which this treats the same
+  # as the docs-only skip. `frontend` and `guards` are in the gate because they
+  # are what a PR actually runs now — before this, frontend wasn't required at
+  # all, so a red frontend could merge.
   #
   # KEEP THIS JOB'S `name:` EXACTLY EQUAL to the required-check context configured
   # in branch protection. If you rename it, update branch protection in lockstep,
   # or every PR blocks forever waiting on a status that no longer reports.
   #
-  # THE NAME IS NOW SLIGHTLY WRONG, ON PURPOSE. It still says `+ FinchMac`, but
-  # macOS (and watchOS) are post-merge only, so a PR passing this check has NOT
-  # compiled macOS. The name is a branch-protection CONTRACT string, not a
-  # description, and renaming it in place is precisely the #579 failure mode — so
-  # it stays. The `ios` job's own name says what a PR actually covers.
+  # THE NAME IS NOW WRONG ON PURPOSE, and more so than before: it still says
+  # `iOS + macOS (…)`, but a PR passing this check has compiled NEITHER — the
+  # whole Apple-platform suite is post-merge. The name is a branch-protection
+  # CONTRACT string, not a description, and renaming it in place is precisely
+  # the #579 failure mode — so it stays. The job names say what actually ran.
   #
   # If it must be renamed, do it with NO blocking window:
   #   1. merge a change that adds a SECOND aggregate job under the new name
@@ -466,20 +503,73 @@ jobs:
   # catches up — admin-override only. (#278 → #579 → #580 → #588 → #593.)
   ios-required:
     name: iOS + macOS (FinchCore + ParityTests + FinchApp + FinchMac)
-    needs: [changes, ios]
+    needs: [changes, frontend, guards, ios]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Gate on the iOS build result
+      - name: Gate on the jobs a PR runs
         run: |
-          echo "changes=${{ needs.changes.result }} (code=${{ needs.changes.outputs.code }}), ios=${{ needs.ios.result }}"
+          echo "changes=${{ needs.changes.result }} (code=${{ needs.changes.outputs.code }})"
+          echo "frontend=${{ needs.frontend.result }} guards=${{ needs.guards.result }} ios=${{ needs.ios.result }}"
           # If change-detection itself failed, don't green the required check.
           if [ "${{ needs.changes.result }}" != "success" ]; then
             echo "::error::change detection ${{ needs.changes.result }} — refusing to pass"
             exit 1
           fi
-          case "${{ needs.ios.result }}" in
-            success)  echo "iOS build & test passed." ;;
-            skipped)  echo "Docs-only change — iOS build skipped, required check satisfied." ;;
-            *)        echo "::error::iOS build & test ${{ needs.ios.result }}"; exit 1 ;;
-          esac
+          # skipped is a pass in every case: docs-only PRs skip frontend+guards,
+          # and ALL pull requests skip ios (post-merge only — see the ios job).
+          for pair in "frontend:${{ needs.frontend.result }}" \
+                      "guards:${{ needs.guards.result }}" \
+                      "ios:${{ needs.ios.result }}"; do
+            job="${pair%%:*}" result="${pair#*:}"
+            case "$result" in
+              success|skipped) echo "$job: $result — ok" ;;
+              *) echo "::error::$job $result"; exit 1 ;;
+            esac
+          done
+
+  # Post-merge red must be LOUD. The `ios` job is the only systematic coverage
+  # of the UI tests, macOS and watchOS now, nothing blocks on it, and a failure
+  # email is easy to miss — so a red push run files (or updates) a pinned issue
+  # labeled `post-merge-red`, and the next green push run closes it. Ubuntu:
+  # this must not wait in the macOS queue behind the thing it reports on.
+  postmerge-alarm:
+    name: Post-merge red alarm
+    needs: [changes, frontend, guards, ios]
+    if: always() && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: File, update, or close the post-merge-red issue
+        run: |
+          set -euo pipefail
+          failed=""
+          for pair in "changes:${{ needs.changes.result }}" \
+                      "frontend:${{ needs.frontend.result }}" \
+                      "guards:${{ needs.guards.result }}" \
+                      "ios:${{ needs.ios.result }}"; do
+            if [ "${pair#*:}" = "failure" ]; then failed="$failed ${pair%%:*}"; fi
+          done
+          run_url="${GITHUB_SERVER_URL}/${GH_REPO}/actions/runs/${GITHUB_RUN_ID}"
+          open_issue="$(gh issue list --label post-merge-red --state open \
+                          --json number --jq '.[0].number // empty')"
+          if [ -n "$failed" ]; then
+            body="$(printf 'Post-merge run [failed](%s) on `%s` at %s — red job(s):%s.\n\nThe base is broken for everyone until this is fixed. This issue closes itself on the next green push run.' \
+              "$run_url" "$GITHUB_REF_NAME" "$GITHUB_SHA" "$failed")"
+            if [ -n "$open_issue" ]; then
+              gh issue comment "$open_issue" --body "$body"
+            else
+              gh issue create --title "Post-merge CI is red on ${GITHUB_REF_NAME}" \
+                --label post-merge-red --body "$body"
+            fi
+          elif [ -n "$open_issue" ]; then
+            # Only a fully-successful run closes it — a cancelled run proves nothing.
+            for result in "${{ needs.changes.result }}" "${{ needs.frontend.result }}" \
+                          "${{ needs.guards.result }}" "${{ needs.ios.result }}"; do
+              [ "$result" = "success" ] || exit 0
+            done
+            gh issue comment "$open_issue" --body "Green again at ${GITHUB_SHA} — $run_url"
+            gh issue close "$open_issue"
+          fi
