@@ -22,8 +22,19 @@ struct PurchaseGridPage: View {
 
     var body: some View {
         Form {
-            PurchaseGridSection(alloc: $alloc, accountIds: accountIds,
-                                categoryIds: categoryIds, currency: currency)
+            if axis == .both {
+                PurchaseGridSection(alloc: $alloc, accountIds: accountIds,
+                                    categoryIds: categoryIds, currency: currency)
+            } else {
+                PurchaseListSection(alloc: $alloc, accountIds: accountIds,
+                                    categoryIds: categoryIds, currency: currency)
+            }
+            if let problem = alloc.problem {
+                // The reason ✓ is blocked, in the words the pickers used before
+                // this page took the job over — already written, already
+                // translated. Do not invent a new one.
+                Section { Text(Self.message(for: problem, axis: axis)).font(.footnote).foregroundStyle(.red) }
+            }
         }
         .finchSheetForm()
         // The purchase total, which is the only context this page needs. Rendered
@@ -36,9 +47,28 @@ struct PurchaseGridPage: View {
                 Button(action: onSave) { Image(systemName: "checkmark") }
                     .accessibilityLabel("Save")
                     .confirmCheckmarkStyle()
-                    .disabled(!PurchaseFlow.isBalanced(alloc))
+                    .disabled(alloc.problem != nil)
                     .accessibilityIdentifier("grid.save")
             }
+        }
+    }
+
+    private var axis: PurchaseFlow.SplitAxis {
+        PurchaseFlow.splitAxis(accounts: accountIds.count, categories: categoryIds.count)
+    }
+
+    /// Both `needsTwo` wordings already exist in the catalog, one per axis —
+    /// picking blind would tell someone splitting by category to give two
+    /// ACCOUNTS an amount. A grid takes the category wording: `needsTwo` there
+    /// means fewer than two funded cells, and the cells are the categories.
+    private static func message(for problem: SplitAllocation.Problem,
+                                axis: PurchaseFlow.SplitAxis) -> LocalizedStringKey {
+        switch problem {
+        case .needsAmount: return "Enter an amount to split."
+        case .needsTwo:
+            return axis == .accounts ? "Give at least two accounts an amount."
+                                     : "Give at least two categories an amount."
+        case .sumMismatch: return "Splits must add up to the transaction total."
         }
     }
 }

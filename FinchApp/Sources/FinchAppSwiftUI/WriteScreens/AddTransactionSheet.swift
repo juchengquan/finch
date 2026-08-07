@@ -226,11 +226,13 @@ struct AddTransactionSheet: View {
     private var categorySplitBlocked: Bool { false }
     private var accountSplitBlocked: Bool { false }
 
-    /// Both axes split: the inline per-axis editors cannot express this, because
-    /// two sets of margins do not determine the cells between them.
-    private var usesGrid: Bool {
-        PurchaseFlow.page2(accounts: accountAlloc.payload.count,
-                           categories: splitAlloc.payload.count) == .grid
+    /// Whether the money is divided on page 2 — for ANY split, one axis or two.
+    ///
+    /// Counts TICKED rows, not `payload`: the pickers no longer collect amounts,
+    /// so every row is zero until page 2 and `payload` would be empty.
+    private var usesPage2: Bool {
+        PurchaseFlow.page2(accounts: accountAlloc.rows.count,
+                           categories: splitAlloc.rows.count) != .notNeeded
     }
 
     var body: some View {
@@ -260,10 +262,10 @@ struct AddTransactionSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     // A grid is described on page 2, so page 1 offers the way there
                     // instead of a save. Everything else still saves from here.
-                    Button(action: { usesGrid ? openGrid() : save() }) {
-                        if usesGrid { Text("Next") } else { Image(systemName: "checkmark") }
+                    Button(action: { usesPage2 ? openGrid() : save() }) {
+                        if usesPage2 { Text("Next") } else { Image(systemName: "checkmark") }
                     }
-                        .accessibilityLabel(usesGrid ? Text("Next") : Text("Save"))
+                        .accessibilityLabel(usesPage2 ? Text("Next") : Text("Save"))
                         .confirmCheckmarkStyle()
                         // Anchored on ✓ — the save that raised it (iOS 26
                         // positions popouts at their source).
@@ -281,8 +283,10 @@ struct AddTransactionSheet: View {
             .navigationDestination(isPresented: $showingGrid) {
                 PurchaseGridPage(
                     alloc: $gridAlloc,
-                    accountIds: accountAlloc.payload.map { $0.id ?? accountId },
-                    categoryIds: splitAlloc.payload.map { $0.id },
+                    accountIds: accountAlloc.rows.isEmpty ? [accountId] : accountAlloc.rows.map(\.id),
+                    categoryIds: splitAlloc.rows.isEmpty
+                        ? [categoryId.isEmpty ? nil : categoryId]
+                        : splitAlloc.rows.map { $0.id.isEmpty ? nil : $0.id },
                     currency: currencyCode.isEmpty ? currency(of: accountId) : currencyCode,
                     onSave: save)
             }
@@ -668,13 +672,10 @@ struct AddTransactionSheet: View {
         // Same rule as the Edit sheet: the amount is the target, the cells must
         // reach it. The grid is the case that could silently under-post — its
         // footer already SAYS "N unaccounted", and nothing stopped the save.
-        if usesGrid, !PurchaseFlow.isBalanced(gridAlloc) {
-            errorMessage = String(localized: "Splits must add up to the transaction total."); return
-        }
-        if accountAlloc.payload.count >= 2, accountAlloc.problem != nil {
-            errorMessage = String(localized: "Splits must add up to the transaction total."); return
-        }
-        if splitAlloc.payload.count >= 2, splitAlloc.problem != nil {
+        // Page 2 owns every split now, so its cells are the only thing that can
+        // fail to add up. The margin allocations are selection state — they carry
+        // no amounts at all until page 2 fills them.
+        if usesPage2, gridAlloc.problem != nil {
             errorMessage = String(localized: "Splits must add up to the transaction total."); return
         }
         let ymd = Self.day(date)
@@ -738,7 +739,7 @@ struct AddTransactionSheet: View {
                 let purchaseCcy = currencyCode.isEmpty ? currency(of: accountId) : currencyCode
                 var cells: [JSONValue] = []
                 let cat: JSONValue = categoryId.isEmpty ? .null : .string(categoryId)
-                if usesGrid {
+                if usesPage2 {
                     // Sent as CELLS, not pre-grouped by card: the engine derives the
                     // shape from the category count (Decision 15), so the sheet does
                     // not decide whether this is one transaction or several.

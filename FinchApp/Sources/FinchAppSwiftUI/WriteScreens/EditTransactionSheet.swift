@@ -89,10 +89,13 @@ struct EditTransactionSheet: View {
         return store.txns.filter { $0.groupId == gid }
     }
 
-    /// Both axes split, so the money is divided on page 2.
-    private var usesGrid: Bool {
-        PurchaseFlow.page2(accounts: accountAlloc.payload.count,
-                           categories: splitAlloc.payload.count) == .grid
+    /// Whether the money is divided on page 2 — for ANY split, one axis or two.
+    ///
+    /// Counts TICKED rows, not `payload`: the pickers no longer collect amounts,
+    /// so every row is zero until page 2 and `payload` would be empty.
+    private var usesPage2: Bool {
+        PurchaseFlow.page2(accounts: accountAlloc.rows.count,
+                           categories: splitAlloc.rows.count) != .notNeeded
     }
     private var refundedSummary: String {
         guard let id = refundedTxId, let t = store.txns.first(where: { $0.id == id }) else { return "Optional" }
@@ -413,10 +416,10 @@ struct EditTransactionSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     // A grid is divided on page 2, so page 1 offers the way there.
-                    Button(action: { usesGrid ? openGrid() : save() }) {
-                        if usesGrid { Text("Next") } else { Image(systemName: "checkmark") }
+                    Button(action: { usesPage2 ? openGrid() : save() }) {
+                        if usesPage2 { Text("Next") } else { Image(systemName: "checkmark") }
                     }
-                        .accessibilityLabel(usesGrid ? Text("Next") : Text("Save"))
+                        .accessibilityLabel(usesPage2 ? Text("Next") : Text("Save"))
                         .confirmCheckmarkStyle()
                 }
             }
@@ -459,8 +462,10 @@ struct EditTransactionSheet: View {
             .navigationDestination(isPresented: $showingGrid) {
                 PurchaseGridPage(
                     alloc: $gridAlloc,
-                    accountIds: accountAlloc.payload.map { $0.id ?? accountId },
-                    categoryIds: splitAlloc.payload.map { $0.id },
+                    accountIds: accountAlloc.rows.isEmpty ? [accountId] : accountAlloc.rows.map(\.id),
+                    categoryIds: splitAlloc.rows.isEmpty
+                        ? [categoryId.isEmpty ? nil : categoryId]
+                        : splitAlloc.rows.map { $0.id.isEmpty ? nil : $0.id },
                     currency: currencyCode.isEmpty ? accountCurrency : currencyCode,
                     onSave: save)
             }
@@ -632,20 +637,12 @@ struct EditTransactionSheet: View {
         // re-totals them against pinned rows, which is exactly `.sumMismatch`.
         // Gating on them here would refuse every grid whose total was changed,
         // with a message about splits the user never touched.
-        if usesGrid {
-            if !PurchaseFlow.isBalanced(gridAlloc) {
-                errorMessage = String(localized: "Splits must add up to the transaction total.")
-                return
-            }
-        } else {
-            if accountAlloc.payload.count >= 2, accountAlloc.problem != nil {
-                errorMessage = String(localized: "Splits must add up to the transaction total.")
-                return
-            }
-            if isSplit, splitAlloc.problem != nil {
-                errorMessage = String(localized: "Splits must add up to the transaction total.")
-                return
-            }
+        // Page 2 owns every split now, so its cells are the only thing that can
+        // fail to add up. The margin allocations are selection state — they carry
+        // no amounts at all until page 2 fills them.
+        if usesPage2, gridAlloc.problem != nil {
+            errorMessage = String(localized: "Splits must add up to the transaction total.")
+            return
         }
         let parsedAmount: Double
         if accountAlloc.payload.count >= 2 {
@@ -662,7 +659,7 @@ struct EditTransactionSheet: View {
         let sign: Double = effKind == "expense" ? -1 : 1
         let targetAccount = accountId.isEmpty ? txn.account : accountId
         var cells: [JSONValue] = []
-        if usesGrid {
+        if usesPage2 {
             // Cells for the whole purchase, and the id names the GROUP — so the
             // engine matches rows by card and each surviving card keeps its
             // transaction id, its receipt and its reconcile mark. Naming the
