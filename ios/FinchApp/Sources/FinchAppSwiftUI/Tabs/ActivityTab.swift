@@ -767,7 +767,9 @@ struct TxRow: View {
             }
             // Right: amount (top) + running account balance after this txn (bottom).
             VStack(alignment: .trailing, spacing: 1) {
-                Text(store.displayMoneyBase(txn.amount)).fontWeight(.semibold)
+                Text(store.displayMoneyBase(txn.amount))
+                    .font(Metrics.rowAmountFont)   // one notch below the category — see Metrics
+                    .fontWeight(.semibold)
                 // nil on a pending row — it has not cleared, so there is no
                 // "balance after" to print.
                 if showRunningBalance, let remaining = store.runningBalanceBase(for: txn) {
