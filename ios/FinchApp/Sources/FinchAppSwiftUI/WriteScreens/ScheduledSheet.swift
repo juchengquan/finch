@@ -132,9 +132,7 @@ struct ScheduledSheet: View {
                     // unset it posts at whatever moment it fires, which is what
                     // every existing template does.
                     FieldRow(glyph: .date, title: "Start", showsDefaultTrailing: false) {
-                        DatePicker("Start", selection: $startDate, displayedComponents: [.date, .hourAndMinute])
-                            .labelsHidden()
-                            .environment(\.locale, AppDate.h24Locale)
+                        H24DatePicker("Start", selection: $startDate)
                     }
                 } header: {
                     finchSectionHeader("Schedule")

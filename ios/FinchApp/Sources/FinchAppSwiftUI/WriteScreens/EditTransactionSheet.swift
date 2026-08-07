@@ -179,9 +179,7 @@ struct EditTransactionSheet: View {
                 if (isSplit && !isGrid) || transferLegs != nil {
                     Section {
                         FieldRow(glyph: .date, title: "Date", showsDefaultTrailing: false) {
-                            DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                                .labelsHidden()
-                                .environment(\.locale, AppDate.h24Locale)   // 24-hour time wheel regardless of device setting
+                            H24DatePicker("Date", selection: $date)
                         }
                         // Transfers have no Merchant field (design), but previously
                         // exposed Note via this shared top section — keep that.
@@ -252,9 +250,7 @@ struct EditTransactionSheet: View {
                             currency: currencyCode)
                             .accessibilityIdentifier("edittx.category")
                         FieldRow(glyph: .date, title: "Date", showsDefaultTrailing: false) {
-                            DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                                .labelsHidden()
-                                .environment(\.locale, AppDate.h24Locale)
+                            H24DatePicker("Date", selection: $date)
                         }
                         // Refund link inline in the primary section (matches the Add sheet).
                         if effectiveKind == "refund" {
