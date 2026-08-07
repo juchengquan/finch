@@ -100,16 +100,32 @@ final class CategorySplitUITests: XCTestCase {
             app.buttons["All Transactions"].firstMatch.tap()
         }
         let row = app.staticTexts["Groceries"].firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 20), "no Groceries transaction in the list")
+        XCTAssertTrue(row.waitForExistence(timeout: 30), "no Groceries transaction in the list")
         // Existing is not enough: reopening straight after a dismiss finds the row
         // still covered by the sheet sliding away, and the tap is rejected as not
         // hittable. Wait for it to actually be reachable.
         wait(for: [expectation(for: NSPredicate(format: "isHittable == true"), evaluatedWith: row)],
-             timeout: 15)
+             timeout: 30)
+
+        // Tap, and tap AGAIN if the sheet did not come up.
+        //
+        // `isHittable` turning true is not the same as the tap landing: a sheet
+        // that is still animating away keeps swallowing touches for a moment
+        // after the row beneath it reports itself reachable. A longer timeout
+        // cannot rescue that — the first tap never arrived, so nothing is coming.
+        //
+        // Measured, rather than guessed. On CI this failed after 107s having
+        // already spent 49s reaching the Cancel tap; the re-run passed at 96s,
+        // and locally the whole test is 33-40s. So the runner is ~3x slower AND
+        // the tap is racy: the retry covers the swallowed tap, the longer waits
+        // cover the slowness. A genuine regression still fails — just twice.
+        let sheet = app.descendants(matching: .any).matching(identifier: "edittx.category").firstMatch
         row.tap()
-        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "edittx.category")
-                        .firstMatch.waitForExistence(timeout: 15),
-                      "tapping the row did not open the edit sheet")
+        if !sheet.waitForExistence(timeout: 15) {
+            row.tap()
+            XCTAssertTrue(sheet.waitForExistence(timeout: 30),
+                          "tapping the row did not open the edit sheet")
+        }
     }
 
     private func categoryRowLabel(_ identifier: String = "addtx.category") -> String {
