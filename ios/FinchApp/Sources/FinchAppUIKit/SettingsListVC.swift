@@ -224,10 +224,7 @@ final class SettingsListVC: UIViewController {
             if row == .privacy {
                 let store = self.store
                 cell.contentConfiguration = UIHostingConfiguration {
-                    Toggle(isOn: Binding(get: { store.privacyMode },
-                                         set: { store.privacyMode = $0 })) {
-                        Label(row.title, systemImage: row.symbol)
-                    }
+                    PrivacyToggleRow(store: store, title: row.title, symbol: row.symbol)
                 }
             } else {
                 cell.contentConfiguration = UIHostingConfiguration {
@@ -305,6 +302,25 @@ final class SettingsListVC: UIViewController {
         // now empty, which is correct — the row in the list below is the visible
         // home for privacy.
         navigationItem.rightBarButtonItems = showsLedgerControl ? [] : [privacy]
+    }
+}
+
+/// The privacy row's SwiftUI content.
+///
+/// A dedicated view with `@ObservedObject` rather than an inline `Toggle` over a
+/// hand-rolled `Binding`: `UIHostingConfiguration` captures its content closure,
+/// so nothing re-renders when `privacyMode` changes elsewhere. The inline version
+/// flipped the store and left the switch showing its old position — and this row
+/// is the ONLY visible indicator of the mode on iPhone, so a stale one is worse
+/// than none.
+private struct PrivacyToggleRow: View {
+    @ObservedObject var store: FinchStore
+    let title: String
+    let symbol: String
+    var body: some View {
+        Toggle(isOn: $store.privacyMode) {
+            Label(title, systemImage: symbol)
+        }
     }
 }
 
