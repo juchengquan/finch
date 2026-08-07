@@ -19,7 +19,9 @@ import FinchCore
 ///   entry, which pushes the converted feed rather than opening a sheet;
 /// - **archive**, a third row verb that Budgets has no equivalent of;
 /// - a much larger ⋯ overflow: Add Group, Reorder, Archived Accounts, Holdings,
-///   Reconcile, Import statement (CSV).
+///   Reconcile. (Import statement (CSV) was removed from this menu — the screen and
+///   `StatementImport` still exist and compile, they are simply unreachable. See the
+///   follow-up issue for removing the feature outright.)
 ///
 /// Hosted SwiftUI is limited to leaves — `AccountRowView`, `StatusSummaryRow`, the group
 /// header — and to sheets, which are presented rather than pushed and so cannot shadow.
@@ -385,11 +387,6 @@ final class AccountsListVC: UIViewController {
             self?.present(self?.hostSheet(ReconcileSheet()) ?? UIViewController(), animated: true)
         }
         reconcile.attributes = hasAccounts ? [] : .disabled
-        let importCSV = UIAction(title: String(localized: "Import statement (CSV)"),
-                                 image: UIImage(systemName: "doc.badge.plus")) { [weak self] _ in
-            self?.present(self?.hostSheet(ImportStatementView()) ?? UIViewController(), animated: true)
-        }
-        importCSV.attributes = hasAccounts ? [] : .disabled
 
         let more = UIBarButtonItem(image: UIImage(systemName: "ellipsis"), menu: UIMenu(children: [
             UIAction(title: String(localized: "Add Group"),
@@ -407,7 +404,6 @@ final class AccountsListVC: UIViewController {
                 self?.pushOrSelectHoldings()
             },
             reconcile,
-            importCSV,
         ]))
         more.accessibilityLabel = String(localized: "More")
         navigationItem.rightBarButtonItems = [more, add, privacy]

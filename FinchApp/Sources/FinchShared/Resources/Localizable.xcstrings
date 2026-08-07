@@ -3232,16 +3232,6 @@
         }
       }
     },
-    "Import statement (CSV)": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "导入对账单（CSV）"
-          }
-        }
-      }
-    },
     "Import tags from…": {
       "localizations": {
         "zh-Hans": {
