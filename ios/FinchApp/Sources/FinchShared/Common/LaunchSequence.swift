@@ -188,6 +188,23 @@ enum LaunchSequence {
         // reason.
         defaults.removeObject(forKey: "AppleLanguages")
 
+        // Clearing the KEY is not enough for state the store already read.
+        //
+        // `privacyMode` is a stored property seeded from UserDefaults when `FinchStore`
+        // is constructed, and this function RECEIVES the store — so it exists, and has
+        // already read the old value, by the time the sweep runs. Removing the key
+        // leaves the in-memory copy stale, the toolbar keeps drawing the old state, and
+        // `-resetStore YES` silently does not reset it.
+        //
+        // `activeLedgerId` escapes this only by luck of ordering: `bootstrap()` runs
+        // AFTER the wipe and re-reads it. Nothing re-reads privacy.
+        //
+        // Assigning through the property is deliberate rather than poking the key: the
+        // `didSet` republishes to every observer, which is the half that was missing.
+        // It writes `false` straight back into defaults, which is the value we want
+        // there anyway.
+        store.privacyMode = false
+
         // NOT the whole persistent domain. `removePersistentDomain` would also discard
         // framework-owned state stored under the same bundle id, which is not this
         // function's business and is not what "reset the app's data" means.
