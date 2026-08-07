@@ -273,17 +273,14 @@ final class SettingsListVC: UIViewController {
         // button here would be a second way to the same place. Same rule as
         // `AccountsListVC` and `BudgetsListVC`.
         if showsLedgerControl {
-            // Tap opens the ledger picker; HOLD shows the privacy toggle.
-            // `UIBarButtonItem` runs `primaryAction` on tap and presents `menu`
-            // on long-press, so this is the feature filling in a property that
-            // was nil — not a gesture recogniser. The tab bar has no equivalent
-            // (`UITabBarItem` has no menu API at all), which is why the toggle
-            // lives here and not down there.
+            // Tap only. A hold on this button briefly toggled privacy — removed,
+            // because nothing on a button people have only ever tapped said so,
+            // and a control nobody finds is not a control. Privacy lives in
+            // Settings on iPhone and on the eye at regular width.
             let ledger = UIBarButtonItem(image: UIImage(systemName: "books.vertical"),
                                          primaryAction: UIAction { [weak self] _ in
                 self?.router.showLedger = true
-            },
-                                         menu: PrivacyMenu.menu(store: store))
+            })
             ledger.accessibilityLabel = String(localized: "Ledger")
             navigationItem.leftBarButtonItems = [ledger]
         } else {

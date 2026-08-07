@@ -349,17 +349,14 @@ final class BudgetsListVC: UIViewController {
         // itself, so the column must not carry a redundant button. `onSelect != nil` is
         // exactly "this list is a split-view column".
         if onSelect == nil {
-            // Tap opens the ledger picker; HOLD shows the privacy toggle.
-            // `UIBarButtonItem` runs `primaryAction` on tap and presents `menu`
-            // on long-press, so this is the feature filling in a property that
-            // was nil — not a gesture recogniser. The tab bar has no equivalent
-            // (`UITabBarItem` has no menu API at all), which is why the toggle
-            // lives here and not down there.
+            // Tap only. A hold on this button briefly toggled privacy — removed,
+            // because nothing on a button people have only ever tapped said so,
+            // and a control nobody finds is not a control. Privacy lives in
+            // Settings on iPhone and on the eye at regular width.
             let ledger = UIBarButtonItem(image: UIImage(systemName: "books.vertical"),
                                          primaryAction: UIAction { [weak self] _ in
                 self?.router.showLedger = true
-            },
-                                         menu: PrivacyMenu.menu(store: store))
+            })
             ledger.accessibilityLabel = String(localized: "Ledger")
             navigationItem.leftBarButtonItems = [ledger]
         } else {
@@ -394,11 +391,14 @@ final class BudgetsListVC: UIViewController {
 
         let more = UIBarButtonItem(image: UIImage(systemName: "ellipsis"), menu: UIMenu(children: menuItems))
         more.accessibilityLabel = String(localized: "More")
-        // The eye is iPad-only now. On iPhone the toolbar is cramped and hiding
-        // amounts moved to a long-press of the ledger button — which iPad does
-        // not have, because its sidebar lists Ledger itself. `onSelect != nil`
-        // IS "this list is a split-view column", the same flag that gates the
-        // ledger button the other way, so the two cannot disagree about shape.
+        // The eye is regular-width only. On iPhone the toolbar is cramped and
+        // privacy's home is the Settings row; at regular width there is room and
+        // no Settings tab a thumb can reach as quickly. `onSelect != nil` IS
+        // "this list is a split-view column", the same flag that gates the ledger
+        // button the other way, so the two cannot disagree about shape.
+        //
+        // (A hold on the ledger button also toggled it for a day. That went: a
+        // gesture with nothing to announce it is not a control anyone finds.)
         navigationItem.rightBarButtonItems = onSelect != nil ? [more, add, privacy] : [more, add]
     }
 

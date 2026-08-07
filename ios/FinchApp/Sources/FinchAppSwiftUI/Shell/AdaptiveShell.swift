@@ -289,27 +289,20 @@ extension View {
 struct LedgerBarButton: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @EnvironmentObject private var router: DeepLinkRouter
-    @EnvironmentObject private var store: FinchStore
+    // No `store` here any more: the privacy toggle was its only reader, and an
+    // `@EnvironmentObject` nobody reads still declares a dependency this view
+    // does not have.
     var body: some View {
         if sizeClass == .compact {
-            // Tap opens the ledger picker, hold shows the privacy toggle — the
-            // same contract the converted UIKit screens get from
-            // `UIBarButtonItem`'s primaryAction + menu pair.
-            // `Menu(primaryAction:)` is SwiftUI's equivalent, so Insights (still
-            // a hosted root) behaves exactly like the native tabs.
-            Menu {
-                Button {
-                    store.privacyMode.toggle()
-                } label: {
-                    // A checkmark when on, so a hidden control can be read and
-                    // not only fired — matching `PrivacyMenu`'s UIAction state.
-                    Label(String(localized: "Hide Amounts"),
-                          systemImage: store.privacyMode ? "checkmark" : "eye.slash")
-                }
+            // A plain button. This was briefly a `Menu(primaryAction:)` whose hold
+            // toggled privacy, mirroring the converted screens' `UIBarButtonItem`
+            // menu — removed with them, so Insights (still a hosted root) matches
+            // the native tabs again. Leaving it here would have made the gesture
+            // work on exactly one tab, which is worse than having it nowhere.
+            Button {
+                router.showLedger = true
             } label: {
                 Image(systemName: "books.vertical")
-            } primaryAction: {
-                router.showLedger = true
             }
             .accessibilityLabel("Ledger")
         }
