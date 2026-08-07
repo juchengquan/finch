@@ -79,24 +79,30 @@ struct MonthCashCalendar: View {
             // presentation context, so it works in every host, macOS included.
             // Guarded by CalendarMonthYearPickerUITests, which runs the HOSTED
             // calendar — keep it green before redesigning this control.
-            if showingMonthYearPicker { monthYearPicker }
-            weekdayRow
-            #if os(iOS)
-            // Interactive month paging: the neighboring months are REAL pages, so
-            // they follow the finger (an after-the-fact .transition can't do that).
-            // Each page IS its month — see MonthPager for why the earlier
-            // three-page-window-plus-recentre arrangement cost the animation.
-            MonthPager(anchorIndex: monthIndexBinding, range: pageRange,
-                       page: { index in monthPage(for: Self.date(fromMonthIndex: index)) },
-                       visible: $visibleIndex)
-            .frame(height: Self.gridHeight)
-            // Chevrons, Today and the month-year wheels move the anchor directly; drop
-            // the drag-time label so it follows the anchor again rather than sticking
-            // on whatever the last drag was over.
-            .onChange(of: monthAnchor) { _, _ in visibleIndex = nil }
-            #else
-            monthPage(for: monthAnchor)
-            #endif
+            // The wheels REPLACE the grid rather than pushing it down, which is what
+            // the system's date picker does — showing wheels and a day grid at once
+            // reads as two calendars. Collapsing brings the grid straight back.
+            if showingMonthYearPicker {
+                monthYearPicker
+            } else {
+                weekdayRow
+                #if os(iOS)
+                // Interactive month paging: the neighboring months are REAL pages, so
+                // they follow the finger (an after-the-fact .transition can't do that).
+                // Each page IS its month — see MonthPager for why the earlier
+                // three-page-window-plus-recentre arrangement cost the animation.
+                MonthPager(anchorIndex: monthIndexBinding, range: pageRange,
+                           page: { index in monthPage(for: Self.date(fromMonthIndex: index)) },
+                           visible: $visibleIndex)
+                .frame(height: Self.gridHeight)
+                // Chevrons, Today and the month-year wheels move the anchor directly; drop
+                // the drag-time label so it follows the anchor again rather than sticking
+                // on whatever the last drag was over.
+                .onChange(of: monthAnchor) { _, _ in visibleIndex = nil }
+                #else
+                monthPage(for: monthAnchor)
+                #endif
+            }
         }
     }
 
@@ -104,10 +110,17 @@ struct MonthCashCalendar: View {
         HStack(spacing: 12) {
             // Tappable month-year → inline wheel pickers (jump months/years
             // quickly). A TOGGLE: tap again to collapse.
-            Button { showingMonthYearPicker.toggle() } label: {
+            Button { withAnimation(.easeInOut(duration: 0.2)) { showingMonthYearPicker.toggle() } } label: {
+                // Matches the system date picker's header: one chevron that turns to
+                // point down while the wheels are open, and a tinted label with it.
                 HStack(spacing: 4) {
                     Text(monthLabel).font(.headline)
-                    Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(.secondary)
+                        // Tinted only while open — collapsed, the system leaves the
+                        // month name in the label colour and tints just the chevron.
+                        .foregroundStyle(showingMonthYearPicker ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.primary))
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tint)
+                        .rotationEffect(.degrees(showingMonthYearPicker ? 90 : 0))
                 }
             }
             .buttonStyle(.plain)
