@@ -661,26 +661,47 @@ struct TxRow: View {
             // it did before, without a phantom zero-width view to carry it. (An empty
             // `Text` cannot: it contributes nothing to a combined label. Measured — the
             // kind vanished from the tree entirely.)
-            // A tap GESTURE, not a `Button` — and the difference is an accessibility
-            // one, not a styling one. A Button is an interactive child, and
-            // `children: .combine` (see `TxRowCell`) does not merge an interactive
-            // child's label into the row: wrapping this glyph in a Button silently
-            // dropped the kind from every row, so what read
-            // "Expense, Groceries, Aug 4 · 12:00, −$58.20" became
-            // "Groceries, Aug 4 · 12:00, −$58.20". Measured before and after.
+            // AN A11Y-HIDDEN BUTTON OVERLAY — the third design for this control, and
+            // both predecessors are known-bad:
             //
-            // `simultaneousGesture`, because three screens wrap the whole row in a
-            // Button to open the editor; a plain `onTapGesture` there competes with
-            // the row's own gesture instead of coexisting with it.
+            //  - a Button WRAPPING the glyph dropped the kind from every row's
+            //    combined label (`children: .combine` does not merge an interactive
+            //    child's label) — measured, 10 of 10 rows;
+            //  - a `.simultaneousGesture(TapGesture())` here — hosted cell content —
+            //    broke UICollectionView row selection OUTRIGHT, both size classes:
+            //    compact rows stopped opening the editor and the iPad Activity
+            //    column stopped selecting (post-merge red #744; bisected to this
+            //    line, confirmed both directions by removing/restoring it). Same
+            //    arbitration failure ActivityMonitor.swift documents at the root.
+            //
+            // So the glyph stays a PLAIN view and keeps carrying the kind label,
+            // while an invisible Button OVERLAYS it to take the tap — an interactive
+            // control, which UIHostingConfiguration arbitrates correctly against
+            // cell selection where a bare gesture recognizer is not. It is hidden
+            // from accessibility (the row's custom action in `TxRowCell` and the
+            // swipe/menu remain the accessible paths, same words) and exists only
+            // when a screen passes `onToggleStatus`, so multi-select and read-only
+            // screens keep a fully inert glyph.
+            //
+            // Guarded by TxRowTapTargetsUITests (compact: row body opens editor,
+            // glyph confirms) and SplitMechanicsUITests (iPad: row selects). Run
+            // BOTH before redesigning this control again.
             statusGlyph
-                .simultaneousGesture(TapGesture().onEnded {
-                    guard let onToggleStatus else { return }
-                    // The row usually LEAVES the screen on tap — it moves to another
-                    // section — so this is the only confirmation the press landed on
-                    // the control rather than on the row behind it.
-                    Haptics.tap()
-                    onToggleStatus(txn)
-                })
+                .overlay {
+                    if let onToggleStatus {
+                        Button {
+                            // The row usually LEAVES the screen on tap — it moves to
+                            // another section — so this is the only confirmation the
+                            // press landed on the control rather than the row behind it.
+                            Haptics.tap()
+                            onToggleStatus(txn)
+                        } label: {
+                            Color.clear.contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHidden(true)
+                    }
+                }
             VStack(alignment: .leading, spacing: 1) {
                 // Top-left: category is the title (merchant lives in edit/detail
                 // only, per user decision) + status flags + tag chips.
