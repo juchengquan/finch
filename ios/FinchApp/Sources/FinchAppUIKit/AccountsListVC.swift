@@ -354,10 +354,17 @@ final class AccountsListVC: UIViewController {
         // The Ledger corner control is compact-only — the iPad sidebar lists Ledger
         // itself, so the column must not carry a redundant button.
         if onSelect == nil {
+            // Tap opens the ledger picker; HOLD shows the privacy toggle.
+            // `UIBarButtonItem` runs `primaryAction` on tap and presents `menu`
+            // on long-press, so this is the feature filling in a property that
+            // was nil — not a gesture recogniser. The tab bar has no equivalent
+            // (`UITabBarItem` has no menu API at all), which is why the toggle
+            // lives here and not down there.
             let ledger = UIBarButtonItem(image: UIImage(systemName: "books.vertical"),
                                          primaryAction: UIAction { [weak self] _ in
                 self?.router.showLedger = true
-            })
+            },
+                                         menu: PrivacyMenu.menu(store: store))
             ledger.accessibilityLabel = String(localized: "Ledger")
             navigationItem.leftBarButtonItems = [ledger]
         } else {
@@ -406,7 +413,12 @@ final class AccountsListVC: UIViewController {
             reconcile,
         ]))
         more.accessibilityLabel = String(localized: "More")
-        navigationItem.rightBarButtonItems = [more, add, privacy]
+        // The eye is iPad-only now. On iPhone the toolbar is cramped and hiding
+        // amounts moved to a long-press of the ledger button — which iPad does
+        // not have, because its sidebar lists Ledger itself. `onSelect != nil`
+        // IS "this list is a split-view column", the same flag that gates the
+        // ledger button the other way, so the two cannot disagree about shape.
+        navigationItem.rightBarButtonItems = onSelect != nil ? [more, add, privacy] : [more, add]
     }
 
     // MARK: Snapshot
