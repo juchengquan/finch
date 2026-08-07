@@ -19,16 +19,17 @@ public enum Money {
     /// The USD pivot — `latestRateMap` always pins it to 1 (fx.ts `HUB_CURRENCY`).
     public static let hubCurrency = "USD"
 
-    private struct Cur { let sym: String; let decimals: Int }
-    /// Symbol + decimal places per currency (mirrors the web `CURRENCIES` map;
-    /// JPY shows 0 decimals). Unknown currencies fall back to "CODE " + 2 dp.
-    private static let currencies: [String: Cur] = [
-        "USD": Cur(sym: "$", decimals: 2),   "SGD": Cur(sym: "S$", decimals: 2),
-        "EUR": Cur(sym: "€", decimals: 2),   "GBP": Cur(sym: "£", decimals: 2),
-        "JPY": Cur(sym: "¥", decimals: 0),   "CNY": Cur(sym: "¥", decimals: 2),
-        "AUD": Cur(sym: "A$", decimals: 2),  "CAD": Cur(sym: "C$", decimals: 2),
-        "HKD": Cur(sym: "HK$", decimals: 2), "INR": Cur(sym: "₹", decimals: 2),
-        "CHF": Cur(sym: "CHF ", decimals: 2),
+    /// Display symbols for common currencies (mirrors the web `CURRENCIES` map).
+    /// Unknown currencies fall back to "CODE ". Fraction digits are NOT stored
+    /// here — `Currencies.minorUnits(for:)` is the single ISO 4217 source, so a
+    /// symbol entry can never disagree with the standard's digit count.
+    private static let symbols: [String: String] = [
+        "USD": "$",   "SGD": "S$",
+        "EUR": "€",   "GBP": "£",
+        "JPY": "¥",   "CNY": "¥",
+        "AUD": "A$",  "CAD": "C$",
+        "HKD": "HK$", "INR": "₹",
+        "CHF": "CHF ",
     ]
 
     /// NumberFormatter is expensive to construct, and `format` used to build a
@@ -60,15 +61,15 @@ public enum Money {
     /// Format an amount already denominated in `currency` (no conversion).
     /// Mirrors `fmtNative`: `sign + symbol + grouped-abs`, U+2212 minus.
     public static func format(_ amount: Double, currency: String, signed: Bool = false) -> String {
-        let c = currencies[currency] ?? Cur(sym: currency + " ", decimals: 2)
+        let sym = symbols[currency] ?? (currency + " ")
         let sign = amount < 0 ? "\u{2212}" : (signed ? "+" : "")
-        return sign + c.sym + groupedAbs(amount, decimals: c.decimals)
+        return sign + sym + groupedAbs(amount, decimals: Currencies.minorUnits(for: currency))
     }
 
     /// The display symbol for `currency` — the same prefix `format` uses (e.g. "$",
     /// "S$", "€"; unknown currencies fall back to "CODE ").
     public static func symbol(for currency: String) -> String {
-        (currencies[currency] ?? Cur(sym: currency + " ", decimals: 2)).sym
+        symbols[currency] ?? (currency + " ")
     }
 
     /// Latest USD-per-1-unit rate per currency (USD pinned to 1). Mirrors

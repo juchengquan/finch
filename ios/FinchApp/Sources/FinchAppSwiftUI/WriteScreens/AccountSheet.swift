@@ -88,7 +88,9 @@ struct AccountSheet: View {
 
                 Section {
                     FieldRow(glyph: .amount, title: "Amount") {
-                        TextField("0.00", text: $openingBalance).numericInput($openingBalance)
+                        TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: currency)),
+                                  text: $openingBalance)
+                            .moneyInput($openingBalance, currency: currency)
                             .keyboardType(.decimalPad)
                     }
                 } header: {

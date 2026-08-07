@@ -38,6 +38,33 @@ final class DecimalInputTests: XCTestCase {
         XCTAssertEqual(DecimalInput.filter("1,2a3", allowsDecimal: false), "123")
         XCTAssertEqual(DecimalInput.filter("-7", allowsDecimal: false), "-7")
     }
+    // MARK: filter — max fraction digits (ISO 4217 minor units)
+    func test_max_fraction_digits_truncates_excess() {
+        XCTAssertEqual(DecimalInput.filter("12.345", allowsDecimal: true, maxFractionDigits: 2), "12.34")
+        XCTAssertEqual(DecimalInput.filter("0.5555", allowsDecimal: true, maxFractionDigits: 3), "0.555")
+    }
+    func test_max_fraction_digits_zero_cuts_at_separator() {
+        // TRIM semantics, not strip: "12.34" trimmed for a 0-decimal currency is 12 —
+        // never 1234, which is what the allowsDecimal:false strip would produce.
+        XCTAssertEqual(DecimalInput.filter("12.34", allowsDecimal: true, maxFractionDigits: 0), "12")
+        XCTAssertEqual(DecimalInput.filter("12.", allowsDecimal: true, maxFractionDigits: 0), "12")
+        XCTAssertEqual(DecimalInput.filter("12", allowsDecimal: true, maxFractionDigits: 0), "12")
+    }
+    func test_max_fraction_digits_within_limit_untouched() {
+        XCTAssertEqual(DecimalInput.filter("12.3", allowsDecimal: true, maxFractionDigits: 2), "12.3")
+        XCTAssertEqual(DecimalInput.filter("12.", allowsDecimal: true, maxFractionDigits: 2), "12.")
+        XCTAssertEqual(DecimalInput.filter(".5", allowsDecimal: true, maxFractionDigits: 1), ".5")
+    }
+    func test_max_fraction_digits_nil_is_unlimited() {
+        XCTAssertEqual(DecimalInput.filter("1.23456", allowsDecimal: true, maxFractionDigits: nil), "1.23456")
+    }
+    // MARK: placeholder
+    func test_zero_placeholder_follows_digits() {
+        XCTAssertEqual(DecimalInput.zeroPlaceholder(fractionDigits: 0), "0")
+        XCTAssertEqual(DecimalInput.zeroPlaceholder(fractionDigits: 2), "0.00")
+        XCTAssertEqual(DecimalInput.zeroPlaceholder(fractionDigits: 3), "0.000")
+    }
+
     // MARK: parse — plain "." decimals
     func test_parse_plain_decimals() {
         XCTAssertEqual(DecimalInput.parse("1.5"), 1.5)

@@ -34,6 +34,10 @@ struct ScheduledSheet: View {
 
     private var isEdit: Bool { template != nil }
     private var accounts: [AccountRow] { store.accounts }
+    /// The typed amount is denominated in the template account's currency.
+    private var templateCurrency: String {
+        accounts.first { $0.id == accountId }?.currency ?? store.baseCurrency
+    }
     private var categories: [CategoryRow] {
         store.pickableCategories.filter { kind == .income ? $0.kind == "income" : $0.kind != "income" }
     }
@@ -84,7 +88,9 @@ struct ScheduledSheet: View {
                         TextField("Name", text: $name)
                     }
                     FieldRow(glyph: .amount, title: "Amount") {
-                        TextField("0.00", text: $amount).numericInput($amount).keyboardType(.decimalPad)
+                        TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: templateCurrency)),
+                                  text: $amount)
+                            .moneyInput($amount, currency: templateCurrency)
                     }
                 } footer: {
                     if !installmentEnabled {
