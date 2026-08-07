@@ -77,6 +77,7 @@ final class SettingsListVC: UIViewController {
     /// The rows, each carrying its own title, symbol and destination — so the list, the
     /// snapshot and the push cannot disagree about what a row is.
     private enum Row: Int, Hashable, CaseIterable {
+        case privacy
         case appearance, notifications, security
         case categories, tags
         case merchants, currencies
@@ -86,7 +87,7 @@ final class SettingsListVC: UIViewController {
 
         var section: SectionID {
             switch self {
-            case .appearance, .notifications, .security: .general
+            case .privacy, .appearance, .notifications, .security: .general
             case .categories, .tags: .ledger
             case .merchants, .currencies: .shared
             case .backupsSync: .data
@@ -97,6 +98,7 @@ final class SettingsListVC: UIViewController {
 
         var title: String {
             switch self {
+            case .privacy:       String(localized: "Privacy mode")
             case .appearance:    String(localized: "Appearance & Language")
             case .notifications: String(localized: "Notifications")
             case .security:      String(localized: "Security")
@@ -112,6 +114,7 @@ final class SettingsListVC: UIViewController {
 
         var symbol: String {
             switch self {
+            case .privacy:       "eye.slash"
             case .appearance:    "paintbrush"
             case .notifications: "bell"
             case .security:      "lock"
@@ -125,8 +128,12 @@ final class SettingsListVC: UIViewController {
             }
         }
 
-        @MainActor func destination() -> UIViewController {
+        /// `nil` for a row that is a CONTROL rather than a destination. Optional
+        /// rather than a fatalError branch, so the compiler keeps the two in
+        /// step: adding another toggle row cannot silently push a screen.
+        @MainActor func destination() -> UIViewController? {
             switch self {
+            case .privacy:       nil
             case .appearance:    AppearanceSettingsVC()
             case .notifications: NotificationsSettingsVC()
             case .security:      SecuritySettingsVC()
@@ -158,7 +165,13 @@ final class SettingsListVC: UIViewController {
         // screens that showed the button and then ignored the mode.
         store.$privacyMode
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.configureToolbar() }
+            .sink { [weak self] _ in
+                self?.configureToolbar()
+                // The row shows the same state the toolbar button did, so it goes
+                // stale the same way — and on iPhone it is now the ONLY visible
+                // indicator of the mode, so a stale one is worse than none.
+                self?.applySnapshot()
+            }
             .store(in: &cancellables)
     }
 
@@ -201,12 +214,29 @@ final class SettingsListVC: UIViewController {
             // 2. NO CHEVRON. `SettingsRootList` uses a plain `Button`, which draws no
             //    disclosure indicator. Adding `.disclosureIndicator()` here looked more
             //    "native" and was simply a different screen.
-            cell.contentConfiguration = UIHostingConfiguration {
-                Label(row.title, systemImage: row.symbol)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .accessibilityElement(children: .combine)
-                    .accessibilityAddTraits(.isButton)
+            // Every other row is a Label that pushes a subpage; privacy is a
+            // TOGGLE and stays put. Branching here rather than adding a
+            // UISwitch accessory keeps one rendering path for the whole list.
+            //
+            // This row is the VISIBLE home for a control that is otherwise a
+            // long-press of the ledger button — without it, hiding amounts does
+            // not exist for anyone who was not told the gesture.
+            if row == .privacy {
+                let store = self.store
+                cell.contentConfiguration = UIHostingConfiguration {
+                    Toggle(isOn: Binding(get: { store.privacyMode },
+                                         set: { store.privacyMode = $0 })) {
+                        Label(row.title, systemImage: row.symbol)
+                    }
+                }
+            } else {
+                cell.contentConfiguration = UIHostingConfiguration {
+                    Label(row.title, systemImage: row.symbol)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .accessibilityElement(children: .combine)
+                        .accessibilityAddTraits(.isButton)
+                }
             }
             cell.accessories = []
         }
@@ -227,8 +257,9 @@ final class SettingsListVC: UIViewController {
         }
     }
 
-    /// Applied once. Nothing here depends on the store, so there is no republish to
-    /// react to and no reconfigure to get right.
+    /// Re-applied when `privacyMode` changes: the privacy row renders that state,
+    /// so it is the one row here that DOES depend on the store. It used to be true
+    /// that nothing did.
     private func applySnapshot() {
         var snap = NSDiffableDataSourceSnapshot<SectionID, Row>()
         for section in SectionID.allCases {
@@ -282,8 +313,9 @@ final class SettingsListVC: UIViewController {
 extension SettingsListVC: UICollectionViewDelegate {
     func collectionView(_ cv: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         cv.deselectItem(at: indexPath, animated: true)
-        guard let row = dataSource.itemIdentifier(for: indexPath) else { return }
-        navigationController?.pushViewController(row.destination(), animated: true)
+        guard let row = dataSource.itemIdentifier(for: indexPath),
+              let destination = row.destination() else { return }
+        navigationController?.pushViewController(destination, animated: true)
     }
 }
 #endif
