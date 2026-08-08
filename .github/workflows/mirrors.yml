@@ -1,0 +1,44 @@
+# Stage 1 of plans/2026-08-08-long-run-platform-separation.md: read-only
+# per-platform branches, regenerated after every merge. The mirrors are BUILD
+# PRODUCTS — the monorepo is the only working surface; PRs against mirror/*
+# are orphaned by the next force-push, by design.
+#
+# DELIBERATELY A SEPARATE FILE from ci.yml: ci.yml runs with `contents: read`,
+# and this workflow's write permission stays visibly scoped to the one job
+# that force-pushes two mirror refs and can touch nothing else.
+name: Platform mirrors
+
+on:
+  push:
+    branches: [main, feat/frontend]
+
+permissions:
+  contents: write
+
+# Serialize; a superseded regeneration is worthless (the next push re-mirrors
+# everything), so latest-wins cancellation is correct HERE even though ci.yml's
+# push runs deliberately never cancel — a mirror is a snapshot, not coverage.
+concurrency:
+  group: mirrors-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # subtree split walks the full history
+
+      # `git subtree split` is deterministic: same history in, same mirror
+      # SHAs out. But a REBASE-MERGE upstream rewrites the input commits, so
+      # mirror history rewrites with it — hence force-push, and hence the
+      # rule that mirrors are read-only snapshots (documented in both
+      # platform READMEs). O(history) per run, in a job nothing waits on.
+      - name: Split and publish mirrors
+        run: |
+          git subtree split --prefix=frontend -b mirror/web
+          git subtree split --prefix=ios      -b mirror/apple
+          git push -f origin mirror/web mirror/apple
+          echo "mirror/web   -> $(git rev-parse --short mirror/web)"
+          echo "mirror/apple -> $(git rev-parse --short mirror/apple)"

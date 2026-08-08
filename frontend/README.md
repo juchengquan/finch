@@ -1,5 +1,10 @@
 # Finch
 
+> **This tree is also published read-only as the `mirror/web` branch** (clone it
+> with `--branch mirror/web --single-branch` for a frontend-only tree). Mirrors
+> are force-pushed build products regenerated on every merge — never commit to
+> or open PRs against them; all work happens in the monorepo.
+
 Personal finance tracker — multi-currency, multi-ledger, mobile-first with a responsive desktop shell.
 
 ## Stack
