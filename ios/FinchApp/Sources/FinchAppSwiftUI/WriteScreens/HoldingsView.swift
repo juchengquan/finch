@@ -101,6 +101,11 @@ struct AddHoldingSheet: View {
     @Environment(\.dismiss) private var dismiss
     let accounts: [AccountRow]
     @State private var accountId = ""
+    /// Follows the account picker, so switching account mid-entry re-trims the
+    /// amounts through `moneyInput`'s currency-change pass.
+    private var holdingCurrency: String {
+        accounts.first { $0.id == accountId }?.currency ?? store.baseCurrency
+    }
     @State private var symbol = ""
     @State private var shares = ""
     @State private var costBasis = ""
@@ -114,8 +119,8 @@ struct AddHoldingSheet: View {
                 TextField("Symbol (e.g. AAPL)", text: $symbol)
                     .textInputAutocapitalization(.characters).autocorrectionDisabled()
                 HStack { Text("Shares"); Spacer(); TextField("0", text: $shares).numericInput($shares).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
-                HStack { Text("Cost basis"); Spacer(); TextField("0.00", text: $costBasis).numericInput($costBasis).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
-                HStack { Text("Last price (optional)"); Spacer(); TextField("0.00", text: $lastPrice).numericInput($lastPrice).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
+                HStack { Text("Cost basis"); Spacer(); TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: holdingCurrency)), text: $costBasis).moneyInput($costBasis, currency: holdingCurrency).multilineTextAlignment(.trailing) }
+                HStack { Text("Last price (optional)"); Spacer(); TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: holdingCurrency)), text: $lastPrice).moneyInput($lastPrice, currency: holdingCurrency).multilineTextAlignment(.trailing) }
                 if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
             }
             .navigationTitle("Add Holding")
@@ -174,7 +179,7 @@ struct SetHoldingPriceSheet: View {
         NavigationStack {
             Form {
                 LabeledContent("Symbol", value: holding.symbol)
-                HStack { Text("Price"); Spacer(); TextField("0.00", text: $price).numericInput($price).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
+                HStack { Text("Price"); Spacer(); TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: holding.currency)), text: $price).moneyInput($price, currency: holding.currency).multilineTextAlignment(.trailing) }
                 Text("Leave empty to clear the stored price.").font(.caption).foregroundStyle(.secondary)
                 if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
             }

@@ -112,8 +112,13 @@ extension View {
     /// mid-entry, and — on blur — settles what was typed to the currency's
     /// digits so a typed value reads the same as a seeded one.
     /// Not for rates or quantities — those stay on plain `numericInput`.
-    func moneyInput(_ text: Binding<String>, currency: String) -> some View {
-        modifier(MoneyInputModifier(text: text, currency: currency))
+    /// `setsKeyboard: false` keeps the caller's own keyboard. The
+    /// adjust-balance fields need `.numbersAndPunctuation` for a leading minus —
+    /// a credit-card balance is negative, and `.decimalPad` has NO minus key, so
+    /// clamping those fields the default way would make a negative balance
+    /// untypeable.
+    func moneyInput(_ text: Binding<String>, currency: String, setsKeyboard: Bool = true) -> some View {
+        modifier(MoneyInputModifier(text: text, currency: currency, setsKeyboard: setsKeyboard))
     }
 }
 
@@ -126,6 +131,7 @@ extension View {
 private struct MoneyInputModifier: ViewModifier {
     @Binding var text: String
     let currency: String
+    var setsKeyboard = true
     @FocusState private var focused: Bool
 
     func body(content: Content) -> some View {
@@ -134,7 +140,7 @@ private struct MoneyInputModifier: ViewModifier {
         // CUTS at the separator (trim), where allowsDecimal:false would strip it
         // and glue the fraction onto the integer ("12.34" → "1234").
         return content
-            .keyboardType(digits == 0 ? .numberPad : .decimalPad)
+            .keyboardType(setsKeyboard ? (digits == 0 ? .numberPad : .decimalPad) : .numbersAndPunctuation)
             .focused($focused)
             .onChange(of: text) { _, newValue in
                 let filtered = DecimalInput.filter(newValue, allowsDecimal: true, maxFractionDigits: digits)
