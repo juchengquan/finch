@@ -110,20 +110,38 @@ struct MonthCashCalendar: View {
         HStack(spacing: 12) {
             // Tappable month-year → inline wheel pickers (jump months/years
             // quickly). A TOGGLE: tap again to collapse.
-            Button { withAnimation(.easeInOut(duration: 0.2)) { showingMonthYearPicker.toggle() } } label: {
-                // Matches the system date picker's header: one chevron that turns to
-                // point down while the wheels are open, and a tinted label with it.
-                HStack(spacing: 4) {
-                    Text(monthLabel).font(.headline)
-                        // Tinted only while open — collapsed, the system leaves the
-                        // month name in the label colour and tints just the chevron.
-                        .foregroundStyle(showingMonthYearPicker ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.primary))
-                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold))
-                        .foregroundStyle(.tint)
-                        .rotationEffect(.degrees(showingMonthYearPicker ? 90 : 0))
-                }
+            // NOT a `Button`. Inside the hosted `UIHostingConfiguration` cell, a
+            // SwiftUI Button here was torn down and re-inserted every time the wheels
+            // opened or closed — the month label vanished for ~300ms and slid back in
+            // from above the card, while `Today` and the chevrons (both `.borderless`
+            // Buttons) sat still. Measured: 10-24 frames missing per toggle across
+            // every variant tried — plain vs borderless style, constant vs computed
+            // string, with and without the animation. A tappable HStack is 0.
+            // Matches the system date picker's header: one chevron that turns to
+            // point down while the wheels are open, and a tinted label with it.
+            HStack(spacing: 4) {
+                Text(monthLabel).font(.headline)
+                    // Tinted only while open — collapsed, the system leaves the
+                    // month name in the label colour and tints just the chevron.
+                    .foregroundStyle(showingMonthYearPicker ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.primary))
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tint)
+                    // Rotated, NOT animated. `.animation(_:value:)` here does not
+                    // animate the rotation alone — it animates every change in this
+                    // subtree, including the glyph's POSITION when the hosted cell
+                    // re-lays out. The chevron flew in diagonally from the middle of
+                    // the weekday row on every collapse. The toggle likewise must not
+                    // be wrapped in `withAnimation`: that animates the cell's height,
+                    // and a self-sizing `UIHostingConfiguration` cell redraws
+                    // wholesale while it runs, blanking Today and the chevrons.
+                    .rotationEffect(.degrees(showingMonthYearPicker ? 90 : 0))
             }
-            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .onTapGesture { showingMonthYearPicker.toggle() }
+            // One element, so VoiceOver and the UI test see a single button rather
+            // than a stray label and image.
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isButton)
             .accessibilityLabel("Month and year")
             // The label names the CONTROL, which left the anchored month itself
             // unspoken — VoiceOver read "Month and year, button" wherever you had
