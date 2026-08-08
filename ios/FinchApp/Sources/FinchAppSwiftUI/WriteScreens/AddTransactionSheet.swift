@@ -367,12 +367,10 @@ struct AddTransactionSheet: View {
                         }
                         .buttonStyle(.plain)
                         #endif
-                    } header: {
-                        finchSectionHeader("Receipt")
+                        FieldRow(glyph: .note, title: "Note") {
+                            TextField("Note (optional)", text: $note, axis: .vertical)
+                        }
                     }
-                }
-                if k == .expense || k == .income || k == .refund {
-                    detailsSection(for: k)
                 }
 
                 if let errorMessage {
@@ -392,6 +390,10 @@ struct AddTransactionSheet: View {
                 // budget detail's own Account row sitting behind the sheet.
                 .accessibilityIdentifier("addtx.account")
             amountField
+            FieldRow(glyph: .date, title: "Date", showsDefaultTrailing: false) {
+                DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                    .labelsHidden()
+            }
             CategoryPickerRow(title: "Category", glyph: .category, categories: categories(for: k), selection: $categoryId,
                 // A transaction may legitimately have no category — the engine stores a
                 // nil category leg — so the picker offers it rather than making the
@@ -401,14 +403,12 @@ struct AddTransactionSheet: View {
                 splitting: k == .refund ? nil : $splitAlloc,
                 currency: currencyCode.isEmpty ? currency(of: accountId) : currencyCode)
                 .accessibilityIdentifier("addtx.category")
+            MerchantPickerRow(title: "Merchant", glyph: .merchant,
+                              counterparties: store.counterparties, merchant: $merchant)
             // Both axes split: the per-axis editors above each divide ONE axis, and
             // two sets of margins do not determine the cells between them — $60/$0/
             // $10/$30 and $42/$18/$28/$12 give the same card and category totals.
             // So the cells are typed on page 2, and the totals derive from them.
-            FieldRow(glyph: .date, title: "Date", showsDefaultTrailing: false) {
-                DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                    .labelsHidden()
-            }
             if k == .refund {
                 Button { showingRefundPicker = true } label: {
                     FieldRow(glyph: .refund, title: "Refunds", isEmpty: refundedTxId == nil) {
@@ -421,18 +421,8 @@ struct AddTransactionSheet: View {
         }
     }
 
-    /// Merchant/Source + Note — optional free-text, shown as the LAST section.
-    @ViewBuilder private func detailsSection(for k: Kind) -> some View {
-        Section {
-            MerchantPickerRow(title: "Merchant", glyph: .merchant,
-                              counterparties: store.counterparties, merchant: $merchant)
-            FieldRow(glyph: .note, title: "Note") {
-                TextField("Note (optional)", text: $note, axis: .vertical)
-            }
-        } header: {
-            finchSectionHeader("Details")
-        }
-    }
+    // Merchant lives in the primary section and Note in the receipt section —
+    // the old "Details" basement (and its header) is gone (2026-08-08 reorg).
 
 
 
