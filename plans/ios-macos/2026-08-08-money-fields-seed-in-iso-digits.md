@@ -17,7 +17,7 @@
 - **No new catalog strings.** Nothing here is user-visible text.
 - **Build:** `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` **and** `PATH="$DEVELOPER_DIR/usr/bin:$PATH"`.
 - **The gate:** `ios/scripts/ci-local.sh` is the pre-push gate. This touches ~20 input fields across seven sheets, so it needs **`--ui`**. Do not pass `SIM_NAME`.
-- **`FinchApp.xcodeproj` is generated and gitignored.** `xcodegen generate` after branching.
+- **Both projects are generated and gitignored.** Use `xcodegen generate --spec project.yml,project-mac.yml` — a bare `xcodegen generate` regenerates FinchApp only, leaving FinchMac.xcodeproj referencing files a later commit deleted, which fails the Mac build for reasons unrelated to your change.
 - After any `xcodebuild`, discard catalog churn:
   `git checkout -- "ios/FinchApp/Sources/FinchShared/Resources/"*.xcstrings`
 
