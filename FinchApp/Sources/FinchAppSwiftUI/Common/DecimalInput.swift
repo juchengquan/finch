@@ -34,6 +34,21 @@ enum DecimalInput {
         fractionDigits == 0 ? "0" : "0." + String(repeating: "0", count: fractionDigits)
     }
 
+    /// What a field should read once the user leaves it.
+    ///
+    /// Pure, and separate from the modifier, so the rules are testable without a
+    /// view. Returns the input unchanged when there is nothing to settle.
+    static func settled(_ s: String, currency: String) -> String {
+        // Empty is UNSET, not zero — an optional field (rollover cap, last
+        // price, max filter) and an untouched grid cell both rely on that.
+        guard !s.trimmingCharacters(in: .whitespaces).isEmpty else { return s }
+        // Mid-entry: "5." is on its way to 5.75. Settling it to "5.00" would sit
+        // the field at max digits and swallow the next keystroke.
+        guard !s.hasSuffix(".") else { return s }
+        guard let value = parse(s) else { return s }
+        return text(value, currency: currency)
+    }
+
     /// The text to SEED an amount field with — the counterpart to `filter`, which
     /// governs typing.
     ///
@@ -93,25 +108,47 @@ extension View {
 
     /// A currency-denominated amount field: clamps typing to the currency's
     /// ISO 4217 minor units (`Currencies.minorUnits(for:)`), hides the decimal
-    /// key for 0-decimal currencies, and — when the currency CHANGES mid-entry
-    /// (switching the account under the Add sheet) — visibly re-trims what was
-    /// typed, so the field always shows an amount that can exist in the active
-    /// currency ("12.34" USD → JPY becomes "12" the moment you switch).
+    /// key for 0-decimal currencies, re-trims when the currency CHANGES
+    /// mid-entry, and — on blur — settles what was typed to the currency's
+    /// digits so a typed value reads the same as a seeded one.
     /// Not for rates or quantities — those stay on plain `numericInput`.
     func moneyInput(_ text: Binding<String>, currency: String) -> some View {
+        modifier(MoneyInputModifier(text: text, currency: currency))
+    }
+}
+
+/// The body of `moneyInput`.
+///
+/// A `ViewModifier` rather than a chain of `.onChange` because `@FocusState` has
+/// to be owned by a view, and the blur pass needs it. Every existing caller
+/// gains that pass with no edit — which is the point of putting it here rather
+/// than in the twenty sheets that use it.
+private struct MoneyInputModifier: ViewModifier {
+    @Binding var text: String
+    let currency: String
+    @FocusState private var focused: Bool
+
+    func body(content: Content) -> some View {
         let digits = Currencies.minorUnits(for: currency)
         // allowsDecimal stays true even for 0-digit currencies: the max-0 clamp
         // CUTS at the separator (trim), where allowsDecimal:false would strip it
         // and glue the fraction onto the integer ("12.34" → "1234").
-        return keyboardType(digits == 0 ? .numberPad : .decimalPad)
-            .onChange(of: text.wrappedValue) { _, newValue in
+        return content
+            .keyboardType(digits == 0 ? .numberPad : .decimalPad)
+            .focused($focused)
+            .onChange(of: text) { _, newValue in
                 let filtered = DecimalInput.filter(newValue, allowsDecimal: true, maxFractionDigits: digits)
-                if filtered != newValue { text.wrappedValue = filtered }
+                if filtered != newValue { text = filtered }
             }
             .onChange(of: currency) { _, newCurrency in
                 let d = Currencies.minorUnits(for: newCurrency)
-                let filtered = DecimalInput.filter(text.wrappedValue, allowsDecimal: true, maxFractionDigits: d)
-                if filtered != text.wrappedValue { text.wrappedValue = filtered }
+                let filtered = DecimalInput.filter(text, allowsDecimal: true, maxFractionDigits: d)
+                if filtered != text { text = filtered }
+            }
+            .onChange(of: focused) { _, isFocused in
+                guard !isFocused else { return }
+                let settled = DecimalInput.settled(text, currency: currency)
+                if settled != text { text = settled }
             }
     }
 }
