@@ -138,6 +138,16 @@
         }
       }
     },
+    "%@ unrealized": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未实现 %@"
+          }
+        }
+      }
+    },
     "%@ used — %@ of %@.": {
       "localizations": {
         "zh-Hans": {
@@ -149,6 +159,16 @@
       }
     },
     "%@ · %@": {},
+    "%@ · %@ total": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · 合计 %@"
+          }
+        }
+      }
+    },
     "%@ · hub": {
       "localizations": {
         "zh-Hans": {
@@ -854,6 +874,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "添加或管理预算"
+          }
+        }
+      }
+    },
+    "Add position": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加持仓"
           }
         }
       }

@@ -28,6 +28,9 @@ struct AccountDetailView: View {
     @State private var duplicating: Tx?   // Duplicate → Add sheet pre-filled
     @State private var previewURL: URL?
     @State private var searchQuery = ""
+    @State private var showingAddHolding = false
+    @State private var pricing: Holding?              // position awaiting a price update
+    @State private var pendingHoldingDelete: Holding? // position awaiting delete confirmation
 
     // Calendar lens (List default): the shared MonthCashCalendar with IN/OUT
     // semantics — at single-account grain the honest reading is a bank
@@ -89,7 +92,7 @@ struct AccountDetailView: View {
                         VStack(spacing: 0) {
                             Text(account.name ?? "—").font(.headline)
                             HStack(spacing: 3) {
-                                Text(store.displayMoney(account.balance, from: account.currency))
+                                Text(balanceCaption(account))
                                     .font(.caption).foregroundStyle(.secondary)
                                 if let seal = titleSeal(account) {
                                     Image(systemName: "checkmark.seal.fill")
@@ -126,6 +129,18 @@ struct AccountDetailView: View {
                 .sheet(isPresented: $showingAddTx) { AddTransactionSheet(defaultAccountId: account.id) }
                 .sheet(item: $editing) { EditTransactionSheet(txn: $0) }
                 .sheet(item: $duplicating) { AddTransactionSheet(prefill: $0) }
+                // Only this account is passed, so the sheet drops its account picker —
+                // arriving from the account already said which one.
+                .sheet(isPresented: $showingAddHolding) { AddHoldingSheet(accounts: [account]) }
+                .sheet(item: $pricing) { SetHoldingPriceSheet(holding: $0) }
+                .alert("Delete holding?", isPresented: Binding(
+                    get: { pendingHoldingDelete != nil }, set: { if !$0 { pendingHoldingDelete = nil } }),
+                    presenting: pendingHoldingDelete) { h in
+                    Button("Delete", role: .destructive) { deleteHolding(h) }
+                    Button("Cancel", role: .cancel) {}
+                } message: { h in
+                    Text("\(h.symbol) is removed from this account.")
+                }
                 // Tell the floating add button which account this page shows,
                 // so it seeds the sheet the same way the toolbar `+` above does.
                 .preference(key: AddTxContextKey.self, value: AddTxContext(accountId: account.id))
@@ -151,6 +166,23 @@ struct AccountDetailView: View {
         }
     }
 
+    /// The bar's balance line. On an investment account holding positions the cash
+    /// figure alone understates the account, so the total follows it — the native
+    /// stand-in for the web balance card's "+ X in holdings · total Y". Both halves go
+    /// through `displayMoney`, so privacy mode masks them.
+    private func balanceCaption(_ a: AccountRow) -> String {
+        let cash = store.displayMoney(a.balance, from: a.currency)
+        guard a.type == "investment",
+              !Selectors.holdingsForAccount(store.holdings, a.id).isEmpty else { return cash }
+        let total = Selectors.investmentAccountTotal(a, store.holdings)
+        return String(localized: "\(cash) · \(store.displayMoney(total, from: a.currency)) total")
+    }
+
+    private func deleteHolding(_ h: Holding) {
+        do { try store.apply(.deleteHolding, Args(["id": .string(h.id)])) }
+        catch { errorMessage = i18nMessage(error) }
+    }
+
     /// Seal color beside the title balance — same meaning as the Accounts
     /// list rows (green fresh / orange overdue / nil never).
     private func titleSeal(_ a: AccountRow) -> Color? {
@@ -162,17 +194,56 @@ struct AccountDetailView: View {
         }
     }
 
+    /// Investment positions: the same rows and the same add / price / delete actions
+    /// the standalone Holdings screen carried, in the account they belong to.
+    ///
+    /// Gating is shared with the UIKit screen via `HoldingsPanel` so the two cannot
+    /// drift — see it for why an empty investment account still shows the section, and
+    /// why a non-investment one carrying stranded positions does too.
     @ViewBuilder private func holdingsSection(_ a: AccountRow) -> some View {
         let holdings = Selectors.holdingsForAccount(store.holdings, a.id)
-        if !holdings.isEmpty {
-            Section("Holdings") {
+        if HoldingsPanel.isVisible(accountType: a.type, hasHoldings: !holdings.isEmpty) {
+            Section {
                 ForEach(holdings) { h in
-                    HStack {
-                        Text(h.symbol)
-                        Spacer()
-                        Text(Selectors.holdingValue(h).map { store.displayMoney($0, from: h.currency) } ?? "—")
-                            .foregroundStyle(.secondary)
+                    Button { pricing = h } label: { HoldingRow(holding: h).contentShape(Rectangle()) }
+                        .buttonStyle(.plain)
+                        .swipeActions(edge: .trailing) {
+                            // Not role: .destructive — that plays a fake removal
+                            // animation before the confirmation is answered.
+                            Button { pendingHoldingDelete = h } label: { Label("Delete", systemImage: "trash") }.tint(.red)
+                        }
+                        .contextMenu {
+                            Button(role: .destructive) { pendingHoldingDelete = h } label: { Label("Delete", systemImage: "trash") }
+                        }
+                }
+                if HoldingsPanel.allowsAdding(accountType: a.type) {
+                    Button { showingAddHolding = true } label: {
+                        Label("Add position", systemImage: "plus")
                     }
+                }
+            } header: {
+                holdingsHeader(a, holdings)
+            }
+        }
+    }
+
+    /// "Holdings" with what the positions are worth, and the unrealized total under it.
+    /// Both figures come from selectors that already existed and were parity-tested but
+    /// had no caller on native.
+    @ViewBuilder private func holdingsHeader(_ a: AccountRow, _ holdings: [Holding]) -> some View {
+        if holdings.isEmpty {
+            Text("Holdings")
+        } else {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    Text("Holdings")
+                    Spacer()
+                    Text(store.displayMoney(Selectors.holdingsValueForAccount(store.holdings, a.id),
+                                            from: a.currency))
+                }
+                if let unrealized = HoldingsPanel.unrealizedTotal(holdings) {
+                    Text("\(store.displayMoney(unrealized, from: a.currency)) unrealized")
+                        .font(.caption2)
                 }
             }
         }
