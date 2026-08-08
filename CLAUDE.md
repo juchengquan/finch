@@ -13,10 +13,17 @@ Two **independent front-ends** implement that model:
 
 - **Native — `ios/`** — SwiftUI app (iOS · macOS · watchOS · Widget · Share) over the
   `FinchCore` Swift engine, kept at behavioral parity with the web DB. **The current
-  focus of active work.** Full guide: **`ios/CLAUDE.md`**. Native may add features ahead
-  of the web and feed them back.
+  focus of active work.** Full guide: **`ios/CLAUDE.md`**.
 - **Web — `frontend/`** — Next.js 16 / React 19 / TypeScript (App Router), file-backed
-  SQLite as source of truth. Documented below (+ `frontend/AGENTS.md`, `frontend/README.md`).
+  SQLite as source of truth. **The web UI is FROZEN (2026-08-08): `frontend/` is
+  maintained as the domain ORACLE and reference implementation, not a living
+  front-end.** Native features are NOT ported back. What stays maintained — because
+  the native side depends on it at every commit — is `lib/db/` (the schema + engine
+  the parity gates mirror), `scripts/export-fixtures.ts` (writes the iOS test
+  fixtures in-tree), `messages/` (the zh-Hans translation source for the iOS
+  catalog), and the unit tests over them. The UI (`app/`, `components/`) changes
+  only when an engine change requires it. Documented below (+ `frontend/AGENTS.md`,
+  `frontend/README.md`).
 
 `plans/` holds design docs, not code: `MASTER_PLAN.md` (design-vs-implementation roadmap),
 `plans/ios-macos/` (native specs; entry `IOS_MACOS_INDEX.md`), `frontend_design/` (web
@@ -108,6 +115,24 @@ all reading the token variables.
 **Provider order** (`app/layout.tsx`): `ThemeProvider` → `LedgerProvider` →
 `StoreHydration` + `SqliteBackupProvider` → children + `Toaster`. (Display currency is
 not a provider — `useCurrency()` derives it from `useLedger()` + the store.)
+
+## Working in one half of the repo
+
+The two front-ends are parity-coupled at the COMMIT level (fixtures, schema pin,
+translation source), so they live in one tree on one branch — components are
+namespaced by DIRECTORY, deliberately not by branch or repo
+(`plans/2026-08-08-repo-structure-decision.md` records the analysis and the
+trigger that would reopen it). To keep the other half out of view:
+
+```bash
+git sparse-checkout set ios plans          # native-only working tree
+git sparse-checkout set frontend plans     # web-only working tree
+git sparse-checkout disable                # full tree again
+git log --oneline -- ios/                  # one half's history
+```
+
+Don't use sparse-checkout in the shared main checkout while ci-local runs there —
+fixture export and the i18n pipeline need both halves present.
 
 ## Conventions
 
