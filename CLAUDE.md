@@ -282,7 +282,10 @@ is in the **account's own currency**).
 - **No header on the first section after the type caption** (costs ~36pt of grey chrome
   for nothing; #563). Resist "Details"/"General"/"Info" openers.
 - **Measure, don't eyeball:** `idb ui describe-all` gives frames in points; correct
-  top-of-form reads type caption `y=138 h=52`, first row `y=202`. Pixel-squinting
+  top-of-form reads type caption `y=138 h=48`, first row `y=198` (h≈50.3 —
+  `Metrics.sheetRowMinHeight` floors short rows at 48; the style's own fixed
+  vertical padding sets the rest, and its comment lists the measured dead
+  knobs — don't re-try `listRowInsets`). Pixel-squinting
   produced wrong fixes twice (#554, #563).
 
 ### Money & currency (easy to get wrong — mirrors the web gotcha)

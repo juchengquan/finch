@@ -47,5 +47,6 @@ extension View {
     func finchSheetForm() -> some View {
         finchSectionSpacing()
             .contentMargins(.top, Metrics.sheetTopMargin, for: .scrollContent)
+            .environment(\.defaultMinListRowHeight, Metrics.sheetRowMinHeight)
     }
 }

@@ -248,15 +248,19 @@ struct EditTransactionSheet: View {
                                       text: $amountText)
                                 .moneyInput($amountText, currency: currencyCode.isEmpty ? accountCurrency : currencyCode)
                         }
+                        FieldRow(glyph: .date, title: "Date", showsDefaultTrailing: false) {
+                            DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                                .labelsHidden()
+                        }
                         CategoryPickerRow(title: "Category", glyph: .category, categories: categories, selection: $categoryId,
                             noneLabel: String(localized: "Uncategorized"),
                             splitSummary: splitSummaryText(names: splitAlloc.selection.map { store.categoryName($0.id) ?? "Uncategorized" }),
                             splitting: effectiveKind == "refund" ? nil : $splitAlloc,
                             currency: currencyCode)
                             .accessibilityIdentifier("edittx.category")
-                        FieldRow(glyph: .date, title: "Date", showsDefaultTrailing: false) {
-                            DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                                .labelsHidden()
+                        if txn.kind != "adjustment", txn.kind != "opening" {
+                            MerchantPickerRow(title: "Merchant", glyph: .merchant,
+                                              counterparties: store.counterparties, merchant: $merchant)
                         }
                         // Refund link inline in the primary section (matches the Add sheet).
                         if effectiveKind == "refund" {
@@ -340,30 +344,14 @@ struct EditTransactionSheet: View {
                     }
                     .buttonStyle(.plain)
                     #endif
-                } header: {
-                    finchSectionHeader("Receipt")
-                }
-
-                if txn.kind != "transfer", txn.kind != "adjustment", txn.kind != "opening" {
-                    Section {
-                        MerchantPickerRow(title: "Merchant", glyph: .merchant,
-                                          counterparties: store.counterparties, merchant: $merchant)
+                    // Note rides with the receipt — the old "Details" basement (and
+                    // both its headers) is gone (2026-08-08 reorg). Merchant moved to
+                    // the primary section, kind-guarded there; transfer's Note lives
+                    // in its own branch above.
+                    if txn.kind != "transfer" {
                         FieldRow(glyph: .note, title: "Note") {
                             TextField("Note (optional)", text: $note, axis: .vertical)
                         }
-                    } header: {
-                        finchSectionHeader("Details")
-                    }
-                }
-                // Adjustment/opening entries have no payee, so no Merchant row —
-                // but keep an editable Note (e.g. "year-end reconciliation").
-                if txn.kind == "adjustment" || txn.kind == "opening" {
-                    Section {
-                        FieldRow(glyph: .note, title: "Note") {
-                            TextField("Note (optional)", text: $note, axis: .vertical)
-                        }
-                    } header: {
-                        finchSectionHeader("Details")
                     }
                 }
 
