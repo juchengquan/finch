@@ -55,3 +55,10 @@ A real split then needs, at minimum: versioned fixture artifacts with a
 compatibility handshake, a schema-version negotiation, an exported-translations
 artifact, per-repo CI, and a migration for the shared history. Price it against
 this list, not against tidiness.
+
+## The long-run path (added same day)
+
+The staged separation plan — published platform mirrors → versioned FinchCore →
+full multi-repo, each with triggers, mechanics, migration order and priced
+costs — is detailed in `2026-08-08-long-run-platform-separation.md`. This
+decision governs *now*; that doc governs *when the triggers fire*.
