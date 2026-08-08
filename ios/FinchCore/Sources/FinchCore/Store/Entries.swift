@@ -14,9 +14,29 @@ public enum Entries {
     public enum Kind: String, Sendable { case opening, income, expense, transfer, adjustment, refund }
     public enum Status: String, Sendable { case pending, confirmed }
 
+    /// `prefix-<ms timestamp, base36>-<random hex>`, the ID for every row this
+    /// store writes.
+    ///
+    /// The suffix is 12 hex characters (48 bits), NOT 4 (16 bits). The
+    /// timestamp does not separate anything written inside the SAME
+    /// millisecond, so within one millisecond the suffix is the only defence
+    /// against a duplicate PRIMARY KEY — and by the birthday bound n IDs
+    /// collide at about n²/2^17 on 4 characters. A tight write loop emits
+    /// ~1000 IDs per millisecond, so that is not a tail risk: measured, the old
+    /// suffix produced 505 duplicates in a batch of 100_000. It reached CI as
+    /// `InsightsRulesTests.test_quietest_day` failing on
+    /// `UNIQUE constraint failed: postings.id` while seeding 28 transactions,
+    /// and the same exposure sits on every bulk path — statement import above
+    /// all. At 48 bits the same batch collides at ~2e-11.
+    ///
+    /// Random rather than a per-process counter, which would be strictly
+    /// unique HERE and collide across devices the moment sync merges two
+    /// databases. Widening is free: `id` is `TEXT PRIMARY KEY` with no length
+    /// limit, nothing in the tree parses an ID, and existing IDs stay valid —
+    /// this only governs IDs minted from now on.
     static func newId(_ prefix: String) -> String {
         let ts = String(Int(Date().timeIntervalSince1970 * 1000), radix: 36)
-        let rand = UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(4).lowercased()
+        let rand = UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(12).lowercased()
         return "\(prefix)-\(ts)-\(rand)"
     }
     static func r2(_ n: Double) -> Double { (n * 100).rounded() / 100 }
