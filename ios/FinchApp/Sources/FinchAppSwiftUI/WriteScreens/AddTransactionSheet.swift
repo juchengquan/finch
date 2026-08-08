@@ -440,10 +440,11 @@ struct AddTransactionSheet: View {
                 .accessibilityIdentifier("addtx.account")
             // numbersAndPunctuation allows a leading minus (e.g. a credit-card balance).
             FieldRow(glyph: .amount, title: "New balance") {
-                TextField("0.00", text: $targetBalance)
-                    #if os(iOS)
-                    .keyboardType(.numbersAndPunctuation)
-                    #endif
+                // setsKeyboard: false keeps numbersAndPunctuation — decimalPad has
+                // no minus key, and a credit-card balance is negative.
+                TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: currency(of: accountId))),
+                          text: $targetBalance)
+                    .moneyInput($targetBalance, currency: currency(of: accountId), setsKeyboard: false)
             }
         } footer: {
             Text("Posts an adjustment for the difference from the account's current balance.")

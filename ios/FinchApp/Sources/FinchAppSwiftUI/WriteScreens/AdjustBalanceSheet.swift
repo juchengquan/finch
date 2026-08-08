@@ -24,10 +24,11 @@ struct AdjustBalanceSheet: View {
                     HStack {
                         Text("New balance"); Spacer()
                         // numbersAndPunctuation allows a leading minus (e.g. a credit-card balance).
-                        TextField("0.00", text: $targetBalance)
-                            #if os(iOS)
-                            .keyboardType(.numbersAndPunctuation)
-                            #endif
+                        TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: account.currency ?? store.baseCurrency)),
+                                  text: $targetBalance)
+                            .moneyInput($targetBalance,
+                                        currency: account.currency ?? store.baseCurrency,
+                                        setsKeyboard: false)
                             .multilineTextAlignment(.trailing)
                     }
                 } footer: {
