@@ -87,6 +87,20 @@ enum Metrics {
     /// the common failure. `ExpandChevronTapTargetTests` makes the floor a tripwire.
     static let tapTargetMin: CGFloat = 44
 
+    /// Minimum row height of the add/edit sheet family — applied by
+    /// `finchSheetForm()` via `defaultMinListRowHeight`, so every sheet moves
+    /// together. The SYSTEM default in this form style is 52 (measured; row
+    /// this floor lands the type caption and short-content rows at 48; rows
+    /// whose content + the STYLE'S OWN padding exceed it sit at ~50.3.
+    ///
+    /// MEASURED DEAD ENDS (2026-08-08, three sim cycles) — do not retry:
+    /// custom `listRowInsets` vertical values change NOTHING in this form
+    /// style (rows identical at 0, 9, and default), with or without the
+    /// floor; the style's vertical padding is fixed. This 48 keeps 4pt of
+    /// margin above `tapTargetMin`; pushing real rows below ~50 would take
+    /// negative-padding hacks, and row content wins over rendering details.
+    static let sheetRowMinHeight: CGFloat = 48
+
     /// Layout height the expand chevron REPORTS to its row, as distinct from the
     /// `tapTargetMin` box it actually accepts touches in.
     ///
