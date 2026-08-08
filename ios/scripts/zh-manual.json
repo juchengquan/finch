@@ -735,5 +735,8 @@
   "this account": "此账户",
   "Liabilities": "负债",
   "This also deletes the other payments linked to this purchase.": "此笔交易的其他关联付款也会一并删除。",
-  "This also deletes the other side of the transfer.": "转账的另一侧记录也会一并删除。"
+  "This also deletes the other side of the transfer.": "转账的另一侧记录也会一并删除。",
+  "Add position": "添加持仓",
+  "%@ unrealized": "未实现 %@",
+  "%@ · %@ total": "%@ · 合计 %@"
 }
