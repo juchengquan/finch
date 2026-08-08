@@ -534,7 +534,7 @@ struct AddTransactionSheet: View {
             // the user types the figure. (A zero-amount duplicate was never
             // savable either — `save()` rejects it.)
             let magnitude = abs(p.nativeAmount ?? p.amount)
-            amount = magnitude == 0 ? "" : String(format: "%g", magnitude)
+            amount = magnitude == 0 ? "" : DecimalInput.text(magnitude, currency: p.currency ?? currency(of: p.account))
             merchant = p.merchant
             // A duplicate is a NEW event, so it keeps today's date — but a
             // scheduled-occurrence prefill must land on the occurrence it
@@ -569,10 +569,16 @@ struct AddTransactionSheet: View {
                     let to = legs.first { ($0.nativeAmount ?? $0.amount) > 0 }
                     fromAccountId = from?.account ?? p.account
                     toAccountId = to?.account ?? ""
-                    if let f = from { amount = String(format: "%g", abs(f.nativeAmount ?? f.amount)) }
+                    // Each leg in ITS OWN currency, matching what transferAmountRow
+                    // passes for typing.
+                    if let f = from {
+                        amount = DecimalInput.text(abs(f.nativeAmount ?? f.amount),
+                                                   currency: currency(of: fromAccountId))
+                    }
                     // Cross-currency transfers carry a second, independent amount.
                     if let t = to, currency(of: fromAccountId) != currency(of: toAccountId) {
-                        received = String(format: "%g", abs(t.nativeAmount ?? t.amount))
+                        received = DecimalInput.text(abs(t.nativeAmount ?? t.amount),
+                                                     currency: currency(of: toAccountId))
                     }
                 } else if postsScheduledOccurrence,
                           let tpl = store.scheduled.first(where: { $0.id == p.sourceTemplateId }) {
@@ -606,7 +612,8 @@ struct AddTransactionSheet: View {
                 // account.balance and the target field are both in the ACCOUNT's own
                 // currency, so use the native delta rather than the base one.
                 let current = store.accounts.first { $0.id == p.account }?.balance ?? 0
-                targetBalance = String(format: "%g", current + (p.nativeAmount ?? p.amount))
+                targetBalance = DecimalInput.text(current + (p.nativeAmount ?? p.amount),
+                                                  currency: currency(of: p.account))
             case .expense, .income:
                 break
             }

@@ -64,7 +64,7 @@ struct PurchaseListSection: View {
         Binding(
             get: {
                 guard let row = alloc.rows.first(where: { $0.id == key }) else { return "" }
-                return row.amount == 0 ? "" : String(format: "%g", row.amount)
+                return row.amount == 0 ? "" : DecimalInput.text(row.amount, currency: currency)
             },
             set: { alloc.setAmount(key, DecimalInput.parse($0)) })
     }

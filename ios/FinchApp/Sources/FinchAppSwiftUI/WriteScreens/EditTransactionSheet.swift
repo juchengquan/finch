@@ -117,7 +117,8 @@ struct EditTransactionSheet: View {
         _note = State(initialValue: txn.note ?? "")
         _date = State(initialValue: Self.parse(txn.date, txn.time) ?? Date())
         _categoryId = State(initialValue: txn.category ?? "")
-        _amountText = State(initialValue: String(format: "%g", abs(txn.nativeAmount ?? txn.amount)))
+        _amountText = State(initialValue: DecimalInput.text(abs(txn.nativeAmount ?? txn.amount),
+                                                           currency: txn.currency ?? FinchStore.shared.baseCurrency))
         _selectedTags = State(initialValue: Set(txn.tags ?? []))
         _status = State(initialValue: txn.pending == true ? .pending : .confirmed)
         _accountId = State(initialValue: txn.account)
@@ -487,7 +488,8 @@ struct EditTransactionSheet: View {
                     gridAlloc = seeded.alloc
                     openingAccountIds = seeded.accountIds
                     if let ccy = seeded.currency { currencyCode = ccy }
-                    amountText = String(format: "%g", seeded.alloc.total)
+                    amountText = DecimalInput.text(seeded.alloc.total,
+                                                   currency: seeded.currency ?? accountCurrency)
 
                     var byAccount: [(id: String?, amount: Double)] = []
                     var byCategory: [(id: String?, amount: Double)] = []
@@ -504,8 +506,13 @@ struct EditTransactionSheet: View {
                     splitAlloc = SplitAllocation.merging(byCategory, total: seeded.alloc.total)
                 }
                 if let legs = transferLegs {
-                    fromAmountText = String(format: "%g", abs(legs.from.nativeAmount ?? legs.from.amount))
-                    toAmountText = String(format: "%g", abs(legs.to.nativeAmount ?? legs.to.amount))
+                    // Each leg in ITS OWN currency — 110 USD out, 100 EUR in.
+                    // `transferAmountRow` already passes the per-leg currency for
+                    // typing; seeding both from one would be the same bug a level down.
+                    fromAmountText = DecimalInput.text(abs(legs.from.nativeAmount ?? legs.from.amount),
+                                                       currency: store.accounts.first { $0.id == legs.from.account }?.currency ?? accountCurrency)
+                    toAmountText = DecimalInput.text(abs(legs.to.nativeAmount ?? legs.to.amount),
+                                                     currency: store.accounts.first { $0.id == legs.to.account }?.currency ?? accountCurrency)
                 }
             }
             .onChange(of: pickedPhoto) { _, item in

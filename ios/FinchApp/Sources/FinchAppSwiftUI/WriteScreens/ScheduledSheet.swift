@@ -35,6 +35,14 @@ struct ScheduledSheet: View {
     private var isEdit: Bool { template != nil }
     private var accounts: [AccountRow] { store.accounts }
     /// The typed amount is denominated in the template account's currency.
+    /// `templateCurrency` for callers without the environment — `init` cannot
+    /// read `@EnvironmentObject`, and the store there is always `.shared`
+    /// (both shells hand out that one instance).
+    private static func currency(forAccount id: String?) -> String {
+        let store = FinchStore.shared
+        return store.accounts.first { $0.id == id }?.currency ?? store.baseCurrency
+    }
+
     private var templateCurrency: String {
         accounts.first { $0.id == accountId }?.currency ?? store.baseCurrency
     }
@@ -47,7 +55,11 @@ struct ScheduledSheet: View {
         self.template = template
         _name = State(initialValue: template?.name ?? "")
         _kind = State(initialValue: template.flatMap { Kind(rawValue: $0.type) } ?? .expense)
-        _amount = State(initialValue: template?.amount.map { String(format: "%g", $0) } ?? "")
+        // `templateCurrency` needs the environment, which init does not have —
+        // the same store, reached the only way available here.
+        _amount = State(initialValue: template?.amount.map {
+            DecimalInput.text($0, currency: ScheduledSheet.currency(forAccount: template?.accountId))
+        } ?? "")
         _accountId = State(initialValue: template?.accountId ?? "")
         _fromAccountId = State(initialValue: template?.fromAccountId ?? "")
         _categoryId = State(initialValue: template?.categoryId ?? "")
@@ -68,7 +80,8 @@ struct ScheduledSheet: View {
         self.template = nil
         _name = State(initialValue: c.merchantName)
         _kind = State(initialValue: .expense)
-        _amount = State(initialValue: String(format: "%g", c.averageAmount))
+        _amount = State(initialValue: DecimalInput.text(c.averageAmount,
+                                                        currency: ScheduledSheet.currency(forAccount: c.accountId)))
         _accountId = State(initialValue: c.accountId ?? "")
         _fromAccountId = State(initialValue: "")
         _categoryId = State(initialValue: c.categoryId ?? "")
