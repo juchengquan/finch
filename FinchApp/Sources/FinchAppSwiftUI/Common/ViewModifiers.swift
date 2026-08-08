@@ -49,6 +49,20 @@ extension View {
         #endif
     }
 
+    /// Applied to the type-caption `Section` itself, this overrides the sheet's
+    /// section gap for that ONE gap (`Metrics.captionSectionSpacing`) so the
+    /// caption sits against the card it names. `listSectionSpacing` honours a
+    /// per-Section value on top of the List-wide one — measured, iOS 17+.
+    /// Same macOS no-op as above.
+    @ViewBuilder
+    func finchCaptionSection() -> some View {
+        #if os(iOS)
+        listSectionSpacing(.custom(Metrics.captionSectionSpacing))
+        #else
+        self
+        #endif
+    }
+
     /// The standard add/edit-sheet `Form` treatment: the app-wide section gap plus a
     /// pinned top margin under the nav bar. Without the explicit margin, SwiftUI gives
     /// these sheets different default top insets (Budget/Scheduled/Account render ~29pt

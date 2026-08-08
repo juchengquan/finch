@@ -36,6 +36,20 @@ enum Metrics {
     /// Row insets for the type-caption row (`TxnTypeToolbar.caption`).
     static let captionInsets = EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16)
 
+    /// Gap BELOW the type-caption section alone — applied per-Section by
+    /// `finchCaptionSection()`, overriding `sheetSectionSpacing` for that one gap.
+    ///
+    /// Zero because the caption is a LABEL for the card beneath it, not a peer
+    /// section: the two should read as one block, and a gap equal to the one
+    /// separating unrelated cards said the opposite. It does not collapse onto
+    /// the card — the caption's row is pinned to `sheetRowMinHeight` (48) and
+    /// its own padding keeps ~14pt of air below the text regardless of what
+    /// this is set to. Measured: the first row moves 192 → 186.
+    ///
+    /// Per-Section rather than a lower `sheetSectionSpacing`, because the gaps
+    /// BETWEEN cards are separating unrelated groups and still want 6.
+    static let captionSectionSpacing: CGFloat = 0
+
     /// Gap below the Calendar/List mode picker, before the content it switches.
     ///
     /// One number because the three screens that carry the picker — Activity, the

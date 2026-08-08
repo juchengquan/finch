@@ -316,7 +316,7 @@ struct AddTransactionSheet: View {
 
     @ViewBuilder private func formPage(_ k: Kind) -> some View {
             Form {
-                Section { TxnTypeToolbar.caption(k.label) }   // names the icon-only type control above
+                Section { TxnTypeToolbar.caption(k.label) }.finchCaptionSection()   // names the icon-only type control above
                 if k == .transfer {
                     transferFields
                 } else if k == .adjust {

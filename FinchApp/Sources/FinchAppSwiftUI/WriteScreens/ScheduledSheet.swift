@@ -95,7 +95,7 @@ struct ScheduledSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section { TxnTypeToolbar.caption(kind.label) }   // names the toolbar type control above
+                Section { TxnTypeToolbar.caption(kind.label) }.finchCaptionSection()   // names the toolbar type control above
                 Section {
                     FieldRow(glyph: .name, title: "Name") {
                         TextField("Name", text: $name)
