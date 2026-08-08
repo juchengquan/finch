@@ -460,7 +460,16 @@ final class AccountsListVC: UIViewController {
         }
     }
 
-    private func applySnapshot() {
+    /// - Parameters:
+    ///   - animated: whether the apply animates. Default false, which is what every
+    ///     caller but the collapse toggle wants: a sync landing, a search keystroke or a
+    ///     ledger switch must not make the list move under a thumb that is reading it.
+    ///     Ten callers, one of which is a deliberate gesture — that one animates.
+    ///   - reconfiguring: which carried items to re-render. Default nil = all of them,
+    ///     today's behaviour. The toggle passes the single group row whose chevron
+    ///     flipped, because on a collapse nothing else on screen changes and an animated
+    ///     apply crossfades everything it is told to reconfigure.
+    private func applySnapshot(animated: Bool = false, reconfiguring: [String]? = nil) {
         // The split shell sets `selectedID` BEFORE this view loads — `install(columns:)`
         // runs while the column is still being assembled — so `dataSource` is nil here on
         // a deep link that opens straight into a selection. Applying then trapped on the
@@ -515,9 +524,16 @@ final class AccountsListVC: UIViewController {
 
         // Renames, balance changes, privacy toggles and collapse toggles all leave the
         // item identifiers alone, so without this the cells keep their old content.
+        //
+        // `reconfiguring` narrows that set, and only the collapse toggle passes it. The
+        // reason is the animation: an ANIMATED apply crossfades every reconfigured cell,
+        // so reconfiguring everything carried — correct and invisible while unanimated —
+        // would make one group opening shimmer the whole list. That is not a guess; it
+        // is what #702's second attempt did and why it was withdrawn.
         let carried = Set(dataSource.snapshot().itemIdentifiers)
-        snap.reconfigureItems(snap.itemIdentifiers.filter(carried.contains))
-        dataSource.apply(snap, animatingDifferences: false)
+        let toReconfigure = reconfiguring ?? snap.itemIdentifiers.filter(carried.contains)
+        snap.reconfigureItems(toReconfigure.filter(carried.contains))
+        dataSource.apply(snap, animatingDifferences: animated)
 
         // Re-assert the highlight: `apply` clears the selection, so without this the row
         // stops looking selected every time a balance changes underneath it.
@@ -678,11 +694,21 @@ final class AccountsListVC: UIViewController {
     }
 
     /// Toggle a group's collapsed state and persist it.
+    ///
+    /// The one apply on this screen that animates. `AccountsTab` — the SwiftUI screen
+    /// this was converted from, still reachable under `-uikitActivity NO` — wraps the
+    /// same toggle in `withAnimation`; the conversion dropped it, so the two disagreed
+    /// about the same gesture on the same screen.
+    ///
+    /// Reconfiguring ONLY this group's row is what makes animating safe. Its chevron
+    /// flips, so it genuinely changed; every other visible row is untouched by a
+    /// collapse, and marking them would have UIKit crossfade the lot while the group
+    /// opens.
     private func toggleGroup(_ name: String) {
         let nowCollapsed = !collapsedGroups.contains(name)
         if nowCollapsed { collapsedGroups.insert(name) } else { collapsedGroups.remove(name) }
         AccountGroupCollapse.setCollapsed(name, nowCollapsed, ledger: store.activeLedgerId)
-        applySnapshot()
+        applySnapshot(animated: true, reconfiguring: [Self.groupPrefix + name])
     }
 
     // MARK: Presentation
