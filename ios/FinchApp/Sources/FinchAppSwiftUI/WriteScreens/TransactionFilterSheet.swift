@@ -62,8 +62,11 @@ struct TransactionFilterSheet: View {
         _filter = filter
         let f = filter.wrappedValue
         _draft = State(initialValue: f)
-        _minText = State(initialValue: f.minAmount.map { String(format: "%g", $0) } ?? "")
-        _maxText = State(initialValue: f.maxAmount.map { String(format: "%g", $0) } ?? "")
+        // A filter threshold spans currencies, so it has none of its own — the
+        // ledger base, following what BudgetSheet does with the same problem.
+        let base = FinchStore.shared.baseCurrency
+        _minText = State(initialValue: f.minAmount.map { DecimalInput.text($0, currency: base) } ?? "")
+        _maxText = State(initialValue: f.maxAmount.map { DecimalInput.text($0, currency: base) } ?? "")
         _useFrom = State(initialValue: f.from != nil)
         _useTo = State(initialValue: f.to != nil)
         _fromDate = State(initialValue: f.from ?? Date())

@@ -47,7 +47,7 @@ struct BudgetSheet: View {
         self.budget = budget
         _name = State(initialValue: budget?.name ?? "")
         _kind = State(initialValue: (budget?.type == "income") ? .income : .expense)
-        _amount = State(initialValue: budget.map { String(format: "%g", $0.amount) } ?? "")
+        _amount = State(initialValue: budget.map { DecimalInput.text($0.amount, currency: FinchStore.shared.baseCurrency) } ?? "")
         _frequency = State(initialValue: budget?.frequency ?? "monthly")
         // Date AND turnover time, in one Date. Seeding from the date alone would
         // show midnight for a budget that turns over at 09:30 — and then SAVE that,
@@ -62,10 +62,10 @@ struct BudgetSheet: View {
         _selectedTags = State(initialValue: Set(budget?.tagIds ?? []))
         _selectedCounterparties = State(initialValue: Set(budget?.counterpartyIds ?? []))
         _rollover = State(initialValue: (budget?.rollover ?? 0) != 0)
-        _rolloverCap = State(initialValue: budget?.rolloverLimit.map { String(format: "%g", $0) } ?? "")
+        _rolloverCap = State(initialValue: budget?.rolloverLimit.map { DecimalInput.text($0, currency: FinchStore.shared.baseCurrency) } ?? "")
         // Income "saved so far": pre-fill on edit (a goal you've already partly funded).
         _savedText = State(initialValue: (budget?.type == "income" && (budget?.saved ?? 0) != 0)
-            ? String(format: "%g", budget!.saved) : "")
+            ? DecimalInput.text(budget!.saved, currency: FinchStore.shared.baseCurrency) : "")
         _hasTargetDate = State(initialValue: budget?.endDate != nil)
         // Date AND time, so a goal saved for 18:00 does not reopen at midnight and
         // save that back — the same trap the Start picker had.

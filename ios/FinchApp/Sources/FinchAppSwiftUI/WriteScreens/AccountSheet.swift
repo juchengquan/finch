@@ -45,7 +45,7 @@ struct AccountSheet: View {
         _groupId = State(initialValue: account?.groupId ?? "")
         _includeInNetWorth = State(initialValue: (account?.includeInNetWorth ?? 1) == 1)
         if let ob = account?.openingBalance, ob != 0 {
-            _openingBalance = State(initialValue: String(format: "%g", ob))
+            _openingBalance = State(initialValue: DecimalInput.text(ob, currency: account?.currency ?? defaultCurrency))
         }
     }
 
