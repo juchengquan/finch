@@ -82,28 +82,44 @@ struct MonthCashCalendar: View {
             // The wheels REPLACE the grid rather than pushing it down, which is what
             // the system's date picker does — showing wheels and a day grid at once
             // reads as two calendars. Collapsing brings the grid straight back.
-            if showingMonthYearPicker {
-                monthYearPicker
-            } else {
-                weekdayRow
-                #if os(iOS)
-                // Interactive month paging: the neighboring months are REAL pages, so
-                // they follow the finger (an after-the-fact .transition can't do that).
-                // Each page IS its month — see MonthPager for why the earlier
-                // three-page-window-plus-recentre arrangement cost the animation.
-                MonthPager(anchorIndex: monthIndexBinding, range: pageRange,
-                           page: { index in monthPage(for: Self.date(fromMonthIndex: index)) },
-                           visible: $visibleIndex)
-                .frame(height: Self.gridHeight)
-                // Chevrons, Today and the month-year wheels move the anchor directly; drop
-                // the drag-time label so it follows the anchor again rather than sticking
-                // on whatever the last drag was over.
-                .onChange(of: monthAnchor) { _, _ in visibleIndex = nil }
-                #else
-                monthPage(for: monthAnchor)
-                #endif
+            // The weekday row keeps its space while the wheels are up rather than being
+            // removed. That is what holds the card's height CONSTANT across the toggle,
+            // without hardcoding a number that Dynamic Type would invalidate — and a
+            // constant height is what finally made animating this safe. Every earlier
+            // attempt animated a ~230pt resize (392pt grid + this row vs 190pt of
+            // wheels), and a self-sizing `UIHostingConfiguration` cell redraws wholesale
+            // while that runs.
+            weekdayRow.opacity(showingMonthYearPicker ? 0 : 1)
+            ZStack {
+                if showingMonthYearPicker {
+                    monthYearPicker.transition(.opacity)
+                } else {
+                    monthGrid.transition(.opacity)
+                }
             }
+            // Both states are exactly the grid's height, so nothing resizes.
+            .frame(height: Self.gridHeight)
+            .animation(.easeInOut(duration: 0.22), value: showingMonthYearPicker)
         }
+    }
+
+    @ViewBuilder private var monthGrid: some View {
+        #if os(iOS)
+        // Interactive month paging: the neighboring months are REAL pages, so they
+        // follow the finger (an after-the-fact .transition can't do that). Each page IS
+        // its month — see MonthPager for why the earlier three-page-window-plus-recentre
+        // arrangement cost the animation.
+        MonthPager(anchorIndex: monthIndexBinding, range: pageRange,
+                   page: { index in monthPage(for: Self.date(fromMonthIndex: index)) },
+                   visible: $visibleIndex)
+        .frame(height: Self.gridHeight)
+        // Chevrons, Today and the month-year wheels move the anchor directly; drop the
+        // drag-time label so it follows the anchor again rather than sticking on
+        // whatever the last drag was over.
+        .onChange(of: monthAnchor) { _, _ in visibleIndex = nil }
+        #else
+        monthPage(for: monthAnchor)
+        #endif
     }
 
     private var header: some View {
@@ -126,15 +142,16 @@ struct MonthCashCalendar: View {
                     .foregroundStyle(showingMonthYearPicker ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.primary))
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold))
                     .foregroundStyle(.tint)
-                    // Rotated, NOT animated. `.animation(_:value:)` here does not
-                    // animate the rotation alone — it animates every change in this
-                    // subtree, including the glyph's POSITION when the hosted cell
-                    // re-lays out. The chevron flew in diagonally from the middle of
-                    // the weekday row on every collapse. The toggle likewise must not
-                    // be wrapped in `withAnimation`: that animates the cell's height,
-                    // and a self-sizing `UIHostingConfiguration` cell redraws
-                    // wholesale while it runs, blanking Today and the chevrons.
+                    // `.animation(_:value:)` animates every change in this subtree,
+                    // POSITION included — which is why this once flew in diagonally
+                    // from the weekday row. It is safe only because the card's height
+                    // is now constant, so nothing here re-lays out. Do not restore it
+                    // if that ever stops being true, and never wrap the toggle in
+                    // `withAnimation`: that animates the cell's height, and a
+                    // self-sizing `UIHostingConfiguration` cell redraws wholesale
+                    // while it runs.
                     .rotationEffect(.degrees(showingMonthYearPicker ? 90 : 0))
+                    .animation(.easeInOut(duration: 0.22), value: showingMonthYearPicker)
             }
             .contentShape(Rectangle())
             .onTapGesture { showingMonthYearPicker.toggle() }
@@ -184,9 +201,9 @@ struct MonthCashCalendar: View {
             .frame(maxWidth: .infinity)
         }
         .labelsHidden()
-        #if os(iOS)
-        .frame(height: 190)
-        #endif
+        // Fills the reserved grid height rather than its natural 190pt: taller wheels
+        // use the space and keep the card the same size in both states.
+        .frame(maxHeight: .infinity)
     }
 
     private var monthBinding: Binding<Int> {
