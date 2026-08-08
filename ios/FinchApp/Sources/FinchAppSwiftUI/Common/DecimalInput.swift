@@ -34,6 +34,24 @@ enum DecimalInput {
         fractionDigits == 0 ? "0" : "0." + String(repeating: "0", count: fractionDigits)
     }
 
+    /// The text to SEED an amount field with — the counterpart to `filter`, which
+    /// governs typing.
+    ///
+    /// Every seed site used `String(format: "%g", …)`, which carries six
+    /// significant digits and drops trailing zeros: 500 became "500", and — the
+    /// half that mattered — 1234567.89 became "1.23457e+06", which `parse`
+    /// accepts as 1234570.0. Opening a large transaction and pressing save
+    /// rewrote the amount. Neither input filter catches it: both run `onChange`,
+    /// and a seeded value never fires one.
+    static func text(_ value: Double, currency: String) -> String {
+        text(value, fractionDigits: Currencies.minorUnits(for: currency))
+    }
+
+    /// For the rare caller that knows its digits without a currency code.
+    static func text(_ value: Double, fractionDigits: Int) -> String {
+        String(format: "%.\(fractionDigits)f", value)
+    }
+
     /// `maxFractionDigits` (ISO 4217 minor units) caps the digits AFTER the
     /// separator — TRIM semantics, distinct from `allowsDecimal: false`'s strip:
     /// "12.34" clamped to 0 digits is "12" (cut at the separator), never "1234".

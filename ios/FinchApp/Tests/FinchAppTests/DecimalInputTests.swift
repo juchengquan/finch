@@ -75,4 +75,42 @@ final class DecimalInputTests: XCTestCase {
         XCTAssertNil(DecimalInput.parse(""))
         XCTAssertNil(DecimalInput.parse("abc"))
     }
+    // MARK: seeding a field from a value
+
+    /// The reported bug: a whole amount lost its minor units.
+    func test_seedsAtTheCurrencysDigits() {
+        XCTAssertEqual(DecimalInput.text(500, currency: "USD"), "500.00")
+        XCTAssertEqual(DecimalInput.text(500, currency: "JPY"), "500")
+        XCTAssertEqual(DecimalInput.text(500, currency: "BHD"), "500.000")
+        XCTAssertEqual(DecimalInput.text(1234.5, currency: "USD"), "1234.50")
+    }
+
+    /// The half nobody would notice by eye, and the reason this is not cosmetic.
+    ///
+    /// `%g` carries six significant digits, so it rendered any large amount in
+    /// SCIENTIFIC NOTATION — and `parse` accepts that as a different number.
+    /// Seeding 1234567.89 gave "1.23457e+06", which parses back as 1234570.0, so
+    /// opening a transaction and pressing save rewrote the amount. Neither input
+    /// filter catches it: both run `onChange`, and a seeded value never fires one.
+    func test_neverSeedsInScientificNotation() {
+        for value in [1_000_000.0, 1_234_567.89, 12_345_678.0, 999_999_999.99] {
+            let seeded = DecimalInput.text(value, currency: "USD")
+            XCTAssertFalse(seeded.contains("e"), "\(value) seeded as \(seeded)")
+            XCTAssertEqual(DecimalInput.parse(seeded) ?? 0, value, accuracy: 0.005,
+                           "\(value) did not survive a seed/parse round trip")
+        }
+    }
+
+    /// A 0-decimal currency must not gain a separator it cannot use.
+    func test_aZeroDecimalCurrencySeedsWithNoSeparator() {
+        XCTAssertEqual(DecimalInput.text(1_000_000, currency: "JPY"), "1000000")
+        XCTAssertFalse(DecimalInput.text(1_000_000, currency: "JPY").contains("."))
+    }
+
+    /// An unknown code falls back to the ISO default of 2, matching
+    /// `Currencies.minorUnits`.
+    func test_anUnknownCurrencyGetsTwoDigits() {
+        XCTAssertEqual(DecimalInput.text(5, currency: "ZZZ"), "5.00")
+    }
+
 }
