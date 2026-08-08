@@ -230,7 +230,7 @@ struct MonthCashCalendar: View {
     private var weekdayRow: some View {
         HStack(spacing: 0) {
             ForEach(Array(Self.weekdaySymbols.enumerated()), id: \.offset) { _, s in
-                Text(s).font(.caption2).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+                Text(s).font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity)
             }
         }
     }
@@ -263,11 +263,11 @@ struct MonthCashCalendar: View {
 
     /// Week rows a month actually needs (5 for most, 4 or 6 at the extremes).
     static func weekRows(firstWeekday: Int, days: Int) -> Int { (firstWeekday + days + 6) / 7 }
-    /// CONSTANT grid height (a 6-week month at 62pt cells + 4pt spacing) so every
+    /// CONSTANT grid height (a 6-week month at 58pt cells + 4pt spacing) so every
     /// month — and every carousel page — renders the same height: no layout
     /// jump when paging. Months with fewer weeks stretch their rows to fill
     /// (`cellHeight(rows:)`) instead of carrying an empty padded week.
-    static let gridHeight: CGFloat = 6 * 62 + 5 * 4
+    static let gridHeight: CGFloat = 6 * 58 + 5 * 4
     static func cellHeight(rows: Int) -> CGFloat { (gridHeight - 4 * CGFloat(rows - 1)) / CGFloat(rows) }
 
     /// Absolute month index (year*12+month, civil calendar) — one number per month,
@@ -343,9 +343,16 @@ struct MonthCashCalendar: View {
         return VStack(spacing: 2) {
             // Today gets a filled accent circle (white number); other days plain.
             Text("\(day)")
-                .font(.callout).fontWeight(isToday ? .semibold : .regular)
+                .font(.subheadline).fontWeight(isToday ? .semibold : .regular)
                 .foregroundStyle(isToday ? Color.white : .primary)
-                .frame(width: 26, height: 26)
+                // The circle is a fixed size but the font scales, so at the largest
+                // text sizes the number ran out of room and ellipsised — "..." instead
+                // of "26". Shrink the glyph rather than truncate it; a date that is a
+                // little small still reads, one that is "..." does not. (This bites the
+                // 26pt circle too, just later — it is not new to the smaller one.)
+                .minimumScaleFactor(0.7)
+                .lineLimit(1)
+                .frame(width: 24, height: 24)
                 .background(isToday ? Color.accentColor : Color.clear, in: Circle())
             // Fixed-height two-line slot (rows align whether or not a day has
             // amounts). Privacy mode swaps the exact figures for presence dots
