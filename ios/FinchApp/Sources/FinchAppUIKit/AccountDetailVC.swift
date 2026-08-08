@@ -75,6 +75,7 @@ final class AccountDetailVC: UIViewController {
     private static let emptyID = "__empty__"
     private static let emptyDayID = "__empty_day__"
     private static let holdingPrefix = "__holding__"
+    private static let addHoldingID = "__add_holding__"
 
     private var collectionView: UICollectionView!
     private var dataSource: UICollectionViewDiffableDataSource<SectionID, String>!
@@ -146,7 +147,13 @@ final class AccountDetailVC: UIViewController {
             .store(in: &cancellables)
         store.$holdings
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.applySnapshot() }
+            .sink { [weak self] _ in
+                // `updateTitleView` too: the bar's balance line now carries the account
+                // total, so adding or repricing a position changes it and no snapshot
+                // touches the navigation item.
+                self?.updateTitleView()
+                self?.applySnapshot()
+            }
             .store(in: &cancellables)
         store.$accounts
             .receive(on: DispatchQueue.main)
@@ -288,16 +295,26 @@ final class AccountDetailVC: UIViewController {
                 return
             }
 
-            if let holding = self.holdingByID[id] {
+            if id == Self.addHoldingID {
                 var cfg = cell.defaultContentConfiguration()
-                cfg.text = holding.symbol
+                cfg.text = String(localized: "Add position")
+                cfg.image = UIImage(systemName: "plus")
+                cfg.textProperties.color = .tintColor
+                cfg.imageProperties.tintColor = .tintColor
                 cell.contentConfiguration = cfg
-                let value = UILabel()
-                value.text = Selectors.holdingValue(holding)
-                    .map { self.store.displayMoney($0, from: holding.currency) } ?? "—"
-                value.font = .preferredFont(forTextStyle: .body)
-                value.textColor = .secondaryLabel
-                cell.accessories = [.customView(configuration: .init(customView: value, placement: .trailing()))]
+                cell.accessories = []
+                return
+            }
+
+            if let holding = self.holdingByID[id] {
+                // The row the standalone Holdings screen drew — symbol, shares, value
+                // and gain/loss — not the symbol-and-value stub this screen used to
+                // show. Reusing it keeps the gain colouring, the money formatting and
+                // the catalog keys in one place instead of two.
+                cell.contentConfiguration = UIHostingConfiguration {
+                    HoldingRow(holding: holding).environmentObject(self.store)
+                }
+                cell.accessories = []
                 return
             }
 
@@ -367,6 +384,23 @@ final class AccountDetailVC: UIViewController {
     /// Its removal is also why list and calendar mode no longer need separate shapes —
     /// the balance was the only thing the calendar fallback had to suppress, since it
     /// includes pending rows while the running balance is confirmed-only math.
+    /// "Holdings · <what the positions are worth>", with the unrealized total under it.
+    ///
+    /// Both figures come from selectors that already existed and were parity-tested but
+    /// had no caller on native — `holdingsValueForAccount` and `holdingGainLoss`. An
+    /// empty investment account gets the plain header: there is no total to state, and
+    /// the Add row below says what to do.
+    private func holdingsHeader(_ account: AccountRow, _ holdings: [Holding]) -> HeaderContent {
+        guard !holdings.isEmpty else { return .plain(String(localized: "Holdings")) }
+        let value = Selectors.holdingsValueForAccount(store.holdings, account.id)
+        let subtitle = HoldingsPanel.unrealizedTotal(holdings).map {
+            String(localized: "\(store.displayMoney($0, from: account.currency)) unrealized")
+        }
+        return .month(label: String(localized: "Holdings"),
+                      trailing: store.displayMoney(value, from: account.currency),
+                      subtitle: subtitle)
+    }
+
     private func monthHeader(_ key: String, _ txns: [Tx]) -> HeaderContent {
         .figures(label: MonthGrouping.label(key),
                  figures: store.monthHeaderFigures(txns),
@@ -433,10 +467,15 @@ final class AccountDetailVC: UIViewController {
         snap.appendSections([.modePicker])
         snap.appendItems([Self.modePickerID], toSection: .modePicker)
 
-        if !holdings.isEmpty {
+        // Shared with the SwiftUI screen so the two cannot drift — see HoldingsPanel for
+        // why an empty investment account still shows, and why a non-investment one
+        // carrying stranded positions does too.
+        if HoldingsPanel.isVisible(accountType: account.type, hasHoldings: !holdings.isEmpty) {
             snap.appendSections([.holdings])
-            snap.appendItems(holdings.map { Self.holdingPrefix + $0.id }, toSection: .holdings)
-            headers[.holdings] = .plain(String(localized: "Holdings"))
+            snap.appendItems(holdings.map { Self.holdingPrefix + $0.id }
+                             + (HoldingsPanel.allowsAdding(accountType: account.type) ? [Self.addHoldingID] : []),
+                             toSection: .holdings)
+            headers[.holdings] = holdingsHeader(account, holdings)
         }
 
         if viewMode == .calendar {
@@ -546,7 +585,7 @@ final class AccountDetailVC: UIViewController {
     /// Balance + reconcile seal as the bar's subtitle.
     private func balanceBarView(_ account: AccountRow) -> UIView {
         let label = UILabel()
-        label.text = store.displayMoney(account.balance, from: account.currency)
+        label.text = balanceCaption(account)
         label.font = .preferredFont(forTextStyle: .caption1)
         label.textColor = .secondaryLabel
         label.adjustsFontForContentSizeCategory = true
@@ -561,6 +600,18 @@ final class AccountDetailVC: UIViewController {
         stack.spacing = 4
         stack.alignment = .center
         return stack
+    }
+
+    /// The bar's balance line. On an investment account holding positions the cash
+    /// figure alone understates the account, so the total follows it — the native
+    /// stand-in for the web balance card's "+ X in holdings · total Y". Everything goes
+    /// through `displayMoney`, so privacy mode masks both halves.
+    private func balanceCaption(_ account: AccountRow) -> String {
+        let cash = store.displayMoney(account.balance, from: account.currency)
+        guard account.type == "investment",
+              !Selectors.holdingsForAccount(store.holdings, account.id).isEmpty else { return cash }
+        let total = Selectors.investmentAccountTotal(account, store.holdings)
+        return String(localized: "\(cash) · \(store.displayMoney(total, from: account.currency)) total")
     }
 
     /// The balance row: amount, with the reconcile seal beside it.
@@ -647,9 +698,26 @@ final class AccountDetailVC: UIViewController {
 
     private func swipe(at indexPath: IndexPath)
         -> (leading: UISwipeActionsConfiguration, trailing: UISwipeActionsConfiguration)? {
-        guard let id = dataSource.itemIdentifier(for: indexPath), let tx = txByID[id] else { return nil }
+        guard let id = dataSource.itemIdentifier(for: indexPath) else { return nil }
+        if let holding = holdingByID[id] {
+            // Delete only, and no leading side — a position has no status to toggle.
+            return (UISwipeActionsConfiguration(actions: []), holdingSwipe(holding))
+        }
+        guard let tx = txByID[id] else { return nil }
         let actions = rowActions
         return (actions.leading(tx), actions.trailing(tx))
+    }
+
+    /// Deliberately `.normal`, not `.destructive`: the destructive style plays a
+    /// row-removal animation before the confirmation has been answered.
+    private func holdingSwipe(_ holding: Holding) -> UISwipeActionsConfiguration {
+        let delete = UIContextualAction(style: .normal, title: String(localized: "Delete")) { [weak self] _, _, done in
+            self?.confirmDeleteHolding(holding)
+            done(false)   // the row stays until the alert is answered
+        }
+        delete.image = UIImage(systemName: "trash")
+        delete.backgroundColor = .systemRed
+        return UISwipeActionsConfiguration(actions: [delete])
     }
 
     // MARK: Writes
@@ -667,6 +735,21 @@ final class AccountDetailVC: UIViewController {
             alert.addAction(UIAlertAction(title: String(localized: "OK"), style: .cancel))
             present(alert, animated: true)
         }
+    }
+
+    /// Centered alert, not a row-anchored sheet — the row is torn down when the swipe
+    /// collapses or the cell recycles, which would take a popout with it.
+    private func confirmDeleteHolding(_ holding: Holding) {
+        let alert = UIAlertController(
+            title: String(localized: "Delete holding?"),
+            message: String(localized: "\(holding.symbol) is removed from this account."),
+            preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: String(localized: "Delete"), style: .destructive) { [weak self] _ in
+            guard let self else { return }
+            self.run { try self.store.apply(.deleteHolding, Args(["id": .string(holding.id)])) }
+        })
+        alert.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel))
+        present(alert, animated: true)
     }
 
     private func confirmDeleteTransaction(_ tx: Tx) {
@@ -728,6 +811,17 @@ final class AccountDetailVC: UIViewController {
         present(hosted(AddTransactionSheet(defaultAccountId: account.id)), animated: true)
     }
 
+    /// Only this account is passed, so the sheet drops its account picker — arriving
+    /// from the account already said which one.
+    private func presentAddHolding() {
+        guard let account else { return }
+        present(hosted(AddHoldingSheet(accounts: [account])), animated: true)
+    }
+
+    private func presentSetHoldingPrice(_ holding: Holding) {
+        present(hosted(SetHoldingPriceSheet(holding: holding)), animated: true)
+    }
+
     private func presentEditAccount() {
         guard let account else { return }
         present(hosted(AccountSheet(account: account, defaultCurrency: store.baseCurrency)), animated: true)
@@ -768,12 +862,17 @@ extension AccountDetailVC: UICollectionViewDelegate {
     /// mode picker looked inert for exactly this reason.
     func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
         guard let id = dataSource.itemIdentifier(for: indexPath) else { return true }
-        return txByID[id] != nil
+        // `HoldingRow` is inert content, not an interactive control, so unlike the mode
+        // picker its cell may take the selection.
+        return txByID[id] != nil || holdingByID[id] != nil || id == Self.addHoldingID
     }
 
     func collectionView(_ cv: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         cv.deselectItem(at: indexPath, animated: true)
-        guard let id = dataSource.itemIdentifier(for: indexPath), let tx = txByID[id] else { return }
+        guard let id = dataSource.itemIdentifier(for: indexPath) else { return }
+        if id == Self.addHoldingID { return presentAddHolding() }
+        if let holding = holdingByID[id] { return presentSetHoldingPrice(holding) }
+        guard let tx = txByID[id] else { return }
         presentEditTransaction(tx)
     }
 
@@ -782,7 +881,16 @@ extension AccountDetailVC: UICollectionViewDelegate {
     func collectionView(_ cv: UICollectionView,
                         contextMenuConfigurationForItemAt indexPath: IndexPath,
                         point: CGPoint) -> UIContextMenuConfiguration? {
-        guard let id = dataSource.itemIdentifier(for: indexPath), let tx = txByID[id] else { return nil }
+        guard let id = dataSource.itemIdentifier(for: indexPath) else { return nil }
+        if let holding = holdingByID[id] {
+            return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+                UIMenu(children: [
+                    UIAction(title: String(localized: "Delete"), image: UIImage(systemName: "trash"),
+                             attributes: .destructive) { _ in self?.confirmDeleteHolding(holding) },
+                ])
+            }
+        }
+        guard let tx = txByID[id] else { return nil }
         var actions = rowActions
         // The item is omitted when the row has no attachment, as in SwiftUI.
         if store.attachments(for: tx.id).isEmpty { actions.previewReceipt = nil }
