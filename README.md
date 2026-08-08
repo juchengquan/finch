@@ -1,5 +1,10 @@
 # finch for iOS & macOS
 
+> **This tree is also published read-only as the `mirror/apple` branch** (clone it
+> with `--branch mirror/apple --single-branch` for a apple-only tree). Mirrors
+> are force-pushed build products regenerated on every merge — never commit to
+> or open PRs against them; all work happens in the monorepo.
+
 The native port of finch. Design arc: `plans/ios-macos/IOS_MACOS_INDEX.md`;
 Phase 1.0 plan: `plans/ios-macos/IOS_MACOS_PHASE_1_0_PLAN.md`.
 
