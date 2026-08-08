@@ -4,8 +4,9 @@ The **native port of finch** — the SwiftUI app under `ios/`, shared by iOS, ma
 (`FinchMac`), watchOS, the Widget, and the Share extension. Active work happens here; the
 root `CLAUDE.md` documents the web `frontend/`. Design docs: `plans/ios-macos/` (start at
 `IOS_MACOS_INDEX.md`; gap matrix in `IOS_MACOS_UI_GAP_AUDIT.md`, build-out plan in
-`IOS_MACOS_UI_REMEDIATION_PLAN.md`). Native may add features ahead of the web and feed
-them back.
+`IOS_MACOS_UI_REMEDIATION_PLAN.md`). The web UI is FROZEN (2026-08-08) — native
+features are not ported back; `frontend/` is maintained as the parity oracle
+(root `CLAUDE.md`, "Working in one half of the repo").
 
 ## Layout
 

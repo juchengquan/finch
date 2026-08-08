@@ -40,3 +40,11 @@ Renames that landed in the 4-PR refactor:
 - 5 `*-sheet.tsx` files renamed to `*-dialog.tsx` (they all use shadcn `Dialog`, not a real bottom-sheet).
 
 See `frontend/ui-architecture.md` for the full layout, the per-file convention, the layer rules table, the icon pattern, and a worked example (adding a new `components/ui/` primitive).
+
+# The web UI is frozen (2026-08-08)
+
+`frontend/` is maintained as the domain ORACLE and reference implementation —
+`lib/db/`, `scripts/export-fixtures.ts`, `messages/`, and their tests are live
+(the iOS parity gates and the zh-Hans catalog depend on them at every commit);
+the UI (`app/`, `components/`) changes only when an engine change requires it.
+Do not port native features back. See root `CLAUDE.md`.
