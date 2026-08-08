@@ -173,6 +173,14 @@ struct EditTransactionSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                // Names the type control above — and is the sheet's ONLY visible
+                // title. `.navigationTitle` below is set but never rendered: a
+                // `.principal` toolbar item REPLACES an inline title, and this
+                // sheet always has one (the segmented control, the locked transfer
+                // pill, or — for adjustment/opening — an empty item). The other
+                // three sheets in the family already compensate this way; this one
+                // was missed, so it showed no title at all.
+                Section { TxnTypeToolbar.caption(KindLabel.label(effectiveKind)) }.finchCaptionSection()
                 // Line items build their own primary section (Account/Amount/
                 // Category/Date) below; split & transfer keep Date here.
                 // A grid keeps the ordinary Account/Amount/Category layout: the
