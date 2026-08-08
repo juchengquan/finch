@@ -113,4 +113,30 @@ final class DecimalInputTests: XCTestCase {
         XCTAssertEqual(DecimalInput.text(5, currency: "ZZZ"), "5.00")
     }
 
+    // MARK: what blur does
+
+    /// Typed and seeded values must agree, so leaving a field settles it to the
+    /// currency's digits.
+    func test_blurSettlesATypedValueToTheCurrencysDigits() {
+        XCTAssertEqual(DecimalInput.settled("500", currency: "USD"), "500.00")
+        XCTAssertEqual(DecimalInput.settled("500.5", currency: "USD"), "500.50")
+        XCTAssertEqual(DecimalInput.settled("500.50", currency: "JPY"), "500")
+    }
+
+    /// Empty stays empty — an unset optional (rollover cap, last price, max
+    /// filter) is not the same as zero, and a grid cell with nothing in it reads
+    /// as "waiting" rather than "typed 0".
+    func test_blurLeavesAnEmptyFieldEmpty() {
+        XCTAssertEqual(DecimalInput.settled("", currency: "USD"), "")
+        XCTAssertEqual(DecimalInput.settled("   ", currency: "USD"), "   ")
+    }
+
+    /// Mid-entry is left alone. "5." is someone on their way to 5.75; settling it
+    /// to "5.00" would put the field at max digits and swallow their next
+    /// keystroke — the exact trap this whole change has to avoid making worse.
+    func test_blurLeavesMidEntryAlone() {
+        XCTAssertEqual(DecimalInput.settled("5.", currency: "USD"), "5.")
+        XCTAssertEqual(DecimalInput.settled("-", currency: "USD"), "-")
+    }
+
 }
