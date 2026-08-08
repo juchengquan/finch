@@ -10,6 +10,16 @@ enum Metrics {
     /// Individual screens may still override it locally (e.g. the Add sheet's 6).
     static let sectionSpacing: CGFloat = 12
 
+    /// Gap between sections in the add/edit sheet family only — applied by
+    /// `finchSheetForm()`.
+    ///
+    /// SEPARATE from `sectionSpacing` on purpose: that one is set once at
+    /// `AdaptiveShell` and inherited by every `List` in every tab, so tightening
+    /// the sheets through it would tighten the Accounts groups, Budgets and the
+    /// rest along with them. These sheets are dense forms of short rows; the
+    /// browse screens are not.
+    static let sheetSectionSpacing: CGFloat = 6
+
     /// Top margin between a sheet's nav bar and its first section. Sheets do NOT
     /// agree on this by default — Budget/Scheduled/Account sit ~29pt lower than the
     /// transaction sheets — so `finchSheetForm()` pins it explicitly. 6 reproduces

@@ -45,7 +45,12 @@ enum TxnTypeToolbar {
     /// first `Form` section, directly under the toolbar control.
     static func caption(_ label: String) -> some View {
         Text(label)
-            .font(.subheadline.weight(.semibold))
+            // .title3, not .subheadline: the caption sits in a row pinned to
+            // `sheetRowMinHeight` (48) that it cannot shrink — the floor is there
+            // so TAPPABLE rows clear a finger, and this label is not one. A bigger
+            // face fills more of the fixed box, so the air above and below it
+            // halves without anything moving. Measured: row stays 48 at both sizes.
+            .font(.title3.weight(.semibold))
             .frame(maxWidth: .infinity, alignment: .center)
             .listRowBackground(Color.clear)
             .listRowInsets(Metrics.captionInsets)
