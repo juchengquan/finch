@@ -14,7 +14,6 @@ import SwiftUI
 public enum NativeRoute: Equatable {
     case activity
     case account(String)
-    case holdings
     case budget(String)
     case categories
     case tags

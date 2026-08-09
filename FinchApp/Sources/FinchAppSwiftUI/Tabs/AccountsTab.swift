@@ -5,12 +5,11 @@ import FinchCore
 /// Compact drill-in target, presented as a top-level right-slide cover so the
 /// iOS 26 resume shadow never forms (a top-level scroll view doesn't re-converge).
 private enum AccountsDrill: Identifiable {
-    case account(String), activity, holdings
+    case account(String), activity
     var id: String {
         switch self {
         case .account(let a): return "acct:\(a)"
         case .activity:       return "activity"
-        case .holdings:       return "holdings"
         }
     }
 }
@@ -166,7 +165,6 @@ struct AccountsTab: View {
         switch target {
         case .account(let id): AccountDetailView(accountId: id)
         case .activity:        ActivityFeedView()
-        case .holdings:        HoldingsView()
         }
     }
     #endif
@@ -199,19 +197,8 @@ struct AccountsTab: View {
         ToolbarItem(placement: .secondaryAction) {
             Button { showingArchived = true } label: { Label("Archived Accounts", systemImage: "archivebox") }
         }
-        ToolbarItem(placement: .secondaryAction) {
-            #if os(iOS)
-            if selection == nil {
-                Button {
-                    if !nativeRoute(.holdings) { drill = .holdings }
-                } label: { Label("Holdings", systemImage: "chart.bar") }
-            } else {
-                NavigationLink { HoldingsView() } label: { Label("Holdings", systemImage: "chart.bar") }
-            }
-            #else
-            NavigationLink { HoldingsView() } label: { Label("Holdings", systemImage: "chart.bar") }
-            #endif
-        }
+        // No Holdings entry: positions live in the investment account that holds them,
+        // which is where the web keeps them and where you already are when you care.
         ToolbarItem(placement: .secondaryAction) {
             Button { showingReconcile = true } label: { Label("Reconcile", systemImage: "checkmark.circle") }
                 .disabled(store.accounts.isEmpty)
