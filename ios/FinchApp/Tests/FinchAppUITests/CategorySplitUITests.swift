@@ -188,7 +188,10 @@ final class CategorySplitUITests: XCTestCase {
         tickCategory("Transport")
 
         turnSplit(on: false)
-        confirmSubpage()
+        // No Confirm in single mode (commit-on-tap contract): the collapse itself
+        // commits the dominant leg, so closing the sheet is all that remains —
+        // and the assertion below proves the app chose Transport, not this test.
+        app.buttons["Cancel"].firstMatch.tap()
 
         let label = categoryRowLabel()
         XCTAssertTrue(label.contains("Transport"),
@@ -208,8 +211,8 @@ final class CategorySplitUITests: XCTestCase {
                       "expected to start from a categorised transaction")
 
         openCategorySubpage("edittx.category")
+        // Single mode commits on tap — the subpage dismisses itself.
         tickCategory("Uncategorized")
-        confirmSubpage()
         app.buttons["Save"].firstMatch.tap()
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "edittx.category")
                         .firstMatch.waitForNonExistence(timeout: 15),
