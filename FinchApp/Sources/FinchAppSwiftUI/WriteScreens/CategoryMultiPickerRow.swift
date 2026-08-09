@@ -67,6 +67,9 @@ private struct CategoryMultiPickerSheet: View {
                         isSelected: staged.contains(item.row.id),
                         expanded: expanded.contains(item.row.id),
                         searchActive: !query.isEmpty,
+                        // Always multi-select here, so always the ○/◉ treatment —
+                        // the app speaks ONE multi-select language (2026-08-09).
+                        tickState: staged.contains(item.row.id),
                         onTap: {
                             if staged.contains(item.row.id) { staged.remove(item.row.id) } else { staged.insert(item.row.id) }
                         },

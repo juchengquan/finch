@@ -215,7 +215,14 @@ private struct SearchablePickerSheet<RowContent: View>: View {
                 } else {
                     // Collapse to the largest leg — the same option the row was
                     // already displaying, per the projection's dominant-leg rule.
-                    if let dominant = splitting.wrappedValue.dominantId { staged = dominant }
+                    // COMMIT it too (2026-08-09): the collapse just mutated the live
+                    // allocation binding, and single mode has no Confirm — without
+                    // this write the collapsed choice would need a redundant re-tap,
+                    // and ✕ would close over a field that disagrees with the rows.
+                    if let dominant = splitting.wrappedValue.dominantId {
+                        staged = dominant
+                        selection = dominant
+                    }
                     splitting.wrappedValue = SplitAllocation(total: splitting.wrappedValue.total)
                 }
             }
@@ -223,15 +230,19 @@ private struct SearchablePickerSheet<RowContent: View>: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Cancel")
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        // Splitting still names a single option — the dominant leg —
-                        // so the field stays meaningful even while split.
-                        selection = splitOn ? (splitting?.wrappedValue.dominantId ?? staged) : staged
-                        dismiss()
-                    } label: { Image(systemName: "checkmark") }
-                        .accessibilityLabel("Confirm")
-                        .confirmCheckmarkStyle()
+                // Confirm exists only while splitting — in single mode a tap
+                // commits, so a Confirm would be a button that merely dismisses.
+                if splitOn {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button {
+                            // Splitting still names a single option — the dominant leg —
+                            // so the field stays meaningful even while split.
+                            selection = splitting?.wrappedValue.dominantId ?? staged
+                            dismiss()
+                        } label: { Image(systemName: "checkmark") }
+                            .accessibilityLabel("Confirm")
+                            .confirmCheckmarkStyle()
+                    }
                 }
             }
         }
@@ -270,24 +281,38 @@ private struct SearchablePickerSheet<RowContent: View>: View {
             tap(opt.id)
         } label: {
             HStack {
+                // Split mode announces itself on EVERY row: the leading ○/◉ is
+                // the same edit-mode idiom the Activity feed's multi-select uses.
+                if splitOn {
+                    let ticked = splitting?.wrappedValue.isTicked(opt.id) ?? false
+                    Image(systemName: ticked ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(ticked ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
+                        .accessibilityIdentifier(ticked ? "tick.on" : "tick.off")
+                }
                 rowContent(opt)
-                // The row may already end in a trailing value (an account's
-                // balance), so the tick follows it — `CurrencyPickerRow`'s
-                // arrangement, kept identical on purpose.
+                // Single mode keeps the trailing current-value tick — the row may
+                // already end in a trailing value (an account's balance), so the
+                // tick follows it — `CurrencyPickerRow`'s arrangement.
                 Spacer(minLength: 8)
-                let isSelected = splitOn ? (splitting?.wrappedValue.isTicked(opt.id) ?? false) : opt.id == staged
-                if isSelected { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                if !splitOn, opt.id == staged { Image(systemName: "checkmark").foregroundStyle(.tint) }
             }
             .contentShape(Rectangle())
             .opacity(mismatched ? 0.4 : 1)
         }
         .buttonStyle(.plain)
         .disabled(mismatched)
+        .accessibilityIdentifier("picker.option.\(opt.id)")
     }
 
     /// In split mode a tap toggles membership; otherwise it stages the single choice.
     private func tap(_ id: String) {
-        guard splitOn, let splitting else { staged = id; return }
+        // SINGLE-select (2026-08-09): a tap IS the choice — commit and close.
+        // Staging + Confirm exist only for the multi-select split mode below.
+        guard splitOn, let splitting else {
+            selection = id
+            dismiss()
+            return
+        }
         if splitting.wrappedValue.isTicked(id) {
             splitting.wrappedValue.untick(id)
         } else {
