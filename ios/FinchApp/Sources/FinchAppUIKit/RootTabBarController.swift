@@ -125,9 +125,6 @@ final class RootTabBarController: UITabBarController {
                     case .budget(let id):
                         nav.pushViewController(BudgetDetailVC(budgetId: id), animated: true)
                         return true
-                    case .holdings:
-                        nav.pushViewController(HoldingsVC(), animated: true)
-                        return true
                     case .categories:
                         nav.pushViewController(CategoriesVC(), animated: true)
                         return true

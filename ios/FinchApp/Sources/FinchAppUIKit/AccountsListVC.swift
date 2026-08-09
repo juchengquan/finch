@@ -18,8 +18,11 @@ import FinchCore
 /// - a **summary section**: the net-worth / liabilities row and the All Transactions
 ///   entry, which pushes the converted feed rather than opening a sheet;
 /// - **archive**, a third row verb that Budgets has no equivalent of;
-/// - a much larger ⋯ overflow: Add Group, Reorder, Archived Accounts, Holdings,
-///   Reconcile. (There was an "Import statement (CSV)" entry here; the feature is gone
+/// - a much larger ⋯ overflow: Add Group, Reorder, Archived Accounts, Reconcile.
+///   (A "Holdings" entry opened a standalone screen; positions now live in the
+///   investment account that holds them, which is where the web keeps them and where
+///   you already are when you care. There was an "Import statement (CSV)" entry too;
+///   that feature is gone
 ///   — `ReconcileSheet` already does that job by hand and says when you are square.
 ///   See FEATURE_IDEAS 9.3 if it is ever built properly.)
 ///
@@ -403,10 +406,6 @@ final class AccountsListVC: UIViewController {
                 guard let self else { return }
                 self.present(self.hostSheet(NavigationStack { ArchivedAccountsView() }), animated: true)
             },
-            UIAction(title: String(localized: "Holdings"),
-                     image: UIImage(systemName: "chart.bar")) { [weak self] _ in
-                self?.pushOrSelectHoldings()
-            },
             reconcile,
         ]))
         more.accessibilityLabel = String(localized: "More")
@@ -717,13 +716,9 @@ final class AccountsListVC: UIViewController {
         present(hostSheet(AccountSheet(account: account, defaultCurrency: store.baseCurrency)), animated: true)
     }
 
-    /// All Transactions and Holdings PUSH in compact mode. In column mode they push
-    /// inside the supplementary column's own navigation controller, which is what the
-    /// SwiftUI screen's `NavigationLink` did there.
-    private func pushOrSelectHoldings() {
-        navigationController?.pushViewController(HoldingsVC(), animated: true)
-    }
-
+    /// All Transactions PUSHES in compact mode. In column mode it pushes inside the
+    /// supplementary column's own navigation controller, which is what the SwiftUI
+    /// screen's `NavigationLink` did there.
     private func pushAllTransactions() {
         navigationController?.pushViewController(ActivityFeedVC(), animated: true)
     }
