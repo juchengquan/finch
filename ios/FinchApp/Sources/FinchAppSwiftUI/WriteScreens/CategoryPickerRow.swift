@@ -143,22 +143,33 @@ struct CategoryPickerSheet: View {
                 } else {
                     // Collapse to the largest leg — the same category the row was
                     // already displaying, per the projection's dominant-leg rule.
-                    if let dominant = splitting.wrappedValue.dominantId { staged = dominant }
+                    // COMMIT it too (2026-08-09): the collapse just mutated the live
+                    // allocation binding, and single mode has no Confirm — without
+                    // this write the collapsed choice would need a redundant re-tap,
+                    // and ✕ would close over a field that disagrees with the rows.
+                    if let dominant = splitting.wrappedValue.dominantId {
+                        staged = dominant
+                        selection = dominant
+                    }
                     splitting.wrappedValue = SplitAllocation(total: splitting.wrappedValue.total)
                 }
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Cancel") }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        // Splitting still names a single category — the dominant leg —
-                        // so the transaction's own category field stays meaningful and
-                        // agrees with what the projection will derive from the legs.
-                        selection = splitOn ? (splitting?.wrappedValue.dominantId ?? staged) : staged
-                        dismiss()
-                    } label: { Image(systemName: "checkmark") }
-                        .accessibilityLabel("Confirm")
-                        .confirmCheckmarkStyle()
+                // Confirm exists only while splitting — in single mode a tap
+                // commits, so a Confirm would be a button that merely dismisses.
+                if splitOn {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button {
+                            // Splitting still names a single category — the dominant leg —
+                            // so the transaction's own category field stays meaningful and
+                            // agrees with what the projection will derive from the legs.
+                            selection = splitting?.wrappedValue.dominantId ?? staged
+                            dismiss()
+                        } label: { Image(systemName: "checkmark") }
+                            .accessibilityLabel("Confirm")
+                            .confirmCheckmarkStyle()
+                    }
                 }
             }
         }
@@ -189,12 +200,18 @@ struct CategoryPickerSheet: View {
         HStack(spacing: 8) {
             Button { tap("") } label: {
                 HStack(spacing: 10) {
+                    if splitOn {
+                        let ticked = splitting?.wrappedValue.isTicked("") ?? false
+                        Image(systemName: ticked ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(ticked ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
+                            .accessibilityIdentifier(ticked ? "tick.on" : "tick.off")
+                    }
                     Image(systemName: "circle.slash")
                         .font(.system(size: 20)).foregroundStyle(.secondary)
                         .frame(width: 26, height: 26)
                     Text(label).foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    if isChosen("") { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                    if !splitOn, isChosen("") { Image(systemName: "checkmark").foregroundStyle(.tint) }
                 }
                 .contentShape(Rectangle())
             }
@@ -214,6 +231,7 @@ struct CategoryPickerSheet: View {
             isSelected: isChosen(item.row.id),
             expanded: expanded.contains(item.row.id),
             searchActive: !query.isEmpty,
+            tickState: splitOn ? (splitting?.wrappedValue.isTicked(item.row.id) ?? false) : nil,
             onTap: { tap(item.row.id) },
             onToggleExpand: {
                 if expanded.contains(item.row.id) { expanded.remove(item.row.id) } else { expanded.insert(item.row.id) }
@@ -226,7 +244,13 @@ struct CategoryPickerSheet: View {
     /// expanding, and a split is exactly one categoryId, so cascading would silently
     /// manufacture a split per child.
     private func tap(_ id: String) {
-        guard splitOn, let splitting else { staged = id; return }
+        // SINGLE-select (2026-08-09): a tap IS the choice — commit and close.
+        // Staging + Confirm exist only for the multi-select split mode below.
+        guard splitOn, let splitting else {
+            selection = id
+            dismiss()
+            return
+        }
         if splitting.wrappedValue.isTicked(id) {
             splitting.wrappedValue.untick(id)
         } else {
@@ -244,6 +268,10 @@ struct CategoryTreeRow: View {
     let isSelected: Bool
     let expanded: Bool
     let searchActive: Bool
+    /// nil ⇒ single-select rendering (trailing checkmark on the chosen row).
+    /// Non-nil ⇒ split mode: a leading ○/◉ announces multi-select on EVERY row
+    /// (the Activity feed's edit-mode idiom) and the trailing checkmark retires.
+    var tickState: Bool? = nil
     let onTap: () -> Void
     let onToggleExpand: () -> Void
 
@@ -252,6 +280,11 @@ struct CategoryTreeRow: View {
         HStack(spacing: 8) {
             Button(action: onTap) {
                 HStack(spacing: 10) {
+                    if let ticked = tickState {
+                        Image(systemName: ticked ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(ticked ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
+                            .accessibilityIdentifier(ticked ? "tick.on" : "tick.off")
+                    }
                     // The picker is reached FROM the category editor (its "Parent" row) as
                     // well as from the transaction sheet, so it has to match the list it
                     // is opened from — circles here would put two treatments on one screen.
@@ -259,7 +292,7 @@ struct CategoryTreeRow: View {
                                  tint: Color(hex: effectiveColor(c, byId)) ?? .secondary)
                     Text(c.name).foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    if isSelected { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                    if tickState == nil, isSelected { Image(systemName: "checkmark").foregroundStyle(.tint) }
                 }
                 .contentShape(Rectangle())
             }
