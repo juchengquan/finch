@@ -798,16 +798,6 @@
         }
       }
     },
-    "Add an investment account first (import a pack with one).": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "请先添加一个投资账户（导入含投资账户的数据包）。"
-          }
-        }
-      }
-    },
     "Add anyway": {
       "localizations": {
         "zh-Hans": {
@@ -4202,16 +4192,6 @@
         }
       }
     },
-    "No holdings": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "暂无持仓"
-          }
-        }
-      }
-    },
     "No income categories yet": {
       "localizations": {
         "zh-Hans": {
@@ -6192,16 +6172,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "点按 + 或日历中的日期以添加定期交易。"
-          }
-        }
-      }
-    },
-    "Tap + to add a position.": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "点击 + 添加一个持仓。"
           }
         }
       }
