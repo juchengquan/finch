@@ -129,13 +129,18 @@ struct MerchantsView: View {
             Button { selectedMerchantId = cp.id } label: { rowLabel(cp, counts) }
                 .buttonStyle(.plain)
                 .swipeActions(edge: .trailing) {
-                    // Rename first ⇒ outer edge / full-swipe default (never delete).
-                    Button { editing = cp } label: { Label("Rename", systemImage: "pencil") }.tint(.accentColor)
+                    // Edit first ⇒ outer edge / full-swipe default (never delete).
+                    Button { editing = cp } label: { Label("Edit", systemImage: "pencil") }.tint(.accentColor)
                     Button { pendingDelete = cp } label: { Label("Delete", systemImage: "trash") }.tint(.red)
+                }
+                .swipeActions(edge: .leading) {
+                    // Merge lives on its own edge on all three power-tools screens: it
+                    // acts on TWO entities, not one, and three actions crowded onto the
+                    // trailing edge pushed the labels toward icons.
                     Button { mergingFrom = cp } label: { Label("Merge…", systemImage: "arrow.triangle.merge") }.tint(.orange)
                 }
                 .contextMenu {
-                    Button { editing = cp } label: { Label("Rename", systemImage: "pencil") }
+                    Button { editing = cp } label: { Label("Edit", systemImage: "pencil") }
                     Button { toggleVerify(cp) } label: { Label(cp.isVerified ? "Unverify" : "Verify", systemImage: "checkmark.seal") }
                     Button { mergingFrom = cp } label: { Label("Merge…", systemImage: "arrow.triangle.merge") }
                     Button(role: .destructive) { pendingDelete = cp } label: { Label("Delete", systemImage: "trash") }

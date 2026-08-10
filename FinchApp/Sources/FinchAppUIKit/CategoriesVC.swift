@@ -112,6 +112,12 @@ final class CategoriesVC: UIViewController {
     private func configureCollectionView() {
         var config = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
         config.headerMode = .none
+        // Merge sits on its own edge on all three power-tools screens: it acts on
+        // TWO entities, not one, and three actions crowded onto the trailing edge
+        // pushed the labels toward icons.
+        config.leadingSwipeActionsConfigurationProvider = { [weak self] indexPath in
+            self?.leadingSwipeActions(at: indexPath)
+        }
         config.trailingSwipeActionsConfigurationProvider = { [weak self] indexPath in
             self?.swipeActions(at: indexPath)
         }
@@ -391,13 +397,20 @@ final class CategoriesVC: UIViewController {
         delete.image = UIImage(systemName: "trash")
         delete.backgroundColor = .systemRed
 
+        return UISwipeActionsConfiguration(actions: [edit, delete])
+    }
+
+    /// Merge — the leading (swipe-right) edge. See `swipeActions` for why it is not
+    /// crowded in with edit and delete.
+    private func leadingSwipeActions(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        guard let id = dataSource.itemIdentifier(for: indexPath),
+              let row = flatByID[id]?.row else { return nil }
         let merge = UIContextualAction(style: .normal, title: String(localized: "Merge…")) { [weak self] _, _, done in
             self?.presentMergeTargets(for: row); done(true)
         }
         merge.image = UIImage(systemName: "arrow.triangle.merge")
         merge.backgroundColor = .systemOrange
-
-        return UISwipeActionsConfiguration(actions: [edit, delete, merge])
+        return UISwipeActionsConfiguration(actions: [merge])
     }
 
     // MARK: Writes — all through the same chokepoints the SwiftUI screen used
