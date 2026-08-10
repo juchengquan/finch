@@ -401,11 +401,17 @@ final class AccountsListVC: UIViewController {
             self?.enterReorder()
         }
         reorder.attributes = hasAccounts ? [] : .disabled
+        // Reconcile always launches for a SPECIFIC account (the no-preselect
+        // sheet was a dead first step — Aug 3 doc, "Dropped"). The list-level
+        // action goes to the first account's mode only when there is exactly
+        // one; otherwise it is disabled and the per-account context menu is
+        // the path.
         let reconcile = UIAction(title: String(localized: "Reconcile"),
                                  image: UIImage(systemName: "checkmark.circle")) { [weak self] _ in
-            self?.present(self?.hostSheet(ReconcileSheet()) ?? UIViewController(), animated: true)
+            guard let self, let only = self.store.accounts.first, self.store.accounts.count == 1 else { return }
+            self.pushReconcileMode(accountId: only.id)
         }
-        reconcile.attributes = hasAccounts ? [] : .disabled
+        reconcile.attributes = store.accounts.count == 1 ? [] : .disabled
 
         let more = UIBarButtonItem(image: UIImage(systemName: "ellipsis"), menu: UIMenu(children: [
             UIAction(title: String(localized: "Add Group"),
@@ -767,6 +773,16 @@ final class AccountsListVC: UIViewController {
 
 // MARK: - Selection, context menus
 
+extension AccountsListVC {
+    /// The reconcile MODE lives in account detail (2026-08-10 design) — every
+    /// entry point navigates there and arms the mode for arrival.
+    func pushReconcileMode(accountId: String) {
+        let vc = AccountDetailVC(accountId: accountId)
+        vc.pendingReconcileEntry = true
+        navigationController?.pushViewController(vc, animated: true)
+    }
+}
+
 extension AccountsListVC: UICollectionViewDelegate {
     func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
         guard let id = dataSource.itemIdentifier(for: indexPath) else { return false }
@@ -845,8 +861,7 @@ extension AccountsListVC: UICollectionViewDelegate {
                     },
                     UIAction(title: String(localized: "Reconcile"),
                              image: UIImage(systemName: "checkmark.circle")) { _ in
-                        guard let self else { return }
-                        self.present(self.hostSheet(ReconcileSheet(preselect: account.id)), animated: true)
+                        self?.pushReconcileMode(accountId: account.id)
                     },
                 ]),
                 UIMenu(title: "", options: .displayInline, children: [
