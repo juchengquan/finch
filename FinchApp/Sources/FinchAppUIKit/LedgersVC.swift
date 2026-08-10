@@ -92,6 +92,9 @@ final class LedgersVC: UIViewController {
         config.trailingSwipeActionsConfigurationProvider = { [weak self] ip in
             self?.swipeActions(at: ip)
         }
+        config.leadingSwipeActionsConfigurationProvider = { [weak self] ip in
+            self?.leadingSwipeActions(at: ip)
+        }
         collectionView = UICollectionView(
             frame: .zero,
             collectionViewLayout: UICollectionViewCompositionalLayout.list(using: config))
@@ -181,6 +184,62 @@ final class LedgersVC: UIViewController {
 
     /// Delete is disabled at one ledger: the app has no meaningful state with none,
     /// and the SwiftUI row disables it the same way.
+    /// Leading swipe: make this ledger the active one.
+    ///
+    /// The constructive verb goes on the LEADING edge, matching `AccountsListVC` and
+    /// `BudgetsListVC`, which both put "Add Transaction" there with Delete trailing.
+    ///
+    /// No confirmation, deliberately: the detail page's row has never asked for one and
+    /// the action is reversible — activating another ledger undoes it. A dialog on a
+    /// reversible switch is how people learn to dismiss dialogs unread, which is what
+    /// makes the Delete confirmation stop working.
+    ///
+    /// The ACTIVE ledger gets a grey, non-acting "Active" chip rather than nothing, so
+    /// the gesture answers the same on every row. `UIContextualAction` has no
+    /// `isEnabled`, so "disabled" can only mean "does nothing" — hence a checkmark and a
+    /// status word rather than a button that visibly refuses. Known limitation:
+    /// VoiceOver still announces it as a button; contextual actions expose no disabled
+    /// trait.
+    private func leadingSwipeActions(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        guard let id = dataSource.itemIdentifier(for: indexPath),
+              let ledger = ledgerByID[id] else { return nil }
+
+        if ledger.id == store.activeLedgerId {
+            let current = UIContextualAction(style: .normal,
+                                             title: String(localized: "Active")) { _, _, done in
+                done(false)   // a status, not an action
+            }
+            current.image = UIImage(systemName: "checkmark")
+            current.backgroundColor = .systemGray3
+            let config = UISwipeActionsConfiguration(actions: [current])
+            config.performsFirstActionWithFullSwipe = false
+            return config
+        }
+
+        let activate = UIContextualAction(style: .normal,
+                                          title: String(localized: "Make active")) { [weak self] _, _, done in
+            guard let self else { return done(false) }
+            do {
+                // The SAME write the detail page makes (`LedgerDetailVC.makeActive`):
+                // through the action chokepoint, not a bare assignment. Two ways to
+                // switch ledgers is exactly the drift the conversion notes warn about.
+                try self.store.apply(.setDefaultLedger, Args(["id": .string(ledger.id)]))
+                self.store.activeLedgerId = ledger.id
+                done(true)
+            } catch {
+                self.presentError(i18nMessage(error))
+                done(false)
+            }
+        }
+        activate.image = UIImage(systemName: "checkmark.circle")
+        activate.backgroundColor = .systemBlue
+        let config = UISwipeActionsConfiguration(actions: [activate])
+        // Same reason Delete here is `.normal`: switching a whole ledger should be a
+        // deliberate tap on the revealed button, not the end of a fast flick.
+        config.performsFirstActionWithFullSwipe = false
+        return config
+    }
+
     private func swipeActions(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         guard let id = dataSource.itemIdentifier(for: indexPath),
               let ledger = ledgerByID[id], store.ledgers.count > 1 else { return nil }
