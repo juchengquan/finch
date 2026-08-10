@@ -400,8 +400,8 @@ struct CategoriesView: View {
     /// feedback for the copy-OUT direction, where the target isn't the ledger on
     /// screen and nothing visibly changes.
     private func copyDone(_ added: Int) {
-        Haptics.success()
         ToastCenter.shared.show(added > 0 ? "\(added) added" : "Nothing new to copy")
+        Haptics.success()
     }
 
     /// One write for the whole drag — see `Categories.setOrder`. A move per sibling

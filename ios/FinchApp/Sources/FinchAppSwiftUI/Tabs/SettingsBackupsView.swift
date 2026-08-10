@@ -229,8 +229,8 @@ struct SettingsBackupsView: View {
         } catch PackError.auditFailed(let problems) {
             auditMessage = "\(problems.count) integrity problem(s). Use Settings › About › Force import to override (iOS only)."
         } catch {
-            Haptics.warning()
             errorMessage = i18nMessage(error)
+            Haptics.warning()
         }
     }
 
