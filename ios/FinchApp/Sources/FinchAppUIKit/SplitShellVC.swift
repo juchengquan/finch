@@ -147,13 +147,33 @@ final class SplitShellVC: UIViewController {
         // instead — see TabBarShell.focusedTx.
         router.$focusedId
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] id in
-                guard let self, self.router.selectedTab == .activity, let id,
-                      self.store.txns.contains(where: { $0.id == id }) else { return }
-                self.selection.tx = id
-                self.router.focusedId = nil
-            }
+            .sink { [weak self] _ in self?.consumeFocusedTx() }
             .store(in: &cancellables)
+
+        // The SAME consumption, re-attempted when the projection lands. A deep link
+        // arrives during launch, and `route(to:)` runs right after `bootstrap()` — so
+        // the id can be set BEFORE `txns` is populated, in which case the attempt above
+        // finds no such transaction and drops it. Only `$focusedId` used to drive this,
+        // and it never fires twice for one link, so the drop was permanent.
+        store.$txns
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.consumeFocusedTx() }
+            .store(in: &cancellables)
+    }
+
+    /// A `tx:` deep link (Spotlight / notification) at regular width selects the
+    /// transaction in the Activity detail column. Compact shows the edit sheet instead
+    /// — see `TabChromeVC.focusedTx`.
+    ///
+    /// The `.activity` guard is deliberate and kept: at regular width a `tx:` link
+    /// SELECTS in the Activity column, and compact shows the edit sheet instead. What
+    /// was missing is the retry below — the tab guard is fine because `route(to:)`
+    /// sets the tab a moment later and the store lands later still.
+    private func consumeFocusedTx() {
+        guard router.selectedTab == .activity, let id = router.focusedId,
+              store.txns.contains(where: { $0.id == id }) else { return }
+        selection.tx = id
+        router.focusedId = nil
     }
 
     // MARK: - Building the split view

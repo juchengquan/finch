@@ -108,7 +108,19 @@ final class AccountsListVC: UIViewController {
         // `txnsReady`.
         store.objectWillChange
             .receive(on: DispatchQueue.main)   // delivered after the mutation lands
-            .sink { [weak self] _ in self?.setNeedsSnapshot() }
+            .sink { [weak self] _ in
+                self?.setNeedsSnapshot()
+                // Re-attempt a pending deep link now that the store has moved. A link
+                // arrives during launch and `route(to:)` runs right after `bootstrap()`,
+                // so `focusedId` can be set BEFORE `accounts` is projected — and the
+                // `$focusedId` sink below never fires twice for one link, so that first
+                // failed attempt was the only one. Measured: `account:` opened the
+                // record on iPhone and left the iPad's detail column on its placeholder,
+                // and the difference was only that the iPad's column is built without a
+                // tab change to rebuild it afterwards. `consumeFocus` clears the id, so
+                // this is a no-op once it has been honoured.
+                self?.consumeFocus()
+            }
             .store(in: &cancellables)
 
         // Collapse state is per-ledger, so a ledger switch loads a different set.

@@ -199,6 +199,27 @@ final class RootTabBarController: UITabBarController {
     ///
     /// The modal stays for Insights, which is still a hosted root with no stack to push
     /// onto, and for the whole app while the flag is off.
+    /// Open a `category:` / `counterparty:` deep link on the selected tab's stack.
+    ///
+    /// Only these two kinds: `tx:` is the edit sheet (`focusedTx`), and `account:` /
+    /// `budget:` are owned by their own lists, which know whether to push or to select
+    /// a column. Nothing owned these two, which is the defect.
+    private func consumeFocusedRecord() {
+        guard let id = router.focusedId, let nav = selectedTabNav else { return }
+        let source: TxListDetailVC.Source
+        if let c = store.categories.first(where: { $0.id == id }) {
+            source = .category(c)
+        } else if let m = store.merchants.first(where: { $0.id == id }) {
+            source = .merchant(m)
+        } else {
+            return   // another kind's id, or the projection has not landed yet
+        }
+        router.focusedId = nil
+        // Guard against stacking a second copy if the same link is delivered twice.
+        guard !(nav.topViewController is TxListDetailVC) else { return }
+        nav.pushViewController(TxListDetailVC(source), animated: true)
+    }
+
     private func presentLedgers() {
         guard ledgerNav == nil, pushedLedger == nil else { return }   // single slot, as the cover had
         let vc = LedgersVC()
@@ -255,6 +276,27 @@ final class RootTabBarController: UITabBarController {
                     self.selectedIndex = i
                 }
             }
+            .store(in: &cancellables)
+
+        // `category:` and `counterparty:` had NO consumer anywhere — measured, both
+        // dead-ended silently. Spotlight indexes and offers both, and the ids were
+        // being checked against collections they can never appear in: `category:`
+        // routes to the Budgets tab, whose guard tests `store.budgets`, and
+        // `counterparty:` routes to Activity, whose guard tests `store.txns`. A
+        // category id is not a budget id and a merchant id is not a posting id, so
+        // every one of those taps switched a tab and stopped.
+        //
+        // They open the SAME screen a tap does — `TxListDetailVC`, the record's
+        // transactions — so a Spotlight result and an in-app drill land in the same
+        // place. Driven off the store as well as the id for the reason in
+        // `AccountsListVC`: the link can arrive before the projection.
+        router.$focusedId
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.consumeFocusedRecord() }
+            .store(in: &cancellables)
+        store.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.consumeFocusedRecord() }
             .store(in: &cancellables)
 
         // The ledger flow. It used to be a hosted SwiftUI cover applied in TabChrome —
