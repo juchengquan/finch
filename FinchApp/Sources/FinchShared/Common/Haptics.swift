@@ -16,8 +16,8 @@ enum Haptics {
         UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true
     }
 
-    static func success() { fire(.success) }
-    static func warning() { fire(.warning) }
+    @MainActor static func success() { fire(.success) }
+    @MainActor static func warning() { fire(.warning) }
 
     /// A control responded — not an outcome. Used by the transaction row's status
     /// glyph, where the row typically moves to another section on tap and so
@@ -30,9 +30,14 @@ enum Haptics {
     @MainActor static func tap() { impact() }
 
     #if os(iOS)
-    private static func fire(_ type: UINotificationFeedbackGenerator.FeedbackType) {
+    /// Retained and prepared, for the same reason as ``impactGenerator``: an
+    /// unprepared generator makes the Taptic Engine warm up before it can play.
+    @MainActor private static let notificationGenerator = UINotificationFeedbackGenerator()
+
+    @MainActor private static func fire(_ type: UINotificationFeedbackGenerator.FeedbackType) {
         guard enabled else { return }
-        UINotificationFeedbackGenerator().notificationOccurred(type)
+        notificationGenerator.notificationOccurred(type)
+        notificationGenerator.prepare()
     }
     /// Retained and PREPARED, not built per call.
     ///

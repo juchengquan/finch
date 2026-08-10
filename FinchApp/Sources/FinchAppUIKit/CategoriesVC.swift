@@ -554,8 +554,8 @@ final class CategoriesVC: UIViewController {
     }
 
     private func copyDone(_ added: Int) {
-        Haptics.success()
         ToastCenter.shared.show(added > 0 ? "\(added) added" : "Nothing new to copy")
+        Haptics.success()
     }
 
     // MARK: Sheets — SwiftUI, hosted. They are presented, so they never shadow.

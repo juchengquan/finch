@@ -373,7 +373,7 @@ struct EditTransactionSheet: View {
                         // Anchored on the button (iOS 26 positions popouts at their source).
                         .confirmationDialog("Delete this transaction?", isPresented: $confirmingDelete, titleVisibility: .visible) {
                             Button("Delete", role: .destructive) {
-                                do { try store.deleteTransaction(txn.id); Haptics.warning(); dismiss() }   // also unlinks receipt files
+                                do { try store.deleteTransaction(txn.id); dismiss(); Haptics.warning() }   // also unlinks receipt files
                                 catch { errorMessage = i18nMessage(error) }
                             }
                         } message: {
@@ -735,9 +735,9 @@ struct EditTransactionSheet: View {
             try store.apply(.saveTransaction, Args(args))
             // The ledger rows cascade-delete with their entry; the FILES do not.
             store.unlinkOrphanedAttachments(relPaths: orphaned)
-            Haptics.success()
             dismiss()
-        } catch { Haptics.warning(); errorMessage = i18nMessage(error) }
+            Haptics.success()
+        } catch { errorMessage = i18nMessage(error); Haptics.warning() }
     }
 
     /// A transfer saves through the same one write every other kind uses.
@@ -783,9 +783,9 @@ struct EditTransactionSheet: View {
             ]
             if !note.isEmpty { args["note"] = .string(note) }
             try store.apply(.saveTransaction, Args(args))
-            Haptics.success()
             dismiss()
-        } catch { Haptics.warning(); errorMessage = i18nMessage(error) }
+            Haptics.success()
+        } catch { errorMessage = i18nMessage(error); Haptics.warning() }
     }
 
     /// Run a lifecycle action then dismiss (these don't re-edit the open form).
