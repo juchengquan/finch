@@ -166,7 +166,7 @@ final class AccountsListVC: UIViewController {
     }
 
     private func configureDataSource() {
-        let cell = UICollectionView.CellRegistration<UICollectionViewListCell, String> { [weak self] cell, _, id in
+        let cell = UICollectionView.CellRegistration<DividerInsetListCell, String> { [weak self] cell, _, id in
             guard let self else { return }
             cell.accessories = []
 
