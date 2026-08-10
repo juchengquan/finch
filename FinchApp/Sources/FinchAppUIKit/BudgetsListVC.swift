@@ -115,7 +115,14 @@ final class BudgetsListVC: UIViewController {
         // and `txnsReady`.
         store.objectWillChange
             .receive(on: DispatchQueue.main)   // delivered after the mutation lands
-            .sink { [weak self] _ in self?.applySnapshot() }
+            .sink { [weak self] _ in
+                self?.applySnapshot()
+                // Re-attempt a pending deep link — see `AccountsListVC` for why one
+                // emission is not enough. `budget:` happens to work today at both
+                // widths, but only because switching to this tab rebuilds the column
+                // AFTER the projection lands; that is luck, not sequencing.
+                self?.consumeFocus()
+            }
             .store(in: &cancellables)
 
         // Collapse state is per-ledger, so a ledger switch loads a different set.
