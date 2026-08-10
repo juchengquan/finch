@@ -27,16 +27,33 @@ enum Haptics {
     /// An IMPACT, not `.success`: the notification haptics above announce that
     /// something finished, and firing one on every toggle — including un-confirming
     /// — would both overstate the event and read as "saved" in the wrong direction.
-    static func tap() { impact() }
+    @MainActor static func tap() { impact() }
 
     #if os(iOS)
     private static func fire(_ type: UINotificationFeedbackGenerator.FeedbackType) {
         guard enabled else { return }
         UINotificationFeedbackGenerator().notificationOccurred(type)
     }
-    private static func impact() {
+    /// Retained and PREPARED, not built per call.
+    ///
+    /// A generator constructed at the call site is unprepared, and an unprepared
+    /// Taptic Engine has to warm up before it can play — which is the whole reason
+    /// `prepare()` exists. The row's status glyph fired one *before* running the
+    /// toggle, so the warm-up sat between the tap and the state change on device.
+    /// The simulator has no Taptic Engine, so none of this is visible there.
+    ///
+    /// Keeping one instance lets the engine stay warm across a burst of taps; the
+    /// system spins it back down on its own, and `prepare()` before each play
+    /// re-warms it when it has.
+    @MainActor private static let impactGenerator = UIImpactFeedbackGenerator(style: .light)
+
+    /// `@MainActor` so the compiler proves every caller is on it — the generator is
+    /// UIKit state. `MainActor.assumeIsolated` would defer that to a runtime crash.
+    @MainActor private static func impact() {
         guard enabled else { return }
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        impactGenerator.impactOccurred()
+        // Warm for the next one: taps on this control usually come in runs.
+        impactGenerator.prepare()
     }
     #else
     private enum Kind { case success, warning }
