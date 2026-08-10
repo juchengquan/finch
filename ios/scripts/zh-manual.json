@@ -643,7 +643,6 @@
   "Updated %lld of %lld": "已更新 %lld 条，共 %lld 条",
   "Updated %lld rates": "已更新 %lld 条汇率",
   "Use system size": "使用系统大小",
-  "View all activity": "查看全部动态",
   "Weekday": "星期",
   "When": "当",
   "Year": "年",
@@ -735,5 +734,8 @@
   "This also deletes the other side of the transfer.": "转账的另一侧记录也会一并删除。",
   "Add position": "添加持仓",
   "%@ unrealized": "未实现 %@",
-  "%@ · %@ total": "%@ · 合计 %@"
+  "%@ · %@ total": "%@ · 合计 %@",
+  "Make active": "设为当前账本",
+  "Current": "当前",
+  "View all activity": "查看全部动态"
 }
