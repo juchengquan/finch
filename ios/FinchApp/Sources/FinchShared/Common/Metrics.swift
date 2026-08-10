@@ -123,6 +123,22 @@ enum Metrics {
     /// deliberately built to scan alike, and two literals is how that drifts.
     static let rowAmountFont: Font = .subheadline
 
+    /// The WEIGHT that goes with `rowAmountFont`, on the same two rows.
+    ///
+    /// Here rather than at the call sites for the reason the size is here: `TxRow` and
+    /// `ScheduledRow` are deliberately built to scan alike, and two literals is how that
+    /// drifts. The size moved first and the weight stayed behind — so the pair was
+    /// already half-shared, which is the worse of the two states.
+    ///
+    /// `.medium`, not `.semibold`. The amount is ALREADY a notch smaller than the
+    /// category beside it, so weight is what keeps the figure findable when a list is
+    /// scanned by number rather than by name — but semibold made it the loudest thing in
+    /// a row it does not need to dominate. Compared on the simulator at all three
+    /// weights on the same rows: regular loses to the category name and starts competing
+    /// with the grey running balance beneath it; medium stays clearly the figure while
+    /// letting the row settle.
+    static let rowAmountWeight: Font.Weight = .medium
+
     /// Minimum side of an interactive element, per Apple's HIG.
     ///
     /// Named as a FLOOR, not a size, because the pressure on it is always

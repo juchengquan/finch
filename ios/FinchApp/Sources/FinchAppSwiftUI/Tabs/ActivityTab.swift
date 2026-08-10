@@ -772,7 +772,7 @@ struct TxRow: View {
             VStack(alignment: .trailing, spacing: 1) {
                 Text(store.displayMoneyBase(txn.amount))
                     .font(Metrics.rowAmountFont)   // one notch below the category — see Metrics
-                    .fontWeight(.semibold)
+                    .fontWeight(Metrics.rowAmountWeight)
                 // nil on a pending row — it has not cleared, so there is no
                 // "balance after" to print.
                 if showRunningBalance, let remaining = store.runningBalanceBase(for: txn) {
