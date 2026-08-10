@@ -315,7 +315,7 @@ struct ScheduledRow: View {
             if let amount = template.amount {
                 Text(store.displayMoney(amount, from: accountCurrency))
                     .font(Metrics.rowAmountFont)   // mirrors TxRow — see Metrics
-                    .fontWeight(.semibold)
+                    .fontWeight(Metrics.rowAmountWeight)
             } else {
                 Text("Variable").font(.caption).foregroundStyle(.secondary)
             }
