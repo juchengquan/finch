@@ -66,6 +66,28 @@ enum Metrics {
     /// in the app shares — deliberately not narrowed to close the last few points.
     static let modePickerBottomGap: CGFloat = 4
 
+    /// Leading inset of a row divider, measured from the card's own leading edge — read
+    /// by `DividerInsetListCell` on the UIKit Accounts and Budgets screens.
+    ///
+    /// The SwiftUI screens reach the same 32pt a different way: `finchRowDividerInset()`
+    /// pins the divider to the row content's own leading edge, which already sits this
+    /// far in, so there is no constant to read. Both measured at 32pt — that agreement
+    /// is verified by measurement, not by a shared value, so re-measure if either side
+    /// changes.
+    ///
+    /// Left alone, iOS aligns each divider to the start of the TEXT on the row above it,
+    /// skipping any leading icon. Rows with different leading content therefore produce
+    /// different dividers, and on Accounts that meant three: 40pt under the net-worth
+    /// row (no icon), 52pt under a group header (chevron + colour dot), 68pt under an
+    /// account row (glyph). Stacked inside one card, the 52→68 step is what reads as
+    /// broken. Measured, not guessed; the SwiftUI screens produced the same three, so
+    /// this was never a conversion regression.
+    ///
+    /// 16 because the dividers already END 16pt inside the card's trailing edge, so the
+    /// same value on the leading side makes each one symmetric within its card. It also
+    /// happens to be where Budgets' own rows already sat, so the two screens now agree.
+    static let rowSeparatorInset: CGFloat = 16
+
     /// Height of the kind/type stripe at a row's trailing edge, beside the amount —
     /// `TxRow` in every transaction list, and `ScheduledRow`, which mirrors it.
     ///

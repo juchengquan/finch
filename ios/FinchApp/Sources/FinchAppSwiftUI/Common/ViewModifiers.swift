@@ -74,3 +74,21 @@ extension View {
             .environment(\.defaultMinListRowHeight, Metrics.sheetRowMinHeight)
     }
 }
+
+extension View {
+    /// Pin this row's divider to the card's own leading edge rather than to the row's
+    /// text — the SwiftUI half of `Metrics.rowSeparatorInset`.
+    ///
+    /// By default iOS aligns a divider to where the TEXT above it starts, skipping any
+    /// leading icon, so rows with different leading content give different dividers. On
+    /// Accounts that produced three (40 / 52 / 68pt) and the 52→68 step inside one card
+    /// is what reads as broken. Returning the content's own leading edge puts every
+    /// divider at the same place.
+    ///
+    /// The UIKit screens do this through `UIListSeparatorConfiguration`; this keeps the
+    /// SwiftUI screens — macOS, and the `-uikitActivity NO` control — drawing the same,
+    /// so the control stays a clean baseline for visual diffs.
+    func finchRowDividerInset() -> some View {
+        alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
+    }
+}
