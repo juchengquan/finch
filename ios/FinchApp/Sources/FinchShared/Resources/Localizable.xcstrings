@@ -5253,16 +5253,6 @@
         }
       }
     },
-    "Rename": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "重命名"
-          }
-        }
-      }
-    },
     "Rename Merchant": {
       "localizations": {
         "zh-Hans": {

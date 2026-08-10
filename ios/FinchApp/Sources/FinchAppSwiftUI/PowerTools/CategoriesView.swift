@@ -319,6 +319,11 @@ struct CategoriesView: View {
                     // Not role: .destructive — see ActivityTab (fake removal
                     // animation kills the row-anchored popout).
                     Button { deleting = c } label: { Label("Delete", systemImage: "trash") }.tint(.red)
+                }
+                .swipeActions(edge: .leading) {
+                    // Merge lives on its own edge on all three power-tools screens: it
+                    // acts on TWO entities, not one, and three actions crowded onto the
+                    // trailing edge pushed the labels toward icons.
                     Button { mergingFrom = c } label: { Label("Merge…", systemImage: "arrow.triangle.merge") }.tint(.orange)
                 }
                 .contextMenu {

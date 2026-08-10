@@ -71,6 +71,12 @@ final class TagsVC: UIViewController {
     private func configureCollectionView() {
         var config = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
         config.headerMode = .none
+        // Merge sits on its own edge on all three power-tools screens: it acts on
+        // TWO entities, not one, and three actions crowded onto the trailing edge
+        // pushed the labels toward icons.
+        config.leadingSwipeActionsConfigurationProvider = { [weak self] indexPath in
+            self?.leadingSwipeActions(at: indexPath)
+        }
         config.trailingSwipeActionsConfigurationProvider = { [weak self] indexPath in
             self?.swipeActions(at: indexPath)
         }
@@ -215,12 +221,6 @@ final class TagsVC: UIViewController {
         edit.image = UIImage(systemName: "pencil")
         edit.backgroundColor = .tintColor
 
-        let merge = UIContextualAction(style: .normal, title: String(localized: "Merge…")) { [weak self] _, _, done in
-            self?.presentMergeTargets(for: tag); done(true)
-        }
-        merge.image = UIImage(systemName: "arrow.triangle.merge")
-        merge.backgroundColor = .systemOrange
-
         // Not `.destructive`: that style animates the row away before the alert is
         // answered.
         let delete = UIContextualAction(style: .normal, title: String(localized: "Delete")) { [weak self] _, _, done in
@@ -229,7 +229,21 @@ final class TagsVC: UIViewController {
         delete.image = UIImage(systemName: "trash")
         delete.backgroundColor = .systemRed
 
-        return UISwipeActionsConfiguration(actions: [edit, merge, delete])
+        return UISwipeActionsConfiguration(actions: [edit, delete])
+    }
+
+    /// Merge — the leading (swipe-right) edge. See `swipeActions` for why it is not
+    /// crowded in with edit and delete.
+    private func leadingSwipeActions(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        guard !isSelecting,
+              let id = dataSource.itemIdentifier(for: indexPath),
+              let tag = tagByID[id] else { return nil }
+        let merge = UIContextualAction(style: .normal, title: String(localized: "Merge…")) { [weak self] _, _, done in
+            self?.presentMergeTargets(for: tag); done(true)
+        }
+        merge.image = UIImage(systemName: "arrow.triangle.merge")
+        merge.backgroundColor = .systemOrange
+        return UISwipeActionsConfiguration(actions: [merge])
     }
 
     // MARK: Writes

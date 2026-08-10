@@ -16,7 +16,7 @@ import FinchCore
 ///     and the search bar is absent with it (the SwiftUI screen attaches
 ///     `.searchable` to the List branch only);
 ///   - the swipe order is Rename, Delete, Merge… — Tags puts Merge second;
-///   - the action is called "Rename", not "Edit";
+///   - the sheet is name-only, though the action reads "Edit" like the other two;
 ///   - Verify/Unverify exists ONLY in the context menu, never on the swipe;
 ///   - the delete message has two branches, because deleting a merchant that has
 ///     transactions does not delete them — they keep the name and lose the link.
@@ -69,6 +69,12 @@ final class MerchantsVC: UIViewController {
     private func configureCollectionView() {
         var config = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
         config.headerMode = .none
+        // Merge sits on its own edge on all three power-tools screens: it acts on
+        // TWO entities, not one, and three actions crowded onto the trailing edge
+        // pushed the labels toward icons.
+        config.leadingSwipeActionsConfigurationProvider = { [weak self] indexPath in
+            self?.leadingSwipeActions(at: indexPath)
+        }
         config.trailingSwipeActionsConfigurationProvider = { [weak self] indexPath in
             self?.swipeActions(at: indexPath)
         }
@@ -200,13 +206,13 @@ final class MerchantsVC: UIViewController {
               let id = dataSource.itemIdentifier(for: indexPath),
               let merchant = merchantByID[id] else { return nil }
 
-        let rename = UIContextualAction(style: .normal, title: String(localized: "Rename")) { [weak self] _, _, done in
+        let edit = UIContextualAction(style: .normal, title: String(localized: "Edit")) { [weak self] _, _, done in
             guard let self else { return done(false) }
             self.present(self.hosted(CounterpartyNameSheet(counterparty: merchant)), animated: true)
             done(true)
         }
-        rename.image = UIImage(systemName: "pencil")
-        rename.backgroundColor = .tintColor
+        edit.image = UIImage(systemName: "pencil")
+        edit.backgroundColor = .tintColor
 
         // Not `.destructive`: the alert confirms first.
         let delete = UIContextualAction(style: .normal, title: String(localized: "Delete")) { [weak self] _, _, done in
@@ -215,13 +221,21 @@ final class MerchantsVC: UIViewController {
         delete.image = UIImage(systemName: "trash")
         delete.backgroundColor = .systemRed
 
+        return UISwipeActionsConfiguration(actions: [edit, delete])
+    }
+
+    /// Merge — the leading (swipe-right) edge. See `swipeActions` for why it is not
+    /// crowded in with edit and delete.
+    private func leadingSwipeActions(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        guard !isSelecting,
+              let id = dataSource.itemIdentifier(for: indexPath),
+              let merchant = merchantByID[id] else { return nil }
         let merge = UIContextualAction(style: .normal, title: String(localized: "Merge…")) { [weak self] _, _, done in
             self?.presentMergeTargets(for: merchant); done(true)
         }
         merge.image = UIImage(systemName: "arrow.triangle.merge")
         merge.backgroundColor = .systemOrange
-
-        return UISwipeActionsConfiguration(actions: [rename, delete, merge])
+        return UISwipeActionsConfiguration(actions: [merge])
     }
 
     // MARK: Writes
@@ -383,7 +397,7 @@ extension MerchantsVC: UICollectionViewDelegate {
               let merchant = merchantByID[id] else { return nil }
         return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
             UIMenu(children: [
-                UIAction(title: String(localized: "Rename"), image: UIImage(systemName: "pencil")) { _ in
+                UIAction(title: String(localized: "Edit"), image: UIImage(systemName: "pencil")) { _ in
                     guard let self else { return }
                     self.present(self.hosted(CounterpartyNameSheet(counterparty: merchant)), animated: true)
                 },
