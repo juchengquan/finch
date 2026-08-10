@@ -692,11 +692,14 @@ struct TxRow: View {
                 .overlay {
                     if let onToggleStatus {
                         Button {
+                            // The state change goes FIRST. The haptic is feedback about
+                            // work already done, and playing it first put the Taptic
+                            // Engine's warm-up between the tap and the row moving.
+                            onToggleStatus(txn)
                             // The row usually LEAVES the screen on tap — it moves to
                             // another section — so this is the only confirmation the
                             // press landed on the control rather than the row behind it.
                             Haptics.tap()
-                            onToggleStatus(txn)
                         } label: {
                             Color.clear.contentShape(Rectangle())
                         }
