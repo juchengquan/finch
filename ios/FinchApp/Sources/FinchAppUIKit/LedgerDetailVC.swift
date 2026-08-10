@@ -25,14 +25,10 @@ final class LedgerDetailVC: UIViewController {
     private var ledger: Ledger? { store.ledgers.first { $0.id == ledgerId } }
     private var isActive: Bool { ledgerId == store.activeLedgerId }
 
-    private enum SectionID: Hashable { case summary, accounts, currency, actions, activity }
+    private enum SectionID: Hashable { case summary, accounts, currency }
     private static let netWorthID = "__net_worth__"
     private static let monthID = "__month__"
     private static let currencyID = "__currency__"
-    private static let makeActiveID = "__make_active__"
-    private static let editID = "__edit__"
-    private static let deleteID = "__delete__"
-    private static let activityID = "__activity__"
     private static let accountPrefix = "__acct__"
 
     private var collectionView: UICollectionView!
@@ -55,6 +51,7 @@ final class LedgerDetailVC: UIViewController {
         navigationItem.largeTitleDisplayMode = .never
         configureCollectionView()
         configureDataSource()
+        configureToolbar()
         reloadSummary()
 
         store.$ledgers
@@ -68,6 +65,10 @@ final class LedgerDetailVC: UIViewController {
                     return
                 }
                 self.title = ledger.name
+                // Rebuild the menu too: its Delete is disabled at one ledger, and a
+                // `UIMenu` captures that count when it is built. The row this replaced
+                // was reconfigured on every snapshot, so it never went stale.
+                self.configureToolbar()
                 self.applySnapshot()
             }
             .store(in: &cancellables)
@@ -146,7 +147,7 @@ final class LedgerDetailVC: UIViewController {
                 }
 
             case Self.currencyID:
-                cfg.text = String(localized: "Display currency")
+                cfg.text = String(localized: "Base currency")
                 cell.contentConfiguration = cfg
                 let current = self.store.displayCurrency(forLedger: self.ledgerId)
                 cell.accessories = [self.menuAccessory(
@@ -157,30 +158,6 @@ final class LedgerDetailVC: UIViewController {
                         self.store.setDisplayCurrency(code, ledgerId: self.ledgerId)
                         self.reloadSummary()
                     })]
-
-            case Self.makeActiveID:
-                cfg.text = String(localized: "Make active ledger")
-                cfg.textProperties.color = .tintColor
-                cell.contentConfiguration = cfg
-
-            case Self.editID:
-                cfg.text = String(localized: "Edit")
-                cfg.textProperties.color = .tintColor
-                cell.contentConfiguration = cfg
-
-            case Self.deleteID:
-                cfg.text = String(localized: "Delete")
-                // Disabled at one ledger, like the SwiftUI button — greyed rather than
-                // hidden so the action's absence is explained by its state.
-                cfg.textProperties.color = self.store.ledgers.count > 1 ? .systemRed : .tertiaryLabel
-                cell.contentConfiguration = cfg
-
-            case Self.activityID:
-                cfg.text = String(localized: "View all activity")
-                cfg.image = UIImage(systemName: "list.bullet")
-                cfg.textProperties.color = .tintColor
-                cell.contentConfiguration = cfg
-                cell.accessories = [.disclosureIndicator()]
 
             default:
                 guard let account = self.accountByID[id] else { return }
@@ -244,21 +221,42 @@ final class LedgerDetailVC: UIViewController {
         snap.appendSections([.currency])
         snap.appendItems([Self.currencyID], toSection: .currency)
 
-        snap.appendSections([.actions])
-        var actions: [String] = []
-        if !isActive { actions.append(Self.makeActiveID) }   // no point offering it on the active one
-        actions += [Self.editID, Self.deleteID]
-        snap.appendItems(actions, toSection: .actions)
-
-        // The feed is only meaningful for the ledger the app is actually scoped to.
-        if isActive {
-            snap.appendSections([.activity])
-            snap.appendItems([Self.activityID], toSection: .activity)
-        }
-
         let carried = Set(dataSource.snapshot().itemIdentifiers)
         snap.reconfigureItems(snap.itemIdentifiers.filter(carried.contains))
         dataSource.apply(snap, animatingDifferences: false)
+    }
+
+    // MARK: Toolbar
+
+    /// Edit / Make active / Delete, matching `AccountDetailVC` and `BudgetDetailVC`.
+    ///
+    /// These were three rows in an `actions` section. The section is gone; the methods
+    /// behind it are untouched, so the menu and the old rows do exactly the same thing.
+    private func configureToolbar() {
+        let menu = UIMenu(children: [
+            UIAction(title: String(localized: "Edit"), image: UIImage(systemName: "pencil")) { [weak self] _ in
+                guard let self, let ledger = self.ledger else { return }
+                self.presentEdit(ledger)
+            },
+            UIAction(title: String(localized: "Make active ledger"),
+                     image: UIImage(systemName: "checkmark.circle")) { [weak self] _ in
+                self?.makeActive()
+            },
+            // Disabled at one ledger, exactly as the row it replaces was greyed out —
+            // the action stays visible so its absence is explained by its state.
+            UIAction(title: String(localized: "Delete"), image: UIImage(systemName: "trash"),
+                     attributes: store.ledgers.count > 1 ? .destructive : [.destructive, .disabled]) { [weak self] _ in
+                guard let self, let ledger = self.ledger else { return }
+                // `from:` anchors the action sheet's iPad popover. There is no cell to
+                // anchor to from a menu, so the bar item is the source — passing nil
+                // would crash on iPad, where an unanchored action sheet has nowhere to
+                // point.
+                self.confirmDelete(ledger, from: nil)
+            },
+        ])
+        let more = UIBarButtonItem(image: UIImage(systemName: "ellipsis"), menu: menu)
+        more.accessibilityLabel = String(localized: "More")
+        navigationItem.rightBarButtonItem = more
     }
 
     // MARK: Actions
@@ -312,24 +310,11 @@ final class LedgerDetailVC: UIViewController {
 }
 
 extension LedgerDetailVC: UICollectionViewDelegate {
-    /// Only the action rows and the activity link do anything; the summary, the
-    /// account rows and the currency menu are not selectable.
+    /// Nothing here is selectable. The three action rows moved into the `⋯` menu and
+    /// the activity link is gone, leaving only the summary, the account rows and the
+    /// currency menu — none of which were ever tappable.
     func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
-        guard let id = dataSource.itemIdentifier(for: indexPath) else { return false }
-        if id == Self.deleteID { return store.ledgers.count > 1 }
-        return [Self.makeActiveID, Self.editID, Self.activityID].contains(id)
-    }
-
-    func collectionView(_ cv: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        cv.deselectItem(at: indexPath, animated: true)
-        guard let id = dataSource.itemIdentifier(for: indexPath), let ledger else { return }
-        switch id {
-        case Self.makeActiveID: makeActive()
-        case Self.editID:       presentEdit(ledger)
-        case Self.deleteID:     confirmDelete(ledger, from: cv.cellForItem(at: indexPath))
-        case Self.activityID:   navigationController?.pushViewController(ActivityFeedVC(), animated: true)
-        default: break
-        }
+        false
     }
 }
 #endif

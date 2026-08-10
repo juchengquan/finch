@@ -505,7 +505,7 @@ final class BudgetDetailVC: UIViewController {
                 self?.confirmDelete()
             },
         ])
-        let more = UIBarButtonItem(image: UIImage(systemName: "ellipsis.circle"), menu: menu)
+        let more = UIBarButtonItem(image: UIImage(systemName: "ellipsis"), menu: menu)
         moreItem = more
         navigationItem.rightBarButtonItems = [more, add]
     }
