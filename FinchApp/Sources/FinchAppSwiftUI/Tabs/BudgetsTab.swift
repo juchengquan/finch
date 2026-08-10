@@ -284,7 +284,7 @@ struct BudgetsTab: View {
         // Ungrouped budgets: bare rows pinned to the top, no "Ungrouped" header.
         if !filteredUngroupedBudgets.isEmpty {
             Section {
-                ForEach(filteredUngroupedBudgets) { budget in row(budget) }
+                ForEach(filteredUngroupedBudgets) { budget in row(budget).finchRowDividerInset() }
                     .onMove { moveBudgets(in: "Ungrouped", from: $0, to: $1) }
             }
         }
@@ -313,6 +313,7 @@ struct BudgetsTab: View {
                 .buttonStyle(.plain)
                 .accessibilityValue(collapsedGroups.contains(groupName) ? "Collapsed" : "Expanded")
                 .accessibilityHint(collapsedGroups.contains(groupName) ? "Double tap to expand" : "Double tap to collapse")
+                .finchRowDividerInset()
                 // Long-press a group → Edit / Delete (real groups only).
                 // Reorder Groups lives in the ⋯ overflow menu.
                 .contextMenu {
@@ -324,7 +325,7 @@ struct BudgetsTab: View {
 
                 // Collapse is bypassed while searching so matches always surface.
                 if !collapsedGroups.contains(groupName) || searchActive {
-                    ForEach(filteredBudgets(in: groupName)) { budget in row(budget) }
+                    ForEach(filteredBudgets(in: groupName)) { budget in row(budget).finchRowDividerInset() }
                         .onMove { moveBudgets(in: groupName, from: $0, to: $1) }
                 }
             }

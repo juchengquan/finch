@@ -269,6 +269,7 @@ struct AccountsTab: View {
         Section {
             StatusSummaryRow(leadingLabel: "Net worth", leadingValue: store.netWorthDisplay,
                              trailingLabel: "Liabilities", trailingValue: store.liabilitiesDisplay)
+                .finchRowDividerInset()
             #if os(iOS)
             // Compact: drill-in cover (no resume shadow). iPad: push in the list column.
             if selection == nil {
@@ -280,10 +281,12 @@ struct AccountsTab: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .finchRowDividerInset()
             } else {
                 NavigationLink { ActivityFeedView() } label: {
                     Label("All Transactions", systemImage: "list.bullet")
                 }
+                .finchRowDividerInset()
             }
             #else
             NavigationLink { ActivityFeedView() } label: {
@@ -329,7 +332,7 @@ struct AccountsTab: View {
         }
         // Ungrouped accounts: bare rows pinned to the top, no "Ungrouped" header.
         if !filteredUngroupedAccounts.isEmpty {
-            Section { ForEach(filteredUngroupedAccounts) { account in row(account) } }
+            Section { ForEach(filteredUngroupedAccounts) { account in row(account).finchRowDividerInset() } }
         }
         ForEach(groupsToShow, id: \.self) { groupName in
             // The group title is a tappable Button *row* (not a section header):
@@ -367,10 +370,11 @@ struct AccountsTab: View {
                 .accessibilityValue(collapsedGroups.contains(groupName) ? "Collapsed" : "Expanded")
                 .accessibilityHint((collapsedGroups.contains(groupName) ? "Double tap to expand" : "Double tap to collapse")
                                    + ". Long press for group options.")
+                .finchRowDividerInset()
 
                 // Collapse is bypassed while searching so matches always surface.
                 if !collapsedGroups.contains(groupName) || searchActive {
-                    ForEach(filteredAccounts(in: groupName)) { account in row(account) }
+                    ForEach(filteredAccounts(in: groupName)) { account in row(account).finchRowDividerInset() }
                         .onMove { moveAccounts(in: groupName, from: $0, to: $1) }
                 }
             }
