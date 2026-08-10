@@ -205,8 +205,12 @@ final class LedgersVC: UIViewController {
               let ledger = ledgerByID[id] else { return nil }
 
         if ledger.id == store.activeLedgerId {
+            // "Current", not "Active": the existing "Active" key is translated 启用
+            // ("enable"), which is a verb about switching something on. This is a status
+            // — the ledger the app is scoped to — and 当前 matches "Make active ledger"
+            // (设为当前账本), so the two read as the same concept in both languages.
             let current = UIContextualAction(style: .normal,
-                                             title: String(localized: "Active")) { _, _, done in
+                                             title: String(localized: "Current")) { _, _, done in
                 done(false)   // a status, not an action
             }
             current.image = UIImage(systemName: "checkmark")
