@@ -838,6 +838,7 @@
         }
       }
     },
+    "Add missing %@": {},
     "Add missing transaction": {
       "localizations": {
         "zh-Hans": {
@@ -1039,6 +1040,7 @@
         }
       }
     },
+    "After the statement": {},
     "All": {
       "localizations": {
         "zh-Hans": {
@@ -1879,6 +1881,7 @@
         }
       }
     },
+    "Couldn't finish": {},
     "Couldn't reach frankfurter.dev. Check your connection and try again.": {
       "localizations": {
         "zh-Hans": {
@@ -2851,6 +2854,7 @@
         }
       }
     },
+    "Finish reconciliation": {},
     "Floating add button": {
       "localizations": {
         "zh-Hans": {
@@ -3262,6 +3266,7 @@
         }
       }
     },
+    "In this period": {},
     "Inactive": {
       "localizations": {
         "zh-Hans": {
@@ -3672,6 +3677,7 @@
         }
       }
     },
+    "Look at %@": {},
     "Looks like “%@” on %@ already exists.": {
       "localizations": {
         "zh-Hans": {
@@ -5163,6 +5169,7 @@
         }
       }
     },
+    "Reconciling": {},
     "Refresh now": {
       "localizations": {
         "zh-Hans": {
@@ -5823,6 +5830,7 @@
         }
       }
     },
+    "Show reconciled": {},
     "Size": {
       "localizations": {
         "zh-Hans": {
@@ -5843,6 +5851,8 @@
         }
       }
     },
+    "Some changes failed to apply, so nothing was sealed. The session is unchanged.": {},
+    "Something ticked isn't on the statement.": {},
     "Sort": {
       "localizations": {
         "zh-Hans": {
@@ -6045,6 +6055,7 @@
         }
       }
     },
+    "Still open from before": {},
     "Subscribed to %lld ledgers": {},
     "Swipe right on a backup to restore it, left to delete it. Restoring replaces all current data — your current data is backed up first.": {
       "localizations": {
@@ -6306,6 +6317,7 @@
         }
       }
     },
+    "The bank has something finch hasn't accounted for.": {},
     "The file is deleted permanently.": {
       "localizations": {
         "zh-Hans": {

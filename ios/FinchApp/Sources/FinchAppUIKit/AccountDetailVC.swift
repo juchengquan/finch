@@ -54,11 +54,16 @@ final class AccountDetailVC: UIViewController {
         case day(String)
         case all
         case empty
+        case reconcileHeader    // the mode's hosted header (2026-08-10 design)
+        case recPeriod          // reconcile: in this period
+        case recAfter           // reconcile: after the statement — can't be on it
+        case recBefore          // reconcile: still open from before
+        case recSettled         // reconcile: already reconciled (the toggle's cargo)
 
         /// The picker and the grid are bare rows in SwiftUI — no `Section` header.
         var wantsHeader: Bool {
             switch self {
-            case .balance, .modePicker, .calendar: return false
+            case .balance, .modePicker, .calendar, .reconcileHeader: return false
             default: return true
             }
         }
@@ -76,6 +81,7 @@ final class AccountDetailVC: UIViewController {
     private static let emptyDayID = "__empty_day__"
     private static let holdingPrefix = "__holding__"
     private static let addHoldingID = "__add_holding__"
+    private static let reconcileHeaderID = "__reconcile_header__"
 
     private var collectionView: UICollectionView!
     private var dataSource: UICollectionViewDiffableDataSource<SectionID, String>!
@@ -104,6 +110,19 @@ final class AccountDetailVC: UIViewController {
 
     private var previewURL: URL?
     private var moreItem: UIBarButtonItem?
+
+    // MARK: Reconcile mode (2026-08-10 design — ReconcileSheet is macOS-only now)
+    private var isReconciling = false
+    /// Unreconciled rows the session has ticked / settled rows it has unticked.
+    /// STAGED — nothing is written until Finish (Cancel must truly cancel).
+    private var stagedTicks: Set<String> = []
+    private var stagedUnticks: Set<String> = []
+    private let reconcileSession = ReconcileSession()
+    private var savedRightItems: [UIBarButtonItem]?
+    /// Set by a pusher (Accounts list) that wants the mode active on arrival —
+    /// honored at the end of viewDidLoad, once the data source exists.
+    var pendingReconcileEntry = false
+    private var diagnosisMatchId: String?
 
     init(accountId: String) {
         self.accountId = accountId
@@ -145,6 +164,12 @@ final class AccountDetailVC: UIViewController {
         // publishes [] → [] and cannot distinguish the two states. See TxnsLoadingCell.
         TxnsLoadingCell.observe(store) { [weak self] in self?.applySnapshot() }
             .store(in: &cancellables)
+        // A pusher (the Accounts list's Reconcile action) may want the mode active
+        // on arrival — honored here, once the data source exists.
+        if pendingReconcileEntry {
+            pendingReconcileEntry = false
+            enterReconcileMode()
+        }
         store.$holdings
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
@@ -318,15 +343,42 @@ final class AccountDetailVC: UIViewController {
                 return
             }
 
+            if id == Self.reconcileHeaderID {
+                // Interactive SwiftUI (fields, toggle, Finish) — the cell is
+                // excluded from selection in shouldSelectItemAt, or the cell's
+                // selection would swallow every control's touch.
+                cell.contentConfiguration = UIHostingConfiguration {
+                    ReconcileHeaderView(session: self.reconcileSession,
+                                        accountName: self.account?.name ?? "",
+                                        currency: self.accountCurrency,
+                                        onJumpToMatch: { [weak self] in self?.scrollToDiagnosisMatch() },
+                                        onAddMissing: { [weak self] in self?.presentAddForGap() },
+                                        onFinish: { [weak self] in self?.finishReconcile() })
+                }
+                cell.accessories = []
+                return
+            }
+
             guard let tx = self.txByID[id] else { return }
             // The SwiftUI row itself, hosted — it draws the amount and the running
             // balance, so no trailing accessory here. See TxRowCell for why this is
             // hosted rather than rebuilt.
             cell.backgroundConfiguration = txRowBackground()
+            // In reconcile mode rows are pure tick targets: no receipt preview, no
+            // status toggle — a tap stages a tick, and the leading ○/◉ (the app's
+            // one multi-select idiom) shows the staged state.
             TxRowCell.configure(cell, tx: tx, store: self.store,
-                                onPreviewReceipt: { [weak self] in self?.previewReceipt($0) },
-                                onToggleStatus: { [weak self] in self?.toggleStatus($0) })
-            cell.accessories = []
+                                onPreviewReceipt: self.isReconciling ? nil : { [weak self] in self?.previewReceipt($0) },
+                                onToggleStatus: self.isReconciling ? nil : { [weak self] in self?.toggleStatus($0) })
+            if self.isReconciling {
+                let ticked = self.isStagedTicked(tx)
+                let mark = UIImageView(image: UIImage(systemName: ticked ? "checkmark.circle.fill" : "circle"))
+                mark.tintColor = ticked ? self.view.tintColor : .tertiaryLabel
+                cell.accessories = [.customView(configuration: .init(customView: mark,
+                                                                     placement: .leading(displayed: .always)))]
+            } else {
+                cell.accessories = []
+            }
         }
 
         let header = UICollectionView.SupplementaryRegistration<UICollectionViewListCell>(
@@ -456,6 +508,8 @@ final class AccountDetailVC: UIViewController {
         guard let account else { return }
         let txns = visibleTxns()
         txByID = Dictionary(uniqueKeysWithValues: txns.map { ($0.id, $0) })
+
+        if isReconciling { return applyReconcileSnapshot(account: account, txns: txns) }
 
         let holdings = Selectors.holdingsForAccount(store.holdings, account.id)
         holdingByID = Dictionary(uniqueKeysWithValues: holdings.map { (Self.holdingPrefix + $0.id, $0) })
@@ -675,6 +729,7 @@ final class AccountDetailVC: UIViewController {
             },
         ])
         let more = UIBarButtonItem(image: UIImage(systemName: "ellipsis"), menu: menu)
+        more.accessibilityIdentifier = "account.more"
         moreItem = more
         navigationItem.rightBarButtonItems = [more, add]
     }
@@ -818,6 +873,223 @@ final class AccountDetailVC: UIViewController {
         present(hosted(AddHoldingSheet(accounts: [account])), animated: true)
     }
 
+    // MARK: - Reconcile mode
+
+    private var accountCurrency: String { account?.currency ?? store.baseCurrency }
+
+    /// Native-currency, privacy-aware money for the mode — reconciliation is an
+    /// assertion against a document in ONE currency; nothing here converts.
+    private func recMoney(_ amount: Double) -> String {
+        store.displayNative(amount, currency: accountCurrency)
+    }
+
+    func enterReconcileMode() {
+        guard !isReconciling, let account else { return }
+        isReconciling = true
+        stagedTicks = []; stagedUnticks = []
+        let digits = Currencies.minorUnits(for: accountCurrency)
+        reconcileSession.onInputChange = nil   // quiet while seeding
+        reconcileSession.onStructureChange = nil
+        reconcileSession.statementBalanceText = String(format: "%.\(digits)f", account.balance)
+        reconcileSession.statementDate = AppDate.isoDay.date(from: store.wallToday) ?? Date()
+        reconcileSession.showReconciled = false
+        reconcileSession.onInputChange = { [weak self] in self?.recomputeReconcileDerived() }
+        reconcileSession.onStructureChange = { [weak self] in
+            self?.recomputeReconcileDerived(); self?.applySnapshot()
+        }
+        savedRightItems = navigationItem.rightBarButtonItems
+        navigationItem.rightBarButtonItems = []
+        navigationItem.leftBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "xmark"),
+            primaryAction: UIAction { [weak self] _ in self?.exitReconcileMode() })
+        navigationItem.leftBarButtonItem?.accessibilityLabel = String(localized: "Cancel")
+        recomputeReconcileDerived()
+        applySnapshot()
+    }
+
+    /// Cancel and Finish both land here; by Finish-time the writes are committed,
+    /// and on Cancel there were never any — staging is what makes ✕ honest.
+    private func exitReconcileMode() {
+        isReconciling = false
+        stagedTicks = []; stagedUnticks = []
+        reconcileSession.onInputChange = nil
+        reconcileSession.onStructureChange = nil
+        navigationItem.leftBarButtonItem = nil
+        navigationItem.rightBarButtonItems = savedRightItems
+        applySnapshot()
+    }
+
+    private func statementDateISO() -> String {
+        AppDate.isoDay.string(from: reconcileSession.statementDate)
+    }
+
+    /// A row counts as ticked when the session says so: settled rows unless
+    /// unticked, plus this session's staged ticks.
+    private func isStagedTicked(_ tx: Tx) -> Bool {
+        tx.clearedAt != nil ? !stagedUnticks.contains(tx.id) : stagedTicks.contains(tx.id)
+    }
+
+    private func toggleReconcileTick(_ tx: Tx) {
+        if tx.clearedAt != nil {
+            if stagedUnticks.contains(tx.id) { stagedUnticks.remove(tx.id) } else { stagedUnticks.insert(tx.id) }
+        } else {
+            if stagedTicks.contains(tx.id) { stagedTicks.remove(tx.id) } else { stagedTicks.insert(tx.id) }
+        }
+        recomputeReconcileDerived()
+        applySnapshot()
+    }
+
+    private func applyReconcileSnapshot(account: AccountRow, txns: [Tx]) {
+        var snap = NSDiffableDataSourceSnapshot<SectionID, String>()
+        var headers: [SectionID: HeaderContent] = [:]
+        snap.appendSections([.reconcileHeader])
+        snap.appendItems([Self.reconcileHeaderID], toSection: .reconcileHeader)
+
+        let w = ReconcileMode.window(txns: txns, accountId: account.id,
+                                     lastReconciledAt: account.lastReconciledAt,
+                                     statementDate: statementDateISO())
+        if !w.inPeriod.isEmpty {
+            snap.appendSections([.recPeriod])
+            snap.appendItems(w.inPeriod.map(\.id), toSection: .recPeriod)
+            headers[.recPeriod] = .plain(String(localized: "In this period"))
+        }
+        if !w.afterStatement.isEmpty {
+            snap.appendSections([.recAfter])
+            snap.appendItems(w.afterStatement.map(\.id), toSection: .recAfter)
+            headers[.recAfter] = .plain(String(localized: "After the statement"))
+        }
+        if !w.openFromBefore.isEmpty {
+            snap.appendSections([.recBefore])
+            snap.appendItems(w.openFromBefore.map(\.id), toSection: .recBefore)
+            headers[.recBefore] = .plain(String(localized: "Still open from before"))
+        }
+        if reconcileSession.showReconciled, !w.settled.isEmpty {
+            snap.appendSections([.recSettled])
+            snap.appendItems(w.settled.map(\.id), toSection: .recSettled)
+            headers[.recSettled] = .plain(String(localized: "Reconciled"))
+        }
+        sectionIDs = snap.sectionIdentifiers
+        headerContent = headers
+        snap.reconfigureItems(snap.itemIdentifiers)
+        dataSource.apply(snap, animatingDifferences: false)
+    }
+
+    /// Difference + diagnosis over the STAGED state — zero writes while working.
+    private func recomputeReconcileDerived() {
+        guard let account else { return }
+        let txns = store.transactions(for: account.id)
+        let stmt = DecimalInput.parse(reconcileSession.statementBalanceText) ?? account.balance
+        let diff = ReconcileMode.stagedDifference(account: account, txns: txns,
+                                                  staged: stagedTicks, unstaged: stagedUnticks,
+                                                  statementBalance: stmt)
+        reconcileSession.currentBalanceText = recMoney(account.balance)
+        reconcileSession.differenceText = recMoney(diff)
+        reconcileSession.isBalanced = abs(diff) < 0.005
+
+        let w = ReconcileMode.window(txns: txns, accountId: account.id,
+                                     lastReconciledAt: account.lastReconciledAt,
+                                     statementDate: statementDateISO())
+        let unreconciled = w.inPeriod + w.afterStatement + w.openFromBefore
+        let ticked = w.settled.filter { !stagedUnticks.contains($0.id) }
+                   + unreconciled.filter { $0.pending != true && stagedTicks.contains($0.id) }
+        let unticked = unreconciled.filter { $0.pending != true && !stagedTicks.contains($0.id) }
+        let pending = unreconciled.filter { $0.pending == true }
+        switch ReconcileMode.diagnose(difference: diff, tickedRows: ticked,
+                                      untickedRows: unticked, pendingRows: pending) {
+        case .balanced:
+            reconcileSession.diagnosisText = nil
+            reconcileSession.matchActionLabel = nil
+            reconcileSession.addMissingLabel = nil
+        case .tickedTooMuch(let matchId):
+            reconcileSession.diagnosisText = String(localized: "Something ticked isn't on the statement.")
+            reconcileSession.matchActionLabel = matchId.flatMap { id in
+                txns.first { $0.id == id }.map { String(localized: "Look at \($0.merchant.isEmpty ? recMoney($0.nativeAmount ?? $0.amount) : $0.merchant)") }
+            }
+            reconcileSession.addMissingLabel = nil
+            diagnosisMatchId = matchId
+        case .missingFromFinch(let matchId, let addAmount):
+            reconcileSession.diagnosisText = String(localized: "The bank has something finch hasn't accounted for.")
+            reconcileSession.matchActionLabel = matchId.flatMap { id in
+                txns.first { $0.id == id }.map { String(localized: "Look at \($0.merchant.isEmpty ? recMoney($0.nativeAmount ?? $0.amount) : $0.merchant)") }
+            }
+            reconcileSession.addMissingLabel = reconcileSession.matchActionLabel == nil
+                ? String(localized: "Add missing \(recMoney(addAmount))") : nil
+            diagnosisMatchId = matchId
+        }
+    }
+
+    private func scrollToDiagnosisMatch() {
+        guard let id = diagnosisMatchId else { return }
+        if !dataSource.snapshot().itemIdentifiers.contains(id), stagedUnticks.isEmpty || true {
+            // The match may be a settled row hidden behind the toggle — reveal it.
+            if !reconcileSession.showReconciled { reconcileSession.showReconciled = true }
+        }
+        guard let ip = dataSource.indexPath(for: id) else { return }
+        collectionView.scrollToItem(at: ip, at: .centeredVertically, animated: true)
+    }
+
+    /// Quick-add prefilled with the exact gap, scoped to this account.
+    private func presentAddForGap() {
+        guard let account else { return }
+        var seed = Tx(id: "", merchant: "", category: nil,
+                      amount: DecimalInput.parse(reconcileSession.statementBalanceText) ?? 0,
+                      account: account.id, date: statementDateISO())
+        if case .missingFromFinch(_, let addAmount) = currentDiagnosis() {
+            seed.amount = addAmount
+            seed.nativeAmount = addAmount
+        }
+        present(hosted(AddTransactionSheet(prefill: seed)), animated: true)
+    }
+
+    private func currentDiagnosis() -> ReconcileMode.Diagnosis {
+        guard let account else { return .balanced }
+        let txns = store.transactions(for: account.id)
+        let stmt = DecimalInput.parse(reconcileSession.statementBalanceText) ?? account.balance
+        let diff = ReconcileMode.stagedDifference(account: account, txns: txns,
+                                                  staged: stagedTicks, unstaged: stagedUnticks,
+                                                  statementBalance: stmt)
+        return ReconcileMode.diagnose(difference: diff, tickedRows: [], untickedRows: [], pendingRows: [])
+    }
+
+    /// One batched write, then the seal — and a short batch refuses to seal
+    /// rather than let reconcileAccount widen the plug (Aug 3 guard).
+    private func finishReconcile() {
+        guard let account else { return }
+        var ops: [(action: ActionName, args: Args)] = []
+        for id in stagedTicks {
+            let tx = txByID[id] ?? store.txns.first { $0.id == id }
+            if tx?.pending == true {
+                let confirmArgs = Args(["id": .string(id)])
+                ops.append((.confirmTransaction, confirmArgs))
+            }
+            let clearArgs = Args(["id": .string(id), "cleared": .bool(true)])
+            ops.append((.setCleared, clearArgs))
+        }
+        for id in stagedUnticks {
+            let unclearArgs = Args(["id": .string(id), "cleared": .bool(false)])
+            ops.append((.setCleared, unclearArgs))
+        }
+        let applied = store.applyBatch(ops)
+        guard ReconcileMode.shouldSeal(applied: applied, expected: ops.count) else {
+            let alert = UIAlertController(
+                title: String(localized: "Couldn't finish"),
+                message: String(localized: "Some changes failed to apply, so nothing was sealed. The session is unchanged."),
+                preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: String(localized: "OK"), style: .default))
+            present(alert, animated: true)
+            recomputeReconcileDerived(); applySnapshot()
+            return
+        }
+        run {
+            try store.apply(.reconcileAccount, Args([
+                "accountId": .string(account.id),
+                "statementBalance": .double(DecimalInput.parse(reconcileSession.statementBalanceText) ?? account.balance),
+                "statementDate": .string(statementDateISO()),
+            ]))
+        }
+        exitReconcileMode()
+    }
+
     private func presentSetHoldingPrice(_ holding: Holding) {
         present(hosted(SetHoldingPriceSheet(holding: holding)), animated: true)
     }
@@ -828,8 +1100,7 @@ final class AccountDetailVC: UIViewController {
     }
 
     private func presentReconcile() {
-        guard let account else { return }
-        present(hosted(ReconcileSheet(preselect: account.id)), animated: true)
+        enterReconcileMode()
     }
 
     private func presentAdjustBalance() {
@@ -862,6 +1133,7 @@ extension AccountDetailVC: UICollectionViewDelegate {
     /// mode picker looked inert for exactly this reason.
     func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
         guard let id = dataSource.itemIdentifier(for: indexPath) else { return true }
+        if id == Self.reconcileHeaderID { return false }   // hosts interactive SwiftUI
         // `HoldingRow` is inert content, not an interactive control, so unlike the mode
         // picker its cell may take the selection.
         return txByID[id] != nil || holdingByID[id] != nil || id == Self.addHoldingID
@@ -870,6 +1142,11 @@ extension AccountDetailVC: UICollectionViewDelegate {
     func collectionView(_ cv: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         cv.deselectItem(at: indexPath, animated: true)
         guard let id = dataSource.itemIdentifier(for: indexPath) else { return }
+        if isReconciling {
+            guard let tx = txByID[id] else { return }
+            toggleReconcileTick(tx)
+            return
+        }
         if id == Self.addHoldingID { return presentAddHolding() }
         if let holding = holdingByID[id] { return presentSetHoldingPrice(holding) }
         guard let tx = txByID[id] else { return }
