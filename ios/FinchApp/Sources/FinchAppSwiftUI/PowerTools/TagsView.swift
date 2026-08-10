@@ -188,9 +188,14 @@ struct TagsView: View {
         .swipeActions(edge: .trailing) {
             // Edit declared first ⇒ outer edge / full-swipe default (never delete).
             Button { editing = tag } label: { Label("Edit", systemImage: "pencil") }.tint(.accentColor)
-            Button { mergingFrom = tag } label: { Label("Merge…", systemImage: "arrow.triangle.merge") }.tint(.orange)
             // Not role: .destructive — the alert confirms; matches Categories.
             Button { deleting = tag } label: { Label("Delete", systemImage: "trash") }.tint(.red)
+        }
+        .swipeActions(edge: .leading) {
+            // Merge lives on its own edge on all three power-tools screens: it acts on
+            // TWO entities, not one, and three actions crowded onto the trailing edge
+            // pushed the labels toward icons.
+            Button { mergingFrom = tag } label: { Label("Merge…", systemImage: "arrow.triangle.merge") }.tint(.orange)
         }
         .contextMenu {
             Button { editing = tag } label: { Label("Edit", systemImage: "pencil") }
