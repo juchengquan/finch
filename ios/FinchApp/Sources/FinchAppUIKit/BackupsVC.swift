@@ -402,8 +402,8 @@ final class BackupsVC: UIViewController {
             presentError(String(localized: "\(problems.count) integrity problem(s). Use Settings › About › Force import to override (iOS only)."),
                          title: String(localized: "Backup failed its integrity check"))
         } catch {
-            Haptics.warning()
             presentError(i18nMessage(error), title: String(localized: "Restore failed"))
+            Haptics.warning()
         }
     }
 

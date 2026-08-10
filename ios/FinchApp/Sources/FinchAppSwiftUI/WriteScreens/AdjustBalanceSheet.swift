@@ -75,8 +75,8 @@ struct AdjustBalanceSheet: View {
             ]
             if !note.isEmpty { args["note"] = .string(note) }
             try store.apply(.adjustAccountBalance, Args(args))
-            Haptics.success()
             dismiss()
-        } catch { Haptics.warning(); errorMessage = i18nMessage(error) }
+            Haptics.success()
+        } catch { errorMessage = i18nMessage(error); Haptics.warning() }
     }
 }
