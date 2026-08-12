@@ -461,6 +461,46 @@ CREATE INDEX IF NOT EXISTS idx_post_account       ON postings(account_id)  WHERE
 CREATE INDEX IF NOT EXISTS idx_post_category      ON postings(category_id) WHERE category_id IS NOT NULL;
 
 -- Balance + shape check, fired by the seal UPDATE (two-phase write).
+-- pending_kind maintains itself. The column pairs with status and only three
+-- combinations are meaningful, but SQLite cannot express that as a CHECK without
+-- rebuilding entries -- a table with four triggers, an FTS mirror and four inbound
+-- foreign keys. A trigger CAN be added to an existing table, so the rule lives here
+-- instead of in a convention that every writer has to remember.
+--
+-- The WHEN guard is load-bearing, not a micro-optimisation: without it every insert
+-- and every status/date edit pays a second UPDATE, and pack imports and the demo seed
+-- insert in bulk. With it, a caller that already set the right value costs nothing and
+-- only a wrong one is rewritten.
+--
+-- date('now') is UTC and can be a day off for a distant user. Harmless: the periodic
+-- refresh runs on the device's own wall day and corrects any row this got wrong. These
+-- triggers cover WRITES; only that refresh can notice the day turning.
+CREATE TRIGGER IF NOT EXISTS tr_entry_pending_kind_insert AFTER INSERT ON entries
+FOR EACH ROW WHEN NEW.pending_kind IS NOT (
+  CASE WHEN NEW.status <> 'pending' THEN NULL
+       WHEN NEW.date > date('now')  THEN 'upcoming'
+       ELSE 'due' END)
+BEGIN
+  UPDATE entries SET pending_kind =
+    CASE WHEN NEW.status <> 'pending' THEN NULL
+         WHEN NEW.date > date('now')  THEN 'upcoming'
+         ELSE 'due' END
+   WHERE id = NEW.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS tr_entry_pending_kind_update AFTER UPDATE OF status, date ON entries
+FOR EACH ROW WHEN NEW.pending_kind IS NOT (
+  CASE WHEN NEW.status <> 'pending' THEN NULL
+       WHEN NEW.date > date('now')  THEN 'upcoming'
+       ELSE 'due' END)
+BEGIN
+  UPDATE entries SET pending_kind =
+    CASE WHEN NEW.status <> 'pending' THEN NULL
+         WHEN NEW.date > date('now')  THEN 'upcoming'
+         ELSE 'due' END
+   WHERE id = NEW.id;
+END;
+
 CREATE TRIGGER IF NOT EXISTS tr_entry_seal BEFORE UPDATE OF sealed ON entries
 FOR EACH ROW WHEN NEW.sealed = 1 AND (
      ROUND((SELECT COALESCE(SUM(amount_base), 0) FROM postings WHERE entry_id = NEW.id), 2) != 0

@@ -114,8 +114,11 @@ final class PendingKindTests: XCTestCase {
         try add(q, "a", "2026-05-01", "pending")
         try add(q, "b", "2026-06-01", "pending")
         try add(q, "c", "2026-05-01", "confirmed")
-        let first = try q.write { db in try Entries.refreshPendingKind(db, today: "2026-05-10") }
-        XCTAssertEqual(first, 2, "two pending rows needed a kind")
+        // The first count is deliberately NOT asserted: the insert trigger has already
+        // stamped these rows using the REAL date('now'), which a fixture cannot fake, so
+        // how much the first refresh has left to do depends on when the test is run.
+        // Idempotency is the property that matters and it holds either way.
+        _ = try q.write { db in try Entries.refreshPendingKind(db, today: "2026-05-10") }
         let second = try q.write { db in try Entries.refreshPendingKind(db, today: "2026-05-10") }
         XCTAssertEqual(second, 0, "an idempotent refresh must write nothing the second time")
     }
@@ -202,6 +205,51 @@ final class PendingKindTests: XCTestCase {
             XCTAssertNil(try k("old-conf"), "a confirmed row keeps no kind")
         }
     }
+
+    // MARK: the trigger — the database enforcing the pair, not a convention
+
+    /// The case that motivated the trigger: all three `SET status = 'confirmed'` writes
+    /// leave `pending_kind` alone. Before the trigger the row sat inconsistent until the
+    /// next refresh; now the database corrects it as part of the same statement.
+    func test_confirmingClearsTheKindWithoutTheCallerDoingIt() throws {
+        let q = try seeded()
+        try add(q, "e1", "2020-01-01", "pending")
+        XCTAssertEqual(try kind(q, "e1"), "due", "the insert stamped it")
+
+        // Exactly what confirmTransaction does — note it never mentions pending_kind.
+        try q.write { db in
+            try db.execute(sql: "UPDATE entries SET status = 'confirmed', confirmed_at = datetime('now') WHERE id = 'e1'")
+        }
+        XCTAssertNil(try kind(q, "e1"), "the trigger cleared it; no refresh ran")
+    }
+
+    /// A caller that writes the WRONG value is corrected rather than trusted.
+    func test_aWrongValueIsCorrectedOnInsert() throws {
+        let q = try seeded()
+        try q.write { db in
+            try db.execute(sql: """
+                INSERT INTO entries (id,ledger_id,date,description,kind,status,pending_kind,sealed,created_at,updated_at)
+                VALUES ('bad','l1','2099-01-01','x','expense','pending','due',0,datetime('now'),datetime('now'))
+                """)
+        }
+        XCTAssertEqual(try kind(q, "bad"), "upcoming",
+                       "dated 2099 and marked due — the trigger must overrule the caller")
+    }
+
+    /// Moving the date across today flips it, without touching status.
+    func test_editingOnlyTheDateFlipsTheKind() throws {
+        let q = try seeded()
+        try add(q, "e1", "2020-01-01", "pending")
+        XCTAssertEqual(try kind(q, "e1"), "due")
+        try q.write { db in try db.execute(sql: "UPDATE entries SET date = '2099-01-01' WHERE id = 'e1'") }
+        XCTAssertEqual(try kind(q, "e1"), "upcoming", "the trigger watches date as well as status")
+    }
+
+    // NOTE: the WHEN guard (no second write when the value is already right) is a
+    // performance property with no clean observation point — `total_changes()` counts
+    // the FTS triggers that fire on the same statement, so a test measuring it measures
+    // those instead. It is verified by reading the DDL, not asserted here; a test that
+    // measures the wrong thing is worse than no test.
 
     /// It agrees with the selector the screens already use, which is the definition of
     /// record. If these two ever disagree the cache is lying.
