@@ -9,7 +9,7 @@ import GRDB
 ///   cd frontend && bun -e 'import {SCHEMA} from "@/lib/db/core/schema"; process.stdout.write(SCHEMA)'
 public enum Schema {
     /// Matches the web's `SCHEMA_VERSION` (`schema.ts:435`).
-    public static let version = "2026-07-23T00:00:00Z"
+    public static let version = "2026-08-12T00:00:00Z"
     /// Matches the web's `APP_NAME` (`schema.ts:436`).
     public static let appName = "finch"
 
@@ -68,6 +68,33 @@ CREATE TABLE IF NOT EXISTS accounts (
   -- point and is included in the postings sum.
   current_balance      REAL NOT NULL DEFAULT 0,
   color                TEXT,
+  -- Per-account icon, mirroring categories.icon: a name resolved through the
+  -- curated set, NOT a raw platform symbol. NULL = derive from the type column,
+  -- which is what every account did before this column existed.
+  icon                 TEXT,
+  -- Free-text note. NULL and '' both mean "none"; nothing parses this.
+  notes                TEXT,
+  -- Credit-card cycle, day-of-month 1-31. statement_day is when the cycle
+  -- closes, due_day when payment is owed — the one you act on. Stored as a day
+  -- rather than a date because issuers state it that way and it repeats; a day
+  -- past the end of a short month clamps to that month's last day, the same
+  -- rule scheduled_templates.day_of_month already uses. Meaningless on other
+  -- account types and left NULL there; nothing enforces that, since a type can
+  -- change and dropping the values on the way through would lose them.
+  statement_day        INTEGER,
+  due_day              INTEGER,
+  -- Credit limit in the account's own currency. Enables utilisation and
+  -- available-credit figures; NULL = unknown, which is not the same as 0.
+  credit_limit         REAL,
+  -- Who holds the account -- "DBS", "Amex". Free text, purely descriptive:
+  -- nothing matches on it, and it is what tells two cards apart at a glance.
+  institution          TEXT,
+  -- Last four digits, for telling cards apart and matching a statement. TEXT,
+  -- not INTEGER: "0042" must stay "0042", and it is an identifier rather than a
+  -- number -- nothing ever does arithmetic on it. Deliberately only the last
+  -- four; this file is exported and synced, and a full number does not belong
+  -- in a backup.
+  account_last4        TEXT,
   -- Sort order within the account group (and within "ungrouped"). Smaller
   -- values come first.
   sort_order           INTEGER NOT NULL DEFAULT 0,
@@ -173,6 +200,14 @@ CREATE TABLE IF NOT EXISTS budgets (
   category_ids       TEXT,
   tag_ids            TEXT,
   counterparty_ids   TEXT,
+  -- Free-text note, same shape and meaning as entries.notes and accounts.notes.
+  -- NULL and '' both mean "none"; nothing parses this.
+  notes              TEXT,
+  -- Visual identity, mirroring categories.icon/color. Budget GROUPS already
+  -- carry a colour; the budgets themselves did not, which is why the list reads
+  -- flatter than Categories. NULL on both = no icon / inherit nothing.
+  icon               TEXT,
+  color              TEXT,
   warning_pct        REAL NOT NULL DEFAULT 80,
   created_at         TEXT NOT NULL,
   updated_at         TEXT NOT NULL

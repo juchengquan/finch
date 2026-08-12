@@ -35,6 +35,11 @@ export interface BudgetRow {
   tagIds?: string[];
   counterpartyIds?: string[];
   warningPct: number;
+  /** Free-text note, mirroring entries.notes and accounts.notes. */
+  notes: string | null;
+  /** Visual identity, mirroring categories.icon/color. */
+  icon: string | null;
+  color: string | null;
 }
 
 export interface NewBudget {
@@ -58,6 +63,9 @@ export interface NewBudget {
   tagIds?: string[];
   counterpartyIds?: string[];
   warningPct?: number;
+  notes?: string | null;
+  icon?: string | null;
+  color?: string | null;
 }
 
 export interface BudgetPatch {
@@ -79,6 +87,9 @@ export interface BudgetPatch {
   tagIds?: string[];
   counterpartyIds?: string[];
   warningPct?: number;
+  notes?: string | null;
+  icon?: string | null;
+  color?: string | null;
 }
 
 export interface BudgetCyclePatch {

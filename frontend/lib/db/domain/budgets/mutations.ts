@@ -55,6 +55,9 @@ export const handlers = {
       tagIds: strList(args.tagIds),
       counterpartyIds: strList(args.counterpartyIds),
       warningPct: args.warningPct != null ? Number(args.warningPct) : 80,
+      notes: args.notes ? String(args.notes) : null,
+      icon: args.icon ? String(args.icon) : null,
+      color: args.color ? String(args.color) : null,
     }));
   },
   updateBudget: async (exec, args: Args['updateBudget']) => {

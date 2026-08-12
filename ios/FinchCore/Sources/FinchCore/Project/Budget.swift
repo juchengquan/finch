@@ -35,6 +35,11 @@ public struct BudgetRow: Identifiable, Equatable, Hashable, Sendable, Codable {
     public let tagIds: [String]            // extra match dimension (OR-within, AND-across); [] = unconstrained
     public let counterpartyIds: [String]   // ditto — matches by merchant id
     public let warningPct: Double       // default 80 on the web
+    /// Free-text note, same meaning as entries.notes and accounts.notes.
+    public let notes: String?
+    /// Visual identity, mirroring categories.icon/color.
+    public let icon: String?
+    public let color: String?
 
     public init(
         id: String, ledgerId: String, groupId: String?, name: String, type: String,
@@ -43,7 +48,8 @@ public struct BudgetRow: Identifiable, Equatable, Hashable, Sendable, Codable {
         isRecurring: Int, rollover: Int,
         rolloverLimit: Double?, pendingAmount: Double?, lastRolledPeriod: String?,
         accountIds: [String], categoryIds: [String],
-        tagIds: [String] = [], counterpartyIds: [String] = [], warningPct: Double
+        tagIds: [String] = [], counterpartyIds: [String] = [], warningPct: Double,
+        notes: String? = nil, icon: String? = nil, color: String? = nil
     ) {
         self.id = id; self.ledgerId = ledgerId; self.groupId = groupId; self.name = name
         self.type = type; self.amount = amount; self.saved = saved
@@ -54,6 +60,7 @@ public struct BudgetRow: Identifiable, Equatable, Hashable, Sendable, Codable {
         self.pendingAmount = pendingAmount; self.lastRolledPeriod = lastRolledPeriod
         self.accountIds = accountIds; self.categoryIds = categoryIds
         self.tagIds = tagIds; self.counterpartyIds = counterpartyIds; self.warningPct = warningPct
+        self.notes = notes; self.icon = icon; self.color = color
     }
 
     // Hand-rolled decode so the new `tagIds`/`counterpartyIds` (and the array/
@@ -87,5 +94,8 @@ public struct BudgetRow: Identifiable, Equatable, Hashable, Sendable, Codable {
         tagIds = try c.decodeIfPresent([String].self, forKey: .tagIds) ?? []
         counterpartyIds = try c.decodeIfPresent([String].self, forKey: .counterpartyIds) ?? []
         warningPct = try c.decodeIfPresent(Double.self, forKey: .warningPct) ?? 80
+        notes = try c.decodeIfPresent(String.self, forKey: .notes)
+        icon = try c.decodeIfPresent(String.self, forKey: .icon)
+        color = try c.decodeIfPresent(String.self, forKey: .color)
     }
 }

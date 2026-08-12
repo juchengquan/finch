@@ -109,6 +109,9 @@ export type Args = {
     tagIds?: string[];
     counterpartyIds?: string[];
     warningPct?: number;
+    notes?: string | null;
+    icon?: string | null;
+    color?: string | null;
   };
   updateBudget: { id: string; patch: BudgetPatch };
   updateBudgetCycle: { id: string; patch: BudgetCyclePatch };
