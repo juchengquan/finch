@@ -5,7 +5,7 @@ import GRDB
 // Full posting-engine coverage: add/update/delete, splits, adjust/reconcile,
 // bulk-recategorize, confirm, tags, attachments — all wired to the engine, with
 // budget-rollover invalidation (Budgets.invalidateForEntry) on the money paths.
-// addTransaction is wrapped in Dedup.wrap so a UNIQUE dedup_hash collision
+// addTransaction and updateTransaction are wrapped in Dedup.wrap so a UNIQUE dedup_hash collision
 // surfaces as a friendly I18nError (web parity: _shared/with-dedup-message.ts).
 public enum Transactions {
 
@@ -13,7 +13,7 @@ public enum Transactions {
     public static let handlers: [ActionName: Apply.Handler] = [
         .addTransaction: addTransaction,
         .adjustAccountBalance: adjustAccountBalance,
-        .updateTransaction: updateTransaction,
+        .updateTransaction: { db, args in try Dedup.wrap { try updateTransaction(db, args) } },
         .deleteTransaction: deleteTransaction,
         .setCleared: setCleared,
         .setReviewed: setReviewed,

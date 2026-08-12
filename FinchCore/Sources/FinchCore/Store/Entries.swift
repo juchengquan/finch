@@ -842,14 +842,32 @@ public enum Entries {
                 try validateShape(kind, current, try categoryMeta(db, current))
             }
 
-            // Re-stamp the dedup hash from the entry's EFFECTIVE content.
-            var effTime: String? = cur["time"]
-            if case .set(let t) = patch.time { effTime = t }
-            var effDesc: String = (cur["description"] as String?) ?? ""
-            if case .set(let d) = patch.description { effDesc = d }
-            let hashLegs = rebuiltLegs ?? oldLegRows.map(rowToResolved)
-            try db.execute(sql: "UPDATE entries SET dedup_hash = ? WHERE id = ?",
-                           arguments: [dedupHash(date, effTime, effDesc, hashLegs), entryId])
+            // Re-stamp the dedup hash from the entry's EFFECTIVE content — but ONLY
+            // for an entry that already has one.
+            //
+            // `insertEntry` deliberately withholds the hash from two kinds of entry:
+            // one the user explicitly allowed as a duplicate, and one posted from a
+            // scheduled template (a template legitimately produces identical rows
+            // month after month). Re-stamping unconditionally invented a hash for
+            // exactly those, which then collided with the entry they were allowed to
+            // duplicate — the first edit of an allowed duplicate, e.g. marking it
+            // pending, failed with a raw UNIQUE violation.
+            //
+            // A NULL hash is the only signal available: `allowDuplicate` is not
+            // persisted. So the rule is "never create a hash where there wasn't one".
+            // The cost is that an entry stored without a time does not gain dedup
+            // cover if an edit later gives it one — which is the same carve-out the
+            // insert already makes ("nil when time is nil"), and far cheaper than
+            // silently revoking a duplicate the user asked for.
+            if (cur["dedup_hash"] as String?) != nil {
+                var effTime: String? = cur["time"]
+                if case .set(let t) = patch.time { effTime = t }
+                var effDesc: String = (cur["description"] as String?) ?? ""
+                if case .set(let d) = patch.description { effDesc = d }
+                let hashLegs = rebuiltLegs ?? oldLegRows.map(rowToResolved)
+                try db.execute(sql: "UPDATE entries SET dedup_hash = ? WHERE id = ?",
+                               arguments: [dedupHash(date, effTime, effDesc, hashLegs), entryId])
+            }
 
             try db.execute(sql: "UPDATE entries SET sealed = 1 WHERE id = ?", arguments: [entryId])
             try db.execute(sql: "RELEASE \(sp)")
