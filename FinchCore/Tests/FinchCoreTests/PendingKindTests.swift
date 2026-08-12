@@ -134,6 +134,75 @@ final class PendingKindTests: XCTestCase {
         XCTAssertEqual(tx.pending, true, "and an upcoming row is still pending")
     }
 
+    /// The invariant the column is worth having: status = 'pending' iff pending_kind IS
+    /// NOT NULL. SQLite cannot express it as a CHECK without rebuilding `entries`, so it
+    /// is held by the insert and the refresh being the only writers — which means it has
+    /// to be tested rather than declared.
+    func test_aFreshlyInsertedPendingRowAlreadyCarriesItsKind() throws {
+        let q = try seeded()
+        let id = try q.write { db in
+            try Entries.postSimple(db, .init(ledgerId: "l1", accountId: "a1", amount: -5,
+                                             date: "2099-01-01", description: "future",
+                                             kind: .expense, time: "09:00", status: .pending))
+        }
+        _ = id
+        try q.read { db in
+            let row = try XCTUnwrap(Row.fetchOne(db, sql: "SELECT status, pending_kind FROM entries WHERE description = 'future'"))
+            XCTAssertEqual(row["status"] as String?, "pending")
+            XCTAssertEqual(row["pending_kind"] as String?, "upcoming",
+                           "a pending row must never exist as pending + NULL, not even before the first refresh")
+        }
+    }
+
+    func test_aFreshlyInsertedConfirmedRowHasNoKind() throws {
+        let q = try seeded()
+        try q.write { db in
+            try Entries.postSimple(db, .init(ledgerId: "l1", accountId: "a1", amount: -5,
+                                             date: "2020-01-01", description: "past",
+                                             kind: .expense, time: "09:00", status: .confirmed))
+        }
+        try q.read { db in
+            XCTAssertNil(try String.fetchOne(db, sql: "SELECT pending_kind FROM entries WHERE description = 'past'"))
+        }
+    }
+
+    /// The upgrade path: rows that existed BEFORE the column must arrive populated, not
+    /// NULL. Without the backfill every one of them would sit in the impossible state
+    /// until the first refresh, and a reader could not tell that from a bug.
+    func test_theMigrationBackfillsExistingRows() throws {
+        let q = try DatabaseQueue()
+        try q.write { db in
+            // entries as it was before this change: no pending_kind column at all.
+            try db.execute(sql: """
+                CREATE TABLE entries (
+                  id TEXT PRIMARY KEY, ledger_id TEXT NOT NULL, date TEXT NOT NULL,
+                  description TEXT, kind TEXT NOT NULL, status TEXT NOT NULL,
+                  sealed INTEGER NOT NULL DEFAULT 0,
+                  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+                )
+                """)
+            for (id, date, status) in [("old-due", "2020-01-01", "pending"),
+                                       ("old-up", "2099-01-01", "pending"),
+                                       ("old-conf", "2020-01-01", "confirmed")] {
+                try db.execute(sql: """
+                    INSERT INTO entries (id,ledger_id,date,description,kind,status,created_at,updated_at)
+                    VALUES (?,'l1',?,'x','expense',?,'2020-01-01','2020-01-01')
+                    """, arguments: [id, date, status])
+            }
+        }
+        // The REAL migration body, not a copy of its SQL — a test that reimplements the
+        // thing it is testing passes whatever the shipped code does.
+        try q.write { db in try Migrations.addPendingKind(db) }
+        try q.read { db in
+            func k(_ id: String) throws -> String? {
+                try String.fetchOne(db, sql: "SELECT pending_kind FROM entries WHERE id = ?", arguments: [id])
+            }
+            XCTAssertEqual(try k("old-due"), "due")
+            XCTAssertEqual(try k("old-up"), "upcoming")
+            XCTAssertNil(try k("old-conf"), "a confirmed row keeps no kind")
+        }
+    }
+
     /// It agrees with the selector the screens already use, which is the definition of
     /// record. If these two ever disagree the cache is lying.
     func test_itAgreesWithPendingSplit() throws {
