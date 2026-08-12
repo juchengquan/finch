@@ -164,11 +164,11 @@ final class ExchangeRateHistoryVC: UIViewController {
         guard let id = dataSource.itemIdentifier(for: indexPath), let rate = rateByDate[id] else { return nil }
         // Not `.destructive`: that style animates the row away before the alert is
         // answered.
-        let delete = UIContextualAction(style: .normal, title: String(localized: "Delete")) { [weak self] _, _, done in
+        let delete = SwipeAction.make(String(localized: "Delete"),
+                                      systemImage: "trash",
+                                      tint: .systemRed) { [weak self] done in
             self?.confirmDelete(rate); done(false)
         }
-        delete.image = UIImage(systemName: "trash")
-        delete.backgroundColor = .systemRed
         return UISwipeActionsConfiguration(actions: [delete])
     }
 

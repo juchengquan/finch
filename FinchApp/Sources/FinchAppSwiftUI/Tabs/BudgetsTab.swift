@@ -414,20 +414,20 @@ struct BudgetsTab: View {
     /// longer contribute), prefilled with the budget's (first) category. Opens a
     /// confirm-first sheet; also merged into the context menu for macOS.
     @ViewBuilder private func leadingActions(_ budget: BudgetRow) -> some View {
-        Button { quickAddFor = budget } label: { Label("Add Transaction", systemImage: "plus") }.tint(.green)
+        SwipeButton("Add Transaction", systemImage: "plus") { quickAddFor = budget }.tint(.green)
     }
 
     /// Context-menu manage cluster (role stays destructive there).
     @ViewBuilder private func rowActions(_ budget: BudgetRow) -> some View {
-        Button { editing = budget } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
+        SwipeButton("Edit", systemImage: "pencil") { editing = budget }.tint(.blue)
         Button(role: .destructive) { pendingBudgetDelete = budget } label: { Label("Delete", systemImage: "trash") }
     }
 
     /// Trailing swipe: Delete is NOT role: .destructive — the role plays a fake
     /// row-removal animation before the confirm.
     @ViewBuilder private func trailingSwipeActions(_ budget: BudgetRow) -> some View {
-        Button { editing = budget } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
-        Button { pendingBudgetDelete = budget } label: { Label("Delete", systemImage: "trash") }.tint(.red)
+        SwipeButton("Edit", systemImage: "pencil") { editing = budget }.tint(.blue)
+        SwipeButton("Delete", systemImage: "trash") { pendingBudgetDelete = budget }.tint(.red)
     }
 
     /// A deep link stashed a budget id + switched to this tab — open it.

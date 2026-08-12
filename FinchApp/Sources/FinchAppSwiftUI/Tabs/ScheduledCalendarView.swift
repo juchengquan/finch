@@ -160,15 +160,15 @@ struct ScheduledCalendarView: View {
         // Swipe actions mirror the List view: trailing Delete + Edit (Edit at the
         // trailing edge), leading Post (only while the occurrence is still upcoming).
         .swipeActions(edge: .trailing) {
-            Button { onEdit(t) } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
-            Button { onDelete(t) } label: { Label("Delete", systemImage: "trash") }.tint(.red)
+            SwipeButton("Edit", systemImage: "pencil") { onEdit(t) }.tint(.blue)
+            SwipeButton("Delete", systemImage: "trash") { onDelete(t) }.tint(.red)
         }
         .swipeActions(edge: .leading) {
             // Unposted either way — a missed occurrence needs Post more than an upcoming one.
             // Same occurrence-aware call as the context menu: this row IS a cell, so
             // `date` is the occurrence being posted — passing the template alone would
             // stamp today and leave the badge unchanged (the bug this branch fixes).
-            if st == .upcoming || st == .missed { Button { onPost(t, date) } label: { Label("Post", systemImage: "checkmark.circle") }.tint(.green) }
+            if st == .upcoming || st == .missed { SwipeButton("Post", systemImage: "checkmark.circle") { onPost(t, date) }.tint(.green) }
         }
         .contextMenu {
             Button { onEdit(t) } label: { Label("Edit", systemImage: "pencil") }

@@ -68,7 +68,7 @@ struct TxnSwipeActions: ViewModifier {
     // that was a guard around an incomplete prefill (which mapped every non-income
     // kind to .expense), not a statement about which kinds are duplicable.
     private var duplicateButton: some View {
-        Button { duplicate(txn) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
+        SwipeButton("Duplicate", systemImage: "plus.square.on.square") { duplicate(txn) }
             .tint(.indigo)
     }
 
@@ -84,7 +84,7 @@ struct TxnSwipeActions: ViewModifier {
     // animation on tap, which both looks like a premature delete and tears down
     // the row-anchored confirmation.
     private var deleteButton: some View {
-        Button { requestDelete(txn) } label: { Label("Delete", systemImage: "trash") }
+        SwipeButton("Delete", systemImage: "trash") { requestDelete(txn) }
             .tint(.red)
     }
 }

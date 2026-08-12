@@ -340,21 +340,21 @@ final class BackupsVC: UIViewController {
     /// Swipe RIGHT to restore, matching the SwiftUI leading edge.
     private func restoreSwipe(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         guard restoring == nil, let entry = entry(at: indexPath) else { return nil }
-        let restore = UIContextualAction(style: .normal, title: String(localized: "Restore")) { [weak self] _, _, done in
+        let restore = SwipeAction.make(String(localized: "Restore"),
+                                       systemImage: "arrow.counterclockwise",
+                                       tint: .systemBlue) { [weak self] done in
             self?.confirmRestore(entry); done(false)
         }
-        restore.image = UIImage(systemName: "arrow.counterclockwise")
-        restore.backgroundColor = .systemBlue
         return UISwipeActionsConfiguration(actions: [restore])
     }
 
     private func deleteSwipe(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         guard restoring == nil, let entry = entry(at: indexPath) else { return nil }
-        let delete = UIContextualAction(style: .normal, title: String(localized: "Delete")) { [weak self] _, _, done in
+        let delete = SwipeAction.make(String(localized: "Delete"),
+                                      systemImage: "trash",
+                                      tint: .systemRed) { [weak self] done in
             self?.confirmDelete(entry); done(false)
         }
-        delete.image = UIImage(systemName: "trash")
-        delete.backgroundColor = .systemRed
         return UISwipeActionsConfiguration(actions: [delete])
     }
 

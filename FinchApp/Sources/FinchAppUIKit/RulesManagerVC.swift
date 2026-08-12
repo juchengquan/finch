@@ -168,11 +168,11 @@ final class RulesManagerVC: UIViewController {
     private func trailingSwipe(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         guard let id = dataSource.itemIdentifier(for: indexPath), let rule = ruleByID[id] else { return nil }
         // Not `.destructive`: the alert confirms first.
-        let delete = UIContextualAction(style: .normal, title: String(localized: "Delete")) { [weak self] _, _, done in
+        let delete = SwipeAction.make(String(localized: "Delete"),
+                                      systemImage: "trash",
+                                      tint: .systemRed) { [weak self] done in
             self?.confirmDelete(rule); done(false)
         }
-        delete.image = UIImage(systemName: "trash")
-        delete.backgroundColor = .systemRed
         return UISwipeActionsConfiguration(actions: [delete])
     }
 
@@ -181,11 +181,11 @@ final class RulesManagerVC: UIViewController {
     /// why it needs no confirmation.
     private func leadingSwipe(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         guard let id = dataSource.itemIdentifier(for: indexPath), let rule = ruleByID[id] else { return nil }
-        let backfill = UIContextualAction(style: .normal, title: String(localized: "Backfill")) { [weak self] _, _, done in
+        let backfill = SwipeAction.make(String(localized: "Backfill"),
+                                        systemImage: "arrow.triangle.2.circlepath",
+                                        tint: .systemBlue) { [weak self] done in
             self?.backfill(rule); done(true)
         }
-        backfill.image = UIImage(systemName: "arrow.triangle.2.circlepath")
-        backfill.backgroundColor = .systemBlue
         return UISwipeActionsConfiguration(actions: [backfill])
     }
 

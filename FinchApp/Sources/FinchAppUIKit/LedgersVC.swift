@@ -209,6 +209,9 @@ final class LedgersVC: UIViewController {
             // ("enable"), which is a verb about switching something on. This is a status
             // — the ledger the app is scoped to — and 当前 matches "Make active ledger"
             // (设为当前账本), so the two read as the same concept in both languages.
+            // Deliberately NOT built through `SwipeAction.make`: this is a status
+            // badge, not an action — it does nothing, so a haptic would announce
+            // something that did not happen.
             let current = UIContextualAction(style: .normal,
                                              title: String(localized: "Current")) { _, _, done in
                 done(false)   // a status, not an action
@@ -220,8 +223,9 @@ final class LedgersVC: UIViewController {
             return config
         }
 
-        let activate = UIContextualAction(style: .normal,
-                                          title: String(localized: "Make active")) { [weak self] _, _, done in
+        let activate = SwipeAction.make(String(localized: "Make active"),
+                                        systemImage: "checkmark.circle",
+                                        tint: .systemBlue) { [weak self] done in
             guard let self else { return done(false) }
             do {
                 // The SAME write the detail page makes (`LedgerDetailVC.makeActive`):
@@ -235,8 +239,6 @@ final class LedgersVC: UIViewController {
                 done(false)
             }
         }
-        activate.image = UIImage(systemName: "checkmark.circle")
-        activate.backgroundColor = .systemBlue
         let config = UISwipeActionsConfiguration(actions: [activate])
         // Same reason Delete here is `.normal`: switching a whole ledger should be a
         // deliberate tap on the revealed button, not the end of a fast flick.
@@ -247,11 +249,11 @@ final class LedgersVC: UIViewController {
     private func swipeActions(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         guard let id = dataSource.itemIdentifier(for: indexPath),
               let ledger = ledgerByID[id], store.ledgers.count > 1 else { return nil }
-        let delete = UIContextualAction(style: .normal, title: String(localized: "Delete")) { [weak self] _, _, done in
+        let delete = SwipeAction.make(String(localized: "Delete"),
+                                      systemImage: "trash",
+                                      tint: .systemRed) { [weak self] done in
             self?.confirmDelete(ledger); done(true)
         }
-        delete.image = UIImage(systemName: "trash")
-        delete.backgroundColor = .systemRed
         return UISwipeActionsConfiguration(actions: [delete])
     }
 
