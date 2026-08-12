@@ -1502,6 +1502,7 @@
         }
       }
     },
+    "Between ledgers": {},
     "Biweekly": {
       "localizations": {
         "zh-Hans": {
@@ -6605,6 +6606,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "本周期"
+          }
+        }
+      }
+    },
+    "This is one half of a transfer between two ledgers. Deleting it removes both halves.": {},
+    "This ledger": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该账本"
           }
         }
       }
