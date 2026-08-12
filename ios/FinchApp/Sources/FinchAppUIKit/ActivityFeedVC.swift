@@ -57,6 +57,7 @@ final class ActivityFeedVC: UIViewController {
         case calendar     // the month grid
         case day(String)  // calendar mode: the selected day's rows
         case pending
+        case upcoming
         case month(String)
         case all          // group-by-month off: one flat section
         case empty
@@ -447,7 +448,11 @@ final class ActivityFeedVC: UIViewController {
         txByID = Dictionary(uniqueKeysWithValues: txns.map { ($0.id, $0) })
 
         // Pending is pinned newest-first whatever the sort menu says — same rule.
-        let pending = TxSort.dateDesc.sorted(txns.filter { $0.pending == true })
+        // Pending splits in two: what is due, and what has not happened yet. A queue
+        // called "To confirm" should not count the latter. See `Selectors.pendingSplit`.
+        let split = Selectors.pendingSplit(txns, today: store.wallToday)
+        let pending = TxSort.dateDesc.sorted(split.dueNow)
+        let upcoming = TxSort.dateDesc.sorted(split.upcoming)
         let confirmed = txns.filter { $0.pending != true }
         hasMore = confirmed.count > visibleCount
         let page = Array(confirmed.prefix(visibleCount))
@@ -505,6 +510,11 @@ final class ActivityFeedVC: UIViewController {
             snap.appendSections([.pending])
             snap.appendItems(pending.map(\.id), toSection: .pending)
             headers[.pending] = HeaderContent(title: String(localized: "To confirm (\(pending.count))"))
+        }
+        if !upcoming.isEmpty {
+            snap.appendSections([.upcoming])
+            snap.appendItems(upcoming.map(\.id), toSection: .upcoming)
+            headers[.upcoming] = HeaderContent(title: String(localized: "Upcoming (\(upcoming.count))"))
         }
         if page.isEmpty {
             snap.appendSections([.empty])

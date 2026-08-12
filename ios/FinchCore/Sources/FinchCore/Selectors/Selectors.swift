@@ -181,6 +181,15 @@ public enum Selectors {
 
     // MARK: counterpartyTxCounts
 
+    /// Is this row pending AND due — i.e. would it belong in "To confirm" today?
+    ///
+    /// The row-level companion to `pendingSplit`, for the screens that filter one list
+    /// rather than building two buckets. Same rule, one definition: a screen that
+    /// spelled `pending == true` inline would silently keep nagging about next month.
+    public static func isPendingNow(_ t: Tx, today: String) -> Bool {
+        t.pending == true && t.date <= today
+    }
+
     /// Split pending transactions into the ones worth confirming NOW and the ones that
     /// have not happened yet.
     ///

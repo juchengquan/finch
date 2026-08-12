@@ -308,7 +308,10 @@ struct AccountDetailView: View {
         let all = store.transactions(for: a.id)
         let txns = searchQuery.isEmpty ? all
             : Selectors.selectTransactions(all, ListOptions(ledgerId: store.activeLedgerId, query: searchQuery))
-        let pending = txns.filter { $0.pending == true }
+        // Pending splits in two — see `Selectors.pendingSplit`. A queue called
+        // "To confirm" should not count what has not happened yet.
+        let split = Selectors.pendingSplit(txns, today: store.wallToday)
+        let pending = split.dueNow
         let confirmed = txns.filter { $0.pending != true }
         if !pending.isEmpty {
             Section("To confirm (\(pending.count))") {

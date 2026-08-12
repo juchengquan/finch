@@ -175,7 +175,11 @@ struct ReconcileSheet: View {
     }
 
     @ViewBuilder private func pendingSection(_ a: AccountRow) -> some View {
-        let pending = store.transactions(for: a.id).filter { $0.pending == true }
+        // Upcoming rows are EXCLUDED here, not grouped: you reconcile against a bank
+        // statement, and something dated next month cannot appear on one. Showing them
+        // would invite ticking a row the bank has never seen.
+        let pending = Selectors.pendingSplit(store.transactions(for: a.id),
+                                             today: store.wallToday).dueNow
         if !pending.isEmpty {
             Section("To confirm (\(pending.count))") {
                 ForEach(pending, id: \.id) { t in
