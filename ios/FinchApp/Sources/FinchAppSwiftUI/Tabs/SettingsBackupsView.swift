@@ -172,12 +172,12 @@ struct SettingsBackupsView: View {
             if restoring?.id == e.id { ProgressView() }
         }
         .swipeActions(edge: .leading) {
-            Button { pendingRestore = e } label: { Label("Restore", systemImage: "arrow.counterclockwise") }
+            SwipeButton("Restore", systemImage: "arrow.counterclockwise") { pendingRestore = e }
                 .tint(.blue)
                 .disabled(restoring != nil)
         }
         .swipeActions(edge: .trailing) {
-            Button { pendingDelete = e } label: { Label("Delete", systemImage: "trash") }
+            SwipeButton("Delete", systemImage: "trash") { pendingDelete = e }
                 .tint(.red)
                 .disabled(restoring != nil)
         }

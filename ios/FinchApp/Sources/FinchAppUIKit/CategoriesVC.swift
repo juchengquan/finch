@@ -383,19 +383,19 @@ final class CategoriesVC: UIViewController {
 
         // Edit is FIRST so it sits at the outer edge and is the full-swipe action —
         // a careless full swipe edits, never deletes.
-        let edit = UIContextualAction(style: .normal, title: String(localized: "Edit")) { [weak self] _, _, done in
+        let edit = SwipeAction.make(String(localized: "Edit"),
+                                    systemImage: "pencil",
+                                    tint: .tintColor) { [weak self] done in
             self?.presentEdit(row); done(true)
         }
-        edit.image = UIImage(systemName: "pencil")
-        edit.backgroundColor = .tintColor
 
         // Not `.destructive`: that style animates the row away before the
         // confirmation is answered.
-        let delete = UIContextualAction(style: .normal, title: String(localized: "Delete")) { [weak self] _, _, done in
+        let delete = SwipeAction.make(String(localized: "Delete"),
+                                      systemImage: "trash",
+                                      tint: .systemRed) { [weak self] done in
             self?.confirmDelete(row); done(false)
         }
-        delete.image = UIImage(systemName: "trash")
-        delete.backgroundColor = .systemRed
 
         return UISwipeActionsConfiguration(actions: [edit, delete])
     }
@@ -405,11 +405,11 @@ final class CategoriesVC: UIViewController {
     private func leadingSwipeActions(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         guard let id = dataSource.itemIdentifier(for: indexPath),
               let row = flatByID[id]?.row else { return nil }
-        let merge = UIContextualAction(style: .normal, title: String(localized: "Merge…")) { [weak self] _, _, done in
+        let merge = SwipeAction.make(String(localized: "Merge…"),
+                                     systemImage: "arrow.triangle.merge",
+                                     tint: .systemOrange) { [weak self] done in
             self?.presentMergeTargets(for: row); done(true)
         }
-        merge.image = UIImage(systemName: "arrow.triangle.merge")
-        merge.backgroundColor = .systemOrange
         return UISwipeActionsConfiguration(actions: [merge])
     }
 

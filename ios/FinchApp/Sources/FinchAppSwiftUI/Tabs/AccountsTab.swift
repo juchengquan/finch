@@ -490,19 +490,19 @@ struct AccountsTab: View {
     /// row-removal animation on tap, which both looks like a premature delete
     /// and tears down the row-anchored confirmation popout.
     @ViewBuilder private func trailingSwipeActions(_ account: AccountRow) -> some View {
-        Button { editing = account } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
-        Button { pendingDelete = account } label: { Label("Delete", systemImage: "trash") }.tint(.red)
+        SwipeButton("Edit", systemImage: "pencil") { editing = account }.tint(.blue)
+        SwipeButton("Delete", systemImage: "trash") { pendingDelete = account }.tint(.red)
     }
 
     /// The per-account quick verbs — context menu (and macOS reachability).
     @ViewBuilder private func leadingActions(_ account: AccountRow) -> some View {
-        Button { quickAddFor = account } label: { Label("Add Transaction", systemImage: "plus") }.tint(.green)
-        Button { reconcileFor = account } label: { Label("Reconcile", systemImage: "checkmark.circle") }.tint(.blue)
+        SwipeButton("Add Transaction", systemImage: "plus") { quickAddFor = account }.tint(.green)
+        SwipeButton("Reconcile", systemImage: "checkmark.circle") { reconcileFor = account }.tint(.blue)
     }
 
     /// Leading swipe: quick-add only (full swipe = Add). Reconcile is menu-only.
     @ViewBuilder private func leadingSwipeActions(_ account: AccountRow) -> some View {
-        Button { quickAddFor = account } label: { Label("Add Transaction", systemImage: "plus") }.tint(.green)
+        SwipeButton("Add Transaction", systemImage: "plus") { quickAddFor = account }.tint(.green)
     }
 
     /// A deep link / Spotlight tap stashed an id + switched to this tab — open it

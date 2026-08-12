@@ -567,18 +567,18 @@ final class BudgetsListVC: UIViewController {
         guard !isReordering,
               let id = dataSource.itemIdentifier(for: indexPath),
               let budget = budgetByID[id] else { return nil }
-        let edit = UIContextualAction(style: .normal, title: String(localized: "Edit")) { [weak self] _, _, done in
+        let edit = SwipeAction.make(String(localized: "Edit"),
+                                    systemImage: "pencil",
+                                    tint: .systemBlue) { [weak self] done in
             self?.presentBudgetSheet(budget); done(true)
         }
-        edit.image = UIImage(systemName: "pencil")
-        edit.backgroundColor = .systemBlue
         // NOT `.destructive`: that style plays a fake row-removal animation before the
         // confirm, which the SwiftUI screen deliberately avoids.
-        let delete = UIContextualAction(style: .normal, title: String(localized: "Delete")) { [weak self] _, _, done in
+        let delete = SwipeAction.make(String(localized: "Delete"),
+                                      systemImage: "trash",
+                                      tint: .systemRed) { [weak self] done in
             self?.confirmDelete(budget); done(true)
         }
-        delete.image = UIImage(systemName: "trash")
-        delete.backgroundColor = .systemRed
         return UISwipeActionsConfiguration(actions: [edit, delete])
     }
 
@@ -589,11 +589,11 @@ final class BudgetsListVC: UIViewController {
         guard !isReordering,
               let id = dataSource.itemIdentifier(for: indexPath),
               let budget = budgetByID[id] else { return nil }
-        let add = UIContextualAction(style: .normal, title: String(localized: "Add Transaction")) { [weak self] _, _, done in
+        let add = SwipeAction.make(String(localized: "Add Transaction"),
+                                   systemImage: "plus",
+                                   tint: .systemGreen) { [weak self] done in
             self?.presentQuickAdd(for: budget); done(true)
         }
-        add.image = UIImage(systemName: "plus")
-        add.backgroundColor = .systemGreen
         return UISwipeActionsConfiguration(actions: [add])
     }
 
