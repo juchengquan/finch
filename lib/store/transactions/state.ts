@@ -29,6 +29,11 @@ export interface Tx {
   time?: string;
   note?: string;
   pending?: boolean;
+  /** Which kind of pending: 'upcoming' (dated after today) or 'due'; null when
+   *  confirmed. A cache of a date rule (see entries.pending_kind) — the web UI is
+   *  frozen and does not group by it, but it travels in packs so the projection
+   *  carries it rather than dropping a value iOS wrote. */
+  pendingKind?: string | null;
   /** Classification. Optional only for the pre-hydration seed; the DB always sets
    *  it. 'adjustment' = manual balance reconciliation (excluded from spend/flow). */
   kind?: 'income' | 'expense' | 'transfer' | 'adjustment' | 'refund';
