@@ -17,7 +17,7 @@ public struct QuietHours: Equatable, Sendable {
     public static let `default` = QuietHours(startHour: 22, endHour: 8)
 
     /// Does this window wrap past midnight? 22→08 does; 01→06 does not.
-    var crossesMidnight: Bool { startHour > endHour }
+    public var crossesMidnight: Bool { startHour > endHour }
 }
 
 /// WHEN an alert may be delivered, and HOW MANY may arrive at once.
@@ -71,6 +71,16 @@ public enum NotificationPolicy {
         guard let sameDay = calendar.date(from: comps) else { return now }
         if sameDay > now { return sameDay }
         return calendar.date(byAdding: .day, value: 1, to: sameDay) ?? sameDay
+    }
+
+    /// The nearest allowed HOUR to the one asked for — the hour-only counterpart of
+    /// `deliveryTime`, for a REPEATING trigger where there is no single instant to hold,
+    /// only an hour that must be a permitted one. Used by the weekly digest.
+    public static func allowedHour(_ hour: Int, quiet: QuietHours) -> Int {
+        let isQuiet = quiet.crossesMidnight
+            ? (hour >= quiet.startHour || hour < quiet.endHour)
+            : (hour >= quiet.startHour && hour < quiet.endHour)
+        return isQuiet ? quiet.endHour : hour
     }
 
     /// Send at most `cap`, and collapse the remainder into one summary.
