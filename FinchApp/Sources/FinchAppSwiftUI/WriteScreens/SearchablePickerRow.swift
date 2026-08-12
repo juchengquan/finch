@@ -16,6 +16,12 @@ struct SearchablePickerRow<RowContent: View>: View {
     let title: String
     let glyph: FieldGlyph
     let options: [PickerOption]
+    /// Optional grouping: option id → section title, plus the order those titles
+    /// appear in. EMPTY for every caller but the cross-ledger To picker — the only
+    /// list that mixes this ledger's accounts with other books'. Empty ⇒ one flat
+    /// list, exactly as before.
+    var sectionTitles: [String: String] = [:]
+    var sectionOrder: [String] = []
     @Binding var selection: String
     /// Non-nil ⇒ the sheet also offers a split toggle — the account-payment twin
     /// of `CategoryPickerRow`'s `splitting`: a purchase paid from several of these
@@ -47,10 +53,13 @@ struct SearchablePickerRow<RowContent: View>: View {
     init(title: String, glyph: FieldGlyph, options: [PickerOption], selection: Binding<String>,
          splitting: Binding<SplitAllocation>? = nil, currency: String = "",
          splitCurrencyMismatch: Set<String> = [],
+         sectionTitles: [String: String] = [:], sectionOrder: [String] = [],
          @ViewBuilder rowContent: @escaping (PickerOption) -> RowContent) {
         self.title = title
         self.glyph = glyph
         self.options = options
+        self.sectionTitles = sectionTitles
+        self.sectionOrder = sectionOrder
         self._selection = selection
         self.splitting = splitting
         self.currency = currency
@@ -91,7 +100,9 @@ struct SearchablePickerRow<RowContent: View>: View {
         .sheet(isPresented: $presented) {
             SearchablePickerSheet(title: title, options: options, selection: $selection,
                                   splitting: splitting, currency: currency,
-                                  splitCurrencyMismatch: splitCurrencyMismatch, rowContent: rowContent)
+                                  splitCurrencyMismatch: splitCurrencyMismatch,
+                                  sectionTitles: sectionTitles, sectionOrder: sectionOrder,
+                                  rowContent: rowContent)
                 #if os(iOS)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -117,11 +128,13 @@ extension SearchablePickerRow where RowContent == AccountPickerRowLabel {
     /// `splitCurrencyMismatch` is derived here (from `accounts`), not passed by
     /// the caller — it's purely a function of the account list and `currency`.
     init(title: String, glyph: FieldGlyph, accounts: [AccountRow], selection: Binding<String>,
-         splitting: Binding<SplitAllocation>? = nil, currency: String = "") {
+         splitting: Binding<SplitAllocation>? = nil, currency: String = "",
+         sectionTitles: [String: String] = [:], sectionOrder: [String] = []) {
         self.init(title: title, glyph: glyph,
                   options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") },
                   selection: selection, splitting: splitting, currency: currency,
                   splitCurrencyMismatch: Self.currencyMismatchedAccountIds(accounts, transactionCurrency: currency),
+                  sectionTitles: sectionTitles, sectionOrder: sectionOrder,
                   rowContent: { opt in AccountPickerRowLabel(accounts: accounts, id: opt.id, name: opt.name) })
     }
 
@@ -159,6 +172,12 @@ struct AccountPickerRowLabel: View {
 private struct SearchablePickerSheet<RowContent: View>: View {
     let title: String
     let options: [PickerOption]
+    /// Optional grouping: option id → section title, plus the order those titles
+    /// appear in. EMPTY for every caller but the cross-ledger To picker — the only
+    /// list that mixes this ledger's accounts with other books'. Empty ⇒ one flat
+    /// list, exactly as before.
+    var sectionTitles: [String: String] = [:]
+    var sectionOrder: [String] = []
     @Binding var selection: String
     var splitting: Binding<SplitAllocation>? = nil
     var currency: String = ""
@@ -175,9 +194,12 @@ private struct SearchablePickerSheet<RowContent: View>: View {
     init(title: String, options: [PickerOption], selection: Binding<String>,
          splitting: Binding<SplitAllocation>? = nil, currency: String = "",
          splitCurrencyMismatch: Set<String> = [],
+         sectionTitles: [String: String] = [:], sectionOrder: [String] = [],
          @ViewBuilder rowContent: @escaping (PickerOption) -> RowContent) {
         self.title = title
         self.options = options
+        self.sectionTitles = sectionTitles
+        self.sectionOrder = sectionOrder
         self._selection = selection
         self.splitting = splitting
         self.currency = currency
@@ -195,7 +217,16 @@ private struct SearchablePickerSheet<RowContent: View>: View {
         NavigationStack {
             List {
                 if splitting != nil { splitSection }
-                ForEach(filtered) { opt in row(opt) }
+                if sectionOrder.isEmpty {
+                    ForEach(filtered) { opt in row(opt) }
+                } else {
+                    ForEach(sectionOrder, id: \.self) { title in
+                        let group = filtered.filter { sectionTitles[$0.id] == title }
+                        if !group.isEmpty {
+                            Section { ForEach(group) { opt in row(opt) } } header: { Text(title) }
+                        }
+                    }
+                }
             }
             .searchable(text: $query)
             .navigationTitle(title)

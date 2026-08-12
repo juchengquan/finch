@@ -414,6 +414,20 @@ public enum Transactions {
     static func deleteTransaction(_ db: Database, _ args: Args) throws {
         let a = try args.to(IdArg.self)
         guard let ref = try Entries.resolveEntryRef(db, a.id) else { return }
+        // A cross-ledger half is never independently valid: the survivor would
+        // claim money arrived from — or vanished into — nowhere, and its book
+        // would stop being true. Guard it HERE, at the chokepoint, so that every
+        // delete path (swipe, context menu, edit sheet, bulk bar) is safe rather
+        // than each one remembering. Note the contrast with a grid's rows two
+        // lines down: those ARE independently valid, so they survive on purpose.
+        if let link = try String.fetchOne(db, sql:
+            "SELECT interledger_link_id FROM entries WHERE id = ?", arguments: [ref.entryId]) {
+            for half in try String.fetchAll(db, sql:
+                "SELECT id FROM entries WHERE interledger_link_id = ?", arguments: [link]) {
+                try Entries.deleteEntry(db, half)
+            }
+            return
+        }
         // Deleting takes what you pointed at (Decision 19) — a grid's rows are
         // independently valid transactions, so the others survive. What must NOT
         // survive is a lone transaction still claiming to be part of a group, so
