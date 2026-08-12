@@ -21,6 +21,7 @@ public enum Accounts {
             let icon: String?; let notes: String?
             let statementDay: Int?; let dueDay: Int?; let creditLimit: Double?
             let institution: String?; let accountLast4: String?
+            let openingDate: String?
         }
         let a = try args.to(A.self)
         let ledgerId = a.ledgerId ?? "personal"
@@ -50,8 +51,11 @@ public enum Accounts {
                              sortOrder, inw])
         let opening = a.openingBalance ?? 0
         if opening != 0 {
+            // Defaults to today, but a back-filled account can say when it really
+            // opened — the figure is meaningless without the date it applies to.
             let today = String(ISO8601DateFormatter().string(from: Date()).prefix(10))
-            try Entries.postOpening(db, ledgerId: ledgerId, accountId: id, amount: opening, date: today)
+            try Entries.postOpening(db, ledgerId: ledgerId, accountId: id, amount: opening,
+                                    date: a.openingDate ?? today)
         }
     }
 
@@ -92,7 +96,7 @@ public enum Accounts {
     /// that date's FX), and lands on "today" when added for the first time —
     /// the same date createAccount would have stamped.
     static func setOpening(_ db: Database, _ args: Args) throws {
-        struct A: Decodable { let id: String; let amount: Double }
+        struct A: Decodable { let id: String; let amount: Double; let date: String? }
         let a = try args.to(A.self)
         guard let ledgerId = try String.fetchOne(
             db, sql: "SELECT ledger_id FROM accounts WHERE id = ?", arguments: [a.id]) else {
@@ -103,9 +107,13 @@ public enum Accounts {
             db, sql: "SELECT date FROM entries WHERE id = ?", arguments: [entryId])
         if existingDate != nil { try Entries.deleteEntry(db, entryId) }
         if Entries.r2(a.amount) != 0 {
+            // An explicit date wins; otherwise keep the date the opening entry
+            // already had, and only fall back to today for an account that never
+            // had one. Editing just the amount must not silently re-date the
+            // opening entry to now.
             let today = String(ISO8601DateFormatter().string(from: Date()).prefix(10))
             try Entries.postOpening(db, ledgerId: ledgerId, accountId: a.id,
-                                    amount: a.amount, date: existingDate ?? today)
+                                    amount: a.amount, date: a.date ?? existingDate ?? today)
         }
         try db.execute(sql: "UPDATE accounts SET updated_at = datetime('now') WHERE id = ?", arguments: [a.id])
     }

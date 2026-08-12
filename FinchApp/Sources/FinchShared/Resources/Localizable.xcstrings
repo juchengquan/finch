@@ -437,6 +437,7 @@
         }
       }
     },
+    "0000": {},
     "1 subcategory moves to top level": {
       "localizations": {
         "zh-Hans": {
@@ -508,6 +509,16 @@
       }
     },
     "A": {},
+    "A day past the end of a short month falls on that month's last day.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "若日期超过当月天数，则顺延至当月最后一天。"
+          }
+        }
+      }
+    },
     "A gentle tap on saves, errors, and deletes. Also respects your device's System Haptics setting.": {
       "localizations": {
         "zh-Hans": {
@@ -1040,6 +1051,16 @@
         }
       }
     },
+    "Advanced": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高级"
+          }
+        }
+      }
+    },
     "After the statement": {},
     "All": {
       "localizations": {
@@ -1381,6 +1402,16 @@
         }
       }
     },
+    "Bank or issuer": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "银行或发卡机构"
+          }
+        }
+      }
+    },
     "Base currency": {
       "localizations": {
         "zh-Hans": {
@@ -1407,6 +1438,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "基于最近 %1$lld 个月%2$@"
+          }
+        }
+      }
+    },
+    "Basic": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "基本"
           }
         }
       }
@@ -1979,6 +2020,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "在当前 finch 账本中创建一个月度预算。"
+          }
+        }
+      }
+    },
+    "Credit card": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "信用卡"
+          }
+        }
+      }
+    },
+    "Credit limit": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "信用额度"
           }
         }
       }
@@ -3377,6 +3438,16 @@
         }
       }
     },
+    "Institution": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开户机构"
+          }
+        }
+      }
+    },
     "Is": {
       "localizations": {
         "zh-Hans": {
@@ -3463,6 +3534,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "最近 %1$lld 个周期 · 预算 %2$@"
+          }
+        }
+      }
+    },
+    "Last 4 digits": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "后四位"
           }
         }
       }
@@ -4489,6 +4570,16 @@
         }
       }
     },
+    "Not set": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未设置"
+          }
+        }
+      }
+    },
     "Note": {
       "localizations": {
         "zh-Hans": {
@@ -4655,6 +4746,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "只有 %@ 账户才能参与拆分。"
+          }
+        }
+      }
+    },
+    "Only the last four digits — enough to tell cards apart on a statement.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅保存后四位，足以在账单中区分不同卡片。"
           }
         }
       }
