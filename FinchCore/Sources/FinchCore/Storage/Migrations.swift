@@ -140,6 +140,63 @@ public enum Migrations {
             try Self.ensureMetadataRow(db)   // re-stamp schema_version
         }
 
+        // Cross-ledger transfers (plans/ios-macos/2026-08-12-cross-ledger-transfers-design.md).
+        // Both changes are iOS-ONLY, following entries.group_id: the web has no
+        // action that writes either, so nothing that is compared diverges.
+        migrator.registerMigration("2026-08-12-entries-interledger-link") { db in
+            do { try db.execute(sql: "ALTER TABLE entries ADD COLUMN interledger_link_id TEXT") }
+            catch { if !"\(error)".contains("duplicate column") { throw error } }
+            try Self.ensureMetadataRow(db)
+        }
+
+        // Widen entries.kind to admit the interledger half. GRDB runs migrations
+        // with `foreignKeyChecks: .deferred` by DEFAULT, which is what makes
+        // dropping `entries` safe: postings/entry_attachments cascade from it, and
+        // with checks live the DROP would take every posting with it.
+        migrator.registerMigration("2026-08-12-entries-interledger-kind") { db in
+            try Self.widenEntryKind(db)
+            try Self.ensureMetadataRow(db)
+        }
+
+        // Widen categories.system to admit the 4th marker. SQLite cannot ALTER a
+        // CHECK, so this is a table rebuild — the same shape as the
+        // 2026-07-23-counterparties-global migration above, including leaving the
+        // foreign_keys pragma alone: the FK text in postings/budgets still reads
+        // "REFERENCES categories(id)" and becomes valid again the moment the
+        // rebuilt table is renamed into place.
+        migrator.registerMigration("2026-08-12-categories-interledger-system") { db in
+            let ddl = try String.fetchOne(db, sql:
+                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'categories'") ?? ""
+            if !ddl.contains("interledger") {
+                try db.execute(sql: "DROP TABLE IF EXISTS categories_new")
+                try db.execute(sql: """
+                    CREATE TABLE categories_new (
+                      id         TEXT PRIMARY KEY,
+                      ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+                      parent_id  TEXT REFERENCES categories(id) ON DELETE SET NULL,
+                      name       TEXT NOT NULL,
+                      kind       TEXT NOT NULL CHECK(kind IN ('expense','income','equity')),
+                      icon       TEXT,
+                      color      TEXT,
+                      sort_order INTEGER NOT NULL DEFAULT 0,
+                      system     TEXT CHECK(system IN ('opening','adjustment','fx','interledger')),
+                      created_at TEXT NOT NULL,
+                      updated_at TEXT NOT NULL
+                    )
+                    """)
+                try db.execute(sql: """
+                    INSERT INTO categories_new (id,ledger_id,parent_id,name,kind,icon,color,sort_order,system,created_at,updated_at)
+                      SELECT id,ledger_id,parent_id,name,kind,icon,color,sort_order,system,created_at,updated_at FROM categories
+                    """)
+                try db.execute(sql: "DROP TABLE categories")
+                try db.execute(sql: "ALTER TABLE categories_new RENAME TO categories")
+                try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_cat_parent ON categories(parent_id) WHERE parent_id IS NOT NULL")
+                try db.execute(sql: "CREATE UNIQUE INDEX IF NOT EXISTS idx_cat_system ON categories(ledger_id, system) WHERE system IS NOT NULL")
+                try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_cat_ledger ON categories(ledger_id)")
+            }
+            try Self.ensureMetadataRow(db)
+        }
+
         return migrator
     }
 
@@ -287,6 +344,66 @@ END
               app_version = excluded.app_version,
               updated_at = excluded.updated_at
             """, arguments: [Schema.appName, Schema.version, FinchCore.version, now, now])
+    }
+
+    /// Rebuild `entries` so its `kind` CHECK admits `interledger`. SQLite cannot
+    /// alter a CHECK, and this table is the spine — 7 indexes, 4 triggers, an FTS
+    /// shadow and three tables cascading from it — so rather than transcribe the
+    /// DDL (which drifts the moment Schema.swift changes) it renames the old table
+    /// aside and lets the CANONICAL schema recreate the real one.
+    ///
+    /// Exposed for the same reason as `addEntryGroupId`: on a fresh database the
+    /// baseline already creates the widened table, so the migration records itself
+    /// as applied and a test could never exercise this path through `runAll`.
+    static func widenEntryKind(_ db: Database) throws {
+        // Match the KIND LIST specifically, not the word anywhere in the table:
+        // `interledger_link_id` is a column on this same table, so a substring
+        // check for "interledger" is true before the widening ever happens — the
+        // migration then skips silently and its tests pass vacuously. (It did.)
+        let ddl = try String.fetchOne(db, sql:
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'entries'") ?? ""
+        guard !ddl.contains("'refund','interledger'") else { return }
+
+        // Indexes and triggers TRAVEL with a rename, so their names would still be
+        // taken and `Schema.apply`'s CREATE … IF NOT EXISTS would silently skip
+        // them — leaving the rebuilt table without its seal check or its search
+        // sync. Drop them first; the canonical schema puts them back.
+        for t in ["tr_entry_seal", "tr_entry_fts_insert", "tr_entry_fts_delete", "tr_entry_fts_update"] {
+            try db.execute(sql: "DROP TRIGGER IF EXISTS \(t)")
+        }
+        for i in ["idx_entry_ledger_date", "idx_entry_pending", "idx_entry_source",
+                  "idx_entry_refunded", "idx_entry_counterparty", "idx_entry_unsealed",
+                  "idx_entry_dedup"] {
+            try db.execute(sql: "DROP INDEX IF EXISTS \(i)")
+        }
+        // THE load-bearing pragma. Without it, ALTER TABLE … RENAME rewrites every
+        // OTHER table's foreign keys to follow the rename — so postings would start
+        // cascading from `entries_old`, and the DROP at the end would delete every
+        // money line in the database (observed: the sealed-entry trigger aborted the
+        // migration, which is the only reason it surfaced loudly rather than
+        // silently). GRDB's deferred foreign-key checks do NOT prevent this:
+        // deferring postpones constraint VIOLATIONS, while ON DELETE CASCADE is an
+        // action that still runs. With legacy mode on, the FKs keep pointing at the
+        // name `entries`, which the canonical schema recreates a moment later.
+        // This is SQLite's documented procedure for a table rebuild.
+        try db.execute(sql: "PRAGMA legacy_alter_table = ON")
+        try db.execute(sql: "ALTER TABLE entries RENAME TO entries_old")
+        // Every other statement in the DDL is CREATE … IF NOT EXISTS, so applying
+        // the whole schema recreates exactly the one table that is missing, plus
+        // its indexes and triggers, and no-ops for everything else.
+        try Schema.apply(to: db)
+        // The copy below fires tr_entry_fts_insert per row, and the shadow still
+        // holds the pre-rebuild rows — clear it so the triggers repopulate it once.
+        try db.execute(sql: "DELETE FROM entries_fts")
+        let cols = """
+            id,ledger_id,date,time,description,kind,status,pending_kind,confirmed_at,\
+            counterparty_id,refunded_entry_id,source_template_id,occurrence_date,group_id,\
+            interledger_link_id,notes,applied_rule_ids,reviewed_at,dedup_hash,sealed,\
+            created_at,updated_at
+            """.replacingOccurrences(of: "\n", with: "")
+        try db.execute(sql: "INSERT INTO entries (\(cols)) SELECT \(cols) FROM entries_old")
+        try db.execute(sql: "DROP TABLE entries_old")
+        try db.execute(sql: "PRAGMA legacy_alter_table = OFF")
     }
 
     /// Run the migration on the given queue. Idempotent.
