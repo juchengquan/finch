@@ -111,6 +111,7 @@ public enum Audit {
                        SUM(CASE WHEN COALESCE(c.kind, '') = 'equity' AND c.system = 'opening'    THEN 1 ELSE 0 END) AS eq_open,
                        SUM(CASE WHEN COALESCE(c.kind, '') = 'equity' AND c.system = 'adjustment' THEN 1 ELSE 0 END) AS eq_adj,
                        SUM(CASE WHEN COALESCE(c.kind, '') = 'equity' AND c.system = 'fx'         THEN 1 ELSE 0 END) AS eq_fx,
+                       SUM(CASE WHEN COALESCE(c.kind, '') = 'equity' AND c.system = 'interledger' THEN 1 ELSE 0 END) AS eq_inter,
                        SUM(CASE WHEN p.account_id IS NOT NULL AND p.amount <= 0 THEN 1 ELSE 0 END) AS neg_acct
                   FROM entries e JOIN postings p ON p.entry_id = e.id LEFT JOIN categories c ON c.id = p.category_id
                   WHERE 1=1 \(scope) GROUP BY e.id
@@ -118,6 +119,7 @@ public enum Audit {
                 let kind: String = r["kind"]
                 let acct: Int = r["acct"]; let plain: Int = r["plain"]
                 let eqOpen: Int = r["eq_open"]; let eqAdj: Int = r["eq_adj"]; let eqFx: Int = r["eq_fx"]
+                let eqInter: Int = r["eq_inter"]
                 let negAcct: Int = r["neg_acct"]
                 // Broken into named sub-expressions: the single combined boolean
                 // trips Swift's "unable to type-check in reasonable time" limit.
@@ -131,7 +133,15 @@ public enum Audit {
                 // transfer (exactly 2), opening/adjustment (exactly 1) — and the seal
                 // trigger already guarantees at least one account leg exists.
                 let badSimple = ["income", "expense", "refund"].contains(kind) && (acct < 1 || plain < 1 || eqOpen + eqAdj > 0)
-                let bad = badTransfer || badOpening || badAdjust || badRefund || badSimple
+                // One half of a cross-ledger transfer: exactly one account leg (the
+                // money leaving or arriving), no ordinary category leg (this is not
+                // spending), and exactly one interledger equity leg (where it went).
+                // A new kind would otherwise pass unchecked — the clauses above only
+                // flag kinds they recognize — so the contract is stated, not inherited.
+                // See plans/ios-macos/2026-08-12-cross-ledger-transfers-design.md D3.
+                let badInterledger = kind == "interledger"
+                    && (acct != 1 || plain > 0 || eqInter != 1 || eqOpen + eqAdj > 0)
+                let bad = badTransfer || badOpening || badAdjust || badRefund || badSimple || badInterledger
                 if bad {
                     problems.append(AuditProblem(code: .kindShape, entryId: r["id"],
                         detail: "kind=\(kind) but shape is acct=\(acct) plain=\(plain) eq=[\(eqOpen),\(eqAdj),\(eqFx)]"))

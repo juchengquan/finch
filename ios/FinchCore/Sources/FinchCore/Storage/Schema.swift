@@ -138,10 +138,16 @@ CREATE TABLE IF NOT EXISTS categories (
   color      TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
   -- Equity system rows (DOUBLE_ENTRY_PLAN §2.3): 'opening'/'adjustment'/'fx'
-  -- markers for the three per-ledger system categories. NULL = ordinary
-  -- user category. kind='equity' rows are hidden from pickers and excluded
-  -- from spend aggregations.
-  system     TEXT CHECK(system IN ('opening','adjustment','fx')),
+  -- markers for the per-ledger system categories. NULL = ordinary user
+  -- category. kind='equity' rows are hidden from pickers and excluded from
+  -- spend aggregations.
+  --
+  -- 'interledger' is the 4th marker and is iOS-ONLY, like entries.group_id
+  -- below: it is the balancing leg of a cross-ledger transfer, an action the
+  -- web has no way to write, so widening the CHECK here without touching the
+  -- web's schema.ts diverges nothing that is compared. See
+  -- plans/ios-macos/2026-08-12-cross-ledger-transfers-design.md.
+  system     TEXT CHECK(system IN ('opening','adjustment','fx','interledger')),
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -373,7 +379,10 @@ CREATE TABLE IF NOT EXISTS entries (
   description        TEXT,
   -- Cached classification label; the postings SHAPE is the truth (design doc
   -- I7). postEntry stamps it, auditLedger checks it.
-  kind               TEXT NOT NULL CHECK(kind IN ('opening','income','expense','transfer','adjustment','refund')),
+  -- 'interledger' is one half of a cross-ledger transfer and is iOS-ONLY, like
+  -- group_id and interledger_link_id below (2026-08-12 design). Widening this
+  -- CHECK is a table rebuild — see Migrations.widenEntryKind.
+  kind               TEXT NOT NULL CHECK(kind IN ('opening','income','expense','transfer','adjustment','refund','interledger')),
   status             TEXT NOT NULL DEFAULT 'confirmed' CHECK(status IN ('pending','confirmed')),
   -- Which KIND of pending this is: 'upcoming' (dated after today, nothing to do
   -- yet) or 'due' (dated today or earlier, waiting to be confirmed). NULL on a
@@ -405,6 +414,14 @@ CREATE TABLE IF NOT EXISTS entries (
   -- a group of one. iOS-only and deliberately outside the parity snapshot: the web
   -- has no action that writes it, so there is nothing to diverge.
   group_id           TEXT,
+  -- Ties the two halves of ONE cross-ledger transfer: a pair of entries, one
+  -- per ledger, each balanced in its own base currency (the seal trigger checks
+  -- SUM(amount_base) = 0, and two ledgers do not share a base — which is why a
+  -- single entry cannot span them). NULL for everything else. Not a FK: the
+  -- partner lives in another ledger and a ledger delete CASCADEs its entries
+  -- away, which must leave this side standing rather than take it along.
+  -- iOS-only, exactly like group_id above.
+  interledger_link_id TEXT,
   notes              TEXT,
   applied_rule_ids   TEXT,
   reviewed_at        TEXT,
