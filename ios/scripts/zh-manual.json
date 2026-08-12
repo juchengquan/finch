@@ -757,5 +757,7 @@
   "Can't remove": "无法移除",
   "%@ tracks only this account. Removing it would leave no accounts, which counts every account instead. Edit or delete the budget itself.": "%@ 仅计入此账户。移除后将不剩任何账户，反而会计入所有账户。请直接编辑或删除该预算。",
   "%@ currently counts every account. Excluding this one pins it to the accounts that exist today — accounts you add later will not be counted.": "%@ 目前计入所有账户。排除此账户后，它将固定为当前已有的账户——之后新增的账户不会被计入。",
-  "%@ currently count every account. Excluding this one pins them to the accounts that exist today — accounts you add later will not be counted.": "%@ 目前计入所有账户。排除此账户后，它们将固定为当前已有的账户——之后新增的账户不会被计入。"
+  "%@ currently count every account. Excluding this one pins them to the accounts that exist today — accounts you add later will not be counted.": "%@ 目前计入所有账户。排除此账户后，它们将固定为当前已有的账户——之后新增的账户不会被计入。",
+  "More to review": "还有需要处理的",
+  "%lld more need your attention.": "另有 %lld 条需要你处理。"
 }
