@@ -11,7 +11,7 @@ import GRDB
 // resolved derived rate. Single-currency entries take the identity FX path.
 
 public enum Entries {
-    public enum Kind: String, Sendable { case opening, income, expense, transfer, adjustment, refund }
+    public enum Kind: String, Sendable { case opening, income, expense, transfer, adjustment, refund, interledger }
     public enum Status: String, Sendable { case pending, confirmed }
 
     /// `prefix-<ms timestamp, base36>-<random hex>`, the ID for every row this
@@ -370,6 +370,18 @@ public enum Entries {
                                 "Same-currency transfer amounts must match")
             }
             if equity.contains(where: { sysOf($0) != "fx" }) { throw I18nError("error.transfer.fxOnly", [:], "Only the FX residue may balance a transfer") }
+        case .interledger:
+            // One half of a cross-ledger transfer: the account leg that moved, and
+            // the interledger equity leg saying it left (or joined) these books.
+            // Mirrors the audit's kind-shape clause exactly — "no route can post a
+            // shape the create path refuses" cuts both ways.
+            let ok = acct.count == 1 && plain.isEmpty
+                && equity.contains(where: { sysOf($0) == "interledger" })
+                && equity.allSatisfy { sysOf($0) == "interledger" || sysOf($0) == "fx" }
+            if !ok {
+                throw I18nError("error.entry.equityShape", ["kind": kind.rawValue],
+                                "An interledger entry is one account leg against the interledger equity category")
+            }
         case .opening, .adjustment:
             let want = kind == .opening ? "opening" : "adjustment"
             let ok = acct.count == 1 && plain.isEmpty
