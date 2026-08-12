@@ -203,8 +203,26 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
         return content
     }
 
+    /// Sunday, at the user's Delivery time.
+    ///
+    /// The DAY stays fixed — a weekly digest has to land on a boundary, and letting the
+    /// day move would mean recomputing which week it covers. Only the HOUR follows the
+    /// preference, so the digest arrives alongside everything else the user asked for
+    /// rather than at a 09:00 nobody chose.
+    ///
+    /// Quiet hours still win: a Delivery time inside the window is pushed to the
+    /// window's end, exactly as a pre-scheduled alert is.
     private static var sundayMorning: DateComponents {
-        var c = DateComponents(); c.weekday = 1; c.hour = 9; c.minute = 0; return c   // Sun 09:00
+        var c = DateComponents()
+        c.weekday = 1
+        c.hour = digestHour
+        c.minute = 0
+        return c
+    }
+
+    /// The Delivery time, moved out of quiet hours if it sits inside them.
+    static var digestHour: Int {
+        NotificationPolicy.allowedHour(NotificationPrefs.deliveryHour, quiet: NotificationPrefs.quietHours)
     }
 
     /// Action titles use String(localized:) — UNNotificationAction takes a plain
