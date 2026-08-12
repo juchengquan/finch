@@ -10,6 +10,7 @@ import SwiftUI
 enum FieldGlyph {
     case account, fromAccount, toAccount, amount, category, date, merchant
     case note, status, tags, receipt, refund, name, group, frequency, currency, color, icon
+    case card
 
     var symbol: String {
         switch self {
@@ -36,12 +37,14 @@ enum FieldGlyph {
         case .currency:               return "dollarsign.arrow.circlepath"
         case .color:                  return "paintpalette"
         case .icon:                   return "star"
+        case .card:                   return "creditcard"
         }
     }
 
     var tint: Color {
         switch self {
         case .account, .fromAccount, .toAccount: return .blue
+        case .card:                              return .blue
         case .amount:                            return .green
         case .category:                          return .orange
         case .date, .frequency:                  return .red

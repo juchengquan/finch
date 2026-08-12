@@ -50,7 +50,9 @@ extension Projection {
                           LIMIT 1) AS openingBalanceBase,
                        (SELECT p.amount FROM postings p
                           WHERE p.entry_id = 'open-' || a.id AND p.account_id = a.id
-                          LIMIT 1) AS openingBalance
+                          LIMIT 1) AS openingBalance,
+                       (SELECT e.date FROM entries e
+                          WHERE e.id = 'open-' || a.id LIMIT 1) AS openingDate
                   FROM accounts a
                   LEFT JOIN account_groups g ON a.group_id = g.id
                  WHERE a.ledger_id = ? AND a.is_active = ?
@@ -66,6 +68,7 @@ extension Projection {
                     statementDay: r["statementDay"], dueDay: r["dueDay"], creditLimit: r["creditLimit"],
                     institution: r["institution"], accountLast4: r["accountLast4"],
                     openingBalanceBase: r["openingBalanceBase"], openingBalance: r["openingBalance"],
+                    openingDate: r["openingDate"],
                     lastReconciledAt: r["lastReconciledAt"], lastReconciledBalance: r["lastReconciledBalance"])
             }
         }
