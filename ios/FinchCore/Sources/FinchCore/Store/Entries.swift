@@ -72,6 +72,29 @@ public enum Entries {
         return SystemCategoryIds(opening: ids["opening"]!, adjustment: ids["adjustment"]!, fx: ids["fx"]!)
     }
 
+    /// The 4th system category — the balancing leg of a cross-ledger transfer.
+    ///
+    /// Deliberately NOT part of `ensureSystemCategories` above, which stays
+    /// byte-comparable with the web's: cross-ledger transfers are a native-only
+    /// action, so seeding this alongside the other three made every ordinary
+    /// write create a category the web oracle knows nothing about — and the
+    /// write-parity gate caught exactly that. Created lazily instead, on the
+    /// first cross-ledger transfer in a ledger, which also means no backfill
+    /// for existing databases. See the 2026-08-12 design, D2.
+    @discardableResult
+    public static func ensureInterledgerCategory(_ db: Database, _ ledgerId: String) throws -> String {
+        if let existing = try String.fetchOne(db, sql:
+            "SELECT id FROM categories WHERE ledger_id = ? AND system = 'interledger'", arguments: [ledgerId]) {
+            return existing
+        }
+        let id = newId("cat")
+        try db.execute(sql: """
+            INSERT INTO categories (id,ledger_id,parent_id,name,kind,icon,color,sort_order,system,created_at,updated_at)
+            VALUES (?,?,NULL,?,'equity',NULL,NULL,9003,'interledger',datetime('now'),datetime('now'))
+            """, arguments: [id, ledgerId, "Between ledgers"])
+        return id
+    }
+
     // MARK: leg inputs
 
     public struct AccountLeg: Sendable {
