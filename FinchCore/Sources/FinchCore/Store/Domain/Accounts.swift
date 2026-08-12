@@ -18,6 +18,9 @@ public enum Accounts {
         struct A: Decodable {
             let id: String?; let ledgerId: String?; let name: String; let type: String?
             let currency: String?; let groupId: String?; let openingBalance: Double?; let color: String?
+            let icon: String?; let notes: String?
+            let statementDay: Int?; let dueDay: Int?; let creditLimit: Double?
+            let institution: String?; let accountLast4: String?
         }
         let a = try args.to(A.self)
         let ledgerId = a.ledgerId ?? "personal"
@@ -39,9 +42,12 @@ public enum Accounts {
         // from the web default, which excludes credit_card.)
         let inw = 1
         try db.execute(sql: """
-            INSERT INTO accounts (id,ledger_id,group_id,name,type,currency,current_balance,color,sort_order,include_in_net_worth,is_active,created_at,updated_at)
-            VALUES (?,?,?,?,?,?,0,?,?,?,1,datetime('now'),datetime('now'))
-            """, arguments: [id, ledgerId, a.groupId, name, type, currency, a.color, sortOrder, inw])
+            INSERT INTO accounts (id,ledger_id,group_id,name,type,currency,current_balance,color,icon,notes,statement_day,due_day,credit_limit,institution,account_last4,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+            VALUES (?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,1,datetime('now'),datetime('now'))
+            """, arguments: [id, ledgerId, a.groupId, name, type, currency, a.color,
+                             a.icon, a.notes, a.statementDay, a.dueDay, a.creditLimit,
+                             a.institution, a.accountLast4,
+                             sortOrder, inw])
         let opening = a.openingBalance ?? 0
         if opening != 0 {
             let today = String(ISO8601DateFormatter().string(from: Date()).prefix(10))
@@ -49,7 +55,9 @@ public enum Accounts {
         }
     }
 
-    private static let cols: [String: String] = ["name": "name", "type": "type", "color": "color", "groupId": "group_id", "includeInNetWorth": "include_in_net_worth", "sortOrder": "sort_order"]
+    private static let cols: [String: String] = ["name": "name", "type": "type", "color": "color", "groupId": "group_id", "includeInNetWorth": "include_in_net_worth", "sortOrder": "sort_order",
+                                                 "icon": "icon", "notes": "notes", "statementDay": "statement_day", "dueDay": "due_day", "creditLimit": "credit_limit",
+                                                 "institution": "institution", "accountLast4": "account_last4"]
 
     static func update(_ db: Database, _ args: Args) throws {
         guard let id = args.idString else { throw I18nError("error.invalidArgs", [:], "updateAccount requires an id") }
@@ -60,7 +68,12 @@ public enum Accounts {
         }
         var sets: [String] = []
         var bind: [DatabaseValueConvertible?] = []
-        for key in ["name", "type", "color", "groupId", "includeInNetWorth", "sortOrder"] where patch.keys.contains(key) {
+        // The detail fields are patchable like any other column, INCLUDING to
+        // null — `.null` clears a card's statement day or an account's note,
+        // which is the only way to undo setting one.
+        for key in ["name", "type", "color", "groupId", "includeInNetWorth", "sortOrder",
+                    "icon", "notes", "statementDay", "dueDay", "creditLimit",
+                    "institution", "accountLast4"] where patch.keys.contains(key) {
             sets.append("\(cols[key]!) = ?"); bind.append(patch[key]!.sqlBind)   // currency is intentionally non-patchable
         }
         if sets.isEmpty { return }

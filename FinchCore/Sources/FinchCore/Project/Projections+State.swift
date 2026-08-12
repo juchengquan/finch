@@ -42,6 +42,9 @@ extension Projection {
                        g.name AS groupName, a.sort_order AS sortOrder,
                        a.include_in_net_worth AS inw, a.is_active AS isActive,
                        a.last_reconciled_at AS lastReconciledAt, a.last_reconciled_balance AS lastReconciledBalance,
+                       a.icon, a.notes, a.statement_day AS statementDay,
+                       a.due_day AS dueDay, a.credit_limit AS creditLimit,
+                       a.institution, a.account_last4 AS accountLast4,
                        (SELECT p.amount_base FROM postings p
                           WHERE p.entry_id = 'open-' || a.id AND p.account_id = a.id
                           LIMIT 1) AS openingBalanceBase,
@@ -59,6 +62,9 @@ extension Projection {
                     isActive: (r["isActive"] as Int? ?? 0) != 0, name: r["name"],
                     type: r["type"], groupId: r["groupId"], groupName: r["groupName"],
                     sortOrder: r["sortOrder"],
+                    icon: r["icon"], notes: r["notes"],
+                    statementDay: r["statementDay"], dueDay: r["dueDay"], creditLimit: r["creditLimit"],
+                    institution: r["institution"], accountLast4: r["accountLast4"],
                     openingBalanceBase: r["openingBalanceBase"], openingBalance: r["openingBalance"],
                     lastReconciledAt: r["lastReconciledAt"], lastReconciledBalance: r["lastReconciledBalance"])
             }
@@ -122,7 +128,7 @@ extension Projection {
                 SELECT id, ledger_id, group_id, name, kind, amount, saved, carry_forward,
                        frequency, start_date, start_time, end_date, end_time, is_recurring, rollover, rollover_limit,
                        pending_amount, last_rolled_period, account_ids, category_ids,
-                       tag_ids, counterparty_ids, warning_pct
+                       tag_ids, counterparty_ids, warning_pct, notes, icon, color
                   FROM budgets WHERE ledger_id = ? ORDER BY created_at
                 """, arguments: [ledgerId]).map { r in
                 let kind: String = r["kind"]
@@ -137,7 +143,8 @@ extension Projection {
                     lastRolledPeriod: r["last_rolled_period"],
                     accountIds: parseIds(r["account_ids"]), categoryIds: parseIds(r["category_ids"]),
                     tagIds: parseIds(r["tag_ids"]), counterpartyIds: parseIds(r["counterparty_ids"]),
-                    warningPct: r["warning_pct"] ?? 80)
+                    warningPct: r["warning_pct"] ?? 80, notes: r["notes"],
+                    icon: r["icon"], color: r["color"])
             }
         }
     }
