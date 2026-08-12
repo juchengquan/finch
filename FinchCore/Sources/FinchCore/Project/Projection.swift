@@ -13,7 +13,7 @@ public enum Projection {
         """
         SELECT p.id AS pid, p.account_id AS p_account, p.amount AS p_amount, p.amount_base AS p_base,
                p.currency AS p_ccy, p.orig_amount, p.orig_currency, p.cleared_at AS p_cleared, p.memo AS p_memo,
-               e.id AS eid, e.ledger_id, e.date, e.time, e.description, e.kind, e.status, e.counterparty_id,
+               e.id AS eid, e.ledger_id, e.date, e.time, e.description, e.kind, e.status, e.pending_kind, e.counterparty_id,
                e.refunded_entry_id, e.source_template_id, e.occurrence_date, e.group_id, e.notes, e.applied_rule_ids, e.reviewed_at,
                e.created_at AS e_created_at
           FROM postings p JOIN entries e ON e.id = p.entry_id
@@ -77,7 +77,7 @@ public enum Projection {
         return Tx(
             id: r["pid"], merchant: memo ?? description ?? "", category: nil,
             amount: amount, account: r["p_account"], date: r["date"],
-            pending: status == "pending", ledgerId: r["ledger_id"],
+            pending: status == "pending", pendingKind: r["pending_kind"], ledgerId: r["ledger_id"],
             currency: origCcy ?? pCcy, nativeAmount: origAmount ?? pAmount, time: r["time"],
             kind: r["kind"], transferGroupId: nil,
             groupId: r["group_id"], counterpartyId: r["counterparty_id"],

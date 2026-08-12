@@ -9,7 +9,7 @@ import GRDB
 ///   cd frontend && bun -e 'import {SCHEMA} from "@/lib/db/core/schema"; process.stdout.write(SCHEMA)'
 public enum Schema {
     /// Matches the web's `SCHEMA_VERSION` (`schema.ts:435`).
-    public static let version = "2026-08-12T00:00:00Z"
+    public static let version = "2026-08-12T01:00:00Z"
     /// Matches the web's `APP_NAME` (`schema.ts:436`).
     public static let appName = "finch"
 
@@ -375,6 +375,22 @@ CREATE TABLE IF NOT EXISTS entries (
   -- I7). postEntry stamps it, auditLedger checks it.
   kind               TEXT NOT NULL CHECK(kind IN ('opening','income','expense','transfer','adjustment','refund')),
   status             TEXT NOT NULL DEFAULT 'confirmed' CHECK(status IN ('pending','confirmed')),
+  -- Which KIND of pending this is: 'upcoming' (dated after today, nothing to do
+  -- yet) or 'due' (dated today or earlier, waiting to be confirmed). NULL on a
+  -- confirmed entry.
+  --
+  -- It is a CACHE of a date rule, not independent state: upcoming-ness is a
+  -- statement about this row's date versus TODAY, and today moves. A refresh
+  -- rewrites it in both directions at launch, on foreground, on a day change and
+  -- after each write, so "pending, dated next month" cannot persist. Anything
+  -- that must be right THIS INSTANT should still derive from the date; this
+  -- column is what lets a stored row describe itself, and lets SQL filter on it.
+  --
+  -- Deliberately a separate column rather than a third status value: SQLite
+  -- cannot widen a CHECK, so that would mean rebuilding the entries table -- which
+  -- has four triggers, an FTS mirror and four inbound foreign keys, one of them
+  -- ON DELETE CASCADE from postings.
+  pending_kind       TEXT CHECK(pending_kind IN ('upcoming','due')),
   confirmed_at       TEXT,
   counterparty_id    TEXT REFERENCES counterparties(id) ON DELETE SET NULL,
   refunded_entry_id  TEXT REFERENCES entries(id) ON DELETE SET NULL,

@@ -378,6 +378,12 @@ public final class FinchStore: ObservableObject {
     /// `Projection.run(ledgerId:)` keeps it from rebuilding every ledger's txns.
     func reprojectActiveLedger() {
         guard let q = dbQueue else { return }
+        // `pending_kind` caches a date rule, so it is refreshed here — the one funnel
+        // every write and the launch bootstrap already pass through. Idempotent and
+        // indexed, so the common case writes no rows. It deliberately does NOT go
+        // through `apply`: the calendar moving is not a user edit, and routing it there
+        // would queue a sync mutation and re-plan notifications for every row, daily.
+        try? q.write { db in try Entries.refreshPendingKind(db, today: wallToday) }
         // Launch defers the heavy txns projection off the first-paint path (see the
         // txns block below); every OTHER reproject — a mutation, a ledger switch —
         // projects synchronously so the change shows immediately. `isHydrating` is true
