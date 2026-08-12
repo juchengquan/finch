@@ -66,7 +66,11 @@ export const handlers = {
   updateTransaction: async (exec, args: Args['updateTransaction']) => {
     const id = str(args.id);
     const before = await txTouches(exec, id);
-    const { oldAccountId } = await qUpdateTransaction(exec, id, args.patch as Parameters<typeof qUpdateTransaction>[2]);
+    // Wrapped like the add path: editing an entry into an exact duplicate of
+    // another trips the UNIQUE dedup index, and that should read as "this looks
+    // like a duplicate", not as a raw SQLite constraint error.
+    const { oldAccountId } = await withDedupMessage(() =>
+      qUpdateTransaction(exec, id, args.patch as Parameters<typeof qUpdateTransaction>[2]));
     if (oldAccountId) {
       await recomputeAccountFromPostings(exec, oldAccountId);
     }
