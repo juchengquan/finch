@@ -276,8 +276,50 @@ struct SettingsNotificationsView: View {
                         })).switchOnlyToggles()
                 }
             }
+            // Mirrors the timing section on `NotificationsSettingsVC`. Both screens must
+            // carry it: macOS renders this one, and `NavigationUITests` runs its suite
+            // once per implementation.
+            Section {
+                hourPicker("Quiet from", hour: Binding(
+                    get: { NotificationPrefs.quietHours.startHour },
+                    set: { NotificationPrefs.quietHours = QuietHours(startHour: $0,
+                                                                    endHour: NotificationPrefs.quietHours.endHour) }))
+                hourPicker("Quiet until", hour: Binding(
+                    get: { NotificationPrefs.quietHours.endHour },
+                    set: { NotificationPrefs.quietHours = QuietHours(startHour: NotificationPrefs.quietHours.startHour,
+                                                                    endHour: $0) }))
+                hourPicker("Delivery time", hour: Binding(
+                    get: { NotificationPrefs.deliveryHour },
+                    set: { NotificationPrefs.deliveryHour = $0 }))
+            } footer: {
+                Text("Alerts raised during quiet hours arrive when it ends, rather than waking you.")
+            }
         }
         .navigationTitle("Notifications")
+    }
+
+    /// The 24 hours, labelled through the user's own locale so a 12-hour region reads
+    /// "10 PM" rather than a bare 22, which looks like a duration.
+    private func hourPicker(_ title: LocalizedStringKey, hour: Binding<Int>) -> some View {
+        Picker(title, selection: hour) {
+            ForEach(0..<24, id: \.self) { h in
+                Text(NotificationsSettingsHour.label(h)).tag(h)
+            }
+        }
+        .onChange(of: hour.wrappedValue) { _, _ in
+            // The preference alone changes nothing already scheduled.
+            Task { await NotificationService.shared.refresh() }
+        }
+    }
+}
+
+/// One hour-label rule for both settings screens — the UIKit one renders the same
+/// strings, and two formatters is how they drift apart.
+enum NotificationsSettingsHour {
+    static func label(_ hour: Int) -> String {
+        var c = DateComponents(); c.hour = hour; c.minute = 0
+        guard let d = Calendar.current.date(from: c) else { return "\(hour)" }
+        return d.formatted(.dateTime.hour().minute())
     }
 }
 
