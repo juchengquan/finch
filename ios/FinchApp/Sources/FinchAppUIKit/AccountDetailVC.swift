@@ -996,7 +996,12 @@ final class AccountDetailVC: UIViewController {
         let ticked = w.settled.filter { !stagedUnticks.contains($0.id) }
                    + unreconciled.filter { $0.pending != true && stagedTicks.contains($0.id) }
         let unticked = unreconciled.filter { $0.pending != true && !stagedTicks.contains($0.id) }
-        let pending = unreconciled.filter { $0.pending == true }
+        // Upcoming rows are EXCLUDED, matching ReconcileSheet: you reconcile against a
+        // bank statement, and something dated next month cannot appear on one. Counting
+        // them would offer a next-month row as the explanation for today's difference.
+        // This mode was written after `pendingSplit` landed and filtered `pending` flat,
+        // so the two implementations of the same screen disagreed.
+        let pending = Selectors.pendingSplit(unreconciled, today: store.wallToday).dueNow
         switch ReconcileMode.diagnose(difference: diff, tickedRows: ticked,
                                       untickedRows: unticked, pendingRows: pending) {
         case .balanced:

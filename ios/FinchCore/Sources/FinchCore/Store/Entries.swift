@@ -379,6 +379,47 @@ public enum Entries {
         }
     }
 
+    /// Bring `entries.pending_kind` in line with the calendar.
+    ///
+    /// `pending_kind` is a CACHE of one rule — a pending row dated after `today` is
+    /// `upcoming`, otherwise it is `due` — and that rule's answer changes at midnight
+    /// without anything touching the row. So this runs in BOTH directions, and runs
+    /// often: at launch, on foreground, on a day change, and after each write. A row
+    /// cannot sit in the impossible state "pending, dated next month".
+    ///
+    /// Deliberately NOT routed through `Apply`. This is derived state catching up with
+    /// the date, not something the user did: pushing it through the mutation chokepoint
+    /// would queue a CloudKit mutation, re-plan notifications and reload widgets for
+    /// every row, every day, attributed to nobody. Each device refreshes its own copy
+    /// and they all compute the same answer from the same date.
+    ///
+    /// `updated_at` is left alone for the same reason — this is not an edit.
+    ///
+    /// Returns the number of rows whose kind changed, which is what the tests assert on.
+    @discardableResult
+    public static func refreshPendingKind(_ db: Database, today: String) throws -> Int {
+        // Confirmed rows have no kind at all; clearing them here keeps a row that was
+        // confirmed from carrying a stale 'due' forever.
+        var changed = 0
+        // Confirmed rows have no kind; clearing keeps a row that was confirmed from
+        // carrying a stale 'due' forever.
+        try db.execute(sql: """
+            UPDATE entries SET pending_kind = NULL
+             WHERE status = 'confirmed' AND pending_kind IS NOT NULL
+            """)
+        changed += db.changesCount
+
+        // `IS NOT` rather than `<>` so a NULL kind counts as needing the write.
+        for (kind, op) in [("upcoming", ">"), ("due", "<=")] {
+            try db.execute(sql: """
+                UPDATE entries SET pending_kind = ?
+                 WHERE status = 'pending' AND date \(op) ? AND pending_kind IS NOT ?
+                """, arguments: [kind, today, kind])
+            changed += db.changesCount
+        }
+        return changed
+    }
+
     /// Double-submit backstop hash; nil when time is nil (parity with the web).
     ///
     /// NOT computed for template-generated entries, and that is deliberate. This

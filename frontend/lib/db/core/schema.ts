@@ -473,13 +473,18 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-08-12T00:00:00Z';
+export const SCHEMA_VERSION = '2026-08-12T01:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.
 // Applied in lex (== chronological) order for versions strictly greater than a
 // database's recorded schema_version.
 const MIGRATIONS: Record<string, string[] | ((exec: ExecFn) => Promise<void>)> = {
+  // entries.pending_kind — which kind of pending a row is. Additive and nullable;
+  // the refresh backfills it from the date, so no data migration is needed. An
+  // hour past the account-fields bump because both land the same day and versions
+  // are compared as strings.
+  '2026-08-12T01:00:00Z': ["ALTER TABLE entries ADD COLUMN pending_kind TEXT"],
   // Account detail fields (icon / notes / credit-card cycle / credit limit), plus
   // budgets.notes — one version bump covering both tables rather than two.
   // Purely additive and all nullable, so existing rows read as "unset" and no

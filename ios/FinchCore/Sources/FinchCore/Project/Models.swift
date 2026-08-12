@@ -12,6 +12,11 @@ public struct Tx: Identifiable, Codable, Equatable, Sendable {
     public var account: String
     public var date: String
     public var pending: Bool?
+    /// Which kind of pending: "upcoming" (dated after today) or "due". nil when the
+    /// entry is confirmed. A CACHE of a date rule, refreshed by the store — anything
+    /// that must be right THIS INSTANT should use `Selectors.pendingSplit`, which
+    /// recomputes against the day it is given.
+    public var pendingKind: String?
     public var ledgerId: String?
     public var currency: String?
     public var nativeAmount: Double?
@@ -53,7 +58,8 @@ public struct Tx: Identifiable, Codable, Equatable, Sendable {
     public var reviewedAt: String?
 
     public init(id: String, merchant: String, category: String? = nil, amount: Double,
-                account: String, date: String, pending: Bool? = nil, ledgerId: String? = nil,
+                account: String, date: String, pending: Bool? = nil, pendingKind: String? = nil,
+                ledgerId: String? = nil,
                 currency: String? = nil, nativeAmount: Double? = nil, time: String? = nil,
                 kind: String? = nil, transferGroupId: String? = nil, accountLegCount: Int? = nil,
                 entryId: String? = nil, groupId: String? = nil, counterpartyId: String? = nil,
@@ -62,7 +68,8 @@ public struct Tx: Identifiable, Codable, Equatable, Sendable {
                 refundedTransactionId: String? = nil,
                 clearedAt: String? = nil, appliedRuleIds: [String]? = nil, reviewedAt: String? = nil) {
         self.id = id; self.merchant = merchant; self.category = category; self.amount = amount
-        self.account = account; self.date = date; self.pending = pending; self.ledgerId = ledgerId
+        self.account = account; self.date = date; self.pending = pending
+        self.pendingKind = pendingKind; self.ledgerId = ledgerId
         self.currency = currency; self.nativeAmount = nativeAmount; self.time = time; self.kind = kind
         self.transferGroupId = transferGroupId; self.accountLegCount = accountLegCount
         self.entryId = entryId; self.groupId = groupId

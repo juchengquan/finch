@@ -56,6 +56,10 @@ function legRowToTx(r: Record<string, unknown>): Tx {
     time: r.time == null ? undefined : String(r.time),
     note: r.notes == null ? undefined : String(r.notes),
     pending: String(r.status) === 'pending',
+    // Cache of the date rule (see entries.pending_kind). The web UI is frozen and does
+    // not group by it, but the column travels in packs, so the projection carries it
+    // rather than silently dropping a value iOS wrote.
+    pendingKind: r.pending_kind == null ? null : String(r.pending_kind),
     kind: String(r.kind) as Tx['kind'],
     ledgerId: String(r.ledger_id),
     // transferGroupId filled by enrichLegTxs (multi-account-leg entries)

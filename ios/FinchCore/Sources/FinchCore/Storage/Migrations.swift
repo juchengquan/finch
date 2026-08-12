@@ -133,6 +133,14 @@ public enum Migrations {
             try Self.ensureMetadataRow(db)   // re-stamp schema_version
         }
 
+        // entries.pending_kind (web migration 2026-08-12T01). Additive and nullable;
+        // the refresh backfills it from the date, so nothing is migrated in place.
+        migrator.registerMigration("2026-08-12-pending-kind") { db in
+            do { try db.execute(sql: "ALTER TABLE entries ADD COLUMN pending_kind TEXT") }
+            catch { if !"\(error)".contains("duplicate column") { throw error } }
+            try Self.ensureMetadataRow(db)   // re-stamp schema_version
+        }
+
         return migrator
     }
 
