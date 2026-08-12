@@ -121,6 +121,11 @@ final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
         gate.didBecomeActive()
         if !gate.isLocked {
             Task { await RateAutoUpdater.refreshIfDue(store: store) }
+            // The app can sit backgrounded across midnight, and `pending_kind` caches a
+            // rule that changes at midnight. Reprojecting refreshes it (see
+            // FinchStore.reprojectActiveLedger) and republishes, so "To confirm" is
+            // right the moment you look rather than after the next write.
+            store.reprojectActiveLedger()
         }
     }
 
