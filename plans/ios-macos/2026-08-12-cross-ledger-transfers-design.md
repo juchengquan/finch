@@ -104,9 +104,15 @@ SQLite cannot alter a CHECK in place, so this is a table rebuild. See the Bill.
 
 **Decided:** `entries.kind = 'interledger'`, plus a sixth `kind-shape` clause.
 
-`entries.kind` has **no** CHECK constraint, so a new value costs no DDL. But invariant
-I7 (`kind-shape`) enumerates a contract per kind, and our shape — one account leg plus
-one equity leg — fails both plausible existing labels:
+> **CORRECTION (2026-08-13, found while building).** This section originally claimed
+> `entries.kind` has no CHECK constraint and that a new kind costs no DDL. **It does
+> have one** (`Schema.swift:382`), so the new kind requires rebuilding the `entries`
+> table — the spine: 7 indexes, 4 triggers, an FTS shadow, and three tables cascading
+> from it. See the revised Bill. The rest of the reasoning below stands; only the
+> price was wrong.
+
+Invariant I7 (`kind-shape`) enumerates a contract per kind, and our shape — one account
+leg plus one equity leg — fails both plausible existing labels:
 
 | Reusing | Contract | Our shape |
 |---|---|---|
@@ -207,6 +213,22 @@ scratch ledger surprisingly hard.
 
 ## The bill
 
+> **REVISED (2026-08-13, after building the foundation).** Two claims here were wrong,
+> and both moved the price — in opposite directions.
+>
+> **Up:** `entries.kind` is constrained, so the spine table gets rebuilt (above).
+>
+> **Down, and further:** the schemas are **not** byte-for-byte identical and never were —
+> `entries.group_id` is already an iOS-only column, documented as such. Nothing
+> mechanically enforces equality. So none of this needs the web at all: the widened
+> CHECKs, the link column, the lazy category and the audit clause all landed iOS-only,
+> with **zero** web changes and **no** `SCHEMA_VERSION` bump. The write-parity gate
+> confirmed the boundary the hard way — seeding the new category alongside the other
+> three made every ordinary write diverge from the web oracle, and the gate caught it
+> in one run. Making the category lazy and native-only restored parity.
+>
+> What follows is the original (overstated) bill, kept for the record.
+
 **Schema (both front-ends, byte-for-byte, `SCHEMA_VERSION` bump):**
 
 1. `categories.system` CHECK gains `'interledger'` → **table rebuild** (SQLite cannot
@@ -248,6 +270,25 @@ the 2026-08-08 freeze — `lib/db` is the maintained surface, `app/` is not.
 | Budgets / Insights | `kind='equity'` categories are already excluded from spend aggregations |
 | Audit rule 6 (`cross-ledger`) | still passes untouched: every posting stays inside its own entry's ledger |
 | Projection's transfer pairing | requires `kind == "transfer"` **and** ≥2 account legs — `interledger` rows can't be mistaken for one |
+
+## Migration hazards found while building (2026-08-13)
+
+Recorded here because they are invisible in the design and expensive to rediscover:
+
+1. **`ALTER TABLE … RENAME` rewrites other tables' foreign keys** to follow the rename.
+   `postings` therefore began cascading from `entries_old`, and the final `DROP` tried to
+   delete every money line in the database. GRDB's deferred foreign-key checks do **not**
+   prevent this — deferring postpones constraint *violations*, while `ON DELETE CASCADE`
+   is an *action* that still runs. `PRAGMA legacy_alter_table = ON` is the fix, and it is
+   load-bearing twice: without it `postings` is also left permanently referencing a table
+   that no longer exists, which fails **silently**.
+2. **The same hazard exists in `2026-07-23-counterparties-global`**, unnoticed: dropping
+   the old `counterparties` table with foreign keys live would fire `ON DELETE SET NULL`
+   and blank `entries.counterparty_id` across the database. Harmless so far (pre-release,
+   and the migrator disables foreign keys), but worth knowing it was luck, not design.
+3. **Indexes and triggers travel with a rename**, so their names stay taken and
+   `CREATE … IF NOT EXISTS` silently skips recreating them — a rebuilt table with no seal
+   check and a search index that stops updating. Drop them explicitly first.
 
 ## Verification
 
