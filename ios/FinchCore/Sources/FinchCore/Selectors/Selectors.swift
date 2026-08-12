@@ -181,6 +181,36 @@ public enum Selectors {
 
     // MARK: counterpartyTxCounts
 
+    /// Split pending transactions into the ones worth confirming NOW and the ones that
+    /// have not happened yet.
+    ///
+    /// `pending` carries two readings in this app. The engine treats it as "has not
+    /// counted yet" — pending rows are excluded from spend, budgets and the running
+    /// balance. The UI treated it as "needs your attention", pinning EVERY pending row
+    /// into a "To confirm (N)" bucket on ten screens. Those agreed only because nothing
+    /// was ever pending and future-dated at once. Once a future-dated transaction starts
+    /// pending, they come apart: next month's rent is correctly not-counted, and
+    /// incorrectly nagging.
+    ///
+    /// `today` is a PARAMETER, not a read of the clock: this stays pure so its tests can
+    /// fix the date. Callers pass `store.wallToday` — the literal current day — never
+    /// `store.today`, which is anchored on the data rather than the calendar.
+    ///
+    /// Day strings compare lexicographically because they are zero-padded ISO
+    /// (`2026-08-12`), so no date parsing is needed. The boundary is `>`, NOT `>=`:
+    /// something dated today is confirmable today, and that is the app's most common
+    /// case.
+    ///
+    /// Order within each bucket is the input's; callers sort afterwards.
+    public static func pendingSplit(_ txns: [Tx], today: String) -> (dueNow: [Tx], upcoming: [Tx]) {
+        var dueNow: [Tx] = []
+        var upcoming: [Tx] = []
+        for t in txns where t.pending == true {
+            if t.date > today { upcoming.append(t) } else { dueNow.append(t) }
+        }
+        return (dueNow, upcoming)
+    }
+
     /// Per-counterparty usage count: non-pending txns in `ledgerId` attributed to a
     /// counterparty by `counterpartyId` (when set & known) else by normalized name.
     /// Keyed by counterparty id; absent for unused merchants. Counts all kinds.
