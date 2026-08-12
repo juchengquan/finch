@@ -31,6 +31,7 @@ export const handlers = {
       currency: str(args.currency || 'SGD'),
       groupId: args.groupId ? str(args.groupId) : null,
       openingBalance: Number(args.openingBalance ?? 0),
+      openingDate: args.openingDate ? str(args.openingDate) : null,
       color: args.color ? str(args.color) : null,
       icon: args.icon ? str(args.icon) : null,
       notes: args.notes ? str(args.notes) : null,

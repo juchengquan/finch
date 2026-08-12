@@ -737,5 +737,13 @@
   "Make active": "设为当前账本",
   "Current": "当前",
   "View all activity": "查看全部动态",
-  "Upcoming (%lld)": "即将到来（%lld）"
+  "Upcoming (%lld)": "即将到来（%lld）",
+  "Basic": "基本",
+  "Institution": "开户机构",
+  "Bank or issuer": "银行或发卡机构",
+  "Last 4 digits": "后四位",
+  "Only the last four digits — enough to tell cards apart on a statement.": "仅保存后四位，足以在账单中区分不同卡片。",
+  "Credit limit": "信用额度",
+  "Not set": "未设置",
+  "A day past the end of a short month falls on that month's last day.": "若日期超过当月天数，则顺延至当月最后一天。"
 }

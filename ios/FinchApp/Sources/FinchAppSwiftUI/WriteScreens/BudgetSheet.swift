@@ -24,7 +24,17 @@ struct BudgetSheet: View {
     }
     let frequencies = ["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"]
 
+    private static let palette: [(hex: String, color: Color)] = [
+        ("#1f3a5f", .blue), ("#2e7d32", .green), ("#c62828", .red),
+        ("#6a1b9a", .purple), ("#ef6c00", .orange), ("#00838f", .teal),
+    ]
+
     @State private var name: String
+    // Detail fields (schema 2026-08-12). Budgets had no visual identity of their
+    // own while budget GROUPS already carried a colour.
+    @State private var icon = ""
+    @State private var colorHex = ""
+    @State private var notes = ""
     @State private var kind: Kind
     @State private var amount: String            // expense = limit; income = target
     @State private var frequency: String
@@ -46,6 +56,9 @@ struct BudgetSheet: View {
     init(budget: BudgetRow? = nil) {
         self.budget = budget
         _name = State(initialValue: budget?.name ?? "")
+        _icon = State(initialValue: budget?.icon ?? "")
+        _colorHex = State(initialValue: budget?.color ?? "")
+        _notes = State(initialValue: budget?.notes ?? "")
         _kind = State(initialValue: (budget?.type == "income") ? .income : .expense)
         _amount = State(initialValue: budget.map { DecimalInput.text($0.amount, currency: FinchStore.shared.baseCurrency) } ?? "")
         _frequency = State(initialValue: budget?.frequency ?? "monthly")
@@ -120,6 +133,7 @@ struct BudgetSheet: View {
             FieldRow(glyph: .name, title: "Name") {
                 TextField("Name", text: $name)
             }
+            IconPickerRow(title: "Icon", glyph: .icon, selection: $icon)
             FieldRow(glyph: .amount, title: "Target") {
                 TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: store.baseCurrency)), text: $amount).moneyInput($amount, currency: store.baseCurrency)
             }
@@ -129,6 +143,22 @@ struct BudgetSheet: View {
                     ForEach(store.budgetGroups) { Text($0.name).tag($0.id) }
                 }
                 .labelsHidden()
+            }
+        }
+
+        Section {
+            FieldRow(glyph: .color, title: "Color") {
+                HStack(spacing: 14) {
+                    ForEach(Self.palette, id: \.hex) { swatch in
+                        Circle().fill(swatch.color).frame(width: 26, height: 26)
+                            .overlay(Circle().stroke(Color.primary, lineWidth: colorHex == swatch.hex ? 2.5 : 0))
+                            .onTapGesture { colorHex = (colorHex == swatch.hex ? "" : swatch.hex) }
+                            .accessibilityLabel("Color \(swatch.hex)")
+                    }
+                }
+            }
+            FieldRow(glyph: .note, title: "Note") {
+                TextField("Note (optional)", text: $notes, axis: .vertical)
             }
         }
         Section {
@@ -185,6 +215,7 @@ struct BudgetSheet: View {
             FieldRow(glyph: .name, title: "Name") {
                 TextField("Name", text: $name)
             }
+            IconPickerRow(title: "Icon", glyph: .icon, selection: $icon)
             FieldRow(glyph: .amount, title: "Limit") {
                 TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: store.baseCurrency)), text: $amount).moneyInput($amount, currency: store.baseCurrency)
             }
@@ -194,6 +225,22 @@ struct BudgetSheet: View {
                     ForEach(store.budgetGroups) { Text($0.name).tag($0.id) }
                 }
                 .labelsHidden()
+            }
+        }
+
+        Section {
+            FieldRow(glyph: .color, title: "Color") {
+                HStack(spacing: 14) {
+                    ForEach(Self.palette, id: \.hex) { swatch in
+                        Circle().fill(swatch.color).frame(width: 26, height: 26)
+                            .overlay(Circle().stroke(Color.primary, lineWidth: colorHex == swatch.hex ? 2.5 : 0))
+                            .onTapGesture { colorHex = (colorHex == swatch.hex ? "" : swatch.hex) }
+                            .accessibilityLabel("Color \(swatch.hex)")
+                    }
+                }
+            }
+            FieldRow(glyph: .note, title: "Note") {
+                TextField("Note (optional)", text: $notes, axis: .vertical)
             }
         }
 
@@ -256,6 +303,16 @@ struct BudgetSheet: View {
 
     // MARK: save
 
+    /// nil-when-blank, so clearing a field actually clears the column rather
+    /// than storing an empty string.
+    private var detailPatch: [String: JSONValue] {
+        func t(_ v: String) -> JSONValue {
+            let s = v.trimmingCharacters(in: .whitespacesAndNewlines)
+            return s.isEmpty ? .null : .string(s)
+        }
+        return ["icon": t(icon), "color": t(colorHex), "notes": t(notes)]
+    }
+
     private func save() {
         errorMessage = nil
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter a name."; return }
@@ -295,7 +352,8 @@ struct BudgetSheet: View {
                 "tagIds": tagIds, "counterpartyIds": counterpartyIds,
             ]
             do {
-                try store.apply(.updateBudget, Args(["id": .string(budget.id), "patch": .object(patch)]))
+                try store.apply(.updateBudget, Args(["id": .string(budget.id),
+                                                     "patch": .object(patch.merging(detailPatch) { a, _ in a })]))
                 dismiss()
             } catch { errorMessage = i18nMessage(error) }
         } else {
@@ -314,6 +372,7 @@ struct BudgetSheet: View {
                 args["endDate"] = .string(AppDate.isoDay.string(from: targetDate))
                 args["endTime"] = .string(AppDate.isoTime.string(from: targetDate))
             }
+            for (k, v) in detailPatch where v != .null { args[k] = v }
             do { try store.apply(.createBudget, Args(args)); dismiss() }
             catch { errorMessage = i18nMessage(error) }
         }
@@ -359,7 +418,8 @@ struct BudgetSheet: View {
                 patch["frequency"] = .string(frequency)
             }
             do {
-                try store.apply(.updateBudget, Args(["id": .string(budget.id), "patch": .object(patch)]))
+                try store.apply(.updateBudget, Args(["id": .string(budget.id),
+                                                     "patch": .object(patch.merging(detailPatch) { a, _ in a })]))
                 if cycleChanged {
                     try store.apply(.updateBudgetCycle, Args(["id": .string(budget.id), "patch": .object([
                         "frequency": .string(frequency),
@@ -379,6 +439,7 @@ struct BudgetSheet: View {
             if !selectedCategories.isEmpty { args["categoryIds"] = categoryIds }
             if !selectedAccounts.isEmpty { args["accountIds"] = accountIds }
             if case .double = capValue { args["rolloverLimit"] = capValue }
+            for (k, v) in detailPatch where v != .null { args[k] = v }
             do { try store.apply(.createBudget, Args(args)); dismiss() }
             catch { errorMessage = i18nMessage(error) }
         }

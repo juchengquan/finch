@@ -143,6 +143,9 @@ public struct AccountRow: Identifiable, Codable, Equatable, Hashable, Sendable {
     public var sortOrder: Int?
     public var openingBalanceBase: Double?   // for unrealizedFx cost basis
     public var openingBalance: Double?       // account-currency amount (the Edit sheet's field)
+    /// Date of the `open-<id>` entry — when the opening figure applies FROM.
+    /// nil when the account has no opening entry at all.
+    public var openingDate: String?
     public var lastReconciledAt: String?
     public var lastReconciledBalance: Double?
     /// Curated icon name; nil = derive from `type`, which is what every account
@@ -168,12 +171,13 @@ public struct AccountRow: Identifiable, Codable, Equatable, Hashable, Sendable {
                 statementDay: Int? = nil, dueDay: Int? = nil, creditLimit: Double? = nil,
                 institution: String? = nil, accountLast4: String? = nil,
                 openingBalanceBase: Double? = nil, openingBalance: Double? = nil,
+                openingDate: String? = nil,
                 lastReconciledAt: String? = nil, lastReconciledBalance: Double? = nil) {
         self.id = id; self.balance = balance; self.ledgerId = ledgerId; self.currency = currency
         self.includeInNetWorth = includeInNetWorth; self.isActive = isActive; self.name = name
         self.type = type; self.groupId = groupId; self.groupName = groupName
         self.sortOrder = sortOrder; self.openingBalanceBase = openingBalanceBase
-        self.openingBalance = openingBalance
+        self.openingBalance = openingBalance; self.openingDate = openingDate
         self.icon = icon; self.notes = notes
         self.statementDay = statementDay; self.dueDay = dueDay; self.creditLimit = creditLimit
         self.institution = institution; self.accountLast4 = accountLast4

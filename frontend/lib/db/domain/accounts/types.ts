@@ -69,6 +69,8 @@ export interface NewAccount {
   currency: string;
   groupId: string | null;
   openingBalance: number;
+  /** Date the opening figure applies FROM; defaults to today when absent. */
+  openingDate?: string | null;
   color: string | null;
   icon?: string | null;
   notes?: string | null;
