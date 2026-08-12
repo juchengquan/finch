@@ -745,5 +745,17 @@
   "Only the last four digits — enough to tell cards apart on a statement.": "仅保存后四位，足以在账单中区分不同卡片。",
   "Credit limit": "信用额度",
   "Not set": "未设置",
-  "A day past the end of a short month falls on that month's last day.": "若日期超过当月天数，则顺延至当月最后一天。"
+  "A day past the end of a short month falls on that month's last day.": "若日期超过当月天数，则顺延至当月最后一天。",
+  "No budgets": "暂无预算",
+  "%lld of %lld": "%1$lld / %2$lld",
+  "Tracks every account": "计入所有账户",
+  "This account only": "仅此账户",
+  "A budget with no account filter counts every account, so it is shown ticked here.": "未限定账户的预算会计入所有账户，因此这里显示为已勾选。",
+  "Narrow this budget?": "缩小该预算范围？",
+  "Narrow these budgets?": "缩小这些预算范围？",
+  "Narrow": "缩小范围",
+  "Can't remove": "无法移除",
+  "%@ tracks only this account. Removing it would leave no accounts, which counts every account instead. Edit or delete the budget itself.": "%@ 仅计入此账户。移除后将不剩任何账户，反而会计入所有账户。请直接编辑或删除该预算。",
+  "%@ currently counts every account. Excluding this one pins it to the accounts that exist today — accounts you add later will not be counted.": "%@ 目前计入所有账户。排除此账户后，它将固定为当前已有的账户——之后新增的账户不会被计入。",
+  "%@ currently count every account. Excluding this one pins them to the accounts that exist today — accounts you add later will not be counted.": "%@ 目前计入所有账户。排除此账户后，它们将固定为当前已有的账户——之后新增的账户不会被计入。"
 }

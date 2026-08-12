@@ -223,11 +223,14 @@ struct AccountSheet: View {
             }
         }
 
-        if isEdit {
+        if isEdit, let account {
             Section {
                 FieldRow(glyph: .status, title: "Include in net worth") {
                     Toggle("Include in net worth", isOn: $includeInNetWorth).switchOnlyToggles()
                 }
+                // Edit only: a budget cannot name an account that does not exist yet,
+                // and the row writes to the BUDGETS, not to this sheet's own state.
+                AccountBudgetsRow(accountId: account.id)
             }
         }
     }
