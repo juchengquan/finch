@@ -491,6 +491,11 @@ const MIGRATIONS: Record<string, string[] | ((exec: ExecFn) => Promise<void>)> =
     // and forces readers back onto the date. date('now') is UTC and may be a day off
     // for a distant user; the first refresh runs on the device's wall day and fixes it.
     "UPDATE entries SET pending_kind = CASE WHEN date > date('now') THEN 'upcoming' ELSE 'due' END WHERE status = 'pending'",
+    // The triggers that keep it correct from here on. Additive — which is the whole
+    // reason the rule is a trigger and not a CHECK: CREATE TRIGGER applies to an
+    // existing table, ALTER ... CHECK does not.
+    "CREATE TRIGGER IF NOT EXISTS tr_entry_pending_kind_insert AFTER INSERT ON entries\nFOR EACH ROW WHEN NEW.pending_kind IS NOT (\n  CASE WHEN NEW.status <> 'pending' THEN NULL\n       WHEN NEW.date > date('now')  THEN 'upcoming'\n       ELSE 'due' END)\nBEGIN\n  UPDATE entries SET pending_kind =\n    CASE WHEN NEW.status <> 'pending' THEN NULL\n         WHEN NEW.date > date('now')  THEN 'upcoming'\n         ELSE 'due' END\n   WHERE id = NEW.id;\nEND",
+    "CREATE TRIGGER IF NOT EXISTS tr_entry_pending_kind_update AFTER UPDATE OF status, date ON entries\nFOR EACH ROW WHEN NEW.pending_kind IS NOT (\n  CASE WHEN NEW.status <> 'pending' THEN NULL\n       WHEN NEW.date > date('now')  THEN 'upcoming'\n       ELSE 'due' END)\nBEGIN\n  UPDATE entries SET pending_kind =\n    CASE WHEN NEW.status <> 'pending' THEN NULL\n         WHEN NEW.date > date('now')  THEN 'upcoming'\n         ELSE 'due' END\n   WHERE id = NEW.id;\nEND",
   ],
   // Account detail fields (icon / notes / credit-card cycle / credit limit), plus
   // budgets.notes — one version bump covering both tables rather than two.
