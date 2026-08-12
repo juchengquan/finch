@@ -206,20 +206,20 @@ final class MerchantsVC: UIViewController {
               let id = dataSource.itemIdentifier(for: indexPath),
               let merchant = merchantByID[id] else { return nil }
 
-        let edit = UIContextualAction(style: .normal, title: String(localized: "Edit")) { [weak self] _, _, done in
+        let edit = SwipeAction.make(String(localized: "Edit"),
+                                    systemImage: "pencil",
+                                    tint: .tintColor) { [weak self] done in
             guard let self else { return done(false) }
             self.present(self.hosted(CounterpartyNameSheet(counterparty: merchant)), animated: true)
             done(true)
         }
-        edit.image = UIImage(systemName: "pencil")
-        edit.backgroundColor = .tintColor
 
         // Not `.destructive`: the alert confirms first.
-        let delete = UIContextualAction(style: .normal, title: String(localized: "Delete")) { [weak self] _, _, done in
+        let delete = SwipeAction.make(String(localized: "Delete"),
+                                      systemImage: "trash",
+                                      tint: .systemRed) { [weak self] done in
             self?.confirmDelete(merchant); done(false)
         }
-        delete.image = UIImage(systemName: "trash")
-        delete.backgroundColor = .systemRed
 
         return UISwipeActionsConfiguration(actions: [edit, delete])
     }
@@ -230,11 +230,11 @@ final class MerchantsVC: UIViewController {
         guard !isSelecting,
               let id = dataSource.itemIdentifier(for: indexPath),
               let merchant = merchantByID[id] else { return nil }
-        let merge = UIContextualAction(style: .normal, title: String(localized: "Merge…")) { [weak self] _, _, done in
+        let merge = SwipeAction.make(String(localized: "Merge…"),
+                                     systemImage: "arrow.triangle.merge",
+                                     tint: .systemOrange) { [weak self] done in
             self?.presentMergeTargets(for: merchant); done(true)
         }
-        merge.image = UIImage(systemName: "arrow.triangle.merge")
-        merge.backgroundColor = .systemOrange
         return UISwipeActionsConfiguration(actions: [merge])
     }
 

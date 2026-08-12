@@ -47,7 +47,9 @@ struct TxRowActions {
     /// device flicker reported there was never diagnosed — it may simply follow the
     /// user to the new gesture. What has gone is the swipe-close race specifically.
     func leading(_ tx: Tx) -> UISwipeActionsConfiguration {
-        let dup = UIContextualAction(style: .normal, title: String(localized: "Duplicate")) { _, _, done in
+        let dup = SwipeAction.make(String(localized: "Duplicate"),
+                                   systemImage: "plus.square.on.square",
+                                   tint: .systemIndigo) { done in
             // Duplicate opens a pre-filled Add sheet and never moves the row, so there
             // is no relocation to race and nothing to wait for. It used to sit behind
             // the same 0.33s delay as the status action, which protected it from an
@@ -55,8 +57,6 @@ struct TxRowActions {
             done(true)
             duplicate(tx)
         }
-        dup.image = UIImage(systemName: "plus.square.on.square")
-        dup.backgroundColor = .systemIndigo
         return UISwipeActionsConfiguration(actions: [dup])
     }
 
@@ -72,12 +72,12 @@ struct TxRowActions {
         // Deliberately `.normal`, not `.destructive`: the destructive style plays a
         // row-removal animation on tap, which looks like the delete already happened
         // and tears the row down before the confirmation is answered.
-        let delete = UIContextualAction(style: .normal, title: String(localized: "Delete")) { _, _, done in
+        let delete = SwipeAction.make(String(localized: "Delete"),
+                                      systemImage: "trash",
+                                      tint: .systemRed) { done in
             requestDelete(tx)
             done(false)   // the row stays until the alert is answered
         }
-        delete.image = UIImage(systemName: "trash")
-        delete.backgroundColor = .systemRed
 
         return UISwipeActionsConfiguration(actions: [delete])
     }

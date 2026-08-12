@@ -543,28 +543,28 @@ final class ScheduledListVC: UIViewController {
     /// order the SwiftUI row declares, and the order muscle memory expects.
     private func trailingSwipe(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         guard let t = template(at: indexPath) else { return nil }
-        let edit = UIContextualAction(style: .normal, title: String(localized: "Edit")) { [weak self] _, _, done in
+        let edit = SwipeAction.make(String(localized: "Edit"),
+                                    systemImage: "pencil",
+                                    tint: .systemBlue) { [weak self] done in
             self?.presentSheet(ScheduledSheet(template: t)); done(true)
         }
-        edit.image = UIImage(systemName: "pencil")
-        edit.backgroundColor = .systemBlue
         // Not `.destructive`: that style plays a fake row-removal animation before the
         // confirmation, so the row vanishes and then comes back if you cancel.
-        let del = UIContextualAction(style: .normal, title: String(localized: "Delete")) { [weak self] _, _, done in
+        let del = SwipeAction.make(String(localized: "Delete"),
+                                   systemImage: "trash",
+                                   tint: .systemRed) { [weak self] done in
             self?.confirmDelete(t, from: self?.collectionView.cellForItem(at: indexPath)); done(true)
         }
-        del.image = UIImage(systemName: "trash")
-        del.backgroundColor = .systemRed
         return UISwipeActionsConfiguration(actions: [edit, del])
     }
 
     private func leadingSwipe(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         guard let t = template(at: indexPath) else { return nil }
-        let post = UIContextualAction(style: .normal, title: String(localized: "Post")) { [weak self] _, _, done in
+        let post = SwipeAction.make(String(localized: "Post"),
+                                    systemImage: "checkmark.circle",
+                                    tint: .systemGreen) { [weak self] done in
             self?.post(t, occurrence: nil); done(true)
         }
-        post.image = UIImage(systemName: "checkmark.circle")
-        post.backgroundColor = .systemGreen
         return UISwipeActionsConfiguration(actions: [post])
     }
 

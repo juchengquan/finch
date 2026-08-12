@@ -769,12 +769,12 @@ final class AccountDetailVC: UIViewController {
     /// Deliberately `.normal`, not `.destructive`: the destructive style plays a
     /// row-removal animation before the confirmation has been answered.
     private func holdingSwipe(_ holding: Holding) -> UISwipeActionsConfiguration {
-        let delete = UIContextualAction(style: .normal, title: String(localized: "Delete")) { [weak self] _, _, done in
+        let delete = SwipeAction.make(String(localized: "Delete"),
+                                      systemImage: "trash",
+                                      tint: .systemRed) { [weak self] done in
             self?.confirmDeleteHolding(holding)
             done(false)   // the row stays until the alert is answered
         }
-        delete.image = UIImage(systemName: "trash")
-        delete.backgroundColor = .systemRed
         return UISwipeActionsConfiguration(actions: [delete])
     }
 
