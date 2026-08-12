@@ -38,6 +38,26 @@
       }
     },
     "%@ / %@": {},
+    "%@ currently count every account. Excluding this one pins them to the accounts that exist today — accounts you add later will not be counted.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 目前计入所有账户。排除此账户后，它们将固定为当前已有的账户——之后新增的账户不会被计入。"
+          }
+        }
+      }
+    },
+    "%@ currently counts every account. Excluding this one pins it to the accounts that exist today — accounts you add later will not be counted.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 目前计入所有账户。排除此账户后，它将固定为当前已有的账户——之后新增的账户不会被计入。"
+          }
+        }
+      }
+    },
     "%@ is %@.": {
       "localizations": {
         "zh-Hans": {
@@ -124,6 +144,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "已花费 %1$@ · 共 %2$@"
+          }
+        }
+      }
+    },
+    "%@ tracks only this account. Removing it would leave no accounts, which counts every account instead. Edit or delete the budget itself.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 仅计入此账户。移除后将不剩任何账户，反而会计入所有账户。请直接编辑或删除该预算。"
           }
         }
       }
@@ -300,6 +330,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "还有 %lld 个标签"
+          }
+        }
+      }
+    },
+    "%lld of %lld": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld / %2$lld"
           }
         }
       }
@@ -509,6 +549,16 @@
       }
     },
     "A": {},
+    "A budget with no account filter counts every account, so it is shown ticked here.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未限定账户的预算会计入所有账户，因此这里显示为已勾选。"
+          }
+        }
+      }
+    },
     "A day past the end of a short month falls on that month's last day.": {
       "localizations": {
         "zh-Hans": {
@@ -1548,6 +1598,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "日历"
+          }
+        }
+      }
+    },
+    "Can't remove": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法移除"
           }
         }
       }
@@ -4059,6 +4119,36 @@
         }
       }
     },
+    "Narrow": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缩小范围"
+          }
+        }
+      }
+    },
+    "Narrow these budgets?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缩小这些预算范围？"
+          }
+        }
+      }
+    },
+    "Narrow this budget?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缩小该预算范围？"
+          }
+        }
+      }
+    },
     "Net": {
       "localizations": {
         "zh-Hans": {
@@ -4245,6 +4335,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "暂无备份"
+          }
+        }
+      }
+    },
+    "No budgets": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无预算"
           }
         }
       }
@@ -6469,6 +6569,16 @@
         }
       }
     },
+    "This account only": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅此账户"
+          }
+        }
+      }
+    },
     "This also deletes the other payments linked to this purchase.": {
       "localizations": {
         "zh-Hans": {
@@ -6675,6 +6785,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "跟踪"
+          }
+        }
+      }
+    },
+    "Tracks every account": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "计入所有账户"
           }
         }
       }
