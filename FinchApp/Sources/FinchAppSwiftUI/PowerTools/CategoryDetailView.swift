@@ -34,7 +34,7 @@ struct CategoryDetailView: View {
     private var pendingTxns: [Tx] {
         Selectors.byPurchase(
             Selectors.categoryShares(store.txns, category.id, store.activeLedgerId, includePending: true)
-                .filter { $0.pending == true })
+                .filter { Selectors.isPendingNow($0, today: store.wallToday) })
     }
 
     var body: some View {

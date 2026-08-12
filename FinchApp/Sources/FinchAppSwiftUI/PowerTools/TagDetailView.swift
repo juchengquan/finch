@@ -28,7 +28,7 @@ struct TagDetailView: View {
     /// AccountDetailView gives them.
     private var pendingTxns: [Tx] {
         Selectors.byPurchase(Selectors.tagTransactions(store.txns, tag.id, store.activeLedgerId, includePending: true)
-            .filter { $0.pending == true })
+            .filter { Selectors.isPendingNow($0, today: store.wallToday) })
     }
 
     var body: some View {

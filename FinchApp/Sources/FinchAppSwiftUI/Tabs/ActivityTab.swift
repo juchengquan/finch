@@ -70,6 +70,9 @@ struct ActivityFeedView: View {
     // field re-rendered the whole list on each keystroke before.
     @State private var sections: [MonthGrouping.Section] = []
     @State private var pendingTxns: [Tx] = []   // pinned "To confirm" bucket (filtered)
+    /// Pending AND dated after today — shown apart, because a queue called "To confirm"
+    /// should not count things that have not happened yet. See `Selectors.pendingSplit`.
+    @State private var upcomingTxns: [Tx] = []
     @State private var hasMore = false
     @State private var confirmingBulkDelete = false
     @State private var pendingDelete: Tx?   // single-row delete awaiting confirmation
@@ -140,6 +143,13 @@ struct ActivityFeedView: View {
                     if !pendingTxns.isEmpty {
                         Section("To confirm (\(pendingTxns.count))") {
                             ForEach(pendingTxns) { txn in row(txn) }
+                        }
+                    }
+                    // Same row builder as above on purpose — these differ only in when
+                    // they are actionable, not in what they are.
+                    if !upcomingTxns.isEmpty {
+                        Section("Upcoming (\(upcomingTxns.count))") {
+                            ForEach(upcomingTxns) { txn in row(txn) }
                         }
                     }
                     if groupByMonth {
@@ -301,7 +311,9 @@ struct ActivityFeedView: View {
         let f = filteredTxns()
         // Pending splits into its pinned bucket (newest first, whatever the sort
         // menu says); the month sections cover confirmed rows only.
-        pendingTxns = TxSort.dateDesc.sorted(f.filter { $0.pending == true })
+        let split = Selectors.pendingSplit(f, today: store.wallToday)
+        pendingTxns = TxSort.dateDesc.sorted(split.dueNow)
+        upcomingTxns = TxSort.dateDesc.sorted(split.upcoming)
         let confirmed = f.filter { $0.pending != true }
         hasMore = confirmed.count > visibleCount
         sections = MonthGrouping.sections(Array(confirmed.prefix(visibleCount)))

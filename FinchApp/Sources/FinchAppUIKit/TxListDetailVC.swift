@@ -43,10 +43,10 @@ final class TxListDetailVC: UIViewController {
             // separate entries that both carry both categories.
             Source(title: row.name,
                    confirmed: { Selectors.categoryShares($0.txns, row.id, $0.activeLedgerId) },
-                   pending: {
-                       Selectors.categoryShares($0.txns, row.id, $0.activeLedgerId,
+                   pending: { st in
+                       Selectors.categoryShares(st.txns, row.id, st.activeLedgerId,
                                                 includePending: true)
-                           .filter { $0.pending == true }
+                           .filter { Selectors.isPendingNow($0, today: st.wallToday) }
                    })
         }
 
@@ -54,10 +54,10 @@ final class TxListDetailVC: UIViewController {
         static func tag(_ row: TagRow) -> Source {
             Source(title: row.name,
                    confirmed: { Selectors.tagTransactions($0.txns, row.id, $0.activeLedgerId) },
-                   pending: {
-                       Selectors.tagTransactions($0.txns, row.id, $0.activeLedgerId,
+                   pending: { st in
+                       Selectors.tagTransactions(st.txns, row.id, st.activeLedgerId,
                                                  includePending: true)
-                           .filter { $0.pending == true }
+                           .filter { Selectors.isPendingNow($0, today: st.wallToday) }
                    })
         }
 
@@ -67,10 +67,10 @@ final class TxListDetailVC: UIViewController {
                    confirmed: {
                        Selectors.merchantTransactions($0.txns, $0.merchants, row.id, $0.activeLedgerId)
                    },
-                   pending: {
-                       Selectors.merchantTransactions($0.txns, $0.merchants, row.id,
-                                                      $0.activeLedgerId, includePending: true)
-                           .filter { $0.pending == true }
+                   pending: { st in
+                       Selectors.merchantTransactions(st.txns, st.merchants, row.id,
+                                                      st.activeLedgerId, includePending: true)
+                           .filter { Selectors.isPendingNow($0, today: st.wallToday) }
                    })
         }
     }
