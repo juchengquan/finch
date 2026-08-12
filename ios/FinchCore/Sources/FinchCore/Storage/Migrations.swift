@@ -136,8 +136,7 @@ public enum Migrations {
         // entries.pending_kind (web migration 2026-08-12T01). Additive and nullable;
         // the refresh backfills it from the date, so nothing is migrated in place.
         migrator.registerMigration("2026-08-12-pending-kind") { db in
-            do { try db.execute(sql: "ALTER TABLE entries ADD COLUMN pending_kind TEXT") }
-            catch { if !"\(error)".contains("duplicate column") { throw error } }
+            try Self.addPendingKind(db)
             try Self.ensureMetadataRow(db)   // re-stamp schema_version
         }
 
@@ -164,6 +163,27 @@ public enum Migrations {
             do { try db.execute(sql: ddl) }
             catch { if !"\(error)".contains("duplicate column") { throw error } }
         }
+    }
+
+    /// Add `entries.pending_kind` and BACKFILL it, tolerating a database that already
+    /// has the column. Exposed for the same reason as `addEntryGroupId`: on a fresh
+    /// database the migration is recorded as applied before a test could run it, so a
+    /// test must be able to call the real thing rather than a copy of its SQL.
+    ///
+    /// The backfill is not optional. Without it every existing pending row sits at
+    /// "pending + NULL" until the first refresh — a state indistinguishable from a bug,
+    /// which would force every reader back onto the date and defeat the column.
+    ///
+    /// `date('now')` is UTC and can be a day off for a user far from it. Harmless: the
+    /// first refresh runs on the device's own wall day and corrects any row it got wrong.
+    static func addPendingKind(_ db: Database) throws {
+        do { try db.execute(sql: "ALTER TABLE entries ADD COLUMN pending_kind TEXT") }
+        catch { if !"\(error)".contains("duplicate column") { throw error } }
+        try db.execute(sql: """
+            UPDATE entries
+               SET pending_kind = CASE WHEN date > date('now') THEN 'upcoming' ELSE 'due' END
+             WHERE status = 'pending'
+            """)
     }
 
     /// Add `entries.group_id`, tolerating a database that already has it.

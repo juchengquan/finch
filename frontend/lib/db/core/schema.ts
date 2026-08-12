@@ -484,7 +484,14 @@ const MIGRATIONS: Record<string, string[] | ((exec: ExecFn) => Promise<void>)> =
   // the refresh backfills it from the date, so no data migration is needed. An
   // hour past the account-fields bump because both land the same day and versions
   // are compared as strings.
-  '2026-08-12T01:00:00Z': ["ALTER TABLE entries ADD COLUMN pending_kind TEXT"],
+  '2026-08-12T01:00:00Z': [
+    'ALTER TABLE entries ADD COLUMN pending_kind TEXT',
+    // Backfilled immediately: without it every existing pending row sits at
+    // "pending + NULL" until the first refresh, which is indistinguishable from a bug
+    // and forces readers back onto the date. date('now') is UTC and may be a day off
+    // for a distant user; the first refresh runs on the device's wall day and fixes it.
+    "UPDATE entries SET pending_kind = CASE WHEN date > date('now') THEN 'upcoming' ELSE 'due' END WHERE status = 'pending'",
+  ],
   // Account detail fields (icon / notes / credit-card cycle / credit limit), plus
   // budgets.notes — one version bump covering both tables rather than two.
   // Purely additive and all nullable, so existing rows read as "unset" and no
