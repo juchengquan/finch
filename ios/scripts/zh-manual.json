@@ -736,5 +736,6 @@
   "%@ · %@ total": "%@ · 合计 %@",
   "Make active": "设为当前账本",
   "Current": "当前",
-  "View all activity": "查看全部动态"
+  "View all activity": "查看全部动态",
+  "Upcoming (%lld)": "即将到来（%lld）"
 }
