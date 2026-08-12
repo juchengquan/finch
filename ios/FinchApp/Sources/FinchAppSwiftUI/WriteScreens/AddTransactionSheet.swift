@@ -212,7 +212,42 @@ struct AddTransactionSheet: View {
     }
 
     private func currency(of accountId: String) -> String {
-        accounts.first { $0.id == accountId }?.currency ?? store.displayCurrency
+        (accounts.first { $0.id == accountId } ?? foreignAccounts.first { $0.id == accountId })?
+            .currency ?? store.displayCurrency
+    }
+
+    // MARK: Cross-ledger transfers (2026-08-12 design, D6)
+
+    /// Accounts in OTHER books, with the ledger they belong to. The store projects
+    /// only the active ledger, so this is the one place the app deliberately reads
+    /// outside it — and only to populate a transfer's To picker.
+    private var foreignLedgers: [Ledger] { store.ledgers.filter { $0.id != store.activeLedgerId } }
+    private var foreignAccounts: [AccountRow] {
+        foreignLedgers.flatMap { store.accounts(forLedger: $0.id) }
+    }
+    private func ledgerName(of accountId: String) -> String? {
+        guard let a = foreignAccounts.first(where: { $0.id == accountId }) else { return nil }
+        return foreignLedgers.first { $0.id == a.ledgerId }?.name
+    }
+    /// True once the chosen destination lives in another book — which is what
+    /// turns this from one balanced entry into a linked PAIR, one per ledger.
+    private var isCrossLedger: Bool {
+        kind == .transfer && !toAccountId.isEmpty && ledgerName(of: toAccountId) != nil
+    }
+    /// This ledger's accounts first, then each other book under its own heading.
+    private var transferToOptions: (accounts: [AccountRow], titles: [String: String], order: [String]) {
+        var titles: [String: String] = [:]
+        var order: [String] = []
+        let mine = store.ledgers.first { $0.id == store.activeLedgerId }?.name ?? String(localized: "This ledger")
+        for a in accounts { titles[a.id] = mine }
+        order.append(mine)
+        for l in foreignLedgers {
+            let named = store.accounts(forLedger: l.id)
+            guard !named.isEmpty else { continue }
+            for a in named { titles[a.id] = l.name }
+            order.append(l.name)
+        }
+        return (accounts + foreignAccounts, titles, order)
     }
     private var transferIsCrossCurrency: Bool {
         kind == .transfer && currency(of: fromAccountId) != currency(of: toAccountId)
@@ -492,7 +527,8 @@ struct AddTransactionSheet: View {
             SearchablePickerRow(title: "From", glyph: .fromAccount,
                 accounts: accounts, selection: $fromAccountId)
             SearchablePickerRow(title: "To", glyph: .toAccount,
-                accounts: accounts, selection: $toAccountId)
+                accounts: transferToOptions.accounts, selection: $toAccountId,
+                sectionTitles: transferToOptions.titles, sectionOrder: transferToOptions.order)
             // Same currency → one amount row; cross-currency → From + To, the To
             // row being the independent received amount in the destination's money.
             if transferIsCrossCurrency {
@@ -730,6 +766,24 @@ struct AddTransactionSheet: View {
                         errorMessage = "Enter the received amount."; return
                     }
                     receivedAmount = recv
+                }
+                // Another book ⇒ a PAIR of entries, one per ledger, each balanced
+                // in its own base currency. A single entry cannot span two ledgers
+                // (see the 2026-08-12 design), so this is a different write, not a
+                // variant of the one below.
+                if isCrossLedger {
+                    var xargs: [String: JSONValue] = [
+                        "fromAccountId": .string(fromAccountId),
+                        "toAccountId": .string(toAccountId),
+                        "fromAmount": .double(abs(value)),
+                        "toAmount": .double(receivedAmount),
+                        "date": .string(ymd), "time": .string(hm),
+                        "status": .string(status.rawValue),
+                    ]
+                    if !note.isEmpty { xargs["note"] = .string(note) }
+                    try store.apply(.createInterledgerTransfer, Args(xargs))
+                    dismiss()
+                    return
                 }
                 // The same one write every other kind uses. A transfer's cells are
                 // each in their OWN card's currency — there is no single purchase

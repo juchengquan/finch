@@ -82,6 +82,14 @@ struct EditTransactionSheet: View {
     /// they all construct `EditTransactionSheet(txn:)` and nothing else, so this
     /// is the one place that has to know.
     private var isGrid: Bool { liveTxn.groupId != nil }
+    /// One half of a cross-ledger transfer. It gets a dedicated read-only section
+    /// rather than the ordinary editor: this entry's partner lives in another
+    /// ledger, and saving it through `saveTransaction` would rewrite it into an
+    /// ordinary expense — silently breaking a pair whose other half still claims
+    /// the money moved. Editing the amounts has its own action
+    /// (`updateInterledgerTransfer`) and is a follow-up; deleting is already safe
+    /// from anywhere, because `deleteTransaction` removes both halves.
+    private var isInterledger: Bool { (liveTxn.kind ?? "") == "interledger" }
 
     /// Every card's transaction in this purchase, the tapped one included.
     private var groupRows: [Tx] {
@@ -135,6 +143,7 @@ struct EditTransactionSheet: View {
     /// Simple single-account entries can be re-typed expense/income/refund.
     private var canReclassify: Bool {
         !isSplit && txn.kind != "transfer" && txn.kind != "adjustment" && txn.kind != "opening"
+            && txn.kind != "interledger"
     }
     private var effectiveKind: String { canReclassify ? selectedKind.rawValue : (txn.kind ?? "expense") }
 
@@ -158,6 +167,26 @@ struct EditTransactionSheet: View {
     private func accountName(_ id: String) -> String {
         store.accounts.first { $0.id == id }?.name ?? "—"
     }
+    /// A cross-ledger half, shown rather than edited (see `isInterledger`). The
+    /// description already carries the partner's "Ledger · Account", so the row
+    /// answers "where did this go?" without reading another ledger. Delete stays
+    /// available below and is safe: the chokepoint removes both halves.
+    @ViewBuilder private var interledgerSummary: some View {
+        Section {
+            FieldRow(glyph: .account, title: "Account") { Text(accountName(accountId)) }
+            FieldRow(glyph: .amount, title: "Amount") {
+                Text(store.displayNative(liveTxn.nativeAmount ?? liveTxn.amount,
+                                         currency: liveTxn.currency ?? accountCurrency))
+            }
+            FieldRow(glyph: .toAccount, title: "To") { Text(liveTxn.merchant) }
+            FieldRow(glyph: .date, title: "Date") { Text(liveTxn.date) }
+        } header: {
+            finchSectionHeader("Between ledgers")
+        } footer: {
+            Text("This is one half of a transfer between two ledgers. Deleting it removes both halves.")
+        }
+    }
+
     /// Transfer amount row: fixed currency label from the leg (accounts own
     /// their currency — no picker).
     private func transferAmountRow(_ label: String, text: Binding<String>, currency: String) -> some View {
@@ -181,6 +210,9 @@ struct EditTransactionSheet: View {
                 // three sheets in the family already compensate this way; this one
                 // was missed, so it showed no title at all.
                 Section { TxnTypeToolbar.caption(KindLabel.label(effectiveKind)) }.finchCaptionSection()
+                if isInterledger {
+                    interledgerSummary
+                } else {
                 // Line items build their own primary section (Account/Amount/
                 // Category/Date) below; split & transfer keep Date here.
                 // A grid keeps the ordinary Account/Amount/Category layout: the
@@ -363,6 +395,8 @@ struct EditTransactionSheet: View {
                         }
                     }
                 }
+
+                }   // end !isInterledger
 
                 // Edit-only meta actions at the very bottom.
                 Section {
