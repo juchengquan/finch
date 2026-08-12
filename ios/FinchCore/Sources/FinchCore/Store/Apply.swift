@@ -30,6 +30,7 @@ public enum Apply {
         all.merge(AppDomain.handlers) { _, new in new }
         all.merge(Accounts.handlers) { _, new in new }
         all.merge(Transfers.handlers) { _, new in new }
+        all.merge(Interledger.handlers) { _, new in new }
         all.merge(Ledgers.handlers) { _, new in new }
         all.merge(Budgets.handlers) { _, new in new }
         all.merge(Scheduled.handlers) { _, new in new }

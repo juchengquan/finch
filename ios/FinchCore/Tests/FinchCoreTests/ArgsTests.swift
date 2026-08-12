@@ -13,8 +13,12 @@ final class ArgsTests: XCTestCase {
     /// + `setCategoryOrder` (native-first — one write per category drag, so a drop
     ///   that renumbers a sibling group costs ONE reprojection and one round of
     ///   write side-effects instead of one per moved row) = 86.
+    /// + `saveTransaction` = 87
+    /// + `createInterledgerTransfer` / `updateInterledgerTransfer` /
+    ///   `deleteInterledgerTransfer` (native-only, cross-ledger transfers — the
+    ///   web has no equivalent, so these never enter WRITE_SEQUENCE) = 90.
     func test_actionCount() {
-        XCTAssertEqual(ActionName.allCases.count, 87)   // +saveTransaction
+        XCTAssertEqual(ActionName.allCases.count, 90)
     }
 
     func test_actionNameRawValues() {
