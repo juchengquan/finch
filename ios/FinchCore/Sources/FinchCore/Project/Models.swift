@@ -145,17 +145,38 @@ public struct AccountRow: Identifiable, Codable, Equatable, Hashable, Sendable {
     public var openingBalance: Double?       // account-currency amount (the Edit sheet's field)
     public var lastReconciledAt: String?
     public var lastReconciledBalance: Double?
+    /// Curated icon name; nil = derive from `type`, which is what every account
+    /// did before the column existed.
+    public var icon: String?
+    public var notes: String?
+    /// Credit-card cycle days, 1-31. Meaningful only on `credit_card`; nil
+    /// elsewhere and nil when unset.
+    public var statementDay: Int?
+    public var dueDay: Int?
+    /// Account-currency credit limit. nil = unknown, which is NOT zero.
+    public var creditLimit: Double?
+    /// Who holds the account ("DBS", "Amex") and the last four digits — both
+    /// descriptive only; nothing matches on them.
+    public var institution: String?
+    public var accountLast4: String?
 
     public init(id: String, balance: Double, ledgerId: String? = nil, currency: String? = nil,
                 includeInNetWorth: Int? = nil, isActive: Bool? = nil, name: String? = nil,
                 type: String? = nil, groupId: String? = nil, groupName: String? = nil,
-                sortOrder: Int? = nil, openingBalanceBase: Double? = nil, openingBalance: Double? = nil,
+                sortOrder: Int? = nil,
+                icon: String? = nil, notes: String? = nil,
+                statementDay: Int? = nil, dueDay: Int? = nil, creditLimit: Double? = nil,
+                institution: String? = nil, accountLast4: String? = nil,
+                openingBalanceBase: Double? = nil, openingBalance: Double? = nil,
                 lastReconciledAt: String? = nil, lastReconciledBalance: Double? = nil) {
         self.id = id; self.balance = balance; self.ledgerId = ledgerId; self.currency = currency
         self.includeInNetWorth = includeInNetWorth; self.isActive = isActive; self.name = name
         self.type = type; self.groupId = groupId; self.groupName = groupName
         self.sortOrder = sortOrder; self.openingBalanceBase = openingBalanceBase
         self.openingBalance = openingBalance
+        self.icon = icon; self.notes = notes
+        self.statementDay = statementDay; self.dueDay = dueDay; self.creditLimit = creditLimit
+        self.institution = institution; self.accountLast4 = accountLast4
         self.lastReconciledAt = lastReconciledAt; self.lastReconciledBalance = lastReconciledBalance
     }
 }

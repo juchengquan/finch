@@ -125,7 +125,37 @@ public enum Migrations {
             try Self.ensureMetadataRow(db)   // re-stamp schema_version
         }
 
+        // Account detail fields + budgets.notes (web migration 2026-08-12).
+        // Purely additive and all nullable, so existing rows read as "unset" and
+        // nothing is backfilled.
+        migrator.registerMigration("2026-08-12-detail-fields") { db in
+            try Self.addDetailFields(db)
+            try Self.ensureMetadataRow(db)   // re-stamp schema_version
+        }
+
         return migrator
+    }
+
+    /// Add the account detail columns and `budgets.notes`, tolerating a database
+    /// that already has them. Exposed for the same reason as `addEntryGroupId`:
+    /// on a fresh database the migration is recorded as applied before a test
+    /// could run it.
+    static func addDetailFields(_ db: Database) throws {
+        for ddl in [
+            "ALTER TABLE accounts ADD COLUMN icon TEXT",
+            "ALTER TABLE accounts ADD COLUMN notes TEXT",
+            "ALTER TABLE accounts ADD COLUMN statement_day INTEGER",
+            "ALTER TABLE accounts ADD COLUMN due_day INTEGER",
+            "ALTER TABLE accounts ADD COLUMN credit_limit REAL",
+            "ALTER TABLE accounts ADD COLUMN institution TEXT",
+            "ALTER TABLE accounts ADD COLUMN account_last4 TEXT",
+            "ALTER TABLE budgets ADD COLUMN notes TEXT",
+            "ALTER TABLE budgets ADD COLUMN icon TEXT",
+            "ALTER TABLE budgets ADD COLUMN color TEXT",
+        ] {
+            do { try db.execute(sql: ddl) }
+            catch { if !"\(error)".contains("duplicate column") { throw error } }
+        }
     }
 
     /// Add `entries.group_id`, tolerating a database that already has it.

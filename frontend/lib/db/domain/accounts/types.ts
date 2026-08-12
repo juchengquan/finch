@@ -47,6 +47,18 @@ export interface AccountPatch {
   includeInNetWorth?: number;
   /** Position within its group — written by drag-to-reorder. */
   sortOrder?: number;
+  /** Curated icon name; null clears it and falls back to the type's icon. */
+  icon?: string | null;
+  notes?: string | null;
+  /** Credit-card cycle days, 1-31; null clears. Meaningful only on credit_card. */
+  statementDay?: number | null;
+  dueDay?: number | null;
+  /** Account-currency limit; null = unknown, which is not 0. */
+  creditLimit?: number | null;
+  /** Descriptive only — nothing matches on these. */
+  institution?: string | null;
+  /** Last four digits as TEXT: "0042" must not become 42. */
+  accountLast4?: string | null;
 }
 
 export interface NewAccount {
@@ -58,4 +70,11 @@ export interface NewAccount {
   groupId: string | null;
   openingBalance: number;
   color: string | null;
+  icon?: string | null;
+  notes?: string | null;
+  statementDay?: number | null;
+  dueDay?: number | null;
+  creditLimit?: number | null;
+  institution?: string | null;
+  accountLast4?: string | null;
 }

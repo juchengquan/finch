@@ -38,6 +38,7 @@ export const budgetActions = (set: SetState, get: GetState) => ({
     const row: BudgetRow = {
       id,
       ledgerId,
+      notes: null, icon: null, color: null,   // web UI is frozen; set on native only
       groupId: input.groupId ?? null,
       name: input.name,
       type: input.type,

@@ -67,6 +67,7 @@ public enum Budgets {
             let isRecurring: Double?; let rolloverLimit: Double?
             let accountIds: [String]?; let categoryIds: [String]?
             let tagIds: [String]?; let counterpartyIds: [String]?; let warningPct: Double?
+            let notes: String?; let icon: String?; let color: String?
         }
         let a = try args.to(A.self)
         let name = a.name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -81,14 +82,14 @@ public enum Budgets {
             try db.execute(sql: """
                 INSERT INTO budgets (id, ledger_id, group_id, name, kind, amount, saved, carry_forward,
                     frequency, start_date, start_time, end_date, end_time, is_recurring, rollover, rollover_limit,
-                    account_ids, category_ids, tag_ids, counterparty_ids, warning_pct, created_at, updated_at)
-                VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))
+                    account_ids, category_ids, tag_ids, counterparty_ids, warning_pct, notes, icon, color, created_at, updated_at)
+                VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))
                 """, arguments: [a.id ?? Entries.newId("bgt"), a.ledgerId ?? "personal", a.groupId, name, type,
                                  a.amount, a.saved ?? 0, a.frequency ?? "monthly", startDate, a.startTime,
                                  a.endDate, a.endTime, isRecurring,
                                  rollover, a.rolloverLimit, idsToJson(a.accountIds ?? []), idsToJson(a.categoryIds ?? []),
                                  idsToJson(a.tagIds ?? []), idsToJson(a.counterpartyIds ?? []),
-                                 a.warningPct ?? 80])
+                                 a.warningPct ?? 80, a.notes, a.icon, a.color])
         }
     }
 
@@ -97,7 +98,7 @@ public enum Budgets {
         "startDate": "start_date", "startTime": "start_time", "endDate": "end_date", "endTime": "end_time",
         "isRecurring": "is_recurring", "rollover": "rollover",
         "rolloverLimit": "rollover_limit", "accountIds": "account_ids", "categoryIds": "category_ids",
-        "tagIds": "tag_ids", "counterpartyIds": "counterparty_ids", "saved": "saved", "warningPct": "warning_pct",
+        "tagIds": "tag_ids", "counterpartyIds": "counterparty_ids", "saved": "saved", "warningPct": "warning_pct", "notes": "notes", "icon": "icon", "color": "color",
     ]
 
     static func update(_ db: Database, _ args: Args) throws {

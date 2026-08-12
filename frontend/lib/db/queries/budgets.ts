@@ -48,6 +48,9 @@ function rowToBudget(r: Record<string, unknown>): BudgetRow {
     tagIds: parseIds(r.tag_ids),
     counterpartyIds: parseIds(r.counterparty_ids),
     warningPct: Number(r.warning_pct ?? 80),
+    notes: r.notes == null ? null : String(r.notes),
+    icon: r.icon == null ? null : String(r.icon),
+    color: r.color == null ? null : String(r.color),
   };
 }
 
@@ -70,8 +73,8 @@ export async function createBudget(exec: Exec, b: NewBudget): Promise<void> {
     `INSERT INTO budgets
        (id, ledger_id, group_id, name, kind, amount, saved, carry_forward,
         frequency, start_date, start_time, end_date, end_time, is_recurring, rollover, rollover_limit,
-        account_ids, category_ids, tag_ids, counterparty_ids, warning_pct, created_at, updated_at)
-    VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
+        account_ids, category_ids, tag_ids, counterparty_ids, warning_pct, notes, icon, color, created_at, updated_at)
+    VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
     [
       b.id,
       b.ledgerId,
@@ -93,6 +96,9 @@ export async function createBudget(exec: Exec, b: NewBudget): Promise<void> {
       idsToJson(b.tagIds),
       idsToJson(b.counterpartyIds),
       b.warningPct ?? 80,
+      b.notes ?? null,
+      b.icon ?? null,
+      b.color ?? null,
     ],
   );
 }
@@ -116,6 +122,9 @@ const BUDGET_PATCH_COLUMNS: Record<keyof BudgetPatch, string> = {
   tagIds: 'tag_ids',
   counterpartyIds: 'counterparty_ids',
   warningPct: 'warning_pct',
+  notes: 'notes',
+  icon: 'icon',
+  color: 'color',
 };
 
 const ARRAY_PATCH_KEYS: ReadonlySet<keyof BudgetPatch> = new Set([
