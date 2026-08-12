@@ -106,3 +106,25 @@ final class ScheduledDuePlanningTests: XCTestCase {
         XCTAssertNil(NotificationPlanner.deliverAt("not-a-date", hour: 9, cal))
     }
 }
+
+/// The digest's hour follows the Delivery time, but never into quiet hours.
+final class AllowedHourTests: XCTestCase {
+    private let night = QuietHours(startHour: 22, endHour: 8)
+
+    func testAnAllowedHourIsUnchanged() {
+        XCTAssertEqual(NotificationPolicy.allowedHour(11, quiet: night), 11)
+    }
+
+    /// An hour inside the window is pushed to its end — the same rule a pre-scheduled
+    /// alert gets, so the two cannot disagree.
+    func testQuietHoursStillWin() {
+        XCTAssertEqual(NotificationPolicy.allowedHour(7, quiet: night), 8)
+        XCTAssertEqual(NotificationPolicy.allowedHour(23, quiet: night), 8, "late evening is quiet too")
+    }
+
+    func testANonWrappingWindow() {
+        let nap = QuietHours(startHour: 1, endHour: 6)
+        XCTAssertEqual(NotificationPolicy.allowedHour(3, quiet: nap), 6)
+        XCTAssertEqual(NotificationPolicy.allowedHour(12, quiet: nap), 12)
+    }
+}
