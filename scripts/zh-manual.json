@@ -759,5 +759,9 @@
   "%@ currently counts every account. Excluding this one pins it to the accounts that exist today — accounts you add later will not be counted.": "%@ 目前计入所有账户。排除此账户后，它将固定为当前已有的账户——之后新增的账户不会被计入。",
   "%@ currently count every account. Excluding this one pins them to the accounts that exist today — accounts you add later will not be counted.": "%@ 目前计入所有账户。排除此账户后，它们将固定为当前已有的账户——之后新增的账户不会被计入。",
   "More to review": "还有需要处理的",
-  "%lld more need your attention.": "另有 %lld 条需要你处理。"
+  "%lld more need your attention.": "另有 %lld 条需要你处理。",
+  "Quiet from": "免打扰开始",
+  "Quiet until": "免打扰结束",
+  "Delivery time": "推送时间",
+  "Alerts raised during quiet hours arrive when it ends, rather than waking you.": "免打扰期间产生的提醒会在结束后送达，不会吵醒你。"
 }

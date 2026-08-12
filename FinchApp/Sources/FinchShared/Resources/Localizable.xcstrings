@@ -1122,6 +1122,16 @@
       }
     },
     "After the statement": {},
+    "Alerts raised during quiet hours arrive when it ends, rather than waking you.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "免打扰期间产生的提醒会在结束后送达，不会吵醒你。"
+          }
+        }
+      }
+    },
     "All": {
       "localizations": {
         "zh-Hans": {
@@ -2541,6 +2551,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "删除该交易？"
+          }
+        }
+      }
+    },
+    "Delivery time": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推送时间"
           }
         }
       }
@@ -5237,6 +5257,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "快速添加按钮"
+          }
+        }
+      }
+    },
+    "Quiet from": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "免打扰开始"
+          }
+        }
+      }
+    },
+    "Quiet until": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "免打扰结束"
           }
         }
       }
