@@ -56,6 +56,7 @@ const acctOf = (over: Partial<AccountRow>): AccountRow => ({
 });
 const budgetOf = (over: Partial<BudgetRow>): BudgetRow => ({
   id: 'b1', ledgerId: 'personal', groupId: null, name: 'Food',
+  notes: null, icon: null, color: null,
   type: 'expense' as BudgetRow['type'], amount: 500, saved: 0, carryForward: 0,
   frequency: 'monthly', startDate: '2026-01-01', endDate: null, isRecurring: 1,
   rollover: 0, rolloverLimit: null, pendingAmount: null, lastRolledPeriod: null,

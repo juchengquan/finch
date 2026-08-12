@@ -32,6 +32,13 @@ export const handlers = {
       groupId: args.groupId ? str(args.groupId) : null,
       openingBalance: Number(args.openingBalance ?? 0),
       color: args.color ? str(args.color) : null,
+      icon: args.icon ? str(args.icon) : null,
+      notes: args.notes ? str(args.notes) : null,
+      statementDay: args.statementDay == null ? null : Number(args.statementDay),
+      dueDay: args.dueDay == null ? null : Number(args.dueDay),
+      creditLimit: args.creditLimit == null ? null : Number(args.creditLimit),
+      institution: args.institution ? str(args.institution) : null,
+      accountLast4: args.accountLast4 ? str(args.accountLast4) : null,
     });
   },
   updateAccount: async (exec, args: Args['updateAccount']) => {

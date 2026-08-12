@@ -136,6 +136,13 @@ const PATCH_COLUMNS: Record<keyof AccountPatch, string> = {
   groupId: 'group_id',
   includeInNetWorth: 'include_in_net_worth',
   sortOrder: 'sort_order',
+  icon: 'icon',
+  notes: 'notes',
+  statementDay: 'statement_day',
+  dueDay: 'due_day',
+  creditLimit: 'credit_limit',
+  institution: 'institution',
+  accountLast4: 'account_last4',
 };
 
 /** Update an account's editable fields on the real table (replaces the old shim). */
@@ -174,9 +181,12 @@ export async function createAccount(exec: Exec, a: NewAccount): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
   await exec(
     `INSERT INTO accounts
-       (id,ledger_id,group_id,name,type,currency,current_balance,color,sort_order,include_in_net_worth,is_active,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,0,?,?,?,1,datetime('now'),datetime('now'))`,
-    [a.id, a.ledgerId, a.groupId, a.name, a.type, a.currency, a.color, sortOrder, inw],
+       (id,ledger_id,group_id,name,type,currency,current_balance,color,icon,notes,statement_day,due_day,credit_limit,institution,account_last4,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,1,datetime('now'),datetime('now'))`,
+    [a.id, a.ledgerId, a.groupId, a.name, a.type, a.currency, a.color,
+     a.icon ?? null, a.notes ?? null, a.statementDay ?? null, a.dueDay ?? null, a.creditLimit ?? null,
+     a.institution ?? null, a.accountLast4 ?? null,
+     sortOrder, inw],
   );
   if (a.openingBalance !== 0) {
     await postOpening(exec, { ledgerId: a.ledgerId, accountId: a.id, amount: a.openingBalance, date: today });
