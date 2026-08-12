@@ -104,6 +104,11 @@ public enum ActionName: String, Codable, Sendable, CaseIterable {
     case createTransfer
     case updateTransfer
     case deleteTransfer
+    // Cross-ledger transfers (2026-08-12 design). NATIVE-ONLY: the web has no
+    // equivalent, like setEntryAttachment / setBudgetOrder / setTrackedCurrencies.
+    case createInterledgerTransfer
+    case updateInterledgerTransfer
+    case deleteInterledgerTransfer
 
     // --- holdings (4) ---
     case createHolding
