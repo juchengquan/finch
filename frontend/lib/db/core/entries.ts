@@ -698,10 +698,20 @@ export async function rebuildEntry(exec: Exec, entryId: string, patch: EntryPatc
     // entry must collide (or not) on what it now says, not what it once said.
     // Editing an entry into an exact duplicate of another trips the UNIQUE
     // index right here, rolling the whole edit back.
-    const effTime = patch.time !== undefined ? patch.time ?? null : cur.time == null ? null : String(cur.time);
-    const effDesc = patch.description !== undefined ? patch.description : cur.description == null ? '' : String(cur.description);
-    const hashLegs = rebuiltLegs ?? oldLegs.map(rowToResolved);
-    await exec('UPDATE entries SET dedup_hash = ? WHERE id = ?', [dedupHash(date, effTime, effDesc, hashLegs), entryId]);
+    // ...but ONLY for an entry that already has a hash. The INSERT withholds one
+    // from scheduled-template postings (a template legitimately produces identical
+    // rows month after month), and re-stamping unconditionally invented a hash for
+    // exactly those — so the first edit of the second posting collided with the
+    // first. A NULL hash is the only signal, so the rule is "never create a hash
+    // where there wasn't one". The cost is that an entry stored without a time does
+    // not gain dedup cover if an edit later gives it one, which is the same
+    // carve-out the insert already makes.
+    if (cur.dedup_hash != null) {
+      const effTime = patch.time !== undefined ? patch.time ?? null : cur.time == null ? null : String(cur.time);
+      const effDesc = patch.description !== undefined ? patch.description : cur.description == null ? '' : String(cur.description);
+      const hashLegs = rebuiltLegs ?? oldLegs.map(rowToResolved);
+      await exec('UPDATE entries SET dedup_hash = ? WHERE id = ?', [dedupHash(date, effTime, effDesc, hashLegs), entryId]);
+    }
 
     await exec('UPDATE entries SET sealed = 1 WHERE id = ?', [entryId]);
     await exec(`RELEASE ${sp}`);
