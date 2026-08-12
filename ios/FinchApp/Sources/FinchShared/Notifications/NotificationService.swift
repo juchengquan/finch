@@ -6,6 +6,31 @@ import FinchCore
 /// UserDefaults, not the chokepoint). All on by default.
 public enum NotificationPrefs {
     private static let key = "finch.notifications.disabledKinds"
+    private static let quietStartKey = "finch.notifications.quietStart"
+    private static let quietEndKey = "finch.notifications.quietEnd"
+    private static let deliveryHourKey = "finch.notifications.deliveryHour"
+
+    /// The window in which nothing may interrupt. Reactive alerts raised inside it are
+    /// HELD to its end, never dropped. Default 22:00–08:00.
+    public static var quietHours: QuietHours {
+        get {
+            let d = UserDefaults.standard
+            let start = d.object(forKey: quietStartKey) as? Int ?? QuietHours.default.startHour
+            let end = d.object(forKey: quietEndKey) as? Int ?? QuietHours.default.endHour
+            return QuietHours(startHour: start, endHour: end)
+        }
+        set {
+            UserDefaults.standard.set(newValue.startHour, forKey: quietStartKey)
+            UserDefaults.standard.set(newValue.endHour, forKey: quietEndKey)
+        }
+    }
+
+    /// The hour of day a PRE-SCHEDULED alert fires on its date. Separate from the quiet
+    /// window on purpose; where the two disagree the window wins.
+    public static var deliveryHour: Int {
+        get { UserDefaults.standard.object(forKey: deliveryHourKey) as? Int ?? 9 }
+        set { UserDefaults.standard.set(newValue, forKey: deliveryHourKey) }
+    }
     public static var enabled: Set<NotificationKind> {
         let disabled = Set((UserDefaults.standard.array(forKey: key) as? [String] ?? [])
             .compactMap(NotificationKind.init(rawValue:)))
@@ -90,7 +115,8 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
             budgets: store.budgets, txns: store.txns, scheduled: store.scheduled,
             categories: store.categoryNodes, today: store.today, wallToday: store.wallToday,
             ledgerId: store.activeLedgerId,
-            enabled: NotificationPrefs.enabled, money: { store.displayMoneyBase($0) })
+            enabled: NotificationPrefs.enabled, money: { store.displayMoneyBase($0) },
+            deliveryHour: NotificationPrefs.deliveryHour)
 
         let pending = Set(await center.pendingNotificationRequests().map(\.identifier))
         let delivered = Set(await center.deliveredNotifications().map(\.request.identifier))
@@ -112,10 +138,41 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
             planned: planned, existing: existing,
             fired: NotificationState.fired, snoozedUntil: NotificationState.snoozedUntil, now: now)
 
-        for p in due {
-            let trigger: UNNotificationTrigger = p.kind == .weeklyDigest
-                ? UNCalendarNotificationTrigger(dateMatching: Self.sundayMorning, repeats: true)
-                : UNTimeIntervalNotificationTrigger(timeInterval: 3, repeats: false)
+        // Send at most a few at once. A statement import can make many alerts true in
+        // one write -- anomaly scoring runs over the 50 most recent purchases -- and
+        // without this they arrive seconds apart. The overflow is summarised, not
+        // dropped, and the summary's id is stable per day so re-planning replaces it.
+        let capped = NotificationPolicy.applyCap(due, cap: Self.burstCap) { more in
+            PlannedNotification(
+                id: "summary:\(store.wallToday)", kind: .anomaly,
+                title: String(localized: "More to review"),
+                body: String(localized: "\(more) more need your attention."),
+                tab: .activity, focusId: nil)
+        }
+
+        let quiet = NotificationPrefs.quietHours
+        for p in capped {
+            let trigger: UNNotificationTrigger
+            if p.kind == .weeklyDigest {
+                trigger = UNCalendarNotificationTrigger(dateMatching: Self.sundayMorning, repeats: true)
+            } else if let at = p.deliverOn {
+                // Known in advance: hand it to iOS, which delivers it with the app shut.
+                // The quiet window WINS over the delivery hour when they disagree -- the
+                // window is the promise about being disturbed, the hour is a preference
+                // about when things land.
+                let when = NotificationPolicy.deliveryTime(raisedAt: at, quiet: quiet)
+                trigger = UNCalendarNotificationTrigger(
+                    dateMatching: Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: when),
+                    repeats: false)
+            } else {
+                // Reactive: now, unless now is a bad hour, in which case hold it.
+                let when = NotificationPolicy.deliveryTime(raisedAt: now, quiet: quiet)
+                trigger = when <= now
+                    ? UNTimeIntervalNotificationTrigger(timeInterval: 3, repeats: false)
+                    : UNCalendarNotificationTrigger(
+                        dateMatching: Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: when),
+                        repeats: false)
+            }
             try? await center.add(UNNotificationRequest(identifier: p.id, content: Self.content(for: p), trigger: trigger))
             // The digest repeats on a calendar trigger — recording it as fired
             // would suppress every future week.
@@ -248,6 +305,9 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
             trigger: UNTimeIntervalNotificationTrigger(timeInterval: Self.snoozeInterval, repeats: false)))
     }
 
+    /// How many alerts may arrive from one refresh before the rest collapse into a
+    /// summary. A judgement, not a measurement -- change it here if it reads wrong.
+    static let burstCap = 3
     static let snoozeInterval: TimeInterval = 3600
 
     private static func tab(from raw: String) -> AppTab? {
