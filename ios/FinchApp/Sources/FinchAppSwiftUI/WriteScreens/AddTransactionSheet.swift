@@ -56,6 +56,12 @@ struct AddTransactionSheet: View {
     @State private var pendingDuplicate: DuplicateMatch?   // soft duplicate nudge
     @State private var dupConfirmed = false
     @State private var status: Entries.Status = .confirmed
+    /// Set once the user picks a Status BY HAND, after which the date stops driving it.
+    ///
+    /// Without it the sheet argues with the person using it: choose Confirmed on a
+    /// future date (recording something paid in advance), nudge the date, and the app
+    /// silently undoes the choice.
+    @State private var statusTouched = false
     @State private var selectedTags: Set<String> = []
     @State private var pickedPhoto: PhotosPickerItem?
     @State private var showingFileImporter = false
@@ -244,6 +250,20 @@ struct AddTransactionSheet: View {
             // the bottom safe-area inset (masked the last row) — dropping it
             // restores the system's native header + bottom behavior for free.
             formPage(kind)
+            // A transaction dated after today starts PENDING — it has not happened, and
+            // pending is exactly what the engine means by "has not counted yet"
+            // (excluded from spend, budgets and the running balance).
+            //
+            // Day-granular on purpose: dinner tonight at 19:00 entered at 15:00 is
+            // TODAY, and confirming it is right. Comparing timestamps would flip the
+            // status on a five-minute nudge of a field that defaults to now.
+            //
+            // Here rather than at the two `DatePicker`s (the kind branches each carry
+            // one) so the rule cannot drift between them.
+            .onChange(of: date) { _, newDate in
+                guard !statusTouched else { return }
+                status = FinchStore.isoDay(newDate) > store.wallToday ? .pending : .confirmed
+            }
             .finchSheetForm()   // whole-form: every section follows the global gap
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -331,7 +351,14 @@ struct AddTransactionSheet: View {
                         // Status keeps its name on the left and the selection on the
                         // right (not the placeholder→value treatment of other rows).
                         FieldRow(glyph: .status, title: "Status", trailing: {
-                            Picker("Status", selection: $status) {
+                            // A Binding rather than `$status`, and NOT
+                            // `.onChange(of: status)`: the rule above assigns `status`
+                            // itself, so an onChange would latch on the first automatic
+                            // change and freeze the rule after one use. This setter runs
+                            // only when the Picker writes through it — a real pick.
+                            Picker("Status", selection: Binding(
+                                get: { status },
+                                set: { statusTouched = true; status = $0 })) {
                                 Text("Confirmed").tag(Entries.Status.confirmed)
                                 Text("Pending").tag(Entries.Status.pending)
                             }
