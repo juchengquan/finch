@@ -189,7 +189,7 @@ export async function createAccount(exec: Exec, a: NewAccount): Promise<void> {
      sortOrder, inw],
   );
   if (a.openingBalance !== 0) {
-    await postOpening(exec, { ledgerId: a.ledgerId, accountId: a.id, amount: a.openingBalance, date: today });
+    await postOpening(exec, { ledgerId: a.ledgerId, accountId: a.id, amount: a.openingBalance, date: a.openingDate ?? today });
   }
 }
 
