@@ -184,7 +184,45 @@ public enum Migrations {
                SET pending_kind = CASE WHEN date > date('now') THEN 'upcoming' ELSE 'due' END
              WHERE status = 'pending'
             """)
+        // The triggers that keep it correct from here on. Additive, which is the whole
+        // reason the rule is a trigger and not a CHECK — CREATE TRIGGER can be applied
+        // to an existing table, ALTER ... CHECK cannot.
+        for ddl in [Self.pendingKindInsertTrigger, Self.pendingKindUpdateTrigger] {
+            try db.execute(sql: ddl)
+        }
     }
+
+    /// Kept in Swift beside the migration AND in `Schema.ddl` for fresh databases; the
+    /// two must stay identical, which `SchemaTests` asserts.
+    static let pendingKindInsertTrigger = """
+CREATE TRIGGER IF NOT EXISTS tr_entry_pending_kind_insert AFTER INSERT ON entries
+FOR EACH ROW WHEN NEW.pending_kind IS NOT (
+  CASE WHEN NEW.status <> 'pending' THEN NULL
+       WHEN NEW.date > date('now')  THEN 'upcoming'
+       ELSE 'due' END)
+BEGIN
+  UPDATE entries SET pending_kind =
+    CASE WHEN NEW.status <> 'pending' THEN NULL
+         WHEN NEW.date > date('now')  THEN 'upcoming'
+         ELSE 'due' END
+   WHERE id = NEW.id;
+END
+"""
+
+    static let pendingKindUpdateTrigger = """
+CREATE TRIGGER IF NOT EXISTS tr_entry_pending_kind_update AFTER UPDATE OF status, date ON entries
+FOR EACH ROW WHEN NEW.pending_kind IS NOT (
+  CASE WHEN NEW.status <> 'pending' THEN NULL
+       WHEN NEW.date > date('now')  THEN 'upcoming'
+       ELSE 'due' END)
+BEGIN
+  UPDATE entries SET pending_kind =
+    CASE WHEN NEW.status <> 'pending' THEN NULL
+         WHEN NEW.date > date('now')  THEN 'upcoming'
+         ELSE 'due' END
+   WHERE id = NEW.id;
+END
+"""
 
     /// Add `entries.group_id`, tolerating a database that already has it.
     /// Exposed so it can be tested directly — a migration is recorded as applied
