@@ -379,6 +379,19 @@ public enum Entries {
         }
     }
 
+    /// Which kind of pending a row is, given the day. The ONE definition — the insert
+    /// and the refresh both call it, so a new row and a refreshed row can never
+    /// disagree about the same facts.
+    ///
+    /// nil for a confirmed entry: `pending_kind` is only meaningful while pending, and
+    /// `status = 'pending'` iff `pending_kind IS NOT NULL` is the invariant the column
+    /// is worth having. SQLite cannot express that as a CHECK without rebuilding
+    /// `entries`, so it is held by this function being the only writer.
+    static func pendingKind(status: Status, date: String, today: String) -> String? {
+        guard status == .pending else { return nil }
+        return date > today ? "upcoming" : "due"
+    }
+
     /// Bring `entries.pending_kind` in line with the calendar.
     ///
     /// `pending_kind` is a CACHE of one rule — a pending row dated after `today` is
@@ -409,7 +422,9 @@ public enum Entries {
             """)
         changed += db.changesCount
 
-        // `IS NOT` rather than `<>` so a NULL kind counts as needing the write.
+        // `IS NOT` rather than `<>` so a NULL kind counts as needing the write. The two
+        // arms are the SQL form of `pendingKind(status:date:today:)`; that function is
+        // the definition, this is it applied in bulk.
         for (kind, op) in [("upcoming", ">"), ("due", "<=")] {
             try db.execute(sql: """
                 UPDATE entries SET pending_kind = ?
@@ -558,9 +573,14 @@ public enum Entries {
         do {
             let appliedJson = appliedRuleIds.flatMap { try? String(data: JSONEncoder().encode($0), encoding: .utf8) } ?? nil
             try db.execute(sql: """
-                INSERT INTO entries (id,ledger_id,date,time,description,kind,status,confirmed_at,counterparty_id,refunded_entry_id,source_template_id,occurrence_date,group_id,notes,applied_rule_ids,reviewed_at,dedup_hash,sealed,created_at,updated_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?)
+                INSERT INTO entries (id,ledger_id,date,time,description,kind,status,pending_kind,confirmed_at,counterparty_id,refunded_entry_id,source_template_id,occurrence_date,group_id,notes,applied_rule_ids,reviewed_at,dedup_hash,sealed,created_at,updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?)
                 """, arguments: [entryId, e.ledgerId, e.date, e.time, description, kind.rawValue, status.rawValue,
+                                 // Stamped here so `pending + NULL` is never a state the
+                                 // database passes through, not even between the insert
+                                 // and the reproject that follows it.
+                                 pendingKind(status: status, date: e.date,
+                                             today: String(ISO8601DateFormatter().string(from: Date()).prefix(10))),
                                  status == .confirmed ? ts : nil, counterpartyId, e.refundedEntryId, e.sourceTemplateId, e.occurrenceDate,
                                  e.groupId, notes, appliedJson, reviewedAt,
                                  (e.allowDuplicate || e.sourceTemplateId != nil) ? nil : dedupHash(e.date, e.time, description, legs), ts, ts])
