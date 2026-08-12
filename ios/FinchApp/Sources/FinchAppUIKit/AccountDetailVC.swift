@@ -555,7 +555,10 @@ final class AccountDetailVC: UIViewController {
                 }
             }
         } else {
-            let pending = txns.filter { $0.pending == true }
+            // See `Selectors.pendingSplit`. `confirmed` below stays `pending != true`:
+            // upcoming rows ARE pending, so they must not also fall into it.
+            let split = Selectors.pendingSplit(txns, today: store.wallToday)
+            let pending = split.dueNow
             let confirmed = txns.filter { $0.pending != true }
             if !pending.isEmpty {
                 snap.appendSections([.pending])
