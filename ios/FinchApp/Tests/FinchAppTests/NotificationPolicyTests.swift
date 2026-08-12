@@ -90,3 +90,19 @@ final class NotificationPolicyTests: XCTestCase {
         XCTAssertEqual(out.last?.body, "7 more", "the summary must report what it replaced")
     }
 }
+
+/// The planner's half of pre-scheduling.
+final class ScheduledDuePlanningTests: XCTestCase {
+    private var cal: Calendar = {
+        var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "UTC")!; return c
+    }()
+
+    /// A day string plus an hour, with a malformed day degrading to nil rather than
+    /// crashing — a bad `nextRun` should mean "send now", not take the app down.
+    func testDeliverAtBuildsTheDateAndToleratesRubbish() {
+        XCTAssertEqual(NotificationPlanner.deliverAt("2026-09-01", hour: 9, cal),
+                       cal.date(from: DateComponents(year: 2026, month: 9, day: 1, hour: 9)))
+        XCTAssertNil(NotificationPlanner.deliverAt("", hour: 9, cal))
+        XCTAssertNil(NotificationPlanner.deliverAt("not-a-date", hour: 9, cal))
+    }
+}

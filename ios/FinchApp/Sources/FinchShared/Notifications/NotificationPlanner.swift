@@ -29,6 +29,27 @@ public struct PlannedNotification: Equatable, Identifiable, Sendable {
     public let body: String
     public let tab: AppTab?
     public let focusId: String?
+    /// When this alert should be handed to the user, if that is knowable in advance.
+    ///
+    /// `nil` means "as soon as policy allows" — the reactive alerts, which are only true
+    /// because data just changed. A date means iOS holds it on a calendar trigger and
+    /// delivers it whether or not the app is ever opened, which is how a bill due on the
+    /// 1st can announce itself on the 1st with no background execution.
+    ///
+    /// Declared LAST with a default so every existing construction site compiles
+    /// untouched — this is a public struct with a memberwise init.
+    public let deliverOn: Date?
+
+    public init(id: String, kind: NotificationKind, title: String, body: String,
+                tab: AppTab?, focusId: String?, deliverOn: Date? = nil) {
+        self.id = id
+        self.kind = kind
+        self.title = title
+        self.body = body
+        self.tab = tab
+        self.focusId = focusId
+        self.deliverOn = deliverOn
+    }
 }
 
 /// Pure decision logic: given the projected state, which notifications are
@@ -52,7 +73,8 @@ public enum NotificationPlanner {
     public static func plan(
         budgets: [BudgetRow], txns: [Tx], scheduled: [ScheduledTemplate],
         categories: [CategoryNode], today: String, wallToday: String, ledgerId: String,
-        enabled: Set<NotificationKind>, money: (Double) -> String, recentLimit: Int = 50
+        enabled: Set<NotificationKind>, money: (Double) -> String, recentLimit: Int = 50,
+        deliveryHour: Int = 9, calendar: Calendar = .current
     ) -> [PlannedNotification] {
         var out: [PlannedNotification] = []
 
@@ -98,12 +120,23 @@ public enum NotificationPlanner {
         }
 
         if enabled.contains(.scheduledDue) {
-            for s in scheduled where !s.nextRun.isEmpty && s.nextRun <= wallToday {
+            // EVERY template with a next run, not just the due ones.
+            //
+            // `cancelIDs` removes anything pending that this plan does not contain, so a
+            // future alert emitted once and then omitted would be cancelled by the very
+            // next write. Emitting it on every run is what keeps it alive — and because
+            // the id is stable, re-planning replaces rather than duplicates.
+            //
+            // Past-due carries no date: it is true NOW, so policy decides when it lands.
+            // Future carries its run date at the delivery hour, and iOS holds it.
+            for s in scheduled where !s.nextRun.isEmpty {
+                let isFuture = s.nextRun > wallToday
                 out.append(PlannedNotification(
                     id: "scheduled:\(s.id)", kind: .scheduledDue,
                     title: String(localized: "Scheduled: \(s.name)"),
                     body: String(localized: "\(s.name) is due. Confirm now?"),
-                    tab: .scheduled, focusId: s.id))
+                    tab: .scheduled, focusId: s.id,
+                    deliverOn: isFuture ? deliverAt(s.nextRun, hour: deliveryHour, calendar) : nil))
             }
         }
 
@@ -116,6 +149,16 @@ public enum NotificationPlanner {
         }
 
         return out
+    }
+
+    /// An ISO day string plus an hour, as a `Date`. Returns nil-safe fallback `nil` when
+    /// the day cannot be parsed, so a malformed `nextRun` degrades to "send now" rather
+    /// than crashing or silently vanishing.
+    static func deliverAt(_ day: String, hour: Int, _ calendar: Calendar) -> Date? {
+        let parts = day.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2],
+                                                  hour: hour, minute: 0, second: 0))
     }
 
     /// Ids currently scheduled or delivered that are no longer planned — a kind was
