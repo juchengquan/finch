@@ -4881,6 +4881,7 @@
         }
       }
     },
+    "One transfer across two ledgers — editing or deleting it here changes both sides.": {},
     "Only %@ accounts can be part of a split.": {
       "localizations": {
         "zh-Hans": {
@@ -4971,6 +4972,8 @@
         }
       }
     },
+    "Other ledger": {},
+    "Other side": {},
     "Over": {
       "localizations": {
         "zh-Hans": {
@@ -6600,6 +6603,7 @@
         }
       }
     },
+    "The other ledger no longer exists. This side is still correct on its own.": {},
     "Theme": {
       "localizations": {
         "zh-Hans": {
@@ -6670,7 +6674,6 @@
         }
       }
     },
-    "This is one half of a transfer between two ledgers. Deleting it removes both halves.": {},
     "This ledger": {
       "localizations": {
         "zh-Hans": {
@@ -6751,6 +6754,7 @@
         }
       }
     },
+    "This side": {},
     "To": {
       "localizations": {
         "zh-Hans": {

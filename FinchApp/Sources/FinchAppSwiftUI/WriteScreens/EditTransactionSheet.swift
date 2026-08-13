@@ -29,6 +29,9 @@ struct EditTransactionSheet: View {
     @State private var date: Date
     @State private var categoryId: String
     @State private var amountText: String
+    /// The partner half's amount, in ITS account's currency. Seeded on appear from
+    /// the cross-ledger lookup; empty for every other kind of transaction.
+    @State private var partnerAmountText: String = ""
     @State private var selectedTags: Set<String>
     @State private var errorMessage: String?
     @State private var confirmingDelete = false
@@ -90,6 +93,10 @@ struct EditTransactionSheet: View {
     /// (`updateInterledgerTransfer`) and is a follow-up; deleting is already safe
     /// from anywhere, because `deleteTransaction` removes both halves.
     private var isInterledger: Bool { (liveTxn.kind ?? "") == "interledger" }
+    /// Looked up once per render from the database — the partner is in another
+    /// ledger, which the store's slices deliberately do not hold. nil ⇒ its ledger
+    /// was deleted (D8), which is a legitimate state, not an error.
+    private var interledgerPartnerInfo: InterledgerPartner? { store.interledgerPartner(of: txn.id) }
 
     /// Every card's transaction in this purchase, the tapped one included.
     private var groupRows: [Tx] {
@@ -167,23 +174,51 @@ struct EditTransactionSheet: View {
     private func accountName(_ id: String) -> String {
         store.accounts.first { $0.id == id }?.name ?? "—"
     }
-    /// A cross-ledger half, shown rather than edited (see `isInterledger`). The
-    /// description already carries the partner's "Ledger · Account", so the row
-    /// answers "where did this go?" without reading another ledger. Delete stays
-    /// available below and is safe: the chokepoint removes both halves.
+    /// A cross-ledger half — BOTH sides editable from whichever half you opened
+    /// (D4: one transfer, edited as one). The partner lives in another ledger, so
+    /// its amount comes from `interledgerPartner`, a direct read rather than the
+    /// active-ledger slices.
+    ///
+    /// Each side keeps its own field: across currencies there is no single right
+    /// way to derive one from the other, which is the same reason the Add sheet
+    /// asks for both. Saving sends both to `updateInterledgerTransfer`, which
+    /// rebuilds each half in place.
     @ViewBuilder private var interledgerSummary: some View {
         Section {
             FieldRow(glyph: .account, title: "Account") { Text(accountName(accountId)) }
-            FieldRow(glyph: .amount, title: "Amount") {
-                Text(store.displayNative(liveTxn.nativeAmount ?? liveTxn.amount,
-                                         currency: liveTxn.currency ?? accountCurrency))
+            FieldRow(glyph: .amount, title: "This side") {
+                TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: accountCurrency)),
+                          text: $amountText)
+                    .moneyInput($amountText, currency: accountCurrency)
+                    .accessibilityIdentifier("interledger.thisAmount")
             }
-            FieldRow(glyph: .toAccount, title: "To") { Text(liveTxn.merchant) }
-            FieldRow(glyph: .date, title: "Date") { Text(liveTxn.date) }
+            if let partner = interledgerPartnerInfo {
+                FieldRow(glyph: .toAccount, title: "Other side") {
+                    TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: partner.currency)),
+                              text: $partnerAmountText)
+                        .moneyInput($partnerAmountText, currency: partner.currency)
+                        .accessibilityIdentifier("interledger.otherAmount")
+                }
+                FieldRow(glyph: .account, title: "Other ledger") {
+                    Text("\(partner.ledgerName) · \(partner.accountName)")
+                }
+            }
+            FieldRow(glyph: .date, title: "Date", showsDefaultTrailing: false) {
+                DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                    .labelsHidden()
+            }
+            FieldRow(glyph: .note, title: "Note") {
+                TextField("Note (optional)", text: $note, axis: .vertical)
+            }
         } header: {
             finchSectionHeader("Between ledgers")
         } footer: {
-            Text("This is one half of a transfer between two ledgers. Deleting it removes both halves.")
+            // D8: the partner is gone when its whole ledger was deleted. This half
+            // is still balanced and still true — it just has nothing left to name,
+            // so say that rather than pointing at a ledger that no longer exists.
+            Text(interledgerPartnerInfo == nil
+                 ? "The other ledger no longer exists. This side is still correct on its own."
+                 : "One transfer across two ledgers — editing or deleting it here changes both sides.")
         }
     }
 
@@ -507,6 +542,13 @@ struct EditTransactionSheet: View {
             .onAppear {
                 attachments = store.attachments(for: txn.id)
                 if currencyCode.isEmpty { currencyCode = accountCurrency }
+                // The other half lives in another ledger, so it is read here rather
+                // than found in the store's slices. Absent ⇒ its ledger was deleted
+                // (D8) and the field simply isn't offered.
+                if let partner = store.interledgerPartner(of: txn.id) {
+                    partnerAmountText = DecimalInput.text(abs(partner.amount),
+                                                          fractionDigits: Currencies.minorUnits(for: partner.currency))
+                }
                 // Seed the payment split from the entry's OWN legs, so opening a
                 // split-tender purchase shows what it actually is rather than the
                 // single posting that happened to be tapped. Seeded here rather
@@ -616,8 +658,39 @@ struct EditTransactionSheet: View {
         showingGrid = true
     }
 
+    /// Both halves in one write (D4). Which side is "from" is decided by the SIGN
+    /// of this half's account leg, not by which sheet you opened — open the
+    /// destination and the fields still mean the same two things.
+    private func saveInterledger() {
+        errorMessage = nil
+        guard let mine = DecimalInput.parse(amountText), mine > 0 else {
+            errorMessage = "Enter an amount greater than 0."; return
+        }
+        let partner = interledgerPartnerInfo
+        let theirs = DecimalInput.parse(partnerAmountText)
+        if partner != nil, !(theirs ?? 0 > 0) {
+            errorMessage = "Enter an amount greater than 0."; return
+        }
+        let iAmOutgoing = (liveTxn.nativeAmount ?? liveTxn.amount) < 0
+        var args: [String: JSONValue] = [
+            "id": .string(txn.id),
+            "date": .string(Self.day(date)),
+            "time": .string(Self.time(date)),
+        ]
+        args["fromAmount"] = .double(iAmOutgoing ? mine : (theirs ?? mine))
+        args["toAmount"] = .double(iAmOutgoing ? (theirs ?? mine) : mine)
+        if !note.isEmpty { args["note"] = .string(note) }
+        do {
+            try store.apply(.updateInterledgerTransfer, Args(args))
+            dismiss()
+        } catch {
+            errorMessage = (error as? I18nError)?.message ?? "\(error)"
+        }
+    }
+
     private func save() {
         if txn.kind == "transfer" { saveTransfer(); return }
+        if isInterledger { saveInterledger(); return }
         errorMessage = nil
         var patch: [String: JSONValue] = [
             "merchant": .string(merchant.isEmpty ? "Untitled" : merchant),
