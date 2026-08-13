@@ -35,7 +35,13 @@ final class NotificationPlannerTests: XCTestCase {
         XCTAssertTrue(under.filter { $0.kind == .budgetWarning }.isEmpty)
     }
 
-    /// A scheduled template whose nextRun is today/past is flagged due.
+    /// BOTH scheduled templates are planned — the due one to send now, the future one
+    /// dated so iOS can hold it.
+    ///
+    /// This test used to assert only the due one, matching the old behaviour. That was
+    /// changed deliberately: `cancelIDs` removes anything pending that the current plan
+    /// does not contain, so a future alert emitted once and then omitted is cancelled by
+    /// the next write. `deliverOn` is what separates them now, not presence.
     func test_scheduledDue() {
         let due = ScheduledTemplate(id: "s1", name: "Rent", type: "expense", amount: 1500,
             frequency: "monthly", dayOfMonth: 1, accountId: "a1", nextRun: "2026-05-01")
@@ -44,7 +50,10 @@ final class NotificationPlannerTests: XCTestCase {
         let planned = NotificationPlanner.plan(
             budgets: [], txns: [], scheduled: [due, future], categories: [], today: "2026-05-15", wallToday: "2026-05-15",
             ledgerId: "l1", enabled: all, money: money)
-        XCTAssertEqual(planned.filter { $0.kind == .scheduledDue }.map(\.focusId), ["s1"])
+        let sched = planned.filter { $0.kind == .scheduledDue }
+        XCTAssertEqual(sched.map(\.focusId), ["s1", "s2"], "both must be planned, or the future one is cancelled")
+        XCTAssertNil(sched.first { $0.focusId == "s1" }?.deliverOn, "due now carries no date — policy decides")
+        XCTAssertNotNil(sched.first { $0.focusId == "s2" }?.deliverOn, "future is handed to iOS with a date")
     }
 
     /// Disabling a kind suppresses it.
