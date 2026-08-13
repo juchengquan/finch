@@ -29,12 +29,19 @@ final class NotificationLogicTests: XCTestCase {
         XCTAssertEqual(out.map(\.id), ["scheduled:s1"], "due today must fire even with stale data")
     }
 
-    /// …and the converse still holds: not yet due stays quiet even if the data
-    /// anchor has run ahead.
-    func test_notYetDueStaysQuiet() {
+    /// …and the converse: not yet due is still planned, but DATED, so iOS holds it
+    /// rather than delivering it now.
+    ///
+    /// This asserted `out.isEmpty` when a future alert was simply not planned. It cannot
+    /// any more: `cancelIDs` removes anything pending that the plan omits, so a future
+    /// alert has to be re-emitted on every run to stay alive. `deliverOn` is what keeps
+    /// it quiet, and that is what this now checks — the guarantee is unchanged, the
+    /// mechanism moved.
+    func test_notYetDueIsPlannedButDated() {
         let out = plan(today: "2026-05-20", wallToday: "2026-05-15",
                        scheduled: [template("s1", nextRun: "2026-05-18")])
-        XCTAssertTrue(out.isEmpty)
+        XCTAssertEqual(out.map(\.id), ["scheduled:s1"])
+        XCTAssertNotNil(out.first?.deliverOn, "a future alert must carry its date, not fire now")
     }
 
     // MARK: 2 — dismissing an alert keeps it dismissed
