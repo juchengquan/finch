@@ -229,6 +229,26 @@ struct AddTransactionSheet: View {
         guard let a = foreignAccounts.first(where: { $0.id == accountId }) else { return nil }
         return foreignLedgers.first { $0.id == a.ledgerId }?.name
     }
+    /// The last received amount WE suggested. The suggestion is only ever
+    /// overwritten while the field still holds it — the moment you type your
+    /// bank's real figure it is yours, and no later rate refresh or amount edit
+    /// takes it back (D5: prefilled, always editable).
+    @State private var suggestedReceived = ""
+
+    /// Fill the received amount from finch's stored rates. Nothing can verify
+    /// either number across two books, so this is a convenience, not a source of
+    /// truth — which is exactly why it must never overwrite a typed value.
+    private func refreshReceivedSuggestion() {
+        guard kind == .transfer, transferIsCrossCurrency,
+              let value = DecimalInput.parse(amount), value > 0 else { return }
+        guard received.isEmpty || received == suggestedReceived else { return }
+        let from = currency(of: fromAccountId), to = currency(of: toAccountId)
+        guard let converted = Money.convert(abs(value), from: from, to: to, rates: store.rateMap) else { return }
+        let text = DecimalInput.text(converted, fractionDigits: Currencies.minorUnits(for: to))
+        received = text
+        suggestedReceived = text
+    }
+
     /// True once the chosen destination lives in another book — which is what
     /// turns this from one balanced entry into a linked PAIR, one per ledger.
     private var isCrossLedger: Bool {
@@ -529,6 +549,8 @@ struct AddTransactionSheet: View {
             SearchablePickerRow(title: "To", glyph: .toAccount,
                 accounts: transferToOptions.accounts, selection: $toAccountId,
                 sectionTitles: transferToOptions.titles, sectionOrder: transferToOptions.order)
+                .onChange(of: toAccountId) { _, _ in refreshReceivedSuggestion() }
+                .onChange(of: amount) { _, _ in refreshReceivedSuggestion() }
             // Same currency → one amount row; cross-currency → From + To, the To
             // row being the independent received amount in the destination's money.
             if transferIsCrossCurrency {

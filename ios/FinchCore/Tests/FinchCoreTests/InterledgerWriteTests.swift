@@ -155,6 +155,37 @@ final class InterledgerWriteTests: XCTestCase {
         }
     }
 
+    /// D8: deleting a whole LEDGER cascades its entries away — and must leave the
+    /// other half standing. That half is self-contained (an account leg against
+    /// "money left these books"), so its own book stays true; it simply loses the
+    /// partner it could name. The opposite of deleting one transfer, which takes
+    /// both — and the distinction is the whole point: deleting one book must never
+    /// rewrite another book's history.
+    func test_deletingTheOtherLedgerLeavesThisHalfStandingAndValid() throws {
+        let q = try twoLedgers()
+        try create(q)
+        let before = try q.read { try Double.fetchOne($0, sql: "SELECT current_balance FROM accounts WHERE id = 'checking'") }
+        try q.write { db in
+            try db.execute(sql: "DELETE FROM ledgers WHERE id = 'travel'")
+        }
+        try q.read { db in
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries WHERE kind = 'interledger'"), 1,
+                           "exactly the surviving half remains")
+            XCTAssertEqual(try String.fetchOne(db, sql:
+                "SELECT ledger_id FROM entries WHERE kind = 'interledger'"), "personal")
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id = 'checking'"), before,
+                           "Personal's balance must not move when another book is deleted")
+            let sum = try Double.fetchOne(db, sql: """
+                SELECT ROUND(SUM(amount_base), 2) FROM postings
+                 WHERE entry_id = (SELECT id FROM entries WHERE kind = 'interledger')
+                """)
+            XCTAssertEqual(sum, 0, "the survivor still balances on its own")
+        }
+        let problems = try Audit.run(on: q)
+        XCTAssertTrue(problems.isEmpty,
+                      "an orphaned half is a legitimate state, not corruption: \(problems)")
+    }
+
     func test_updatingAmountsRewritesBothHalves() throws {
         let q = try twoLedgers()
         try create(q)
