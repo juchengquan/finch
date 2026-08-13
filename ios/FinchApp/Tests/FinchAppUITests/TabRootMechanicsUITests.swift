@@ -464,10 +464,19 @@ final class SplitMechanicsUITests: TabMechanicsBase {
         let target = rowElement(labelled: name)
         XCTAssertTrue(target.waitForExistence(timeout: 15), "no '\(name)' ledger in the demo data")
         target.tap()
-        // NOTE the query: this row is a CELL, not a button, so `app.buttons[...]` finds
-        // nothing and silently skips the activation — which read as "the ledger never
-        // switched" while the test looked like it had tried.
-        let makeActive = rowElement(labelled: "Make active ledger")
-        if makeActive.waitForExistence(timeout: 10) { makeActive.tap() }
+        // The detail's actions are in the `⋯` menu; they used to be rows in an
+        // `actions` section (see `LedgerDetailVC.configureToolbar`). This looked for the
+        // ROW, found nothing, and — because the tap was behind an `if` — skipped the
+        // activation without a word. The test then failed further down claiming the
+        // ledger never switched, which was true but said nothing about why.
+        let more = app.buttons["More"].firstMatch
+        XCTAssertTrue(more.waitForExistence(timeout: 15),
+                      "the ledger detail has no ⋯ menu — its actions moved again")
+        more.tap()
+        // A menu item IS a button, unlike the row this replaced.
+        let makeActive = app.buttons["Make active ledger"].firstMatch
+        XCTAssertTrue(makeActive.waitForExistence(timeout: 10),
+                      "the ⋯ menu has no 'Make active ledger'")
+        makeActive.tap()
     }
 }
