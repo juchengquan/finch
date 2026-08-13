@@ -1,5 +1,6 @@
 import Foundation
 import FinchCore
+import GRDB
 
 /// The read / format surface the views call: money formatting (all via Money +
 /// the rate map), the active-ledger display-currency, account & budget grouping,
@@ -614,5 +615,51 @@ public struct DatabaseInfo: Equatable, Sendable {
     }
     public var rowCountsOrdered: [(String, Int)] {
         rowCounts.sorted { $0.key < $1.key }.map { ($0.key, $0.value) }
+    }
+}
+
+// MARK: - Cross-ledger transfers (2026-08-12 design)
+
+/// The other half of a cross-ledger transfer — it lives in a DIFFERENT ledger, so
+/// the store's active-ledger slices cannot see it and this reads the database
+/// directly. Deliberately a flat summary rather than a `Tx`: the caller needs to
+/// SHOW the partner (and let its amount be edited), not project another ledger.
+public struct InterledgerPartner: Equatable, Sendable {
+    public let entryId: String
+    public let ledgerName: String
+    public let accountName: String
+    /// Signed, in the partner account's own currency.
+    public let amount: Double
+    public let currency: String
+}
+
+public extension FinchStore {
+    /// Look up the partner of a cross-ledger half. `id` is whatever the UI holds —
+    /// a `Tx.id` is a POSTING id, so it is resolved to its entry first.
+    ///
+    /// Returns nil when there is no partner: not an error state but the design's
+    /// D8 case — deleting a whole ledger cascades its entries away and leaves this
+    /// side standing, still balanced and still true, just with nothing to name.
+    func interledgerPartner(of id: String) -> InterledgerPartner? {
+        guard let q = dbQueue else { return nil }
+        return try? q.read { db -> InterledgerPartner? in
+            guard let ref = try Entries.resolveEntryRef(db, id),
+                  let link = try String.fetchOne(db, sql:
+                    "SELECT interledger_link_id FROM entries WHERE id = ?", arguments: [ref.entryId])
+            else { return nil }
+            guard let row = try Row.fetchOne(db, sql: """
+                SELECT e.id AS entry_id, l.name AS ledger_name, a.name AS account_name,
+                       p.amount AS amount, p.currency AS currency
+                  FROM entries e
+                  JOIN ledgers l ON l.id = e.ledger_id
+                  JOIN postings p ON p.entry_id = e.id AND p.account_id IS NOT NULL
+                  JOIN accounts a ON a.id = p.account_id
+                 WHERE e.interledger_link_id = ? AND e.id != ?
+                 LIMIT 1
+                """, arguments: [link, ref.entryId]) else { return nil }
+            return InterledgerPartner(entryId: row["entry_id"], ledgerName: row["ledger_name"],
+                                      accountName: row["account_name"], amount: row["amount"],
+                                      currency: row["currency"])
+        }
     }
 }
