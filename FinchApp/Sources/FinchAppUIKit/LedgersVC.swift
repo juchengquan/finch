@@ -114,6 +114,10 @@ final class LedgersVC: UIViewController {
         collectionView.dragDelegate = self
         collectionView.dropDelegate = self
         collectionView.dragInteractionEnabled = false   // only in reorder mode
+        // Named so a UI test can assert this list's ORDER. `app.cells` is not enough:
+        // the ledger flow is PUSHED over Accounts, whose rows stay in the hierarchy and
+        // answer the same query, so an unscoped order assertion reads both screens.
+        collectionView.accessibilityIdentifier = "ledgerList"
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(collectionView)
         NSLayoutConstraint.activate([
@@ -127,6 +131,11 @@ final class LedgersVC: UIViewController {
     private func configureDataSource() {
         let cell = UICollectionView.CellRegistration<UICollectionViewListCell, String> { [weak self] cell, _, id in
             guard let self, let ledger = self.ledgerByID[id] else { return }
+            // Identifies the ROW rather than its text, so a UI test can assert the
+            // order without depending on labels: the net worth is stripped in reorder
+            // mode, and a cell's staticTexts are not returned in visual order, so
+            // matching on text reads a different string in each mode.
+            cell.accessibilityIdentifier = "ledger.\(ledger.id)"
             var cfg = cell.defaultContentConfiguration()
             cfg.text = ledger.name
             cfg.secondaryText = ledger.base          // the base currency, as the SwiftUI row shows
