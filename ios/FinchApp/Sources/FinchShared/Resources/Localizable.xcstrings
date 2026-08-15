@@ -2155,8 +2155,6 @@
         }
       }
     },
-    "Currency can't be changed after an account is created — it is what every balance on this account is recorded in.": {},
-    "Currency is fixed once the account is created. Type decides how the balance is read: a credit card counts what you owe, so its balance is normally negative.": {},
     "Current": {
       "localizations": {
         "zh-Hans": {
@@ -6554,8 +6552,6 @@
         }
       }
     },
-    "Target is the amount you are aiming to put aside each cycle.": {},
-    "Target is what you plan to spend each cycle. finch warns you as you approach it.": {},
     "Tells you an account's balance.": {
       "localizations": {
         "zh-Hans": {
@@ -7299,7 +7295,6 @@
         }
       }
     },
-    "What the account held before finch started tracking it, and the date that figure is from. Leave the amount empty for a new account starting at zero.": {},
     "What you aim to put aside each cycle.": {
       "localizations": {
         "zh-Hans": {
