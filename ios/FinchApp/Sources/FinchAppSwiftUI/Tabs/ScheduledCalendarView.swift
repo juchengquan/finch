@@ -170,26 +170,6 @@ struct ScheduledCalendarView: View {
             // stamp today and leave the badge unchanged (the bug this branch fixes).
             if st == .upcoming || st == .missed { SwipeButton("Post", systemImage: "checkmark.circle") { onPost(t, date) }.tint(.green) }
         }
-        // Swipes surface what the long-press menu already offered — the actions were
-        // reachable only by a gesture nothing on screen advertises.
-        //
-        // Trailing (swipe left) carries Edit and Delete, matching the List view's rows so
-        // the two modes of the SAME screen do not disagree about which side edits.
-        // Leading (swipe right) carries Post now, following the app's convention that
-        // the constructive verb lives on the leading edge (Accounts and Budgets put Add
-        // Transaction there; Ledgers puts Make active).
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button(role: .destructive) { onDelete(t) } label: { Label("Delete", systemImage: "trash") }
-            Button { onEdit(t) } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
-        }
-        .swipeActions(edge: .leading, allowsFullSwipe: false) {
-            // Same condition the menu uses: posting a done/pending occurrence is
-            // meaningless, so the swipe reveals nothing rather than a no-op button.
-            if st == .upcoming || st == .missed {
-                Button { onPost(t, date) } label: { Label("Post now", systemImage: "checkmark.circle") }
-                    .tint(.green)
-            }
-        }
         .contextMenu {
             Button { onEdit(t) } label: { Label("Edit", systemImage: "pencil") }
             // Unposted either way — a missed occurrence needs this more than an upcoming one.
