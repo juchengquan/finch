@@ -11,6 +11,7 @@ public enum AppDomain {
         .setMobileTabIds: setMobileTabIds,
         .setDisplayCurrency: setDisplayCurrency,
         .setBudgetOrder: setBudgetOrder,
+        .setLedgerOrder: setLedgerOrder,
         .setTrackedCurrencies: setTrackedCurrencies,
         .setBackupFrequency: setBackupFrequency,
         .setBackupRetention: setBackupRetention,
@@ -91,6 +92,20 @@ public enum AppDomain {
            let parsed = try? JSONDecoder().decode([String: [String]].self, from: data) { map = parsed }
         map[a.ledgerId] = a.budgetIds
         try setAppState(db, "budgetOrderByLedger", String(data: try JSONEncoder().encode(map), encoding: .utf8) ?? "{}")
+    }
+
+    /// The global manual ledger order. One flat id list, where `setBudgetOrder` keeps
+    /// a per-ledger map — ledgers are the top-level book, so there is nothing to scope
+    /// the order to.
+    ///
+    /// Stored verbatim, including ids that no longer exist: `Projection.ledgers`
+    /// tolerates stale entries, and pruning here would fight a delete that happens in
+    /// a different transaction.
+    static func setLedgerOrder(_ db: Database, _ args: Args) throws {
+        struct A: Decodable { let ledgerIds: [String] }
+        let ids = try args.to(A.self).ledgerIds
+        try setAppState(db, LedgerOrder.stateKey,
+                        String(data: try JSONEncoder().encode(ids), encoding: .utf8) ?? "[]")
     }
 
     static func setTrackedCurrencies(_ db: Database, _ args: Args) throws {

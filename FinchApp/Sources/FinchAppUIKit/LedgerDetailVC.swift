@@ -295,7 +295,7 @@ final class LedgerDetailVC: UIViewController {
             do {
                 try store.apply(.deleteLedger, Args(["id": .string(ledger.id)]))
                 if store.activeLedgerId == ledger.id {
-                    store.activeLedgerId = store.ledgers.first?.id ?? ""
+                    store.activeLedgerId = store.defaultLedgerId
                 }
                 navigationController?.popViewController(animated: true)
             } catch { presentError(i18nMessage(error)) }
