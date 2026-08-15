@@ -298,14 +298,22 @@ struct SettingsNotificationsView: View {
         .navigationTitle("Notifications")
     }
 
-    /// The 24 hours, labelled through the user's own locale so a 12-hour region reads
-    /// "10 PM" rather than a bare 22, which looks like a duration.
+    /// A real time picker, mirroring `NotificationsSettingsVC`.
+    ///
+    /// This was a `Picker` listing 24 hours — the wrong control for a time: a long list
+    /// to scroll for something a wheel picks in one gesture, and it reads as a set of
+    /// options rather than a clock. The locale still does the labelling, so a 12-hour
+    /// region sees 10 PM rather than a bare 22.
+    ///
+    /// **Minutes snap back to :00**, matching the UIKit screen: the preference is a whole
+    /// hour, and a picker that accepted 22:30 while the app stored 22:00 would be lying
+    /// about what it does.
     private func hourPicker(_ title: LocalizedStringKey, hour: Binding<Int>) -> some View {
-        Picker(title, selection: hour) {
-            ForEach(0..<24, id: \.self) { h in
-                Text(NotificationsSettingsHour.label(h)).tag(h)
-            }
-        }
+        DatePicker(title,
+                   selection: Binding(
+                       get: { NotificationsSettingsHour.date(forHour: hour.wrappedValue) },
+                       set: { hour.wrappedValue = Calendar.current.component(.hour, from: $0) }),
+                   displayedComponents: .hourAndMinute)
         .onChange(of: hour.wrappedValue) { _, _ in
             // The preference alone changes nothing already scheduled.
             Task { await NotificationService.shared.refresh() }
@@ -316,6 +324,13 @@ struct SettingsNotificationsView: View {
 /// One hour-label rule for both settings screens — the UIKit one renders the same
 /// strings, and two formatters is how they drift apart.
 enum NotificationsSettingsHour {
+    /// Today at `hour`:00 — a time picker wants a `Date` where the preference is an `Int`.
+    static func date(forHour hour: Int) -> Date {
+        var c = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        c.hour = hour; c.minute = 0; c.second = 0
+        return Calendar.current.date(from: c) ?? Date()
+    }
+
     static func label(_ hour: Int) -> String {
         var c = DateComponents(); c.hour = hour; c.minute = 0
         guard let d = Calendar.current.date(from: c) else { return "\(hour)" }
