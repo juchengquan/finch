@@ -30,7 +30,9 @@ struct LedgerListView: View {
         .alert("Delete this ledger?", isPresented: Binding(
             get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
             presenting: pendingDelete) { ledger in
-            Button("Delete \(ledger.name)", role: .destructive) { delete(ledger) }
+            // Just "Delete" — the message below already names the ledger, and both
+            // ledger detail screens have always said plain Delete. See LedgersVC.
+            Button("Delete", role: .destructive) { delete(ledger) }
             Button("Cancel", role: .cancel) {}
         } message: { ledger in
             Text("This permanently deletes \(ledger.name) and all its data.")
