@@ -71,7 +71,9 @@ extension FinchStore {
         self.auditProblems = problems
         self.ledgers = (try? Projection.ledgers(dbQueue: live)) ?? []
         // didSet on activeLedgerId re-projects accounts/txns/budgets.
-        let first = ledgers.first?.id ?? ""
+        // The imported pack's DEFAULT ledger, not its first row: the list is ordered by
+        // the user's manual order (or name), so position no longer marks the default.
+        let first = defaultLedgerId
         if activeLedgerId == first { reprojectActiveLedger() } else { activeLedgerId = first }
         self.dbInfo = makeDBInfo()
         // Refresh OS surfaces for the new dataset: authoritative Spotlight

@@ -127,10 +127,11 @@ public enum ActionName: String, Codable, Sendable, CaseIterable {
     case setExchangeRate
     case deleteExchangeRate
 
-    // --- app_state (7) ---
+    // --- app_state (8) ---
     case setMobileTabIds
     case setDisplayCurrency
     case setBudgetOrder       // native-first (per-ledger manual budget order; the web ignores the key until it adopts it)
+    case setLedgerOrder       // native-first (global manual ledger order; the web ignores the key until it adopts it)
     case setTrackedCurrencies // native-first (global FX auto-update fetch list; the web ignores the key until it adopts it)
     case setBackupFrequency
     case setBackupRetention

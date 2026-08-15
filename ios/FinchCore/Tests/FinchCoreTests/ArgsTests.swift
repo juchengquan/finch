@@ -17,8 +17,10 @@ final class ArgsTests: XCTestCase {
     /// + `createInterledgerTransfer` / `updateInterledgerTransfer` /
     ///   `deleteInterledgerTransfer` (native-only, cross-ledger transfers — the
     ///   web has no equivalent, so these never enter WRITE_SEQUENCE) = 90.
+    /// + `setLedgerOrder` (native-first manual ledger order, app_state — the web
+    ///   ignores the key, as it does `setBudgetOrder`) = 91.
     func test_actionCount() {
-        XCTAssertEqual(ActionName.allCases.count, 90)
+        XCTAssertEqual(ActionName.allCases.count, 91)
     }
 
     func test_actionNameRawValues() {

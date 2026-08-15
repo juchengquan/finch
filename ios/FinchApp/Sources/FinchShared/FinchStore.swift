@@ -161,10 +161,12 @@ public final class FinchStore: ObservableObject {
         // "N problems" indicator, so it's now deferred off the critical path —
         // see `runAuditInBackground()`, called after first paint.
         self.ledgers = (try? Projection.ledgers(dbQueue: live)) ?? []
-        let first = ledgers.first?.id ?? ""
-        // Restore the last-active ledger if it still exists; else the default (first).
+        // The DB's default ledger — NOT `ledgers.first`, which is now whatever the
+        // user's manual order (or name) puts on top.
+        let fallback = defaultLedgerId
+        // Restore the last-active ledger if it still exists; else the default.
         let saved = UserDefaults.standard.string(forKey: Self.activeLedgerKey)
-        let target = (saved.map { s in ledgers.contains { $0.id == s } } ?? false) ? saved! : first
+        let target = (saved.map { s in ledgers.contains { $0.id == s } } ?? false) ? saved! : fallback
         if activeLedgerId == target { reprojectActiveLedger() } else { activeLedgerId = target }
         // dbInfo (file size + row counts) only feeds the Settings "database info"
         // screen. Computing it here would block ~600ms behind the deferred txns
