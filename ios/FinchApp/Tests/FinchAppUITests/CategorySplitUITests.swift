@@ -106,6 +106,20 @@ final class CategorySplitUITests: XCTestCase {
     /// Deliberately NOT `app.cells.firstMatch`: the Activity list's first cell is the
     /// List/Calendar mode picker, so that tapped the picker and never opened a sheet.
     /// Tapping the row's own text forwards to the cell and is unambiguous.
+    /// The amount shown on the first row whose label mentions `text`.
+    ///
+    /// A row's label ends with its amount ("Expense, Groceries, Aug 5 · 12:00, −$58.20"),
+    /// and the amount survives every edit this test makes — unlike the title, which is
+    /// the thing under test.
+    private func amountOfFirstRow(containing text: String) -> String? {
+        if app.buttons["All Transactions"].firstMatch.exists {
+            app.buttons["All Transactions"].firstMatch.tap()
+        }
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", text)).firstMatch
+        guard row.waitForExistence(timeout: 30) else { return nil }
+        return row.label.split(separator: ",").last?.trimmingCharacters(in: .whitespaces)
+    }
+
     private func openFirstGroceriesTransaction() {
         if app.buttons["All Transactions"].firstMatch.exists {
             app.buttons["All Transactions"].firstMatch.tap()
@@ -206,6 +220,10 @@ final class CategorySplitUITests: XCTestCase {
     // dismiss cleanly, save, and change nothing at all. The engine reads an explicit
     // null as "clear it"; omitting the key leaves the old leg in place.
     func testClearingACategoryActuallyClearsIt() throws {
+        // Captured BEFORE the edit: the row is re-found by this below, since its title
+        // is exactly what the edit changes.
+        let amount = try XCTUnwrap(amountOfFirstRow(containing: "Groceries"),
+                                   "no Groceries row to read an amount from")
         openFirstGroceriesTransaction()
         XCTAssertTrue(categoryRowLabel("edittx.category").contains("Groceries"),
                       "expected to start from a categorised transaction")
@@ -220,9 +238,16 @@ final class CategorySplitUITests: XCTestCase {
 
         // Reopen the SAME row and read it back from the store, not from the sheet we
         // just closed — that is what makes this a write test rather than a UI one.
-        let row = app.staticTexts["Uncategorized"].firstMatch
+        //
+        // Found by its AMOUNT, which does not move. This used to look for the text
+        // "Uncategorized" in the list, on the assumption that clearing a category makes
+        // a row say so. A row with no category now falls back to its merchant — the
+        // demo's Groceries rows are Whole Foods, Target, Trader Joe's — so that text
+        // never appears and the row was declared missing when it was there all along.
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", amount))
+            .firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 20),
-                      "no uncategorised transaction in the list — the category was not cleared")
+                      "no row for \(amount) in the list — the transaction vanished")
         wait(for: [expectation(for: NSPredicate(format: "isHittable == true"), evaluatedWith: row)],
              timeout: 15)
         row.tap()
