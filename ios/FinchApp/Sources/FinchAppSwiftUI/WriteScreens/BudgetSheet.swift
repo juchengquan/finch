@@ -144,6 +144,13 @@ struct BudgetSheet: View {
                 }
                 .labelsHidden()
             }
+        } footer: {
+            // Target is the one word doing double duty here — it is a ceiling for a
+            // spending budget and a goal for a saving one, and which it means comes from
+            // the type control above rather than from this field.
+            Text(kind == .income
+                 ? "Target is the amount you are aiming to put aside each cycle."
+                 : "Target is what you plan to spend each cycle. finch warns you as you approach it.")
         }
 
         Section {
