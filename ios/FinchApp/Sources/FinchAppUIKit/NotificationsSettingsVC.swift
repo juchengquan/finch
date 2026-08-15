@@ -137,16 +137,32 @@ final class NotificationsSettingsVC: UIViewController {
         }
     }
 
-    /// A pull-down of the 24 hours, as `SecuritySettingsVC` does for its timeout —
-    /// `MenuValueButton` draws the chevron, without which the row reads as a plain
-    /// value and nothing says it opens a menu.
+    /// A real time picker, not a 24-item pull-down.
+    ///
+    /// The first version listed the hours in a `UIMenu`, which is the wrong control for a
+    /// time: a long list to scroll for something a wheel picks in one gesture, and it
+    /// reads as a set of options rather than a clock.
+    ///
+    /// **Minutes snap back to :00.** `UIDatePicker.minuteInterval` accepts no value above
+    /// 30, so the minute wheel cannot be hidden or made a no-op. Rather than accept a
+    /// minute the app then ignores — a control that lies about what it does — the value
+    /// is written back on the hour, so the wheel visibly returns to zero.
     private func hourAccessory(hour: Int, onPick: @escaping (Int) -> Void) -> UICellAccessory {
-        let button = MenuValueButton.make(value: Self.hourLabel(hour))
-        button.menu = UIMenu(children: (0..<24).map { h in
-            UIAction(title: Self.hourLabel(h), state: h == hour ? .on : .off) { _ in onPick(h) }
-        })
-        return .customView(configuration: .init(customView: button, placement: .trailing()))
+        let picker = UIDatePicker()
+        picker.datePickerMode = .time
+        picker.preferredDatePickerStyle = .compact
+        picker.date = Self.date(forHour: hour)
+        picker.addAction(UIAction { [weak picker] _ in
+            guard let picker else { return }
+            let h = Calendar.current.component(.hour, from: picker.date)
+            picker.date = Self.date(forHour: h)   // snap the minutes back, visibly
+            onPick(h)
+        }, for: .valueChanged)
+        return .customView(configuration: .init(customView: picker, placement: .trailing()))
     }
+
+    /// Shared with the SwiftUI screen — two builders is how the two drift.
+    static func date(forHour hour: Int) -> Date { NotificationsSettingsHour.date(forHour: hour) }
 
     /// Shared with the SwiftUI screen — two formatters is how the two drift apart.
     static func hourLabel(_ hour: Int) -> String { NotificationsSettingsHour.label(hour) }
