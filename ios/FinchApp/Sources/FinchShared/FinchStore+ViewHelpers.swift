@@ -12,6 +12,18 @@ extension FinchStore {
     public var baseCurrency: String {
         ledgers.first { $0.id == activeLedgerId }?.base ?? Money.hubCurrency
     }
+
+    /// The ledger to fall back on when the active one goes away (deleted, or gone
+    /// after an import) — the one the DB marks `is_default`.
+    ///
+    /// **Not `ledgers.first`.** The list is ordered by the user's manual order, then
+    /// name; it stopped sorting `is_default` to the top so that activating a ledger
+    /// leaves its row where it is. Position therefore no longer means "default", and
+    /// `deleteLedger` promotes a new default in SQL — reading `.first` here would
+    /// activate a different ledger than the one the DB just promoted.
+    public var defaultLedgerId: String {
+        (ledgers.first(where: \.isDefault) ?? ledgers.first)?.id ?? ""
+    }
     /// Per-ledger display currency (DB-backed via app_state.displayCurrencyByLedger);
     /// defaults to the active ledger's base until the user picks one.
     public var displayCurrency: String { displayCurrencyByLedger[activeLedgerId] ?? baseCurrency }

@@ -10,17 +10,44 @@ import GRDB
 /// active-ledger filter is pushed into SQL since the tabs only show one ledger.
 extension Projection {
 
-    /// `ledgers` — `base` ← `base_currency`. ORDER BY is_default DESC, name.
+    /// `ledgers` — `base` ← `base_currency`. The user's manual order
+    /// (`app_state.ledgerOrder`), then name for anything it doesn't mention.
+    ///
+    /// **Deliberately NOT the web's `ORDER BY is_default DESC, name`.** Sorting by
+    /// `is_default` meant activating a ledger moved its row to the top, so the list
+    /// rearranged itself under the finger that tapped it — and once ledgers can be
+    /// dragged, the manual order has to survive an activation to mean anything. The
+    /// default ledger now travels as `Ledger.isDefault` instead of as position 0.
+    ///
+    /// Divergence from the web oracle is intentional and of the same class as
+    /// `setBudgetOrder`: a native-first ordering key the frozen web UI ignores. No
+    /// parity gate covers this ORDER BY (`WriteParityTests` snapshots the ledgers
+    /// TABLE by id).
     public static func ledgers(dbQueue: DatabaseQueue) throws -> [Ledger] {
         try dbQueue.read { db in
-            try Row.fetchAll(db, sql: """
-                SELECT id, name, base_currency AS base, color, tagline
-                  FROM ledgers ORDER BY is_default DESC, name
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT id, name, base_currency AS base, color, tagline, is_default AS isDefault
+                  FROM ledgers ORDER BY name
                 """).map { r in
                 Ledger(id: r["id"], name: r["name"], base: r["base"],
-                       color: r["color"], tagline: r["tagline"])
+                       color: r["color"], tagline: r["tagline"],
+                       isDefault: (r["isDefault"] as Int? ?? 0) == 1)
             }
+            return LedgerOrder.sorted(rows, order: try ledgerOrder(db))
         }
+    }
+
+    /// The manual ledger order stored in `app_state` — `[]` when never dragged.
+    ///
+    /// Takes a `Database` rather than a queue so `ledgers` can read it inside its own
+    /// transaction; a second `dbQueue.read` there would serialize a second hop on the
+    /// queue for two rows of JSON.
+    static func ledgerOrder(_ db: Database) throws -> [String] {
+        guard let raw = try String.fetchOne(db, sql: "SELECT value FROM app_state WHERE key = ?",
+                                            arguments: [LedgerOrder.stateKey]),
+              let data = raw.data(using: .utf8),
+              let ids = try? JSONDecoder().decode([String].self, from: data) else { return [] }
+        return ids
     }
 
     /// `accounts` — `balance` is the stored `current_balance` (kept in sync by

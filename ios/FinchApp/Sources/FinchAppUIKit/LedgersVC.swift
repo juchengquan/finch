@@ -280,7 +280,7 @@ final class LedgersVC: UIViewController {
                 if store.activeLedgerId == ledger.id {
                     // Deleted the active one — fall back to whatever remains, or the
                     // rest of the app is scoped to a ledger that no longer exists.
-                    store.activeLedgerId = store.ledgers.first?.id ?? ""
+                    store.activeLedgerId = store.defaultLedgerId
                 }
             } catch {
                 presentError(i18nMessage(error))

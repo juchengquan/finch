@@ -128,7 +128,7 @@ struct LedgerDetailView: View {
             do {
                 try store.apply(.deleteLedger, Args(["id": .string(ledger.id)]))
                 if store.activeLedgerId == ledger.id {   // reassign active if we deleted it
-                    store.activeLedgerId = store.ledgers.first?.id ?? ""
+                    store.activeLedgerId = store.defaultLedgerId
                 }
                 dismiss()
             } catch { errorMessage = i18nMessage(error) }
