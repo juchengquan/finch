@@ -134,7 +134,10 @@ struct BudgetSheet: View {
                 TextField("Name", text: $name)
             }
             IconPickerRow(title: "Icon", glyph: .icon, selection: $icon)
-            FieldRow(glyph: .amount, title: "Target") {
+            FieldRow(glyph: .amount, title: "Target",
+                     help: kind == .income
+                         ? "What you aim to put aside each cycle."
+                         : "What you plan to spend each cycle.") {
                 TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: store.baseCurrency)), text: $amount).moneyInput($amount, currency: store.baseCurrency)
             }
             FieldRow(glyph: .group, title: "Group", showsDefaultTrailing: false) {
@@ -144,13 +147,6 @@ struct BudgetSheet: View {
                 }
                 .labelsHidden()
             }
-        } footer: {
-            // Target is the one word doing double duty here — it is a ceiling for a
-            // spending budget and a goal for a saving one, and which it means comes from
-            // the type control above rather than from this field.
-            Text(kind == .income
-                 ? "Target is the amount you are aiming to put aside each cycle."
-                 : "Target is what you plan to spend each cycle. finch warns you as you approach it.")
         }
 
         Section {
