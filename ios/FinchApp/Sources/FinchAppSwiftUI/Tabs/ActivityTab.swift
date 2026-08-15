@@ -627,6 +627,34 @@ struct TxRow: View {
         }
     }
 
+    /// What the row calls itself, best information first.
+    ///
+    /// A row used to say "Uncategorized" whenever it had no category — unhelpful on an
+    /// expense whose merchant is right there, and simply WRONG on a transfer, which is
+    /// not uncategorised but a movement between your own accounts. So fall through:
+    ///
+    ///   category → the kind's own word → merchant → note → "Uncategorized"
+    ///
+    /// Only transfers and adjustments get a kind word, and deliberately: they have no
+    /// merchant by nature. The other kinds do, and a name identifies a row far better
+    /// than repeating what the leading glyph and the amount's colour already say.
+    ///
+    /// `tookNote` tells the subtitle to stop printing the note it just lost — see the
+    /// second line below. Without it a bare row reads "weekly shop / Aug 5 · weekly shop".
+    private var rowTitle: (text: Text, placeholder: Bool, tookNote: Bool, fromKind: Bool) {
+        if let category = store.categoryName(txn.category) { return (Text(category), false, false, false) }
+        switch txn.kind {
+        case "transfer":   return (Text("Transfer"), false, false, true)
+        case "adjustment": return (Text("Adjustment"), false, false, true)
+        default: break
+        }
+        let merchant = txn.merchant.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !merchant.isEmpty { return (Text(merchant), false, false, false) }
+        let note = (txn.note ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !note.isEmpty { return (Text(note), false, true, false) }
+        return (Text("Uncategorized"), true, false, false)
+    }
+
     private var kindA11yLabel: Text {
         switch txn.kind {
         case "income": Text("Income")
@@ -724,11 +752,18 @@ struct TxRow: View {
                 // only, per user decision) + status flags + tag chips.
                 HStack(spacing: 4) {
                     Group {
-                        if let cat = store.categoryName(txn.category) {
-                            Text(cat)
-                        } else {
-                            Text("Uncategorized").foregroundStyle(.secondary)
-                        }
+                        // Grey is reserved for the one case that says nothing; a kind,
+                        // a merchant or a note is real information and reads like any
+                        // other title. `Color` on both arms, not `AnyShapeStyle` — the
+                        // erased type churns identity and SwiftUI re-inserts the view.
+                        rowTitle.text
+                            .foregroundStyle(rowTitle.placeholder ? Color.secondary : Color.primary)
+                            .lineLimit(1)   // a promoted note can be long
+                            // The leading glyph already announces the kind, so a title
+                            // that IS the kind made VoiceOver read "Transfer, Transfer".
+                            // Hidden only in that case — a merchant or note is new
+                            // information and must still be spoken.
+                            .accessibilityHidden(rowTitle.fromKind)
                     }
                     .layoutPriority(1)   // chips yield before the title truncates
                     if txn.pending == true {
@@ -765,7 +800,7 @@ struct TxRow: View {
                 // Bottom-left: date·time + optional note (truncated to one line).
                 HStack(spacing: 4) {
                     if showDate { Text(dateTimeText).font(.footnote).foregroundStyle(.secondary) }
-                    if let note = txn.note, !note.isEmpty {
+                    if let note = txn.note, !note.isEmpty, !rowTitle.tookNote {
                         Text(showDate ? "· \(note)" : note)
                             .font(.footnote).foregroundStyle(.secondary)
                             .lineLimit(1)
