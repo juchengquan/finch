@@ -379,7 +379,16 @@ final class LedgersVC: UIViewController {
             message: String(localized: "This permanently deletes \(ledger.name) and all its data."),
             preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel))
-        alert.addAction(UIAlertAction(title: String(localized: "Delete \(ledger.name)"),
+        // Just "Delete": the message above it already names the ledger, so repeating it
+        // on the button is noise rather than a speed bump — and both ledger DETAIL
+        // confirmations (`LedgerDetailVC`, `LedgerDetailView`) have always said plain
+        // Delete, so naming it here made the same action read differently depending on
+        // which screen you deleted from.
+        //
+        // NOT the rule for the account/budget GROUP dialogs, whose message never says
+        // which group ("Accounts in this group become ungrouped") — there the button is
+        // the only thing identifying what is about to be destroyed.
+        alert.addAction(UIAlertAction(title: String(localized: "Delete"),
                                       style: .destructive) { [weak self] _ in self?.delete(ledger) })
         present(alert, animated: true)
     }
