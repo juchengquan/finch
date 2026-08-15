@@ -2155,26 +2155,8 @@
         }
       }
     },
-    "Currency can't be changed after an account is created — it is what every balance on this account is recorded in.": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "账户创建后货币不可更改——该账户的所有余额都以此货币记录。"
-          }
-        }
-      }
-    },
-    "Currency is fixed once the account is created. Type decides how the balance is read: a credit card counts what you owe, so its balance is normally negative.": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "货币在创建后即固定。类型决定余额的含义：信用卡记录的是欠款，因此余额通常为负。"
-          }
-        }
-      }
-    },
+    "Currency can't be changed after an account is created — it is what every balance on this account is recorded in.": {},
+    "Currency is fixed once the account is created. Type decides how the balance is read: a credit card counts what you owe, so its balance is normally negative.": {},
     "Current": {
       "localizations": {
         "zh-Hans": {
@@ -3027,6 +3009,26 @@
       }
     },
     "Finish reconciliation": {},
+    "Fixed once the account is created.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "账户创建后即固定。"
+          }
+        }
+      }
+    },
+    "Fixed when the account was created — every balance here is recorded in it.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在账户创建时确定——此处所有余额都以该货币记录。"
+          }
+        }
+      }
+    },
     "Floating add button": {
       "localizations": {
         "zh-Hans": {
@@ -6552,26 +6554,8 @@
         }
       }
     },
-    "Target is the amount you are aiming to put aside each cycle.": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "目标是你计划每个周期存下的金额。"
-          }
-        }
-      }
-    },
-    "Target is what you plan to spend each cycle. finch warns you as you approach it.": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "目标是你计划每个周期花费的金额，接近时 finch 会提醒你。"
-          }
-        }
-      }
-    },
+    "Target is the amount you are aiming to put aside each cycle.": {},
+    "Target is what you plan to spend each cycle. finch warns you as you approach it.": {},
     "Tells you an account's balance.": {
       "localizations": {
         "zh-Hans": {
@@ -6623,6 +6607,16 @@
       }
     },
     "The bank has something finch hasn't accounted for.": {},
+    "The date the opening figure is from.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该期初金额对应的日期。"
+          }
+        }
+      }
+    },
     "The file is deleted permanently.": {
       "localizations": {
         "zh-Hans": {
@@ -7305,12 +7299,23 @@
         }
       }
     },
-    "What the account held before finch started tracking it, and the date that figure is from. Leave the amount empty for a new account starting at zero.": {
+    "What the account held before finch started tracking it, and the date that figure is from. Leave the amount empty for a new account starting at zero.": {},
+    "What you aim to put aside each cycle.": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "finch 开始记录之前该账户的余额，以及该数字对应的日期。新账户从零开始时可留空。"
+            "value": "你计划每个周期存下的金额。"
+          }
+        }
+      }
+    },
+    "What you plan to spend each cycle.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你计划每个周期花费的金额。"
           }
         }
       }
