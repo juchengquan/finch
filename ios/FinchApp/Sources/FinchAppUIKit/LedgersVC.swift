@@ -57,6 +57,18 @@ final class LedgersVC: UIViewController {
     /// Ledger by id, so the diffable ids stay `Hashable` strings.
     private var ledgerByID: [String: Ledger] = [:]
 
+    /// Reorder mode, entered from the ⋯ overflow like Accounts, Budgets and
+    /// Categories. The draft order lives here until ✓ — ✕ throws it away without a
+    /// write, so a drag that looked wrong costs nothing.
+    ///
+    /// A flat `[String]` where those three screens need a row model: ledgers have no
+    /// groups and nothing nests, so the whole move is one `move(fromOffsets:toOffset:)`.
+    private var isReordering = false
+    private var reorderIDs: [String] = []
+    /// The id under the finger. `localObject` usually carries it, but a drop that
+    /// lands with no items still needs to know what was lifted.
+    private var draggingID: String?
+
     override func didMove(toParent parent: UIViewController?) {
         super.didMove(toParent: parent)
         if parent == nil { onPoppedFromStack?() }
@@ -99,6 +111,9 @@ final class LedgersVC: UIViewController {
             frame: .zero,
             collectionViewLayout: UICollectionViewCompositionalLayout.list(using: config))
         collectionView.delegate = self
+        collectionView.dragDelegate = self
+        collectionView.dropDelegate = self
+        collectionView.dragInteractionEnabled = false   // only in reorder mode
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(collectionView)
         NSLayoutConstraint.activate([
@@ -118,6 +133,15 @@ final class LedgersVC: UIViewController {
             cfg.secondaryTextProperties.font = .preferredFont(forTextStyle: .caption1)
             cfg.secondaryTextProperties.color = .secondaryLabel
             cell.contentConfiguration = cfg
+
+            // Reorder mode: a grip and nothing else. The net worth is not what you are
+            // arranging, and the disclosure chevron would promise a push that the mode
+            // has disabled. The tick goes too — `Projection.ledgers` no longer sorts by
+            // it, so which ledger is active has nothing to do with where its row sits.
+            if self.isReordering {
+                cell.accessories = [reorderGripAccessory()]
+                return
+            }
 
             // Trailing: net worth, preceded by a tick on the active ledger.
             let worth = UILabel()
@@ -146,11 +170,80 @@ final class LedgersVC: UIViewController {
     }
 
     private func configureToolbar() {
+        // Reorder mode owns the whole bar: ✕ discards the draft, ✓ writes it. Same
+        // shape as Accounts / Budgets / Categories, down to the icons.
+        guard !isReordering else {
+            let cancel = UIBarButtonItem(image: UIImage(systemName: "xmark"),
+                                         primaryAction: UIAction { [weak self] _ in
+                // Clear FIRST so `persistReorder`'s guard no-ops if anything else
+                // reaches it — the other three screens all discard this way.
+                self?.reorderIDs = []
+                self?.exitReorder()
+            })
+            cancel.accessibilityLabel = String(localized: "Cancel")
+            let done = UIBarButtonItem(image: UIImage(systemName: "checkmark"),
+                                       primaryAction: UIAction { [weak self] _ in
+                self?.persistReorder()
+                self?.exitReorder()
+            })
+            done.accessibilityLabel = String(localized: "Done")
+            navigationItem.leftBarButtonItems = [cancel]
+            navigationItem.rightBarButtonItems = [done]
+            return
+        }
+        // The back button owns the left slot outside reorder mode; leaving the ✕ there
+        // would strand the user on a screen with two ways back and no way out.
+        navigationItem.leftBarButtonItems = nil
+
         let add = UIBarButtonItem(image: UIImage(systemName: "plus"), primaryAction: UIAction { [weak self] _ in
             self?.presentAddLedger()
         })
         add.accessibilityLabel = String(localized: "Add Ledger")
-        navigationItem.rightBarButtonItem = add
+
+        let reorder = UIAction(title: String(localized: "Reorder"),
+                               image: UIImage(systemName: "arrow.up.arrow.down")) { [weak self] _ in
+            self?.enterReorder()
+        }
+        // Nothing to arrange with one ledger — the same threshold Delete uses.
+        reorder.attributes = store.ledgers.count > 1 ? [] : .disabled
+        let more = UIBarButtonItem(image: UIImage(systemName: "ellipsis"), menu: UIMenu(children: [reorder]))
+        more.accessibilityLabel = String(localized: "More")
+
+        navigationItem.rightBarButtonItems = [more, add]
+    }
+
+    // MARK: Reorder
+
+    private func enterReorder() {
+        isReordering = true
+        reorderIDs = store.ledgers.map(\.id)
+        collectionView.dragInteractionEnabled = true
+        configureToolbar()
+        applySnapshot()
+    }
+
+    private func exitReorder() {
+        isReordering = false
+        reorderIDs = []
+        draggingID = nil
+        collectionView.dragInteractionEnabled = false
+        configureToolbar()
+        applySnapshot()
+    }
+
+    /// Persist on ✓ — one `setLedgerOrder` for the whole drag, through the action
+    /// chokepoint like every other write on this screen.
+    ///
+    /// Writes the full list every time rather than a diff: the stored order is the
+    /// list, so a partial write would leave the untouched ids to fall back on name and
+    /// silently undo an earlier drag.
+    private func persistReorder() {
+        guard !reorderIDs.isEmpty, reorderIDs != store.ledgers.map(\.id) else { return }
+        do {
+            try store.apply(.setLedgerOrder, Args(["ledgerIds": .array(reorderIDs.map { .string($0) })]))
+        } catch {
+            presentError(i18nMessage(error))
+        }
     }
 
     private func applySnapshot() {
@@ -166,7 +259,17 @@ final class LedgersVC: UIViewController {
         ledgerByID = Dictionary(uniqueKeysWithValues: store.ledgers.map { ($0.id, $0) })
         var snap = NSDiffableDataSourceSnapshot<SectionID, String>()
         snap.appendSections([.ledgers])
-        snap.appendItems(store.ledgers.map(\.id), toSection: .ledgers)
+        // While reordering, the draft is the truth on screen — `store.ledgers` still
+        // holds the saved order until ✓.
+        //
+        // The draft is reconciled against the store on every republish rather than
+        // just filtered for display: a ledger deleted under the mode (an import, a
+        // sync) would otherwise name a row that no longer exists, and one that arrived
+        // would be invisible until ✓ and then be missing from the very list ✓ writes.
+        if isReordering {
+            reorderIDs = LedgerReorder.reconciled(draft: reorderIDs, live: store.ledgers.map(\.id))
+        }
+        snap.appendItems(isReordering ? reorderIDs : store.ledgers.map(\.id), toSection: .ledgers)
         // Ids are stable across a rename or an active-ledger switch, so carried-over
         // rows must be told to re-read or the tick and the net worth stay stale.
         let carried = Set(dataSource.snapshot().itemIdentifiers)
@@ -201,7 +304,8 @@ final class LedgersVC: UIViewController {
     /// VoiceOver still announces it as a button; contextual actions expose no disabled
     /// trait.
     private func leadingSwipeActions(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
-        guard let id = dataSource.itemIdentifier(for: indexPath),
+        guard !isReordering,
+              let id = dataSource.itemIdentifier(for: indexPath),
               let ledger = ledgerByID[id] else { return nil }
 
         if ledger.id == store.activeLedgerId {
@@ -247,7 +351,8 @@ final class LedgersVC: UIViewController {
     }
 
     private func swipeActions(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
-        guard let id = dataSource.itemIdentifier(for: indexPath),
+        guard !isReordering,
+              let id = dataSource.itemIdentifier(for: indexPath),
               let ledger = ledgerByID[id], store.ledgers.count > 1 else { return nil }
         let delete = SwipeAction.make(String(localized: "Delete"),
                                       systemImage: "trash",
@@ -305,6 +410,8 @@ final class LedgersVC: UIViewController {
 
 extension LedgersVC: UICollectionViewDelegate {
     func collectionView(_ cv: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        // A tap in reorder mode is a mis-hit, not a drill: the rows are being arranged.
+        guard !isReordering else { return cv.deselectItem(at: indexPath, animated: false) }
         guard let id = dataSource.itemIdentifier(for: indexPath) else { return }
         if let onSelect {
             // Stay selected: the row is the current state of the column beside it, not
@@ -321,7 +428,8 @@ extension LedgersVC: UICollectionViewDelegate {
     func collectionView(_ cv: UICollectionView,
                         contextMenuConfigurationForItemAt indexPath: IndexPath,
                         point: CGPoint) -> UIContextMenuConfiguration? {
-        guard let id = dataSource.itemIdentifier(for: indexPath),
+        guard !isReordering,
+              let id = dataSource.itemIdentifier(for: indexPath),
               let ledger = ledgerByID[id], store.ledgers.count > 1 else { return nil }
         return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
             UIMenu(children: [
@@ -329,6 +437,72 @@ extension LedgersVC: UICollectionViewDelegate {
                          image: UIImage(systemName: "trash"),
                          attributes: .destructive) { _ in self?.confirmDelete(ledger) }
             ])
+        }
+    }
+}
+
+extension LedgersVC: UICollectionViewDragDelegate {
+    func collectionView(_ cv: UICollectionView,
+                        itemsForBeginning session: UIDragSession,
+                        at indexPath: IndexPath) -> [UIDragItem] {
+        guard isReordering, let id = dataSource.itemIdentifier(for: indexPath) else { return [] }
+        draggingID = id
+        let item = UIDragItem(itemProvider: NSItemProvider(object: id as NSString))
+        item.localObject = id
+        return [item]
+    }
+
+    func collectionView(_ cv: UICollectionView, dragSessionDidEnd session: UIDragSession) {
+        draggingID = nil
+    }
+}
+
+extension LedgersVC: UICollectionViewDropDelegate {
+    func collectionView(_ cv: UICollectionView, canHandle session: UIDropSession) -> Bool {
+        isReordering && draggingID != nil
+    }
+
+    func collectionView(_ cv: UICollectionView,
+                        dropSessionDidUpdate session: UIDropSession,
+                        withDestinationIndexPath destinationIndexPath: IndexPath?) -> UICollectionViewDropProposal {
+        guard isReordering else { return UICollectionViewDropProposal(operation: .cancel) }
+        return UICollectionViewDropProposal(operation: .move, intent: .insertAtDestinationIndexPath)
+    }
+
+    /// The drop math is `BudgetsListVC`'s, minus the group flattening: the row under
+    /// the finger decides the slot, and which HALF of it the finger is over decides
+    /// whether the dragged ledger lands above or below it. Past the last row means
+    /// last.
+    func collectionView(_ cv: UICollectionView, performDropWith coordinator: UICollectionViewDropCoordinator) {
+        guard isReordering,
+              let sourceID = coordinator.items.first?.dragItem.localObject as? String ?? draggingID,
+              let src = reorderIDs.firstIndex(of: sourceID) else { return }
+
+        let point = coordinator.session.location(in: cv)
+        var destination: Int
+        if let indexPath = cv.indexPathForItem(at: point),
+           let targetID = dataSource.itemIdentifier(for: indexPath),
+           let target = reorderIDs.firstIndex(of: targetID) {
+            let frame = cv.cellForItem(at: indexPath)?.frame ?? .zero
+            let below = frame.height > 0 && (point.y - frame.minY) / frame.height > 0.5
+            destination = below ? target + 1 : target
+        } else {
+            destination = reorderIDs.count      // dropped past the last row
+        }
+        guard destination != src, destination != src + 1 else { return }
+
+        var next = reorderIDs
+        next.move(fromOffsets: IndexSet(integer: src), toOffset: destination)
+        reorderIDs = next
+        applySnapshot()
+
+        // Hand the lifted preview back to UIKit so it animates INTO its new row.
+        // Without this the drop plays the CANCEL animation — flying the preview back
+        // to the lift point — before the reordered list appears underneath it.
+        // `applySnapshot` above is synchronous, so this index path is already the new one.
+        if let item = coordinator.items.first?.dragItem,
+           let dest = dataSource.indexPath(for: sourceID) {
+            coordinator.drop(item, toItemAt: dest)
         }
     }
 }
