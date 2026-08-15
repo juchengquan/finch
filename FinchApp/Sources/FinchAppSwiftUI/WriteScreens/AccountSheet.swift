@@ -136,6 +136,19 @@ struct AccountSheet: View {
                 }
                 .labelsHidden()
             }
+        } footer: {
+            // Says what is not obvious from the labels, and NOTHING that merely restates
+            // them — "Name: the account's name" is noise, and noise trains people to stop
+            // reading footers, which is what makes the one useful sentence invisible.
+            //
+            // The currency line is the one that costs real money to learn late: it is
+            // fixed once the account exists, which is why the row goes read-only on edit
+            // rather than silently refusing later.
+            if isEdit {
+                Text("Currency can't be changed after an account is created — it is what every balance on this account is recorded in.")
+            } else {
+                Text("Currency is fixed once the account is created. Type decides how the balance is read: a credit card counts what you owe, so its balance is normally negative.")
+            }
         }
 
         // Card cycle sits in Basic, not Advanced: these are what DEFINE a credit
@@ -176,8 +189,13 @@ struct AccountSheet: View {
         } header: {
             finchSectionHeader("Opening balance")
         } footer: {
+            // The ADD case was silent, which is backwards: someone editing has already
+            // met these fields, and someone creating an account has not. "As of" in
+            // particular means nothing until you are told what it anchors.
             if isEdit {
                 Text("The balance before finch started tracking, in the account's currency. Changing it adjusts the account's balance.")
+            } else {
+                Text("What the account held before finch started tracking it, and the date that figure is from. Leave the amount empty for a new account starting at zero.")
             }
         }
 
