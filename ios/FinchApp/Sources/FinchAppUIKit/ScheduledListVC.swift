@@ -539,10 +539,30 @@ final class ScheduledListVC: UIViewController {
         return templateByID[id]
     }
 
+    /// The template behind a CALENDAR day row, with the occurrence date it sits under.
+    ///
+    /// Day rows are keyed `occPrefix + day + "|" + templateId`, not a bare template id,
+    /// so `template(at:)` misses them and both swipe providers used to `return nil` —
+    /// which is why swiping a calendar occurrence did nothing at all while the identical
+    /// swipe worked in List mode.
+    ///
+    /// The date matters as much as the template: posting an occurrence needs to know
+    /// WHICH one, and passing the template alone stamps today.
+    private func occurrence(at indexPath: IndexPath) -> (template: ScheduledTemplate, date: String)? {
+        guard let id = dataSource.itemIdentifier(for: indexPath),
+              id.hasPrefix(Self.occPrefix),
+              let t = template(forOccurrence: id) else { return nil }
+        // `template(forOccurrence:)` already owns the id's template half — this adds
+        // only the DATE half, which posting needs and it does not return.
+        let body = id.dropFirst(Self.occPrefix.count)
+        guard let bar = body.lastIndex(of: "|") else { return nil }
+        return (t, String(body[..<bar]))
+    }
+
     /// Edit declared first so it sits at the trailing edge, Delete to its left — the
     /// order the SwiftUI row declares, and the order muscle memory expects.
     private func trailingSwipe(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
-        guard let t = template(at: indexPath) else { return nil }
+        guard let t = template(at: indexPath) ?? occurrence(at: indexPath)?.template else { return nil }
         let edit = SwipeAction.make(String(localized: "Edit"),
                                     systemImage: "pencil",
                                     tint: .systemBlue) { [weak self] done in
@@ -559,11 +579,14 @@ final class ScheduledListVC: UIViewController {
     }
 
     private func leadingSwipe(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
-        guard let t = template(at: indexPath) else { return nil }
+        // A calendar row posts the occurrence it is showing; a list row has no single
+        // occurrence, so it passes nil and `post` resolves which one is meant.
+        let occ = occurrence(at: indexPath)
+        guard let t = template(at: indexPath) ?? occ?.template else { return nil }
         let post = SwipeAction.make(String(localized: "Post"),
                                     systemImage: "checkmark.circle",
                                     tint: .systemGreen) { [weak self] done in
-            self?.post(t, occurrence: nil); done(true)
+            self?.post(t, occurrence: occ?.date); done(true)
         }
         return UISwipeActionsConfiguration(actions: [post])
     }
