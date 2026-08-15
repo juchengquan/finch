@@ -59,7 +59,7 @@ struct ScheduledDetailView: View {
                                      : t.type == "transfer" ? .blue : .red)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(t.name).font(.headline)
-                    if let amount = t.amount {
+                    if let amount = t.signedAmount {
                         Text(store.displayMoney(amount, from: account(t.accountId)?.currency ?? store.displayCurrency))
                             .font(.title3).fontWeight(.semibold)
                     } else {
