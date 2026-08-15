@@ -149,7 +149,7 @@ struct ScheduledCalendarView: View {
                 // badge's variable width ("upcoming" vs "missed") shifted every
                 // amount a different distance from the edge.
                 statusBadge(st)
-                if let amt = t.amount { Text(store.displayMoney(amt, from: acct?.currency ?? store.displayCurrency)).font(.callout) }
+                if let amt = t.signedAmount { Text(store.displayMoney(amt, from: acct?.currency ?? store.displayCurrency)).font(.callout) }
             }
             .contentShape(Rectangle())
         }
