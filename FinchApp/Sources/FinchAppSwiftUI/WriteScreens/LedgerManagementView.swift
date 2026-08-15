@@ -44,6 +44,19 @@ struct LedgerListView: View {
         .sheet(isPresented: $showingAdd) { AddLedgerSheet() }
     }
 
+    /// Drag to reorder, persisted as one `setLedgerOrder`.
+    ///
+    /// This screen is the macOS ledger list (iOS runs `LedgersVC`, which puts the same
+    /// write behind a Reorder mode in the ⋯ overflow — a Mac list drags without one).
+    /// The move is computed against `store.ledgers`, which is already in the stored
+    /// order, so the written list is the whole order rather than a diff.
+    private func move(from source: IndexSet, to destination: Int) {
+        var ids = store.ledgers.map(\.id)
+        ids.move(fromOffsets: source, toOffset: destination)
+        do { try store.apply(.setLedgerOrder, Args(["ledgerIds": .array(ids.map { .string($0) })])) }
+        catch { errorMessage = i18nMessage(error) }
+    }
+
     @ViewBuilder private var rows: some View {
         ForEach(store.ledgers) { ledger in
             Group {
@@ -72,6 +85,7 @@ struct LedgerListView: View {
                 Button(role: .destructive) { pendingDelete = ledger } label: { Label("Delete", systemImage: "trash") }
             }
         }
+        .onMove(perform: move)
     }
 
     private func rowContent(_ ledger: Ledger) -> some View {
