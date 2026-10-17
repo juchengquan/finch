@@ -6,9 +6,10 @@ import GRDB
 // (counterparty) → FX residue → validate shape → insert + seal in a SAVEPOINT.
 //
 // SCOPE: the full posting path including the rules-engine branch (applyRules) on
-// income/expense/refund insert, and the cross-currency `rateToHub` lookup
-// (on-or-before → on-or-after → static fallback) with write-through of the
-// resolved derived rate. Single-currency entries take the identity FX path.
+// income/expense/refund insert, and the cross-currency `lookupRateToHub` lookup
+// (on-or-before → on-or-after → static fallback, else `error.fx.noRate`) with
+// write-through of the resolved derived rate. Single-currency entries take the
+// identity FX path.
 
 public enum Entries {
     public enum Kind: String, Sendable { case opening, income, expense, transfer, adjustment, refund, interledger }
@@ -213,48 +214,60 @@ public enum Entries {
     }
 
     /// USD-hub FX (HUB_CURRENCY = "USD"). Verbatim port of the web's
-    /// queries/rates.ts: cross-rate via the hub, with `rateToHub` doing the
+    /// queries/rates.ts: cross-rate via the hub, with `lookupRateToHub` doing the
     /// on-or-before → on-or-after → static-fallback lookup + write-through of the
     /// resolved rate. Single-currency (currency == base) returns identity.
+    ///
+    /// A side with NO rate at all refuses the write (`error.fx.noRate`) instead of
+    /// converting 1:1 — that booked ₩50,000 as 50,000 USD and pinned the 1.0 for good.
+    /// Both sides are looked up before either is pinned, so a refusal writes nothing.
     static func convertToBase(_ db: Database, _ native: Double, _ currency: String,
                               _ base: String, _ date: String) throws -> (amountBase: Double, rate: Double) {
         if currency == base { return (native, 1) }
-        let rc = try rateToHub(db, currency, date)
-        let rb = try rateToHub(db, base, date)
-        let rate = rb != 0 ? rc / rb : 1
+        let c = try lookupRateToHub(db, currency, date), b = try lookupRateToHub(db, base, date)
+        guard let rc = c, let rb = b else {
+            let missing = c == nil ? currency : base
+            throw I18nError("error.fx.noRate", ["from": currency, "to": base, "currency": missing],
+                            "No exchange rate for \(currency) → \(base) yet. Turn on \(missing) in Settings › Currencies, then tap Refresh now.")
+        }
+        try pinRate(db, currency, date, rc)
+        try pinRate(db, base, date, rb)
+        let rate = rb.rate != 0 ? rc.rate / rb.rate : 1
         return (r2(native * rate), (rate * 1e6).rounded() / 1e6)
     }
 
     /// Static last-resort USD-per-1-unit map (web FALLBACK_USD_PER_UNIT) — used
     /// only when the rates table has no row for a currency, so a fresh/empty DB
-    /// still produces a value.
+    /// still produces a value for these few. Any other currency has no fallback.
     private static let fallbackUsdPerUnit: [String: Double] = [
         "USD": 1, "EUR": 1.087, "GBP": 1.266, "JPY": 0.0064, "SGD": 0.741, "CNY": 0.138,
     ]
 
-    /// USD-per-1-unit of `currency` at `date`: exact/on-or-before → on-or-after →
-    /// static fallback. When no exact-date row exists, the resolved rate is
-    /// pinned under `date` (source 'derived', INSERT OR IGNORE so a user-set rate
-    /// is never clobbered) — making every locked conversion reproducible.
-    private static func rateToHub(_ db: Database, _ currency: String, _ date: String) throws -> Double {
-        if currency == "USD" { return 1 }
+    /// USD-per-1-unit of `currency` at `date`, and whether it must be pinned:
+    /// exact/on-or-before → on-or-after → static fallback → nil (no rate). When no
+    /// exact-date row exists, `pinRate` pins the resolved rate under `date` (source
+    /// 'derived', INSERT OR IGNORE so a user-set rate is never clobbered) — making
+    /// every locked conversion reproducible.
+    private static func lookupRateToHub(_ db: Database, _ currency: String, _ date: String) throws -> (rate: Double, pin: Bool)? {
+        if currency == "USD" { return (1, false) }
         let before = try Row.fetchOne(db, sql:
             "SELECT date AS d, rate AS r FROM exchange_rates WHERE currency = ? AND date <= ? ORDER BY date DESC LIMIT 1",
             arguments: [currency, date])
-        if let before, (before["d"] as String) == date { return before["r"] }   // exact → no write-through
-        let rate: Double
-        if let before {
-            rate = before["r"]
-        } else if let after = try Double.fetchOne(db, sql:
+        if let before, (before["d"] as String) == date { return (before["r"], false) }   // exact → no write-through
+        if let before { return (before["r"], true) }
+        if let after = try Double.fetchOne(db, sql:
             "SELECT rate FROM exchange_rates WHERE currency = ? AND date >= ? ORDER BY date ASC LIMIT 1",
             arguments: [currency, date]) {
-            rate = after
-        } else {
-            rate = fallbackUsdPerUnit[currency] ?? 1
+            return (after, true)
         }
+        return fallbackUsdPerUnit[currency].map { ($0, true) }
+    }
+
+    private static func pinRate(_ db: Database, _ currency: String, _ date: String,
+                                _ r: (rate: Double, pin: Bool)) throws {
+        guard r.pin else { return }
         try db.execute(sql: "INSERT OR IGNORE INTO exchange_rates (date, currency, rate, source) VALUES (?, ?, ?, 'derived')",
-                       arguments: [date, currency, rate])
-        return rate
+                       arguments: [date, currency, r.rate])
     }
 
     static func resolveCounterpartyIdByName(_ db: Database, _ name: String) throws -> String? {

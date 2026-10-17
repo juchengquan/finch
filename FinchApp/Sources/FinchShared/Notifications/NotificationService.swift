@@ -184,6 +184,26 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
         }
     }
 
+    /// Tell the user about a write the engine refused while nobody was looking — a
+    /// wrist add the phone turned down, which would otherwise vanish. Shown now, or
+    /// when quiet hours end. The id carries `unplannedPrefix`, so re-planning keeps it.
+    public func notifyRefused(id: String, title: String, body: String) async {
+        guard await center.notificationSettings().authorizationStatus != .denied else { return }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        let now = Date()
+        let when = NotificationPolicy.deliveryTime(raisedAt: now, quiet: NotificationPrefs.quietHours)
+        let trigger: UNNotificationTrigger = when <= now
+            ? UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+            : UNCalendarNotificationTrigger(
+                dateMatching: Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: when),
+                repeats: false)
+        try? await center.add(UNNotificationRequest(
+            identifier: NotificationPlanner.unplannedPrefix + id, content: content, trigger: trigger))
+    }
+
     // NO app-icon badge, deliberately. One was added alongside these fixes to
     // justify the .badge authorization option, which was being requested and never
     // used — but the app has no notification centre and PlannedNotification never

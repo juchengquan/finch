@@ -179,25 +179,40 @@ public enum Scheduled {
             if type == "transfer" {
                 let fromAccountId: String = r["from_account_id"]
                 for date in dates {
-                    try Entries.postTransfer(db, fromAccountId: fromAccountId, toAccountId: acctId, fromAmount: abs(amount),
-                                             date: date, time: postingTime(r, explicit: explicitTime), note: description.isEmpty ? nil : description,
-                                             sourceTemplateId: r["id"], occurrenceDate: date, timestamp: ts)
+                    guard try skippingNoRate({
+                        try Entries.postTransfer(db, fromAccountId: fromAccountId, toAccountId: acctId, fromAmount: abs(amount),
+                                                 date: date, time: postingTime(r, explicit: explicitTime), note: description.isEmpty ? nil : description,
+                                                 sourceTemplateId: r["id"], occurrenceDate: date, timestamp: ts)
+                    }) else { continue }
+                    posted += 1
                 }
-                posted += dates.count
                 continue
             }
             let signed = (type == "income" ? 1.0 : -1.0) * amount
             let categoryId: String? = r["category_id"]
             let cpId = try Entries.resolveCounterpartyIdByName(db, description)
             for date in dates {
-                try Entries.postSimple(db, .init(ledgerId: ledgerId, accountId: acctId, amount: signed, date: date,
-                    description: description, categoryId: categoryId, kind: type == "income" ? .income : .expense,
-                    time: postingTime(r, explicit: explicitTime), status: .pending, counterpartyId: cpId, id: nil,
-                    sourceTemplateId: r["id"], occurrenceDate: date))
+                guard try skippingNoRate({
+                    try Entries.postSimple(db, .init(ledgerId: ledgerId, accountId: acctId, amount: signed, date: date,
+                        description: description, categoryId: categoryId, kind: type == "income" ? .income : .expense,
+                        time: postingTime(r, explicit: explicitTime), status: .pending, counterpartyId: cpId, id: nil,
+                        sourceTemplateId: r["id"], occurrenceDate: date))
+                }) else { continue }
+                posted += 1
             }
-            posted += dates.count
         }
         return posted
+    }
+
+    /// Run one occurrence's post; false when it was refused for want of an exchange
+    /// rate. Nobody is looking at a generator run, so throwing would fail the whole
+    /// sweep — every other template's rows and the auto-post mark with it, on every
+    /// launch. Skipped instead, the occurrence stays unposted and so still due:
+    /// posting it by hand says why. The refusal comes from the leg conversion, before
+    /// anything is written. Mirrors the web's `generateDueScheduled`.
+    private static func skippingNoRate(_ post: () throws -> Any) throws -> Bool {
+        do { _ = try post(); return true }
+        catch let e as I18nError where e.code == "error.fx.noRate" { return false }
     }
 
     /// The app's generator (native-only): materialize the due occurrences of every
