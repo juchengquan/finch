@@ -424,7 +424,7 @@ struct ActivityFeedView: View {
     private var bulkDeleteButton: some View {
         Button("Delete \(selected.count)", role: .destructive) { confirmingBulkDelete = true }
             .disabled(selected.isEmpty)
-            .confirmationDialog("Delete \(selected.count) transaction\(selected.count == 1 ? "" : "s")?",
+            .confirmationDialog(BulkDelete.confirmTitle(selected.count),
                                 isPresented: $confirmingBulkDelete, titleVisibility: .visible) {
                 Button("Delete \(selected.count)", role: .destructive) { bulkDelete() }
                 Button("Cancel", role: .cancel) {}
@@ -490,11 +490,9 @@ struct ActivityFeedView: View {
         isSelecting = false; selected.removeAll()
     }
     /// Whether deleting the selection would also remove rows the user did not
-    /// tick — a payment whose purchase has a sibling leg outside the selection.
-    /// `selected` holds POSTING ids, and deletion is per purchase.
+    /// tick — shared with the iPhone feed (`BulkDelete`).
     private var selectionTakesUnselectedRows: Bool {
-        let keys = Set(store.txns.filter { selected.contains($0.id) }.map(\.purchaseKey))
-        return store.txns.contains { keys.contains($0.purchaseKey) && !selected.contains($0.id) }
+        BulkDelete.takesUnselectedRows(selected, in: store.txns)
     }
 
     private func bulkDelete() {
