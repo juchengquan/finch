@@ -199,6 +199,26 @@
         }
       }
     },
+    "%@ · ended %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · 已于 %2$@ 结束"
+          }
+        }
+      }
+    },
+    "%@ · ends %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$@ 结束"
+          }
+        }
+      }
+    },
     "%@ · hub": {
       "localizations": {
         "zh-Hans": {
@@ -215,6 +235,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$@ · 下次 %2$@"
+          }
+        }
+      }
+    },
+    "%@ · next %@ · ends %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · 下次 %2$@ · %3$@ 结束"
           }
         }
       }
@@ -2895,6 +2925,16 @@
         }
       }
     },
+    "End date": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结束日期"
+          }
+        }
+      }
+    },
     "Ended": {
       "localizations": {
         "zh-Hans": {
@@ -2911,6 +2951,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "结束"
+          }
+        }
+      }
+    },
+    "Ends on": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结束于"
           }
         }
       }
@@ -4971,6 +5021,16 @@
         }
       }
     },
+    "Nothing is posted or reminded after this day.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此日期之后不会再记账或提醒。"
+          }
+        }
+      }
+    },
     "Nothing new to copy": {
       "localizations": {
         "zh-Hans": {
@@ -6376,6 +6436,46 @@
         }
       }
     },
+    "Skip": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跳过"
+          }
+        }
+      }
+    },
+    "Skip %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跳过 %@"
+          }
+        }
+      }
+    },
+    "Skipped": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已跳过"
+          }
+        }
+      }
+    },
+    "Skipping %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将跳过 %@"
+          }
+        }
+      }
+    },
     "Snooze 1 hour": {
       "localizations": {
         "zh-Hans": {
@@ -6859,6 +6959,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "该期初金额对应的日期。"
+          }
+        }
+      }
+    },
+    "The end date can't be before the start.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结束日期不能早于开始日期。"
           }
         }
       }
@@ -7351,6 +7461,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "取消已复核标记"
+          }
+        }
+      }
+    },
+    "Unskip": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消跳过"
+          }
+        }
+      }
+    },
+    "Unskip %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消跳过 %@"
           }
         }
       }
@@ -7865,6 +7995,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "优先级 %lld"
+          }
+        }
+      }
+    },
+    "skipped": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已跳过"
           }
         }
       }
