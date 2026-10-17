@@ -19,8 +19,10 @@ final class ArgsTests: XCTestCase {
     ///   web has no equivalent, so these never enter WRITE_SEQUENCE) = 90.
     /// + `setLedgerOrder` (native-first manual ledger order, app_state — the web
     ///   ignores the key, as it does `setBudgetOrder`) = 91.
+    /// + `restoreTransactions` (native-only — undo of a transaction delete; the
+    ///   web has no undo, so it never enters WRITE_SEQUENCE) = 92.
     func test_actionCount() {
-        XCTAssertEqual(ActionName.allCases.count, 91)
+        XCTAssertEqual(ActionName.allCases.count, 92)
     }
 
     func test_actionNameRawValues() {
