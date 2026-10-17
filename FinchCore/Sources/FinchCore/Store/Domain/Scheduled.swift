@@ -15,6 +15,8 @@ public enum Scheduled {
         .generateDueScheduled: generateDue,
         .autoPostDueScheduled: autoPostDue,
         .postScheduled: post,
+        .skipScheduledOccurrence: skip,
+        .unskipScheduledOccurrence: unskip,
     ]
 
     /// The time a posting carries: an explicitly requested one, else the template's
@@ -141,6 +143,7 @@ public enum Scheduled {
         var posted = 0
         let ts = ISO8601DateFormatter().string(from: Date())
         let filter = autoPostOnly ? " AND auto_post = 1" : ""
+        let skips = try ScheduledSkips.load(db)
         for r in try Row.fetchAll(db, sql: "SELECT * FROM scheduled_templates WHERE is_active = 1\(filter)") {
             let type: String = r["kind"]
             guard let amount = r["amount"] as Double? else { continue }
@@ -152,7 +155,10 @@ public enum Scheduled {
                 amount: amount, frequency: r["frequency"], dayOfMonth: (r["day_of_month"] as Int?) ?? 1,
                 weekDay: r["day_of_week"], accountId: r["account_id"], fromAccountId: r["from_account_id"],
                 startDate: r["start_date"], startTime: r["start_time"], endDate: r["end_date"], nextRun: (r["next_run"] as String?) ?? "",
-                maxExecutions: nil, installmentTotal: nil, installmentPaid: nil)
+                maxExecutions: nil, installmentTotal: nil, installmentPaid: nil,
+                skippedDates: skips[r["id"] as String])
+            // Skipped occurrences are already gone from this list, so the caps below
+            // spend nothing on them — a skip is not an execution (`occurrencesUpTo`).
             var dates = Selectors.occurrencesUpTo(template, today)
             if let since { dates = dates.filter { $0 >= since } }
             if dates.isEmpty { continue }
@@ -314,7 +320,62 @@ public enum Scheduled {
 
     static func delete(_ db: Database, _ args: Args) throws {
         struct A: Decodable { let id: String }
-        try db.execute(sql: "DELETE FROM scheduled_templates WHERE id = ?", arguments: [try args.to(A.self).id])
+        let id = try args.to(A.self).id
+        try db.execute(sql: "DELETE FROM scheduled_templates WHERE id = ?", arguments: [id])
+        // The template's skips go with it. Left behind they would be harmless — no
+        // template reads them — but they would sit in every export forever.
+        var skips = try ScheduledSkips.load(db)
+        if skips.removeValue(forKey: id) != nil { try ScheduledSkips.save(db, skips) }
+    }
+
+    // MARK: skipping one occurrence (native-first)
+
+    /// Skip ONE occurrence: it stops being due, is not generated, forecast or
+    /// reminded about, and the caps do not count it (see `Selectors.occurrencesUpTo`).
+    ///
+    /// Refuses a date that is not an occurrence of this template, and one already
+    /// posted — that money has moved; skipping it would only hide the record of it.
+    /// Skipping twice is a no-op.
+    static func skip(_ db: Database, _ args: Args) throws {
+        struct A: Decodable { let templateId: String; let date: String }
+        let a = try args.to(A.self)
+        guard let t = try Row.fetchOne(db, sql: "SELECT * FROM scheduled_templates WHERE id = ?", arguments: [a.templateId]) else {
+            throw I18nError("error.notFound.template", [:], "Template not found")
+        }
+        let name = (t["name"] as String?) ?? ""
+        let recurrence = ScheduledTemplate(
+            id: t["id"], name: name, type: t["kind"], frequency: t["frequency"],
+            dayOfMonth: (t["day_of_month"] as Int?) ?? 1, weekDay: t["day_of_week"], accountId: t["account_id"],
+            startDate: t["start_date"], endDate: t["end_date"], nextRun: (t["next_run"] as String?) ?? "")
+        guard isYMD(a.date), Selectors.isOccurrence(recurrence, a.date) else {
+            throw I18nError("error.scheduled.notAnOccurrence", ["name": name, "date": a.date],
+                            "\(a.date) is not an occurrence of \"\(name)\"")
+        }
+        let posted = try Int.fetchOne(db, sql: """
+            SELECT COUNT(*) FROM entries
+             WHERE source_template_id = ? AND COALESCE(occurrence_date, date) = ?
+            """, arguments: [a.templateId, a.date]) ?? 0
+        if posted > 0 {
+            throw I18nError("error.scheduled.alreadyPosted", ["name": name, "date": a.date],
+                            "\"\(name)\" was already posted for \(a.date)")
+        }
+        var skips = try ScheduledSkips.load(db)
+        var dates = Set(skips[a.templateId] ?? [])
+        guard dates.insert(a.date).inserted else { return }
+        skips[a.templateId] = dates.sorted()
+        try ScheduledSkips.save(db, skips)
+    }
+
+    /// Undo a skip: the occurrence is due again. Un-skipping one that isn't skipped
+    /// is a no-op, so a stale button can't fail.
+    static func unskip(_ db: Database, _ args: Args) throws {
+        struct A: Decodable { let templateId: String; let date: String }
+        let a = try args.to(A.self)
+        var skips = try ScheduledSkips.load(db)
+        guard var dates = skips[a.templateId], let i = dates.firstIndex(of: a.date) else { return }
+        dates.remove(at: i)
+        skips[a.templateId] = dates.isEmpty ? nil : dates
+        try ScheduledSkips.save(db, skips)
     }
 
     static func addSplit(_ db: Database, _ args: Args) throws {
@@ -375,5 +436,32 @@ public enum AutoPostMark {
 
     static func save(_ db: Database, _ day: String) throws {
         try AppDomain.setAppState(db, stateKey, String(data: try JSONEncoder().encode(day), encoding: .utf8) ?? "null")
+    }
+}
+
+/// The skipped occurrences of every template (`app_state.scheduledSkips`):
+/// `{ templateId: ["yyyy-MM-dd", …] }`, each list sorted.
+///
+/// Native-first, the same way `LedgerOrder` is: a JSON value in app_state rather
+/// than a new table, so it needs no schema change, no `SCHEMA_VERSION` bump and no
+/// fixture regeneration — and the web (frozen, with no skip UI) ignores the key.
+/// One global map, because template ids are a global key. It travels with the
+/// database: a `.finch` export clones app_state whole.
+public enum ScheduledSkips {
+    /// The app_state key holding the map.
+    public static let stateKey = "scheduledSkips"
+
+    /// The whole map; `[:]` when nothing was ever skipped, or when the value is
+    /// unreadable — a malformed blob must not stop the Scheduled tab from loading.
+    public static func load(_ db: Database) throws -> [String: [String]] {
+        guard let raw = try AppDomain.getAppState(db, stateKey), let data = raw.data(using: .utf8),
+              let map = try? JSONDecoder().decode([String: [String]].self, from: data) else { return [:] }
+        return map
+    }
+
+    static func save(_ db: Database, _ map: [String: [String]]) throws {
+        let enc = JSONEncoder()
+        enc.outputFormatting = .sortedKeys   // stable bytes: an unchanged map diffs clean
+        try AppDomain.setAppState(db, stateKey, String(data: try enc.encode(map), encoding: .utf8) ?? "{}")
     }
 }
