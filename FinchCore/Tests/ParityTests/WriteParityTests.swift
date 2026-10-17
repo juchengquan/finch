@@ -9,11 +9,44 @@ import GRDB
 /// comparison is free of float/JSON-format drift.
 final class WriteParityTests: XCTestCase {
 
+    private struct Step: Decodable { let action: String; let args: JSONValue }
+    private struct Fixture: Decodable { let seedSql: [String]; let sequence: [Step]; let expected: JSONValue }
+
     func test_writeSequenceMatchesWebOracle() throws {
+        let (q, fx) = try replayOracleSequence()
+        let actual = try q.read { db in try Self.canonicalState(db) }
+        // Per-key diff for a readable failure.
+        if actual != fx.expected, case .object(let exp) = fx.expected, case .object(let act) = actual {
+            for key in Set(exp.keys).union(act.keys).sorted() where exp[key] != act[key] {
+                XCTFail("canonicalState mismatch in '\(key)':\n  expected: \(exp[key] ?? .null)\n  actual:   \(act[key] ?? .null)")
+            }
+        }
+        XCTAssertEqual(actual, fx.expected)
+    }
+
+    /// Undo of a delete (native-only — `restoreTransactions` is NOT in
+    /// WRITE_SEQUENCE, since the web has no such action) checked against the
+    /// oracle's own end state: delete EVERY transaction the sequence produced as
+    /// one bulk delete, restore it, and the canonical snapshot must be the web's
+    /// again — the same bar the write gate holds every other action to.
+    func test_deleteAllThenRestore_returnsToTheOracleState() throws {
+        let (q, fx) = try replayOracleSequence()
+        let projected = try Projection.run(dbQueue: q)
+        let ids = projected.map(\.id)
+        XCTAssertFalse(ids.isEmpty)
+        let captured = try q.read { try TransactionUndo.capture($0, txIds: ids) }
+        for id in ids { try? Apply.apply(dbQueue: q, action: "deleteTransaction", args: Args(["id": .string(id)])) }
+        XCTAssertEqual(try Projection.run(dbQueue: q).count, 0, "precondition: everything went")
+        let settled = try q.read { try TransactionUndo.settle(captured, $0) }
+        try Apply.apply(dbQueue: q, action: "restoreTransactions", args: try settled.args)
+        XCTAssertEqual(try q.read { db in try Self.canonicalState(db) }, fx.expected)
+        XCTAssertEqual(try Projection.run(dbQueue: q), projected)
+    }
+
+    /// Seed + replay the oracle's write sequence through the iOS chokepoint.
+    private func replayOracleSequence() throws -> (DatabaseQueue, Fixture) {
         let dir = try XCTUnwrap(Bundle.module.url(forResource: "Fixtures", withExtension: nil))
             .appendingPathComponent("writeparity")
-        struct Step: Decodable { let action: String; let args: JSONValue }
-        struct Fixture: Decodable { let seedSql: [String]; let sequence: [Step]; let expected: JSONValue }
         let fx = try JSONDecoder().decode(Fixture.self, from: Data(contentsOf: dir.appendingPathComponent("sequence.json")))
 
         let q = try DatabaseQueue()
@@ -32,15 +65,7 @@ final class WriteParityTests: XCTestCase {
             for (k, v) in o { o[k] = resolve(v) }
             try Apply.apply(dbQueue: q, action: step.action, args: Args(o))
         }
-
-        let actual = try q.read { db in try Self.canonicalState(db) }
-        // Per-key diff for a readable failure.
-        if actual != fx.expected, case .object(let exp) = fx.expected, case .object(let act) = actual {
-            for key in Set(exp.keys).union(act.keys).sorted() where exp[key] != act[key] {
-                XCTFail("canonicalState mismatch in '\(key)':\n  expected: \(exp[key] ?? .null)\n  actual:   \(act[key] ?? .null)")
-            }
-        }
-        XCTAssertEqual(actual, fx.expected)
+        return (q, fx)
     }
 
     // MARK: canonicalState (mirror of export-fixtures.ts::canonicalState)
