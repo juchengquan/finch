@@ -110,6 +110,27 @@ final class AutoPostDueTests: XCTestCase {
         XCTAssertEqual(try mark(q), "2026-10-20")
     }
 
+    /// A skipped occurrence is never auto-posted, and the occurrences around it
+    /// still are: both stacks share `materializeDue`, which reads the skips.
+    func test_skippedOccurrence_isNotAutoPosted() throws {
+        let q = try seeded()
+        try create(q)
+        try run(q, "2026-08-01")
+        try Apply.apply(dbQueue: q, action: "skipScheduledOccurrence",
+                        args: Args(["templateId": .string("s1"), "date": .string("2026-09-15")]))
+        XCTAssertEqual(try run(q, "2026-10-20"), 2)
+        XCTAssertEqual(try occurrences(q), ["2026-08-15", "2026-10-15"])
+    }
+
+    /// No occurrence after the template's end date is auto-posted.
+    func test_endDate_stopsAutoPost() throws {
+        let q = try seeded()
+        try create(q, extra: ["endDate": .string("2026-09-30")])
+        try run(q, "2026-08-01")
+        XCTAssertEqual(try run(q, "2026-12-20"), 2)
+        XCTAssertEqual(try occurrences(q), ["2026-08-15", "2026-09-15"])
+    }
+
     /// A template created today with a start date a year back starts from today.
     func test_newTemplateWithPastStart_doesNotBackfill() throws {
         let q = try seeded()
