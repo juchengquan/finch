@@ -1,10 +1,11 @@
 import Foundation
 import FinchCore
 
-/// The 4 local-notification categories (Phase 6.2). Raw values double as the
-/// `UNNotificationCategory` identifiers.
+/// The local-notification categories (Phase 6.2, plus `lowBalance`). Raw values
+/// double as the `UNNotificationCategory` identifiers. Declaration order is the order
+/// of the Settings toggles, which iterate `allCases`.
 public enum NotificationKind: String, CaseIterable, Sendable {
-    case scheduledDue, budgetWarning, anomaly, weeklyDigest
+    case scheduledDue, budgetWarning, lowBalance, anomaly, weeklyDigest
     /// String(localized:) — NOT a bare literal. Call sites pass this straight to
     /// `Toggle(_:isOn:)`, and a plain String selects SwiftUI's StringProtocol
     /// overload, which does no lookup: the Settings toggles rendered English in
@@ -13,6 +14,7 @@ public enum NotificationKind: String, CaseIterable, Sendable {
         switch self {
         case .scheduledDue: return String(localized: "Scheduled reminders")
         case .budgetWarning: return String(localized: "Budget warnings")
+        case .lowBalance: return String(localized: "Low balance warnings")
         case .anomaly: return String(localized: "Unusual transactions")
         case .weeklyDigest: return String(localized: "Weekly digest")
         }
@@ -70,11 +72,16 @@ public enum NotificationPlanner {
     /// today` never became true until the user recorded a transaction dated on or
     /// after the due date, so the reminder meant to PROMPT that recording only
     /// arrived once it was already done.
+    ///
+    /// `accounts` and `accountMoney` feed the low-balance alert only, and default so the
+    /// call sites that predate it compile unchanged. `accountMoney` formats an amount in
+    /// the account's OWN currency (the forecast is in it); nil falls back to `money`.
     public static func plan(
         budgets: [BudgetRow], txns: [Tx], scheduled: [ScheduledTemplate],
         categories: [CategoryNode], today: String, wallToday: String, ledgerId: String,
         enabled: Set<NotificationKind>, money: (Double) -> String, recentLimit: Int = 50,
-        deliveryHour: Int = 9, calendar: Calendar = .current
+        deliveryHour: Int = 9, calendar: Calendar = .current,
+        accounts: [AccountRow] = [], accountMoney: ((Double, String?) -> String)? = nil
     ) -> [PlannedNotification] {
         var out: [PlannedNotification] = []
 
@@ -94,6 +101,46 @@ public enum NotificationPlanner {
                         body: String(localized: "\(pctText) used — \(money(p.used)) of \(money(p.base))."),
                         tab: .budgets, focusId: b.id))
                 }
+            }
+        }
+
+        if enabled.contains(.lowBalance) {
+            // The account screen's own forecast (`AccountForecastPanel`), so the alert
+            // and the screen it opens cannot disagree — both on the WALL-clock day.
+            //
+            // Only a FUTURE crossing alerts — see `crossesBelowZeroOn` for why an
+            // account already below zero does not. It is announced `lowBalanceLeadDays`
+            // ahead of the crossing, which is the point of a forecast: time to move
+            // money before the bill lands. Inside that lead it is true now, so it carries
+            // no date and policy decides when it lands, like a past-due reminder.
+            //
+            // The id carries the crossing DAY. `toSchedule` never re-adds an id that is
+            // already pending, so on an account-only id an earlier crossing — a new bill
+            // pulling it forward a week — would leave the old, too-late alert in place.
+            // A new day is a new id: the stale one is cancelled, the right one scheduled.
+            // While the day holds, the id is stable, so re-planning on every write
+            // replaces rather than duplicates.
+            func format(_ amount: Double, _ currency: String?) -> String {
+                accountMoney?(amount, currency) ?? money(amount)
+            }
+            for a in accounts where a.isActive != false {
+                guard let panel = AccountForecastPanel.make(account: a, scheduled: scheduled, today: wallToday),
+                      let crossing = panel.crossesBelowZeroOn else { continue }
+                let name = a.name ?? String(localized: "Account")
+                let notifyDay = Selectors.horizonDay(from: crossing, addingDays: -lowBalanceLeadDays)
+                let crossingLabel = AccountForecastPanel.dayLabel(crossing)
+                let lowAmount = format(panel.low.balance, a.currency)
+                // One date when the low point IS the crossing — "below zero on the 23rd,
+                // down to −120 by the 23rd" says the day twice.
+                let body = panel.low.date == crossing
+                    ? String(localized: "Scheduled items take it below zero on \(crossingLabel), to \(lowAmount).")
+                    : String(localized: "Scheduled items take it below zero on \(crossingLabel), down to \(lowAmount) by \(AccountForecastPanel.dayLabel(panel.low.date)).")
+                out.append(PlannedNotification(
+                    id: "lowBalance:\(a.id):\(crossing)", kind: .lowBalance,
+                    title: String(localized: "Low balance ahead: \(name)"),
+                    body: body,
+                    tab: .accounts, focusId: a.id,
+                    deliverOn: notifyDay > wallToday ? deliverAt(notifyDay, hour: deliveryHour, calendar) : nil))
             }
         }
 
@@ -150,6 +197,11 @@ public enum NotificationPlanner {
 
         return out
     }
+
+    /// How many days before a forecast dip below zero the low-balance alert arrives. A
+    /// judgement: enough for a transfer between banks to clear, short enough that the
+    /// forecast it rests on is still the one that comes true.
+    static let lowBalanceLeadDays = 3
 
     /// An ISO day string plus an hour, as a `Date`. Returns nil-safe fallback `nil` when
     /// the day cannot be parsed, so a malformed `nextRun` degrades to "send now" rather
