@@ -23,6 +23,7 @@ struct ScheduledDetailView: View {
             List {
                 headerSection(t)
                 scheduleSection(t)
+                skippedSection(t)
                 postingSection(t)
                 progressSection(t)
                 if let d = t.description, !d.isEmpty {
@@ -36,6 +37,18 @@ struct ScheduledDetailView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button { postNow(t) } label: { Label("Post now", systemImage: "checkmark.circle") }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    // The occurrence Post now would take — its date in the label, as in
+                    // the list's menu, so a Skip that lands on an old missed one is seen.
+                    let occ = ScheduledSkipping.skipTarget(t, store: store)
+                    Button {
+                        if let occ { errorMessage = ScheduledSkipping.skip(t, occurrence: occ, store: store) }
+                    } label: {
+                        Label(occ.map { ScheduledSkipping.skipTitle($0, today: store.wallToday) } ?? String(localized: "Skip"),
+                              systemImage: "forward.end")
+                    }
+                    .disabled(occ == nil)
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button { editing = t } label: { Label("Edit", systemImage: "pencil") }
@@ -84,6 +97,24 @@ struct ScheduledDetailView: View {
             }
             if let start = t.startDate { LabeledContent("Starts", value: String(start.prefix(10))) }
             if let end = t.endDate { LabeledContent("Ends", value: String(end.prefix(10))) }
+        }
+    }
+
+    /// Skips still in effect, each with its own Unskip — the one place a skip other
+    /// than the latest can be undone without finding its day on the calendar.
+    @ViewBuilder private func skippedSection(_ t: ScheduledTemplate) -> some View {
+        let skips = Selectors.activeSkips(template: t, posted: Selectors.scheduledPostedMap(store.txns))
+        if !skips.isEmpty {
+            Section("Skipped") {
+                ForEach(skips, id: \.self) { day in
+                    HStack {
+                        Text(day)
+                        Spacer()
+                        Button("Unskip") { errorMessage = ScheduledSkipping.unskip(t, occurrence: day, store: store) }
+                            .buttonStyle(.borderless)
+                    }
+                }
+            }
         }
     }
 
