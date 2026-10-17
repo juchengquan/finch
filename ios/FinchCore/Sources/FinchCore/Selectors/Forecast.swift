@@ -27,12 +27,18 @@ public struct ScheduledTemplate: Identifiable, Equatable, Sendable, Codable {
     public let installmentTotal: Int?
     public let installmentPaid: Int?
     public let color: String?
+    /// `auto_post`, 0/1 — an `Int`, as the web's `autoPost: number` is, so the web's
+    /// fixtures (which carry `"autoPost": 0`) still decode; optional because most of
+    /// them never carry it. nil and 0 both mean "posted by hand". Read it through
+    /// `postsAutomatically`.
+    public let autoPost: Int?
 
     public init(id: String, name: String, description: String? = nil, type: String,
                 amount: Double? = nil, frequency: String, dayOfMonth: Int, weekDay: Int? = nil,
                 accountId: String, fromAccountId: String? = nil, categoryId: String? = nil,
                 startDate: String? = nil, startTime: String? = nil, endDate: String? = nil, nextRun: String, maxExecutions: Int? = nil,
-                installmentTotal: Int? = nil, installmentPaid: Int? = nil, color: String? = nil) {
+                installmentTotal: Int? = nil, installmentPaid: Int? = nil, color: String? = nil,
+                autoPost: Int? = nil) {
         self.id = id; self.name = name; self.description = description; self.type = type
         self.amount = amount; self.frequency = frequency; self.dayOfMonth = dayOfMonth
         self.weekDay = weekDay; self.accountId = accountId; self.fromAccountId = fromAccountId
@@ -41,7 +47,12 @@ public struct ScheduledTemplate: Identifiable, Equatable, Sendable, Codable {
         self.maxExecutions = maxExecutions; self.installmentTotal = installmentTotal
         self.installmentPaid = installmentPaid
         self.color = color
+        self.autoPost = autoPost
     }
+
+    /// Whether due occurrences are added for the user (`autoPostDueScheduled`)
+    /// rather than waiting to be posted by hand.
+    public var postsAutomatically: Bool { (autoPost ?? 0) != 0 }
 }
 
 public struct MonthForecast: Equatable, Sendable, Codable {
