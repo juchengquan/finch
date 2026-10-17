@@ -556,7 +556,8 @@ struct EditTransactionSheet: View {
                 //
                 // Rows arrive PINNED via `merging` — they are amounts the user set
                 // before, and must not be re-divided just by opening the sheet.
-                let legs = store.txns.filter { $0.entryId != nil && $0.entryId == txn.entryId }
+                // Never a transfer's two legs — see `PurchaseFlow.paymentLegs`.
+                let legs = PurchaseFlow.paymentLegs(of: txn, in: store.txns)
                 if legs.count >= 2 {
                     accountAlloc = SplitAllocation.merging(
                         legs.map { (id: Optional($0.account), amount: abs($0.amount)) },
