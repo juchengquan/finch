@@ -161,7 +161,11 @@ struct ScheduledSheet: View {
                             .labelsHidden()
                     }
                     FieldRow(glyph: .autoPost, title: "Add automatically when due", help: autoPostHelp) {
-                        Toggle("Add automatically when due", isOn: $autoPost).switchOnlyToggles()
+                        // Shown OFF while the amount is empty, not just disabled: an
+                        // on-but-greyed switch reads as "this will happen". The choice
+                        // itself is kept, so typing an amount brings it back.
+                        Toggle("Add automatically when due",
+                               isOn: isVariableAmount ? .constant(false) : $autoPost).switchOnlyToggles()
                             .disabled(isVariableAmount)
                     }
                 } header: {
@@ -225,10 +229,14 @@ struct ScheduledSheet: View {
         return kind == .transfer ? "Each one is recorded on its due date." : "Each one waits in To confirm on its due date."
     }
 
+    /// What is stored: off for a variable amount, whatever the switch held, so the
+    /// row never says "on" for something the generator will not touch.
+    private var savesAutoPost: Bool { autoPost && !isVariableAmount }
+
     /// Add today's occurrence now if this save made one due, rather than at the
     /// next launch — the same run the app makes on every return to the foreground.
     private func autoPostIfOn() {
-        guard autoPost else { return }
+        guard savesAutoPost else { return }
         Task { await store.autoPostDueScheduled() }
     }
 
@@ -279,7 +287,7 @@ struct ScheduledSheet: View {
             patch["startTime"] = .string(AppDate.isoTime.string(from: startDate))
             if kind != .transfer { patch["category"] = categoryId.isEmpty ? .null : .string(categoryId) }
             patch["installmentTotal"] = installmentN.map { JSONValue.int($0) } ?? .null
-            patch["autoPost"] = .bool(autoPost)
+            patch["autoPost"] = .bool(savesAutoPost)
             do {
                 try store.apply(.updateScheduled, Args(["id": .string(template.id), "patch": .object(patch)]))
                 autoPostIfOn(); dismiss()
@@ -300,7 +308,7 @@ struct ScheduledSheet: View {
         if kind == .transfer { args["fromAccountId"] = .string(fromAccountId) }
         else if !categoryId.isEmpty { args["category"] = .string(categoryId) }
         if let n = installmentN { args["installmentTotal"] = .double(Double(n)) }
-        args["autoPost"] = .bool(autoPost)
+        args["autoPost"] = .bool(savesAutoPost)
         do { try store.apply(.createScheduled, Args(args)); autoPostIfOn(); dismiss() }
         catch { errorMessage = i18nMessage(error) }
     }
