@@ -13,6 +13,7 @@ public enum Scheduled {
         .updateScheduledSplit: updateSplit,
         .removeScheduledSplit: removeSplit,
         .generateDueScheduled: generateDue,
+        .autoPostDueScheduled: autoPostDue,
         .postScheduled: post,
     ]
 
@@ -120,13 +121,27 @@ public enum Scheduled {
     /// Post every due (not-yet-generated) occurrence of each active template as a
     /// pending transaction/transfer. DEFERRED: split-enabled templates are
     /// skipped (as on the web), and the rules engine isn't applied.
+    ///
+    /// The PARITY action: like the web's, it ignores `auto_post` and catches up from
+    /// each template's start date. The app never calls it — it calls
+    /// `autoPostDueScheduled` below, which honours the flag and the catch-up floor.
     static func generateDue(_ db: Database, _ args: Args) throws {
         struct A: Decodable { let today: String?; let time: String? }
         let parsed = try? args.to(A.self)
         let today = (parsed?.today).flatMap { $0 } ?? String(ISO8601DateFormatter().string(from: Date()).prefix(10))
         let explicitTime = (parsed?.time).flatMap { $0 }
+        _ = try materializeDue(db, today: today, explicitTime: explicitTime, autoPostOnly: false, since: nil)
+    }
+
+    /// Materialize what `occurrencesUpTo(template, today)` says is due and nothing
+    /// has posted yet. `autoPostOnly` limits it to `auto_post = 1` templates; `since`
+    /// drops every occurrence dated before it. Returns how many occurrences it posted.
+    static func materializeDue(_ db: Database, today: String, explicitTime: String?,
+                               autoPostOnly: Bool, since: String?) throws -> Int {
+        var posted = 0
         let ts = ISO8601DateFormatter().string(from: Date())
-        for r in try Row.fetchAll(db, sql: "SELECT * FROM scheduled_templates WHERE is_active = 1") {
+        let filter = autoPostOnly ? " AND auto_post = 1" : ""
+        for r in try Row.fetchAll(db, sql: "SELECT * FROM scheduled_templates WHERE is_active = 1\(filter)") {
             let type: String = r["kind"]
             guard let amount = r["amount"] as Double? else { continue }
             if (r["splits_enabled"] as Int? ?? 0) != 0 { continue }
@@ -139,6 +154,7 @@ public enum Scheduled {
                 startDate: r["start_date"], startTime: r["start_time"], endDate: r["end_date"], nextRun: (r["next_run"] as String?) ?? "",
                 maxExecutions: nil, installmentTotal: nil, installmentPaid: nil)
             var dates = Selectors.occurrencesUpTo(template, today)
+            if let since { dates = dates.filter { $0 >= since } }
             if dates.isEmpty { continue }
             // Resolution keys on occurrenceDate ?? date (see Selectors), so
             // "already posted" must key on the same coalesce — not the raw
@@ -161,6 +177,7 @@ public enum Scheduled {
                                              date: date, time: postingTime(r, explicit: explicitTime), note: description.isEmpty ? nil : description,
                                              sourceTemplateId: r["id"], occurrenceDate: date, timestamp: ts)
                 }
+                posted += dates.count
                 continue
             }
             let signed = (type == "income" ? 1.0 : -1.0) * amount
@@ -172,7 +189,50 @@ public enum Scheduled {
                     time: postingTime(r, explicit: explicitTime), status: .pending, counterpartyId: cpId, id: nil,
                     sourceTemplateId: r["id"], occurrenceDate: date))
             }
+            posted += dates.count
         }
+        return posted
+    }
+
+    /// The app's generator (native-only): materialize the due occurrences of every
+    /// `auto_post = 1` template — income/expense as PENDING (they land in To confirm),
+    /// transfers CONFIRMED (design decision 25) — then advance the high-water mark.
+    ///
+    /// The mark (`AutoPostMark`) is what makes this safe to ship. The parity action
+    /// above catches up from each template's START DATE, so run as-is it would turn
+    /// every unposted past occurrence into a row the first time it ran: months of
+    /// pending rows from one launch. Here occurrences dated before the mark are never
+    /// generated, and the first run sets the mark to `today`. So auto-post covers the
+    /// occurrences that fall due while it is on, and nothing earlier:
+    ///   - after an update, no backlog, whatever `auto_post` holds;
+    ///   - a new template with a start date in the past does not back-fill;
+    ///   - a template switched on later starts from that day;
+    ///   - days the app was not opened ARE caught up, because the mark stays put;
+    ///   - a generated row the user deleted is not re-created once its day has passed.
+    ///
+    /// A run on a later day starts the day AFTER the mark; a run on the mark's own
+    /// day re-covers it, so a template created or switched on after that morning's
+    /// run still gets its occurrence today (the app also runs this straight after
+    /// the sheet saves). The `COALESCE(occurrence_date, date)` dedupe makes the
+    /// overlap harmless. The mark never moves backwards, so a clock set back cannot
+    /// re-open old days.
+    ///
+    /// Returns how many occurrences it posted, so the app can skip the write
+    /// side-effects on the usual run that finds nothing.
+    static func autoPostDue(_ db: Database, _ args: Args) throws {
+        _ = try autoPostDueReturningCount(db, args)
+    }
+
+    static func autoPostDueReturningCount(_ db: Database, _ args: Args) throws -> Int {
+        struct A: Decodable { let today: String; let time: String? }
+        let a = try args.to(A.self)
+        guard isYMD(a.today) else { throw I18nError("error.invalidArgs", [:], "autoPostDueScheduled requires today as YYYY-MM-DD") }
+        let mark = try AutoPostMark.load(db)
+        let since: String
+        if let mark, mark < a.today { since = Selectors.horizonDay(from: mark, addingDays: 1) } else { since = a.today }
+        let posted = try materializeDue(db, today: a.today, explicitTime: a.time, autoPostOnly: true, since: since)
+        if mark.map({ $0 < a.today }) ?? true { try AutoPostMark.save(db, a.today) }
+        return posted
     }
 
     /// null/empty → nil; otherwise a positive whole number (else throws).
@@ -289,5 +349,31 @@ public enum Scheduled {
         if n == 0 {
             try db.execute(sql: "UPDATE scheduled_templates SET splits_enabled = 0, updated_at = datetime('now') WHERE id = ?", arguments: [a.templateId])
         }
+    }
+}
+
+/// The last day `autoPostDueScheduled` ran (`app_state.scheduledAutoPostThrough`,
+/// `yyyy-MM-dd`) — the floor below which auto-post never generates.
+///
+/// Native-first, like `LedgerOrder`: a value in app_state, so no schema change, no
+/// `SCHEMA_VERSION` bump and no fixture regeneration, and the web (frozen; its
+/// generator ignores `auto_post`) ignores the key. It travels with the database —
+/// a `.finch` export clones app_state whole — so restoring an older backup restores
+/// its mark too, and the days since are caught up. A pack without one (anything
+/// from the web, or from before this shipped) starts from the day it is first run.
+public enum AutoPostMark {
+    /// The app_state key holding the day.
+    public static let stateKey = "scheduledAutoPostThrough"
+
+    /// The stored day; nil when auto-post has never run, or when the value is not a
+    /// `yyyy-MM-dd` — an unreadable mark falls back to "first run", the safe side.
+    public static func load(_ db: Database) throws -> String? {
+        guard let raw = try AppDomain.getAppState(db, stateKey),
+              let day = try? JSONDecoder().decode(String.self, from: Data(raw.utf8)), isYMD(day) else { return nil }
+        return day
+    }
+
+    static func save(_ db: Database, _ day: String) throws {
+        try AppDomain.setAppState(db, stateKey, String(data: try JSONEncoder().encode(day), encoding: .utf8) ?? "null")
     }
 }
