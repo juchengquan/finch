@@ -86,7 +86,13 @@ struct ScheduledDetailView: View {
     @ViewBuilder private func scheduleSection(_ t: ScheduledTemplate) -> some View {
         Section("Schedule") {
             LabeledContent("Frequency", value: t.frequency.capitalized)
-            LabeledContent("Next run", value: scheduledNextRun(t, today: store.wallToday))
+            // The date the toolbar's Post opens — an overdue one says so, as the row does.
+            let posted = Selectors.scheduledPostedMap(store.txns)
+            if let due = ScheduledCaption.due(t, posted: posted, today: store.wallToday), due.overdue {
+                LabeledContent("Overdue") { Text(due.date).foregroundStyle(.red) }
+            } else {
+                LabeledContent("Next run", value: scheduledNextRun(t, posted: posted, today: store.wallToday))
+            }
             // Quarterly and yearly recur on their start day (shown under "Starts").
             if t.frequency == "monthly" {
                 LabeledContent("Day of month", value: "\(t.dayOfMonth)")

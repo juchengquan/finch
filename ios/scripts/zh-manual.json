@@ -807,6 +807,8 @@
   "%@ · next %@ · ends %@": "%1$@ · 下次 %2$@ · %3$@ 结束",
   "%@ · ends %@": "%1$@ · %2$@ 结束",
   "%@ · ended %@": "%1$@ · 已于 %2$@ 结束",
+  "%@ · overdue %@": "%1$@ · %2$@ 已逾期",
+  "Overdue": "已逾期",
   "End date": "结束日期",
   "Ends on": "结束于",
   "Nothing is posted or reminded after this day.": "此日期之后不会再记账或提醒。",
