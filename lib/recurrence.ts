@@ -52,9 +52,13 @@ export function occurrencesUpTo(t: ScheduledTemplate, throughInclusive: string):
     return out;
   }
 
-  // monthly / quarterly / yearly: step whole months, landing on dayOfMonth.
+  // monthly / quarterly / yearly: step whole months. Monthly lands on its
+  // dayOfMonth; quarterly and yearly land on the start date's day — the start
+  // already picks their month, and a row saved without a day of month stores 1,
+  // which would skip the start itself.
   const stepMonths = freq === 'quarterly' ? 3 : freq === 'yearly' ? 12 : 1;
-  const day = t.dayOfMonth || new Date(start).getUTCDate();
+  const startDay = new Date(start).getUTCDate();
+  const day = freq === 'quarterly' || freq === 'yearly' ? startDay : t.dayOfMonth || startDay;
   let y = new Date(start).getUTCFullYear();
   let m = new Date(start).getUTCMonth();
   let guard = 0;
