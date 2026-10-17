@@ -59,9 +59,13 @@ enum ErrorL10n {
         "error.required.templateName": "模板名称必填",
         "error.scheduled.alreadyPosted": "\"{name}\" 在 {date} 已记账",
         "error.scheduled.awaitingConfirm": "\"{name}\" 在 {date} 的记录已在待确认中",
+        // The skip refusals carry no {placeholders}: `i18nMessage` returns these
+        // strings verbatim, so a placeholder would be shown as literal braces.
+        "error.scheduled.skipAlreadyPosted": "这一期已经发布,无法跳过",
         "error.scheduled.installmentDone": "\"{name}\" 的 {total} 期分期付款已完成",
         "error.scheduled.missingAccount": "\"{name}\" 缺少账户",
         "error.scheduled.noSplits": "\"{name}\" 没有可发布的拆分金额",
+        "error.scheduled.notAnOccurrence": "该日期不是这个计划的发生日",
         "error.scheduled.nothingToPost": "\"{name}\" 没有可发布的项目",
         "error.scheduled.variableAmount": "\"{name}\" 金额可变 — 请手动添加",
         "error.transfer.amountGt0": "转账金额必须大于 0",

@@ -169,7 +169,7 @@ final class ScheduledSkipEndTests: XCTestCase {
         try Apply.apply(dbQueue: q, action: "postScheduled", args: Args([
             "templateId": .string("gym"), "date": .string("2026-02-18"), "occurrenceDate": .string("2026-02-15")]))
         XCTAssertThrowsError(try skip(q, "2026-02-15")) {
-            XCTAssertEqual(($0 as? I18nError)?.code, "error.scheduled.alreadyPosted")
+            XCTAssertEqual(($0 as? I18nError)?.code, "error.scheduled.skipAlreadyPosted")
         }
         XCTAssertThrowsError(try skip(q, "2026-02-15", template: "nope")) {
             XCTAssertEqual(($0 as? I18nError)?.code, "error.notFound.template")

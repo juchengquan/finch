@@ -4,8 +4,8 @@ import FinchCore
 /// Add or edit a scheduled template (recurring transaction / installment plan).
 /// `nil` template = add (`createScheduled`); otherwise edit (`updateScheduled`).
 /// On edit, type and account are not patchable (the engine omits them), so they're
-/// shown read-only; name, amount, category, frequency, day-of-month, START DATE and
-/// the installment count are editable. Routes FinchStore.apply.
+/// shown read-only; name, amount, category, frequency, day-of-month, START DATE, the
+/// optional END DATE and the installment count are editable. Routes FinchStore.apply.
 struct ScheduledSheet: View {
     @EnvironmentObject private var store: FinchStore
     @Environment(\.dismiss) private var dismiss
@@ -34,6 +34,11 @@ struct ScheduledSheet: View {
     /// the template holds on edit, which for everything created before this
     /// switch existed is off (native `createScheduled` always wrote 0).
     @State private var autoPost: Bool
+    /// Optional last day of the schedule. Off = it runs on indefinitely (or until an
+    /// installment plan is paid off). No occurrence after it is posted, generated,
+    /// forecast or reminded about — the engine's recurrence stops there.
+    @State private var endEnabled: Bool
+    @State private var endDate: Date
     @State private var errorMessage: String?
 
     private var isEdit: Bool { template != nil }
@@ -79,6 +84,15 @@ struct ScheduledSheet: View {
         _installmentEnabled = State(initialValue: template?.installmentTotal != nil)
         _installmentTotal = State(initialValue: template?.installmentTotal.map { String($0) } ?? "")
         _autoPost = State(initialValue: template?.postsAutomatically ?? true)
+        let storedEnd = template?.endDate.flatMap { AppDate.isoDay.date(from: String($0.prefix(10))) }
+        _endEnabled = State(initialValue: storedEnd != nil)
+        _endDate = State(initialValue: storedEnd ?? Self.defaultEnd(after: seeded ?? prefillStart ?? Date()))
+    }
+
+    /// Where the end-date picker starts when the toggle is first turned on: a year
+    /// after the start — a plain round figure to adjust from, never before the start.
+    private static func defaultEnd(after start: Date) -> Date {
+        AppDate.civil.date(byAdding: .year, value: 1, to: start) ?? start
     }
 
     init(fromCharge c: RecurringCharge) {
@@ -96,6 +110,8 @@ struct ScheduledSheet: View {
         _installmentEnabled = State(initialValue: false)
         _installmentTotal = State(initialValue: "")
         _autoPost = State(initialValue: true)
+        _endEnabled = State(initialValue: false)
+        _endDate = State(initialValue: Self.defaultEnd(after: AppDate.isoDay.date(from: c.nextEstimatedDate) ?? Date()))
     }
 
     var body: some View {
@@ -159,6 +175,21 @@ struct ScheduledSheet: View {
                     FieldRow(glyph: .date, title: "Start", showsDefaultTrailing: false) {
                         DatePicker("Start", selection: $startDate, displayedComponents: [.date, .hourAndMinute])
                             .labelsHidden()
+                    }
+                    FieldRow(glyph: .endDate, title: "End date") {
+                        Toggle("End date", isOn: $endEnabled).switchOnlyToggles()
+                    }
+                    if endEnabled {
+                        // The caption is this row's label: the pill alone would read as
+                        // a second Start. Bounded below by the start day — an end before
+                        // the start would leave the schedule with nothing to run.
+                        FieldRow(glyph: .endDate, title: "Ends on",
+                                 help: "Nothing is posted or reminded after this day.") {
+                            DatePicker("Ends on", selection: $endDate,
+                                       in: AppDate.civil.startOfDay(for: startDate)...,
+                                       displayedComponents: [.date])
+                                .labelsHidden()
+                        }
                     }
                     FieldRow(glyph: .autoPost, title: "Add automatically when due", help: autoPostHelp) {
                         // Shown OFF while the amount is empty, not just disabled: an
@@ -276,6 +307,12 @@ struct ScheduledSheet: View {
             installmentN = n
         }
 
+        // Inclusive: an end on the start day leaves exactly that one occurrence.
+        let endValue: String? = endEnabled ? AppDate.isoDay.string(from: endDate) : nil
+        if let endValue, endValue < AppDate.isoDay.string(from: startDate) {
+            errorMessage = String(localized: "The end date can't be before the start."); return
+        }
+
         if let template {
             var patch: [String: JSONValue] = [
                 "name": .string(name), "amount": amountValue.map { JSONValue.double($0) } ?? .null,
@@ -288,6 +325,8 @@ struct ScheduledSheet: View {
             if kind != .transfer { patch["category"] = categoryId.isEmpty ? .null : .string(categoryId) }
             patch["installmentTotal"] = installmentN.map { JSONValue.int($0) } ?? .null
             patch["autoPost"] = .bool(savesAutoPost)
+            // Always sent: turning the toggle off must CLEAR a stored end date.
+            patch["endDate"] = endValue.map { JSONValue.string($0) } ?? .null
             do {
                 try store.apply(.updateScheduled, Args(["id": .string(template.id), "patch": .object(patch)]))
                 autoPostIfOn(); dismiss()
@@ -309,6 +348,7 @@ struct ScheduledSheet: View {
         else if !categoryId.isEmpty { args["category"] = .string(categoryId) }
         if let n = installmentN { args["installmentTotal"] = .double(Double(n)) }
         args["autoPost"] = .bool(savesAutoPost)
+        if let endValue { args["endDate"] = .string(endValue) }
         do { try store.apply(.createScheduled, Args(args)); autoPostIfOn(); dismiss() }
         catch { errorMessage = i18nMessage(error) }
     }

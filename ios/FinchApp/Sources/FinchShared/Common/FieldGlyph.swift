@@ -11,6 +11,9 @@ enum FieldGlyph {
     case account, fromAccount, toAccount, amount, category, date, merchant
     case note, status, tags, receipt, refund, name, group, frequency, currency, color, icon
     case card, budget, autoPost
+    /// The day a schedule stops — its own glyph, not `.date`: the sheet shows it
+    /// under Start, and two calendar icons beside two date pills cannot be told apart.
+    case endDate
 
     var symbol: String {
         switch self {
@@ -40,6 +43,7 @@ enum FieldGlyph {
         case .card:                   return "creditcard"
         case .budget:                 return "chart.pie"
         case .autoPost:               return "clock.badge.checkmark"
+        case .endDate:                return "flag.checkered"
         }
     }
 
@@ -50,7 +54,7 @@ enum FieldGlyph {
         case .budget:                            return .orange
         case .amount:                            return .green
         case .category:                          return .orange
-        case .date, .frequency:                  return .red
+        case .date, .frequency, .endDate:        return .red
         case .merchant:                          return .purple
         case .note, .name:                       return .secondary
         case .status, .autoPost:                 return .teal
