@@ -627,12 +627,16 @@ final class ActivityFeedVC: UIViewController {
             ]
             navigationController?.setToolbarHidden(false, animated: true)
             let n = selected.count
+            let deleteItem = UIBarButtonItem(title: String(localized: "Delete \(n)"))
+            deleteItem.primaryAction = UIAction(title: String(localized: "Delete \(n)")) { [weak self, weak deleteItem] _ in
+                self?.confirmBulkDelete(from: deleteItem)
+            }
             toolbarItems = [
                 UIBarButtonItem(title: String(localized: "Confirm \(n)"), primaryAction: UIAction { [weak self] _ in self?.bulkConfirm() }),
                 .flexibleSpace(),
                 UIBarButtonItem(title: String(localized: "Recategorize \(n)"), primaryAction: UIAction { [weak self] _ in self?.bulkRecategorize() }),
                 .flexibleSpace(),
-                UIBarButtonItem(title: String(localized: "Delete \(n)"), primaryAction: UIAction { [weak self] _ in self?.bulkDelete() }),
+                deleteItem,
             ]
             toolbarItems?.forEach { $0.isEnabled = n > 0 }
             return
@@ -683,6 +687,27 @@ final class ActivityFeedVC: UIViewController {
         configureToolbar()
         applySnapshot()
         fabState.send()
+        hideTabBarForSelection(on)
+    }
+
+    /// The bulk actions go in the bottom toolbar, and iOS 26's floating tab bar is
+    /// drawn OVER that toolbar — the actions sat underneath it, and a tap meant for
+    /// Recategorize switched tabs instead. Selecting hides the tab bar for as long as
+    /// it lasts, which is what Photos and Files do. (Before iOS 18 the bar does not
+    /// float, and the toolbar already stacks above it.)
+    private func hideTabBarForSelection(_ hidden: Bool) {
+        if #available(iOS 18.0, *) { tabBarController?.setTabBarHidden(hidden, animated: true) }
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        if isSelecting { hideTabBarForSelection(true) }
+    }
+
+    /// Popping the screen mid-selection must not strand the app without its tabs.
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if isSelecting { hideTabBarForSelection(false) }
     }
 
     private func bulkConfirm() {
@@ -690,8 +715,27 @@ final class ActivityFeedVC: UIViewController {
         setSelecting(false)
     }
 
+    /// Asks first, like the SwiftUI feed — one more tap, and the only place the
+    /// multi-select says that a ticked payment takes its purchase's other legs.
+    /// Still asked with Undo on offer: a bulk delete clears a screenful at once.
+    private func confirmBulkDelete(from item: UIBarButtonItem?) {
+        let n = selected.count
+        guard n > 0 else { return }
+        let sheet = UIAlertController(
+            title: BulkDelete.confirmTitle(n),
+            message: BulkDelete.takesUnselectedRows(selected, in: store.txns) ? ActivityFeedView.multiLegDeleteHint : nil,
+            preferredStyle: .actionSheet)
+        sheet.addAction(UIAlertAction(title: String(localized: "Delete \(n)"), style: .destructive) { [weak self] _ in
+            self?.bulkDelete()
+        })
+        sheet.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel))
+        sheet.popoverPresentationController?.barButtonItem = item   // iPad: anchor at the button
+        present(sheet, animated: true)
+    }
+
     private func bulkDelete() {
-        report(store.deleteTransactions(Array(selected)), of: selected.count)   // also unlinks receipts
+        report(store.deleteTransactions(Array(selected)), of: selected.count)   // offers Undo; receipts kept until it expires
+        Haptics.warning()
         setSelecting(false)
     }
 
