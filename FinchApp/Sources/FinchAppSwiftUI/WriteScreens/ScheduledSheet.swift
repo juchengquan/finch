@@ -271,6 +271,17 @@ struct ScheduledSheet: View {
         Task { await store.autoPostDueScheduled() }
     }
 
+    /// The day of month to store: the stepper's for monthly; the start's for quarterly
+    /// and yearly, which recur on their start day (the engine reads it from the start
+    /// date — this keeps the stored column saying the same). Nil for the rest.
+    private var savedDayOfMonth: Int? {
+        switch frequency {
+        case "monthly": return dayOfMonth
+        case "quarterly", "yearly": return Int(AppDate.isoDay.string(from: startDate).suffix(2))
+        default: return nil
+        }
+    }
+
     private func seedDefaults() {
         guard !isEdit else { return }
         if accountId.isEmpty { accountId = accounts.first?.id ?? "" }
@@ -318,7 +329,7 @@ struct ScheduledSheet: View {
                 "name": .string(name), "amount": amountValue.map { JSONValue.double($0) } ?? .null,
                 "frequency": .string(frequency),
             ]
-            if frequency == "monthly" { patch["dayOfMonth"] = .int(dayOfMonth) }
+            if let day = savedDayOfMonth { patch["dayOfMonth"] = .int(day) }
             // Moving the start moves the schedule: occurrences are derived from it.
             patch["startDate"] = .string(AppDate.isoDay.string(from: startDate))
             patch["startTime"] = .string(AppDate.isoTime.string(from: startDate))
@@ -343,7 +354,7 @@ struct ScheduledSheet: View {
             "startDate": .string(AppDate.isoDay.string(from: startDate)),
             "startTime": .string(AppDate.isoTime.string(from: startDate)),
         ]
-        if frequency == "monthly" { args["dayOfMonth"] = .int(dayOfMonth) }   // integer field; matches the edit path
+        if let day = savedDayOfMonth { args["dayOfMonth"] = .int(day) }   // integer field; matches the edit path
         if kind == .transfer { args["fromAccountId"] = .string(fromAccountId) }
         else if !categoryId.isEmpty { args["category"] = .string(categoryId) }
         if let n = installmentN { args["installmentTotal"] = .double(Double(n)) }

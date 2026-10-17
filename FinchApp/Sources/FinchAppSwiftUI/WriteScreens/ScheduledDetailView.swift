@@ -87,7 +87,8 @@ struct ScheduledDetailView: View {
         Section("Schedule") {
             LabeledContent("Frequency", value: t.frequency.capitalized)
             LabeledContent("Next run", value: scheduledNextRun(t, today: store.wallToday))
-            if t.frequency == "monthly" || t.frequency == "quarterly" || t.frequency == "yearly" {
+            // Quarterly and yearly recur on their start day (shown under "Starts").
+            if t.frequency == "monthly" {
                 LabeledContent("Day of month", value: "\(t.dayOfMonth)")
             }
             if let wd = t.weekDay {
