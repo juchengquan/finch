@@ -23,8 +23,10 @@ final class ArgsTests: XCTestCase {
     ///   web has no undo, so it never enters WRITE_SEQUENCE) = 92.
     /// + `autoPostDueScheduled` (native-only — the app's generator: auto_post
     ///   templates only, from a high-water mark in app_state) = 93.
+    /// + `skipScheduledOccurrence` / `unskipScheduledOccurrence` (native-first, one
+    ///   occurrence skipped, app_state — the web ignores the key) = 95.
     func test_actionCount() {
-        XCTAssertEqual(ActionName.allCases.count, 93)
+        XCTAssertEqual(ActionName.allCases.count, 95)
     }
 
     func test_actionNameRawValues() {
