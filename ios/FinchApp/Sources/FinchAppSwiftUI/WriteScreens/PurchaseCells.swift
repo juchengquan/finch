@@ -185,6 +185,22 @@ enum PurchaseFlow {
         return out
     }
 
+    // MARK: - Reopening a saved purchase
+
+    /// The cards a saved purchase was PAID from — every account leg of its entry,
+    /// which is what the Edit sheet seeds its card split from.
+    ///
+    /// **A transfer has none.** It is one entry with two account legs, the same
+    /// shape as a purchase paid from two cards if all you count is legs. Counted
+    /// that way, editing a transfer offered Next instead of ✓ and led to a page 2
+    /// that could never balance: its legs are −250 and +250, so the "purchase"
+    /// totalled $0.00 against an amount of $250.00. A transfer moves money
+    /// between accounts; there is nothing on it to divide.
+    static func paymentLegs(of txn: Tx, in txns: [Tx]) -> [Tx] {
+        guard txn.kind != "transfer", let entryId = txn.entryId else { return [] }
+        return txns.filter { $0.entryId == entryId }
+    }
+
     // MARK: - Reopening a saved grid
 
     /// Everything page 1 and page 2 need to reopen a saved grid.
