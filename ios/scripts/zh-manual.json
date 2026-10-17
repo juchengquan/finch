@@ -768,5 +768,15 @@
   "Fixed when the account was created — every balance here is recorded in it.": "在账户创建时确定——此处所有余额都以该货币记录。",
   "The date the opening figure is from.": "该期初金额对应的日期。",
   "What you aim to put aside each cycle.": "你计划每个周期存下的金额。",
-  "What you plan to spend each cycle.": "你计划每个周期花费的金额。"
+  "What you plan to spend each cycle.": "你计划每个周期花费的金额。",
+  "Needs review": "待复核",
+  "Needs review · %lld": "待复核 · %lld",
+  "%lld to review": "%lld 笔待复核",
+  "Mark all reviewed": "全部标为已复核",
+  "Reviewed": "已复核",
+  "All caught up": "都处理完了",
+  "Every transaction has been reviewed.": "所有交易都已复核。",
+  "Nothing here needs review. Clear the search or filters to see the other %lld.": "这里没有待复核的交易。清除搜索或筛选条件，即可看到其余 %lld 笔。",
+  "Mark %lld transactions reviewed?": "将 %lld 笔交易标为已复核？",
+  "They leave the review queue. You can unmark one from its editor.": "它们将移出复核队列。可在单笔交易的编辑页中取消标记。"
 }

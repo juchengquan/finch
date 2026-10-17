@@ -414,6 +414,16 @@
         }
       }
     },
+    "%lld to review": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 笔待复核"
+          }
+        }
+      }
+    },
     "%lld transaction%@": {
       "localizations": {
         "zh-Hans": {
@@ -1148,6 +1158,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "全部交易"
+          }
+        }
+      }
+    },
+    "All caught up": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "都处理完了"
           }
         }
       }
@@ -2816,6 +2836,16 @@
       }
     },
     "Enter an amount to split.": {},
+    "Every transaction has been reviewed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有交易都已复核。"
+          }
+        }
+      }
+    },
     "Exchange rates": {
       "localizations": {
         "zh-Hans": {
@@ -3930,12 +3960,32 @@
         }
       }
     },
+    "Mark %lld transactions reviewed?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将 %lld 笔交易标为已复核？"
+          }
+        }
+      }
+    },
     "Mark Cleared": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "标记已清算"
+          }
+        }
+      }
+    },
+    "Mark all reviewed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部标为已复核"
           }
         }
       }
@@ -4206,6 +4256,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "缩小该预算范围？"
+          }
+        }
+      }
+    },
+    "Needs review": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待复核"
+          }
+        }
+      }
+    },
+    "Needs review · %lld": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待复核 · %lld"
           }
         }
       }
@@ -4757,6 +4827,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "备注（可选）"
+          }
+        }
+      }
+    },
+    "Nothing here needs review. Clear the search or filters to see the other %lld.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这里没有待复核的交易。清除搜索或筛选条件，即可看到其余 %lld 笔。"
           }
         }
       }
@@ -5661,6 +5741,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "重新同步账本"
+          }
+        }
+      }
+    },
+    "Reviewed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已复核"
           }
         }
       }
@@ -6660,6 +6750,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "目前没有可与 %@ 合并的商户。"
+          }
+        }
+      }
+    },
+    "They leave the review queue. You can unmark one from its editor.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "它们将移出复核队列。可在单笔交易的编辑页中取消标记。"
           }
         }
       }
