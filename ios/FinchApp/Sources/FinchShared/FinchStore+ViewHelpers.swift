@@ -172,6 +172,24 @@ extension FinchStore {
         applyBatch(ids.map { (action: ActionName.confirmTransaction, args: Args(["id": .string($0)])) })
     }
 
+    /// Mark several transactions reviewed as ONE write — the review queue's
+    /// "Mark all reviewed", and its per-row swipe (a batch of one, so both paths
+    /// count the same way).
+    ///
+    /// Per-row `setReviewed`, not the engine's `markAllReviewed`: that one stamps
+    /// every unreviewed entry in the LEDGER, pending ones included, so under a
+    /// search or a filter it would tick off rows the user was never shown — the
+    /// exact "confirm all" bug the feed's pending bucket was stripped of. This acts
+    /// on precisely the ids passed. Ids are posting ids; the engine resolves each
+    /// to its entry, so two legs of one purchase stamp it twice, harmlessly.
+    ///
+    /// Same return contract as `confirmTransactions`.
+    @discardableResult
+    public func markReviewed(_ ids: [String]) -> Int {
+        applyBatch(ids.map { (action: ActionName.setReviewed,
+                              args: Args(["id": .string($0), "reviewed": .bool(true)])) })
+    }
+
     /// Delete several transactions as one write, unlinking their receipts after.
     /// Attachment paths are read BEFORE the delete, while the rows still exist.
     @discardableResult

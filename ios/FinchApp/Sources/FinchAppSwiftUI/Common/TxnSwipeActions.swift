@@ -37,12 +37,21 @@ struct TxnSwipeActions: ViewModifier {
     /// Receipt preview, context menu only. Pass nil when the row has no
     /// attachment (or the list doesn't support previews) and the item is omitted.
     var previewReceipt: ((Tx) -> Void)? = nil
+    /// Tick the row off the review queue. Only the queue passes it, and the action
+    /// appears only on a row that still needs review — see the UIKit `TxRowActions`.
+    var markReviewed: ((Tx) -> Void)? = nil
 
     private var isPending: Bool { txn.pending == true }
 
     func body(content: Content) -> some View {
         content
             .swipeActions(edge: .leading) {
+                // First = the outer edge = the full swipe: in the queue, a full swipe
+                // right ticks the row off, as in a mail inbox.
+                if let markReviewed, ReviewQueue.needsReview(txn) {
+                    SwipeButton("Reviewed", systemImage: "text.badge.checkmark") { markReviewed(txn) }
+                        .tint(.teal)
+                }
                 duplicateButton
             }
             // Delete only. The status action moved to the row's leading glyph in
@@ -58,6 +67,9 @@ struct TxnSwipeActions: ViewModifier {
                 Button { duplicate(txn) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
                 if let previewReceipt {
                     Button { previewReceipt(txn) } label: { Label("Preview receipt", systemImage: "paperclip") }
+                }
+                if let markReviewed, ReviewQueue.needsReview(txn) {
+                    Button { markReviewed(txn) } label: { Label("Mark reviewed", systemImage: "text.badge.checkmark") }
                 }
                 Button { toggleStatus(txn) } label: { statusLabel }
                 Button(role: .destructive) { requestDelete(txn) } label: { Label("Delete", systemImage: "trash") }
@@ -98,11 +110,13 @@ extension View {
                          requestDelete: @escaping (Tx) -> Void,
                          toggleStatus: @escaping (Tx) -> Void,
                          edit: @escaping (Tx) -> Void,
-                         previewReceipt: ((Tx) -> Void)? = nil) -> some View {
+                         previewReceipt: ((Tx) -> Void)? = nil,
+                         markReviewed: ((Tx) -> Void)? = nil) -> some View {
         modifier(TxnSwipeActions(txn: txn, duplicate: duplicate,
                                  requestDelete: requestDelete,
                                  toggleStatus: toggleStatus, edit: edit,
-                                 previewReceipt: previewReceipt))
+                                 previewReceipt: previewReceipt,
+                                 markReviewed: markReviewed))
     }
 }
 

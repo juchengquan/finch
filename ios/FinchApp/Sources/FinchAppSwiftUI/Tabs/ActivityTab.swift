@@ -74,6 +74,10 @@ struct ActivityFeedView: View {
     /// should not count things that have not happened yet. See `Selectors.pendingSplit`.
     @State private var upcomingTxns: [Tx] = []
     @State private var hasMore = false
+    /// The review queue under the current search and filters — what its bar counts
+    /// and "Mark all reviewed" acts on. Every row, not just the page.
+    @State private var reviewQueue: [Tx] = []
+    @State private var confirmingMarkAll = false
     @State private var confirmingBulkDelete = false
     @State private var pendingDelete: Tx?   // single-row delete awaiting confirmation
     // Appended to the delete-confirmation message when the entry has more than
@@ -122,16 +126,7 @@ struct ActivityFeedView: View {
                         calendarDetail
                     } else {
                     savedSearchRow
-                    if sections.isEmpty && pendingTxns.isEmpty {
-                        ContentUnavailableView {
-                            Label("No matching transactions", systemImage: "line.3.horizontal.decrease.circle")
-                        } description: {
-                            Text("Try adjusting your search or filters.")
-                        } actions: {
-                            if hasActiveQuery { Button("Clear filters & search") { searchQuery = ""; filter = TxFilter() } }
-                        }
-                        .listRowBackground(Color.clear)
-                    }
+                    listHead
                     // Pending pins above the months regardless of the sort menu —
                     // the same "To confirm" bucket the account detail shows.
                     // Search/filters apply, so the bucket shows only matching rows.
@@ -317,6 +312,82 @@ struct ActivityFeedView: View {
         let confirmed = f.filter { $0.pending != true }
         hasMore = confirmed.count > visibleCount
         sections = MonthGrouping.sections(Array(confirmed.prefix(visibleCount)))
+        reviewQueue = inReview ? f : []
+    }
+
+    // MARK: Review queue — see `ReviewQueue` for what it holds and why
+
+    /// The feed is the queue while the filter's status says so — set by the chip,
+    /// the filter sheet's Status picker, or a saved search.
+    private var inReview: Bool { filter.status == ReviewQueue.status }
+
+    /// What sits above the rows: in the review queue, its count and "Mark all
+    /// reviewed" (or, once clear, its own empty state); otherwise the generic empty
+    /// state when nothing matches. Its own property because inline, the extra branch
+    /// pushed `body` past what the type-checker would finish.
+    @ViewBuilder private var listHead: some View {
+        if inReview {
+            reviewQueueRow
+        } else if sections.isEmpty && pendingTxns.isEmpty {
+            ContentUnavailableView {
+                Label("No matching transactions", systemImage: "line.3.horizontal.decrease.circle")
+            } description: {
+                Text("Try adjusting your search or filters.")
+            } actions: {
+                if hasActiveQuery { Button("Clear filters & search") { searchQuery = ""; filter = TxFilter() } }
+            }
+            .listRowBackground(Color.clear)
+        }
+    }
+
+    @ViewBuilder private var reviewQueueRow: some View {
+        if reviewQueue.isEmpty {
+            ReviewQueueEmpty(remainingElsewhere: ReviewQueue.count(store.txns, ledgerId: store.activeLedgerId))
+                .listRowBackground(Color.clear)
+        } else {
+            ReviewQueueBar(count: reviewQueue.count) { requestMarkAllReviewed() }
+                .listRowBackground(Color.clear)
+                // On the bar rather than on `body`: one more modifier there and the
+                // macOS type-checker gives up on the whole chain. The bar outlives the
+                // prompt — it only goes once the queue is empty.
+                .alert("Mark \(reviewQueue.count) transactions reviewed?", isPresented: $confirmingMarkAll) {
+                    Button("Mark all reviewed") { markReviewed(reviewQueue.map(\.id)); Haptics.success() }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("They leave the review queue. You can unmark one from its editor.")
+                }
+        }
+    }
+
+    /// The row's swipe-to-review — offered only inside the queue. Typed out here
+    /// rather than as a ternary at the call site, which the type-checker chokes on.
+    private var reviewAction: ((Tx) -> Void)? {
+        guard inReview else { return nil }
+        return { txn in markReviewed([txn.id]) }
+    }
+
+    /// Whether a filter is on beyond the review queue itself — what "＋ Save" offers
+    /// to keep. Saving the queue alone would duplicate its chip.
+    private var filterBeyondReview: Bool {
+        var rest = filter
+        if inReview { rest.status = nil }
+        return rest.isActive
+    }
+
+    /// Asks first from `ReviewQueue.confirmationThreshold` rows up.
+    private func requestMarkAllReviewed() {
+        guard !reviewQueue.isEmpty else { return }
+        if ReviewQueue.needsConfirmation(reviewQueue.count) { confirmingMarkAll = true }
+        else { markReviewed(reviewQueue.map(\.id)); Haptics.success() }
+    }
+
+    /// The write is synchronous, so `store.txns` is already current when it returns —
+    /// recomputing here, inside the animation, is what makes the ticked-off rows
+    /// visibly LEAVE. (The deferred `onReceive` recompute that follows is a no-op
+    /// diff.) Unlike `toggleStatus`, which moves a row and so suppresses animation.
+    private func markReviewed(_ ids: [String]) {
+        report(store.markReviewed(ids), of: ids.count)
+        withAnimation { recompute() }
     }
 
     /// A deep link / Spotlight / notification tap stashed a tx id + switched to
@@ -393,7 +464,8 @@ struct ActivityFeedView: View {
                          requestDelete: { pendingDelete = $0 },
                          toggleStatus: { toggleStatus($0) },
                          edit: { editing = $0 },
-                         previewReceipt: store.attachments(for: txn.id).isEmpty ? nil : { previewReceipt($0) })
+                         previewReceipt: store.attachments(for: txn.id).isEmpty ? nil : { previewReceipt($0) },
+                         markReviewed: reviewAction)
         .tag(txn.id)
     }
 
@@ -493,9 +565,18 @@ struct ActivityFeedView: View {
 
     @ViewBuilder private var savedSearchRow: some View {
         let saved = savedSearches.all(ledgerId: store.activeLedgerId)
-        if !saved.isEmpty || filter.isActive {
+        let reviewCount = ReviewQueue.count(store.txns, ledgerId: store.activeLedgerId)
+        // The review chip is the queue's way in, so the row also shows while anything
+        // needs review — the one case where it appears with no saved search behind it.
+        if !saved.isEmpty || filter.isActive || reviewCount > 0 {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
+                    if reviewCount > 0 || inReview {
+                        Button { filter.status = inReview ? nil : ReviewQueue.status } label: {
+                            ReviewQueueChip(count: reviewCount, selected: inReview)
+                        }
+                        .buttonStyle(.plain)
+                    }
                     ForEach(saved) { s in
                         Button { filter = s.filter } label: { chipLabel(s.name, selected: filter == s.filter) }
                             .buttonStyle(.plain)
@@ -508,7 +589,8 @@ struct ActivityFeedView: View {
                                 Button(role: .destructive) { pendingSearchDelete = s } label: { Label("Delete", systemImage: "trash") }
                             }
                     }
-                    if filter.isActive, !saved.contains(where: { $0.filter == filter }) {
+                    // Not for the review queue alone — it has its own chip above.
+                    if filterBeyondReview, !saved.contains(where: { $0.filter == filter }) {
                         Button { newSearchName = ""; showingSaveSearch = true } label: { chipLabel("＋ Save", selected: false) }
                             .buttonStyle(.plain)
                     }
@@ -550,7 +632,7 @@ struct ActivityFeedView: View {
             query: searchQuery.isEmpty ? nil : searchQuery,
             accountId: filter.accountId,
             categoryId: filter.categoryId,
-            status: filter.status,
+            status: ReviewQueue.listStatus(filter.status),
             from: filter.fromYMD,
             to: filter.toYMD,
             minAmount: filter.minAmount,
@@ -560,10 +642,11 @@ struct ActivityFeedView: View {
         // Search matches what a row displays — the category title (TxRow's
         // title line) and tag chips, not just the merchant text — so the
         // id→name lookups ride along with the query.
-        return sort.sorted(Selectors.selectTransactions(
+        return ReviewQueue.narrow(sort.sorted(Selectors.selectTransactions(
             base, opts,
             categoryNames: Dictionary(uniqueKeysWithValues: store.categories.map { ($0.id, $0.name) }),
-            tagNames: Dictionary(uniqueKeysWithValues: store.tags.map { ($0.id, $0.name) })))
+            tagNames: Dictionary(uniqueKeysWithValues: store.tags.map { ($0.id, $0.name) }))),
+            status: filter.status)
     }
 }
 
