@@ -71,6 +71,8 @@ struct FinchApp: App {
                     gate.didBecomeActive()
                     // Daily FX refresh (Frankfurter) — lock-gated like Spotlight below.
                     if !gate.isLocked { Task { await RateAutoUpdater.refreshIfDue(store: store) } }
+                    // A scheduled occurrence may have fallen due while backgrounded.
+                    if !gate.isLocked { Task { await store.autoPostDueScheduled() } }
                 default: break
                 }
             }
@@ -89,6 +91,9 @@ struct FinchApp: App {
                     if locked { await SpotlightIndexer.shared.clearAll() }
                     else { await SpotlightIndexer.shared.indexAll(store: store) }
                 }
+                // Auto-post is lock-gated, so unlocking is when a launch behind the
+                // lock catches up.
+                if !locked { Task { await store.autoPostDueScheduled() } }
             }
             // Surface a non-recoverable load/migration/projection failure.
             .alert("Data problem", isPresented: Binding(

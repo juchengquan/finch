@@ -284,20 +284,7 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
         await MainActor.run {
             switch action {
             case "confirmNow":
-                // Headless — no sheet to confirm a date, so resolve the occurrence
-                // ourselves the same way ScheduledPoster.postNow does (oldest
-                // unresolved, else next >= today) and post it silently. The bug this
-                // fixes was posting WITHOUT resolving an occurrence when one existed;
-                // resolving above closes that. This branch only omits `date` when
-                // nothing resolves, where stamping today is the correct fallback.
-                if let id = focusId, let store {
-                    let posted = Selectors.scheduledPostedMap(store.txns)
-                    let t = store.scheduled.first { $0.id == id }
-                    let occ = t.flatMap { Selectors.resumeOccurrence(template: $0, posted: posted, today: store.wallToday) }
-                    var args: [String: JSONValue] = ["templateId": .string(id)]
-                    if let occ { args["date"] = .string(occ) }
-                    try? store.apply(.postScheduled, Args(args))
-                }
+                if let id = focusId, let store { Self.confirmNow(templateId: id, store: store) }
                 router?.open(.scheduled)
             case "viewBudgets": router?.open(.budgets)
             case "viewTransaction":
@@ -310,6 +297,38 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
                 } else if let tabName, let t = Self.tab(from: tabName) { router?.open(t) }
             }
         }
+    }
+
+    /// The "Confirm now" button on a scheduled reminder.
+    ///
+    /// When auto-post already added the occurrence, it is sitting in To confirm as a
+    /// pending row, and confirming THAT is what the button says. Posting instead
+    /// would add a second one: `resumeOccurrence` counts a pending row as resolved,
+    /// so it would fall forward and book the NEXT occurrence early. The planner no
+    /// longer reminds about auto-post templates, but an alert delivered before the
+    /// switch was turned on — or before the generator ran on this launch — can
+    /// still be tapped.
+    ///
+    /// Otherwise: headless, with no sheet to confirm a date, so resolve the
+    /// occurrence the same way ScheduledPoster.postNow does (oldest unresolved, else
+    /// next >= today) and post it silently. The bug this fixes was posting WITHOUT
+    /// resolving an occurrence when one existed; resolving closes that. `date` is
+    /// omitted only when nothing resolves, where stamping today is the correct
+    /// fallback.
+    static func confirmNow(templateId id: String, store: FinchStore) {
+        let today = store.wallToday
+        if let waiting = store.txns
+            .filter({ $0.sourceTemplateId == id && ($0.pending ?? false) && ($0.occurrenceDate ?? $0.date) <= today })
+            .min(by: { ($0.occurrenceDate ?? $0.date) < ($1.occurrenceDate ?? $1.date) }) {
+            try? store.apply(.confirmTransaction, Args(["id": .string(waiting.id)]))
+            return
+        }
+        let posted = Selectors.scheduledPostedMap(store.txns)
+        let t = store.scheduled.first { $0.id == id }
+        let occ = t.flatMap { Selectors.resumeOccurrence(template: $0, posted: posted, today: today) }
+        var args: [String: JSONValue] = ["templateId": .string(id)]
+        if let occ { args["date"] = .string(occ) }
+        try? store.apply(.postScheduled, Args(args))
     }
 
     /// Re-arm a notification an hour out and mark it snoozed until then.

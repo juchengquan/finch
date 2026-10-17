@@ -176,7 +176,12 @@ public enum NotificationPlanner {
             //
             // Past-due carries no date: it is true NOW, so policy decides when it lands.
             // Future carries its run date at the delivery hour, and iOS holds it.
-            for s in scheduled where !s.nextRun.isEmpty {
+            //
+            // Not the "Add automatically" ones: their occurrences arrive on their own,
+            // in To confirm, so "is due. Confirm now?" would nag about something the
+            // app has already done. Leaving them out of the plan also cancels any
+            // alert scheduled before the switch was turned on.
+            for s in scheduled where !s.nextRun.isEmpty && !s.postsAutomatically {
                 let isFuture = s.nextRun > wallToday
                 out.append(PlannedNotification(
                     id: "scheduled:\(s.id)", kind: .scheduledDue,
