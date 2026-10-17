@@ -21,7 +21,8 @@ final class FieldGlyphTests: XCTestCase {
     }
     func testEveryCaseHasANonEmptySymbol() {
         let all: [FieldGlyph] = [.account,.fromAccount,.toAccount,.amount,.category,.date,
-            .merchant,.note,.status,.tags,.receipt,.refund,.name,.group,.frequency,.currency,.color,.icon]
+            .merchant,.note,.status,.tags,.receipt,.refund,.name,.group,.frequency,.currency,.color,.icon,
+            .card,.budget,.autoPost]
         for g in all { XCTAssertFalse(g.symbol.isEmpty, "\(g) has empty symbol") }
     }
 }
