@@ -16,6 +16,9 @@ struct ScheduledCalendarView: View {
     /// (template, occurrence date) — the tapped CELL's date, not today. Posting
     /// has to record which occurrence it fulfils or the badge never flips.
     var onPost: (ScheduledTemplate, String) -> Void
+    /// (template, occurrence date) — skip that one occurrence, or undo the skip.
+    var onSkip: (ScheduledTemplate, String) -> Void
+    var onUnskip: (ScheduledTemplate, String) -> Void
     var onDelete: (ScheduledTemplate) -> Void
     var onAdd: (Date) -> Void
     /// Non-nil → a row TAP selects the template (iPad three-column mode) while
@@ -40,7 +43,10 @@ struct ScheduledCalendarView: View {
         // once per rendered month page), which was the bulk of the calendar's
         // first-frame cost on tab entry (the "blink").
         let wide = wideRange
-        let byDayAll = Dictionary(grouping: Selectors.occurrencesInRange(templates, from: wide.start, through: wide.end), by: { $0.date })
+        // Skipped occurrences INCLUDED: the day still lists them, badged, because that
+        // row is where a skip is undone. `dayAmounts` leaves them out of the totals.
+        let byDayAll = Dictionary(grouping: Selectors.occurrencesInRange(templates, from: wide.start, through: wide.end,
+                                                                         includeSkipped: true), by: { $0.date })
         let byDay = byDayAll.filter { $0.key >= range.start && $0.key <= range.end }
         let amountsAll = dayAmounts(byDayAll)
         let posted = Selectors.scheduledPostedMap(store.txns)
@@ -80,7 +86,7 @@ struct ScheduledCalendarView: View {
         for (d, occs) in byDay {
             var inc = 0.0, exp = 0.0
             for o in occs {
-                guard let amt = o.template.amount else { continue }
+                guard let amt = o.template.amount, !o.template.isSkipped(o.date) else { continue }
                 let base = abs(store.toBase(amt, from: currencyById[o.template.accountId] ?? nil))
                 switch o.template.type {
                 case "income":  inc += base
@@ -130,7 +136,7 @@ struct ScheduledCalendarView: View {
     }
 
     private func occurrenceRow(_ t: ScheduledTemplate, date: String, posted: [String: Bool]) -> some View {
-        let st = status(t.id, date, posted)
+        let st = status(t, date, posted)
         let acct = store.accounts.first { $0.id == t.accountId }
         // Tap the row to edit the template (or select it, in three-column mode);
         // long-press still offers Edit / Post now — Edit always opens the editor.
@@ -149,7 +155,11 @@ struct ScheduledCalendarView: View {
                 // badge's variable width ("upcoming" vs "missed") shifted every
                 // amount a different distance from the edge.
                 statusBadge(st)
-                if let amt = t.signedAmount { Text(store.displayMoney(amt, from: acct?.currency ?? store.displayCurrency)).font(.callout) }
+                if let amt = t.signedAmount {
+                    Text(store.displayMoney(amt, from: acct?.currency ?? store.displayCurrency)).font(.callout)
+                        .strikethrough(st == .skipped)
+                        .foregroundStyle(st == .skipped ? .secondary : .primary)
+                }
             }
             .contentShape(Rectangle())
         }
@@ -168,27 +178,39 @@ struct ScheduledCalendarView: View {
             // Same occurrence-aware call as the context menu: this row IS a cell, so
             // `date` is the occurrence being posted — passing the template alone would
             // stamp today and leave the badge unchanged (the bug this branch fixes).
-            if st == .upcoming || st == .missed { SwipeButton("Post", systemImage: "checkmark.circle") { onPost(t, date) }.tint(.green) }
+            if st == .upcoming || st == .missed {
+                SwipeButton("Post", systemImage: "checkmark.circle") { onPost(t, date) }.tint(.green)
+                SwipeButton("Skip", systemImage: "forward.end") { onSkip(t, date) }.tint(.orange)
+            }
+            if st == .skipped { SwipeButton("Unskip", systemImage: "arrow.uturn.backward") { onUnskip(t, date) }.tint(.indigo) }
         }
         .contextMenu {
             Button { onEdit(t) } label: { Label("Edit", systemImage: "pencil") }
             // Unposted either way — a missed occurrence needs this more than an upcoming one.
-            if st == .upcoming || st == .missed { Button { onPost(t, date) } label: { Label("Post now", systemImage: "checkmark.circle") } }
+            if st == .upcoming || st == .missed {
+                Button { onPost(t, date) } label: { Label("Post now", systemImage: "checkmark.circle") }
+                Button { onSkip(t, date) } label: { Label("Skip", systemImage: "forward.end") }
+            }
+            if st == .skipped { Button { onUnskip(t, date) } label: { Label("Unskip", systemImage: "arrow.uturn.backward") } }
             Button(role: .destructive) { onDelete(t) } label: { Label("Delete", systemImage: "trash") }
         }
     }
 
-    private enum OccStatus { case upcoming, missed, pending, done }
+    private enum OccStatus { case upcoming, missed, pending, done, skipped }
     /// No posting record means "nobody posted this yet" — which is only `upcoming`
     /// while the date is still ahead. A past occurrence nobody posted is `missed`,
     /// and it's the state that most needs action. Both are ISO `yyyy-MM-dd`, so a
     /// string compare is a date compare. `wallToday`, not `today`: this is a literal
     /// "has it happened yet" question, not a data-anchored one.
-    private func status(_ id: String, _ date: String, _ posted: [String: Bool]) -> OccStatus {
-        switch posted["\(id)|\(date)"] {
+    /// A posted occurrence reads as posted even if it was also skipped — the money
+    /// moved (`Selectors.activeSkips` applies the same rule).
+    private func status(_ t: ScheduledTemplate, _ date: String, _ posted: [String: Bool]) -> OccStatus {
+        switch posted["\(t.id)|\(date)"] {
         case .some(true): return .pending
         case .some(false): return .done
-        case .none: return date < store.wallToday ? .missed : .upcoming
+        case .none:
+            if t.isSkipped(date) { return .skipped }
+            return date < store.wallToday ? .missed : .upcoming
         }
     }
     @ViewBuilder private func statusBadge(_ s: OccStatus) -> some View {
@@ -199,6 +221,7 @@ struct ScheduledCalendarView: View {
             case .missed:   return ("missed", .red)
             case .pending:  return ("pending", .orange)
             case .done:     return ("done", .green)
+            case .skipped:  return ("skipped", .secondary)
             }
         }()
         Text(label).font(.caption2).padding(.horizontal, 6).padding(.vertical, 2)

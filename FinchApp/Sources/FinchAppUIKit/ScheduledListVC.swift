@@ -293,9 +293,12 @@ final class ScheduledListVC: UIViewController {
             default:
                 if id.hasPrefix(Self.occPrefix), let t = self.template(forOccurrence: id) {
                     // The occurrence row: the template, hosted as the same ScheduledRow
-                    // the list mode uses, so the two modes cannot drift apart.
+                    // the list mode uses, so the two modes cannot drift apart. A skipped
+                    // occurrence still has its row — that is where it is un-skipped —
+                    // marked as skipped rather than as money about to move.
+                    let skipped = self.isSkippedOccurrence(id)
                     cell.contentConfiguration = UIHostingConfiguration {
-                        ScheduledRow(template: t).environmentObject(self.store)
+                        ScheduledRow(template: t, occurrenceSkipped: skipped).environmentObject(self.store)
                             .accessibilityElement(children: .combine)
                             .accessibilityAddTraits(.isButton)
                     }
@@ -491,9 +494,12 @@ final class ScheduledListVC: UIViewController {
     private func rebuildOccurrences() {
         let (start, end) = MonthGrouping.monthBounds(monthAnchor)
         let wide = MonthGrouping.carouselWindow(monthAnchor)
+        // Skipped occurrences included, so their day still lists them (and offers
+        // Unskip); `dayAmounts` leaves them out of the grid's totals.
         occurrencesWide = Dictionary(
             grouping: Selectors.occurrencesInRange(filteredTemplates(),
-                                                   from: wide.start, through: wide.end),
+                                                   from: wide.start, through: wide.end,
+                                                   includeSkipped: true),
             by: { $0.date })
         occurrencesByDay = occurrencesWide.filter { $0.key >= start && $0.key <= end }
         // A stale selection (month changed under it) must not strand the day section.
@@ -514,7 +520,7 @@ final class ScheduledListVC: UIViewController {
         for (day, occs) in occurrencesWide {
             var inc = 0.0, exp = 0.0
             for o in occs {
-                guard let amt = o.template.amount else { continue }
+                guard let amt = o.template.amount, !o.template.isSkipped(o.date) else { continue }
                 let base = abs(store.toBase(amt, from: currencyById[o.template.accountId] ?? nil))
                 switch o.template.type {
                 case "income":  inc += base
@@ -549,8 +555,11 @@ final class ScheduledListVC: UIViewController {
     /// The date matters as much as the template: posting an occurrence needs to know
     /// WHICH one, and passing the template alone stamps today.
     private func occurrence(at indexPath: IndexPath) -> (template: ScheduledTemplate, date: String)? {
-        guard let id = dataSource.itemIdentifier(for: indexPath),
-              id.hasPrefix(Self.occPrefix),
+        dataSource.itemIdentifier(for: indexPath).flatMap(occurrence(forID:))
+    }
+
+    private func occurrence(forID id: String) -> (template: ScheduledTemplate, date: String)? {
+        guard id.hasPrefix(Self.occPrefix),
               let t = template(forOccurrence: id) else { return nil }
         // `template(forOccurrence:)` already owns the id's template half — this adds
         // only the DATE half, which posting needs and it does not return.
@@ -578,17 +587,56 @@ final class ScheduledListVC: UIViewController {
         return UISwipeActionsConfiguration(actions: [edit, del])
     }
 
+    /// Post outermost (a full swipe posts), Skip inside it. A calendar row's actions
+    /// both act on that row's occurrence; a list row's Skip takes this cycle's
+    /// (`Selectors.skipTarget`). A skipped calendar occurrence offers only Unskip.
     private func leadingSwipe(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         // A calendar row posts the occurrence it is showing; a list row has no single
         // occurrence, so it passes nil and `post` resolves which one is meant.
         let occ = occurrence(at: indexPath)
         guard let t = template(at: indexPath) ?? occ?.template else { return nil }
+        if let occ, let id = dataSource.itemIdentifier(for: indexPath), isSkippedOccurrence(id) {
+            let unskip = SwipeAction.make(String(localized: "Unskip"),
+                                          systemImage: "arrow.uturn.backward",
+                                          tint: .systemIndigo) { [weak self] done in
+                self?.unskip(t, occ.date); done(true)
+            }
+            return UISwipeActionsConfiguration(actions: [unskip])
+        }
         let post = SwipeAction.make(String(localized: "Post"),
                                     systemImage: "checkmark.circle",
                                     tint: .systemGreen) { [weak self] done in
             self?.post(t, occurrence: occ?.date); done(true)
         }
-        return UISwipeActionsConfiguration(actions: [post])
+        var actions = [post]
+        // A posted calendar occurrence can't be skipped — the engine refuses it, so
+        // the button isn't offered. A list row skips this cycle's occurrence, if any.
+        let posted = Selectors.scheduledPostedMap(store.txns)
+        let skipDate = occ.map { posted["\(t.id)|\($0.date)"] == nil ? $0.date : nil }
+            ?? ScheduledSkipping.skipTarget(t, store: store)
+        if let skipDate {
+            actions.append(SwipeAction.make(String(localized: "Skip"),
+                                            systemImage: "forward.end",
+                                            tint: .systemOrange) { [weak self] done in
+                self?.skip(t, skipDate); done(true)
+            })
+        }
+        return UISwipeActionsConfiguration(actions: actions)
+    }
+
+    /// Whether a calendar row's occurrence is skipped and not posted since — a posted
+    /// occurrence reads as posted, whatever the skip list says (`Selectors.activeSkips`).
+    private func isSkippedOccurrence(_ id: String) -> Bool {
+        guard let occ = occurrence(forID: id), occ.template.isSkipped(occ.date) else { return false }
+        return Selectors.activeSkips(template: occ.template, posted: Selectors.scheduledPostedMap(store.txns))
+            .contains(occ.date)
+    }
+
+    private func skip(_ t: ScheduledTemplate, _ occurrence: String) {
+        if let error = ScheduledSkipping.skip(t, occurrence: occurrence, store: store) { presentError(error) }
+    }
+    private func unskip(_ t: ScheduledTemplate, _ occurrence: String) {
+        if let error = ScheduledSkipping.unskip(t, occurrence: occurrence, store: store) { presentError(error) }
     }
 
     /// Presents the prefilled sheet rather than posting instantly — deliberately.
@@ -679,19 +727,32 @@ extension ScheduledListVC: UICollectionViewDelegate {
                         contextMenuConfigurationForItemAt indexPath: IndexPath,
                         point: CGPoint) -> UIContextMenuConfiguration? {
         guard let t = template(at: indexPath) else { return nil }
+        // Resolved when the menu opens, so each title can name its date.
+        let today = store.wallToday
+        let skipDate = ScheduledSkipping.skipTarget(t, store: store)
+        let unskipDate = ScheduledSkipping.unskipTarget(t, store: store)
         return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
-            UIMenu(children: [
+            var items: [UIMenuElement] = [
                 UIAction(title: String(localized: "Edit"), image: UIImage(systemName: "pencil")) { _ in
                     self?.presentSheet(ScheduledSheet(template: t))
                 },
                 UIAction(title: String(localized: "Post now"), image: UIImage(systemName: "checkmark.circle")) { _ in
                     self?.post(t, occurrence: nil)
                 },
-                UIAction(title: String(localized: "Delete"), image: UIImage(systemName: "trash"),
-                         attributes: .destructive) { _ in
-                    self?.confirmDelete(t, from: cv.cellForItem(at: indexPath))
-                },
-            ])
+            ]
+            if let skipDate {
+                items.append(UIAction(title: ScheduledSkipping.skipTitle(skipDate, today: today),
+                                      image: UIImage(systemName: "forward.end")) { _ in self?.skip(t, skipDate) })
+            }
+            if let unskipDate {
+                items.append(UIAction(title: ScheduledSkipping.unskipTitle(unskipDate, today: today),
+                                      image: UIImage(systemName: "arrow.uturn.backward")) { _ in self?.unskip(t, unskipDate) })
+            }
+            items.append(UIAction(title: String(localized: "Delete"), image: UIImage(systemName: "trash"),
+                                  attributes: .destructive) { _ in
+                self?.confirmDelete(t, from: cv.cellForItem(at: indexPath))
+            })
+            return UIMenu(children: items)
         }
     }
 }
