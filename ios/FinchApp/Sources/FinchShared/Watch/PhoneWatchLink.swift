@@ -92,6 +92,12 @@ final class PhoneWatchLink: NSObject, WCSessionDelegate {
                 // The fresh snapshot pushed back to the watch IS the confirmation
                 // (and refreshes the recents/catalog + the complication).
                 WidgetSnapshotWriter.write(from: store)
+            } catch let e as I18nError where e.code == "error.fx.noRate" {
+                // No exchange rate for the account's currency: unlike a duplicate,
+                // the user has something to fix, and nothing on the wrist says so.
+                await NotificationService.shared.notifyRefused(
+                    id: req.id, title: item.merchant,
+                    body: String(localized: "Couldn't add it: \(i18nMessage(e))"))
             } catch {
                 // The duplicate guard or a validation failure — drop. The watch
                 // row only ever claims "queued", not "posted".

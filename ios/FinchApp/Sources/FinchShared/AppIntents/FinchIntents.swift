@@ -46,7 +46,7 @@ public struct AddTransactionIntent: AppIntent {
         if let c = category?.id ?? store.pickableCategories.first?.id { args["categoryId"] = .string(c) }
         if let n = note { args["note"] = .string(n) }
         do { try store.apply(.addTransaction, Args(args)) }
-        catch let e as I18nError { return .result(dialog: "Couldn't add it: \(e.message)") }
+        catch let e as I18nError { return .result(dialog: "Couldn't add it: \(i18nMessage(e))") }
         DeepLinkRouter.shared.open(.activity)
         return .result(dialog: "Added \(merchant) to finch.")
     }

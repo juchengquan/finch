@@ -22,6 +22,7 @@ enum ErrorL10n {
         "error.category.selfParent": "类别不能成为自己的父级",
         "error.category.underDescendant": "类别不能移动到自己的后代之下",
         "error.fx.dateFormat": "日期必须为 YYYY-MM-DD 格式",
+        "error.fx.noRate": "还没有 {from} → {to} 的汇率。请在「设置 › 货币」中打开 {currency}，然后点按「立即刷新」。",
         "error.fx.rateGt0": "汇率必须大于 0",
         "error.fx.usdHub": "USD 是中转货币,不会被存储",
         "error.holding.costBasisGte0": "成本基础必须不小于 0",
@@ -59,8 +60,6 @@ enum ErrorL10n {
         "error.required.templateName": "模板名称必填",
         "error.scheduled.alreadyPosted": "\"{name}\" 在 {date} 已记账",
         "error.scheduled.awaitingConfirm": "\"{name}\" 在 {date} 的记录已在待确认中",
-        // The skip refusals carry no {placeholders}: `i18nMessage` returns these
-        // strings verbatim, so a placeholder would be shown as literal braces.
         "error.scheduled.skipAlreadyPosted": "这一期已经发布,无法跳过",
         "error.scheduled.installmentDone": "\"{name}\" 的 {total} 期分期付款已完成",
         "error.scheduled.missingAccount": "\"{name}\" 缺少账户",

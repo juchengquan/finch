@@ -83,4 +83,10 @@ final class NotificationPlannerTests: XCTestCase {
         let existing: Set<String> = ["budget:b1", "scheduled:s1", "anomaly:t1"]
         XCTAssertEqual(NotificationPlanner.cancelIDs(planned: planned, existing: existing), ["anomaly:t1", "scheduled:s1"])
     }
+
+    /// A refused-write alert is raised outside the plan; re-planning leaves it alone.
+    func test_cancelIDs_keepsUnplannedAlerts() {
+        let existing: Set<String> = ["refused:w1", "scheduled:s1"]
+        XCTAssertEqual(NotificationPlanner.cancelIDs(planned: [], existing: existing), ["scheduled:s1"])
+    }
 }

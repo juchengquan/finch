@@ -332,4 +332,47 @@ final class AutoPostDueTests: XCTestCase {
         XCTAssertEqual(try occurrences(q), ["2026-01-15", "2026-02-15", "2026-03-15"])
         XCTAssertNil(try mark(q))
     }
+
+    // MARK: - A refused occurrence
+
+    /// A template on a KRW account with no KRW rate: auto-post skips its occurrence
+    /// rather than failing the whole run (which used to roll back every OTHER
+    /// template's rows and the mark, on every launch). The skipped one stays unposted,
+    /// so it is still due; posting it by hand gives the reason, and once a rate exists
+    /// it posts.
+    func test_anOccurrenceWithNoRate_isSkipped_andTheRestStillPost() throws {
+        let q = try seeded()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('krw','l1','Seoul','cash','KRW',0,0,1,1,datetime('now'),datetime('now'))")
+        }
+        try create(q)
+        try create(q, id: "s2", extra: ["accountId": .string("krw")])
+        try run(q, "2026-10-01")
+        XCTAssertEqual(try run(q, "2026-10-20"), 1)
+        XCTAssertEqual(try occurrences(q), ["2026-10-15"])
+        XCTAssertEqual(try occurrences(q, "s2"), [])
+        XCTAssertEqual(try mark(q), "2026-10-20")
+        XCTAssertEqual(try q.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM exchange_rates WHERE currency = 'KRW'") }, 0)
+
+        let post = { try Apply.apply(dbQueue: q, action: "postScheduled",
+                                     args: Args(["templateId": .string("s2"), "date": .string("2026-10-15")])) }
+        XCTAssertThrowsError(try post()) { XCTAssertEqual(($0 as? I18nError)?.code, "error.fx.noRate") }
+        try Apply.apply(dbQueue: q, action: "setExchangeRate", args: Args([
+            "date": .string("2026-10-01"), "currency": .string("KRW"), "rate": .double(0.00072)]))
+        try post()
+        XCTAssertEqual(try occurrences(q, "s2"), ["2026-10-15"])
+    }
+
+    /// The parity action skips the same way (and so does the web's).
+    func test_parityAction_skipsAnOccurrenceWithNoRate() throws {
+        let q = try seeded()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('krw','l1','Seoul','cash','KRW',0,0,1,1,datetime('now'),datetime('now'))")
+        }
+        try create(q, autoPost: false)
+        try create(q, id: "s2", type: "transfer", autoPost: false, extra: ["accountId": .string("krw")])
+        try Apply.apply(dbQueue: q, action: "generateDueScheduled", args: Args(["today": .string("2026-02-20")]))
+        XCTAssertEqual(try occurrences(q), ["2026-01-15", "2026-02-15"])
+        XCTAssertEqual(try occurrences(q, "s2"), [])
+    }
 }

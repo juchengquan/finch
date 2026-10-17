@@ -232,11 +232,16 @@ public enum NotificationPlanner {
 
     /// Ids currently scheduled or delivered that are no longer planned — a kind was
     /// disabled, a budget fell back under threshold, or a due item was confirmed — so
-    /// they should be cancelled.
+    /// they should be cancelled. Never an `unplannedPrefix` alert: no plan contains
+    /// one, so every re-plan would otherwise clear it.
     public static func cancelIDs(planned: [PlannedNotification], existing: Set<String>) -> [String] {
         let keep = Set(planned.map(\.id))
-        return existing.subtracting(keep).sorted()
+        return existing.subtracting(keep).filter { !$0.hasPrefix(unplannedPrefix) }.sorted()
     }
+
+    /// Id prefix of the one-off alerts raised outside the plan
+    /// (`NotificationService.notifyRefused`).
+    public static let unplannedPrefix = "refused:"
 
     /// Which planned notifications should actually be scheduled right now.
     ///
