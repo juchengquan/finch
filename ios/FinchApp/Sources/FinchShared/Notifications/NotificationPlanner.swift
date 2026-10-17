@@ -177,18 +177,30 @@ public enum NotificationPlanner {
             // Past-due carries no date: it is true NOW, so policy decides when it lands.
             // Future carries its run date at the delivery hour, and iOS holds it.
             //
+            // The date is the occurrence the reminder's own "Confirm" would post —
+            // `resumeOccurrence`, the oldest unresolved else the next due — not the
+            // stored `next_run`. That column is never written (inserted NULL), so it
+            // meant no reminder at all for a template made in the app, and a stale
+            // one for an imported template. The recurrence is also what knows about
+            // skips and the end date: a skipped occurrence is passed over, and an
+            // ended template has nothing left to remind about.
+            //
             // Not the "Add automatically" ones: their occurrences arrive on their own,
             // in To confirm, so "is due. Confirm now?" would nag about something the
             // app has already done. Leaving them out of the plan also cancels any
             // alert scheduled before the switch was turned on.
-            for s in scheduled where !s.nextRun.isEmpty && !s.postsAutomatically {
-                let isFuture = s.nextRun > wallToday
+            let posted = Selectors.scheduledPostedMap(txns)
+            for s in scheduled where !s.postsAutomatically {
+                // A paid-off installment plan has no more payments to prompt for.
+                if let total = s.installmentTotal, (s.installmentPaid ?? 0) >= total { continue }
+                guard let due = Selectors.resumeOccurrence(template: s, posted: posted, today: wallToday) else { continue }
+                let isFuture = due > wallToday
                 out.append(PlannedNotification(
                     id: "scheduled:\(s.id)", kind: .scheduledDue,
                     title: String(localized: "Scheduled: \(s.name)"),
                     body: String(localized: "\(s.name) is due. Confirm now?"),
                     tab: .scheduled, focusId: s.id,
-                    deliverOn: isFuture ? deliverAt(s.nextRun, hour: deliveryHour, calendar) : nil))
+                    deliverOn: isFuture ? deliverAt(due, hour: deliveryHour, calendar) : nil))
             }
         }
 

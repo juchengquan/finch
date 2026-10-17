@@ -7,9 +7,12 @@ final class NotificationLogicTests: XCTestCase {
     private let money: (Double) -> String = { String(format: "%.2f", $0) }
     private let all = Set(NotificationKind.allCases)
 
+    /// The day of month follows `nextRun`: the planner reads the recurrence, so a
+    /// template whose day disagreed with its `nextRun` would be due on a different day
+    /// from the one the test names.
     private func template(_ id: String, nextRun: String) -> ScheduledTemplate {
         ScheduledTemplate(id: id, name: "Rent", type: "expense", amount: 100,
-                          frequency: "monthly", dayOfMonth: 1, accountId: "a1", nextRun: nextRun)
+                          frequency: "monthly", dayOfMonth: Int(nextRun.suffix(2)) ?? 1, accountId: "a1", nextRun: nextRun)
     }
     private func plan(today: String, wallToday: String, scheduled: [ScheduledTemplate]) -> [PlannedNotification] {
         NotificationPlanner.plan(budgets: [], txns: [], scheduled: scheduled, categories: [],
@@ -27,6 +30,7 @@ final class NotificationLogicTests: XCTestCase {
         let out = plan(today: "2026-05-08", wallToday: "2026-05-15",
                        scheduled: [template("s1", nextRun: "2026-05-15")])
         XCTAssertEqual(out.map(\.id), ["scheduled:s1"], "due today must fire even with stale data")
+        XCTAssertNil(out.first?.deliverOn, "due today is due now, not held for a later date")
     }
 
     /// …and the converse: not yet due is still planned, but DATED, so iOS holds it

@@ -66,7 +66,11 @@ struct ScheduledTab: View {
 
     /// One List row: tap to edit (or select, in three-column mode); swipe
     /// trailing = Edit + Delete, leading = Post; context menu mirrors both.
-    @ViewBuilder private func scheduledListRow(_ t: ScheduledTemplate) -> some View {
+    /// `posted` is computed once per list render and handed to every row — the skip
+    /// targets need it, and building it per row would walk every transaction per row.
+    @ViewBuilder private func scheduledListRow(_ t: ScheduledTemplate, posted: [String: Bool]) -> some View {
+        let skipDate = Selectors.skipTarget(template: t, posted: posted, today: store.wallToday)
+        let unskipDate = Selectors.unskipTarget(template: t, posted: posted)
         Button {
             if let selection { selection.wrappedValue = t.id } else { editing = t }
         } label: { ScheduledRow(template: t).contentShape(Rectangle()) }
@@ -84,10 +88,27 @@ struct ScheduledTab: View {
                 // and that occurrence needs the user's confirmation. Do not
                 // "fix" this back to an instant post.
                 Button { postNow(t) } label: { Label("Post", systemImage: "checkmark.circle") }.tint(.green)
+                // Skip takes THIS cycle's occurrence (`Selectors.skipTarget`), which
+                // can differ from the backlog-first one Post resolves; the menu names
+                // its date. Declared second, so it sits inside Post and a full swipe
+                // still posts.
+                if let occ = skipDate {
+                    Button { skip(t, occ) } label: { Label("Skip", systemImage: "forward.end") }.tint(.orange)
+                }
             }
             .contextMenu {
                 Button { editing = t } label: { Label("Edit", systemImage: "pencil") }
                 Button { postNow(t) } label: { Label("Post now", systemImage: "checkmark.circle") }
+                if let occ = skipDate {
+                    Button { skip(t, occ) } label: {
+                        Label(ScheduledSkipping.skipTitle(occ, today: store.wallToday), systemImage: "forward.end")
+                    }
+                }
+                if let occ = unskipDate {
+                    Button { unskip(t, occ) } label: {
+                        Label(ScheduledSkipping.unskipTitle(occ, today: store.wallToday), systemImage: "arrow.uturn.backward")
+                    }
+                }
                 Button(role: .destructive) { pendingDelete = t } label: { Label("Delete", systemImage: "trash") }
             }
             .tag(t.id)
@@ -121,6 +142,7 @@ struct ScheduledTab: View {
                     // and the title disappears entirely.)
                     Group {
                         if mode == .list {
+                            let posted = Selectors.scheduledPostedMap(store.txns)
                             List(selection: selection ?? $kbSel) {
                                 modePickerRow
                                 // Explicit Section: with the clear-background toggle as
@@ -140,7 +162,7 @@ struct ScheduledTab: View {
                                 // "Ended" section.
                                 ForEach(scheduledByMonth, id: \.key) { group in
                                     Section {
-                                        ForEach(group.items, id: \.id) { t in scheduledListRow(t) }
+                                        ForEach(group.items, id: \.id) { t in scheduledListRow(t, posted: posted) }
                                     } header: {
                                         if group.key == "—" { Text("Ended").textCase(nil) }
                                         else { Text(MonthGrouping.label(group.key)).textCase(nil) }
@@ -193,6 +215,8 @@ struct ScheduledTab: View {
                             ScheduledCalendarView(templates: filteredScheduled,
                                                   onEdit: { editing = $0 },
                                                   onPost: { ScheduledPoster.postNow($0, occurrence: $1, store: store, prefill: $postPrefill, errorMessage: $errorMessage) },
+                                                  onSkip: { skip($0, $1) },
+                                                  onUnskip: { unskip($0, $1) },
                                                   onDelete: { pendingDelete = $0 },
                                                   onAdd: { addPrefill = $0; showingAdd = true },
                                                   onSelect: selection.map { sel in { sel.wrappedValue = $0.id } },
@@ -251,6 +275,13 @@ struct ScheduledTab: View {
         ScheduledPoster.postNow(t, store: store, prefill: $postPrefill, errorMessage: $errorMessage)
     }
 
+    private func skip(_ t: ScheduledTemplate, _ occurrence: String) {
+        errorMessage = ScheduledSkipping.skip(t, occurrence: occurrence, store: store)
+    }
+    private func unskip(_ t: ScheduledTemplate, _ occurrence: String) {
+        errorMessage = ScheduledSkipping.unskip(t, occurrence: occurrence, store: store)
+    }
+
     private func delete(_ t: ScheduledTemplate) {
         do { try store.apply(.deleteScheduled, Args(["id": .string(t.id)])) } catch { errorMessage = i18nMessage(error) }
     }
@@ -259,6 +290,11 @@ struct ScheduledTab: View {
 struct ScheduledRow: View {
     @EnvironmentObject private var store: FinchStore
     let template: ScheduledTemplate
+    /// Set by a calendar day row whose occurrence the user skipped: the row says
+    /// "Skipped" where the cadence goes and strikes the amount through, so the day
+    /// still shows the item — that is where it is un-skipped — without it reading
+    /// as money about to move.
+    var occurrenceSkipped = false
 
     private var accountName: String {
         store.accounts.first { $0.id == template.accountId }?.name ?? "—"
@@ -266,7 +302,6 @@ struct ScheduledRow: View {
     private var accountCurrency: String {
         store.accounts.first { $0.id == template.accountId }?.currency ?? store.displayCurrency
     }
-    private var nextRunDisplay: String { scheduledNextRun(template, today: store.wallToday) }
 
     /// Leading stripe color by template type — mirrors TxRow's kind stripe so
     /// Scheduled reads the same as the transaction feeds (expense red, income
@@ -304,8 +339,15 @@ struct ScheduledRow: View {
                          a11yLabel: typeA11yLabel)
             VStack(alignment: .leading, spacing: 2) {
                 Text(template.name).fontWeight(.medium)
-                Text("\(template.frequency.capitalized) · next \(nextRunDisplay)")
-                    .font(.caption).foregroundStyle(.secondary)
+                if occurrenceSkipped {
+                    Text("Skipped").font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text(ScheduledCaption.cadence(template, today: store.wallToday))
+                        .font(.caption).foregroundStyle(.secondary)
+                    if let skips = ScheduledCaption.skips(template, today: store.wallToday) {
+                        Text(skips).font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
                 if let total = template.installmentTotal {
                     Text("Installment \(template.installmentPaid ?? 0)/\(total) · \(accountName)")
                         .font(.caption2).foregroundStyle(.secondary)
@@ -316,6 +358,8 @@ struct ScheduledRow: View {
                 Text(store.displayMoney(amount, from: accountCurrency))
                     .font(Metrics.rowAmountFont)   // mirrors TxRow — see Metrics
                     .fontWeight(Metrics.rowAmountWeight)
+                    .strikethrough(occurrenceSkipped)
+                    .foregroundStyle(occurrenceSkipped ? .secondary : .primary)
             } else {
                 Text("Variable").font(.caption).foregroundStyle(.secondary)
             }
@@ -346,7 +390,5 @@ struct ScheduledRow: View {
 /// itself lives in FinchCore (`Selectors.horizonDay`) — shared with
 /// `resumeOccurrence`, which needs the same lookahead.
 func scheduledNextRun(_ template: ScheduledTemplate, today: String) -> String {
-    let horizon = Selectors.horizonDay(from: today, addingDays: 400)
-    return Selectors.occurrencesInRange([template], from: today, through: horizon).first?.date
-        ?? (template.nextRun.isEmpty ? "—" : template.nextRun)
+    Selectors.nextOccurrence(template, onOrAfter: today) ?? (template.nextRun.isEmpty ? "—" : template.nextRun)
 }

@@ -356,7 +356,7 @@ public enum Scheduled {
              WHERE source_template_id = ? AND COALESCE(occurrence_date, date) = ?
             """, arguments: [a.templateId, a.date]) ?? 0
         if posted > 0 {
-            throw I18nError("error.scheduled.alreadyPosted", ["name": name, "date": a.date],
+            throw I18nError("error.scheduled.skipAlreadyPosted", ["name": name, "date": a.date],
                             "\"\(name)\" was already posted for \(a.date)")
         }
         var skips = try ScheduledSkips.load(db)
