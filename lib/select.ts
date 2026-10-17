@@ -385,6 +385,9 @@ export function monthForecast(
       if (rt.amount == null) continue;
       if (rt.dayOfMonth <= dayOfMonth) continue;
       if (rt.dayOfMonth > daysInMonth) continue;
+      // This month's occurrence falls after the template's end date — it will not
+      // happen. (Mirrored by the native monthForecast, which also drops skips.)
+      if (rt.endDate && rt.endDate.slice(0, 10) < `${month}-${String(rt.dayOfMonth).padStart(2, '0')}`) continue;
       scheduledRest += Math.abs(rt.amount);
     }
   }

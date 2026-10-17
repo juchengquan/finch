@@ -464,6 +464,15 @@ test('monthForecast: in-month projection = MTD + run-rate × days-left + upcomin
   expect(f!.projected).toBeCloseTo(160 + 336 + 160, 2);
 });
 
+test('monthForecast: an occurrence after the end date is not upcoming (the end date is inclusive)', () => {
+  const recurring = [
+    rt({ amount: 100, dayOfMonth: 15, endDate: '2026-05-14' }), // ended before the 15th — excluded
+    rt({ amount: 60, dayOfMonth: 22, endDate: '2026-05-22' }),  // ends on the day — counted
+  ];
+  const f = monthForecast([], recurring, 'personal', '2026-05', '2026-05-10');
+  expect(f!.scheduledRest).toBeCloseTo(60, 2);
+});
+
 test('monthForecast for a past month: projection collapses to actuals (no run-rate, no upcoming)', () => {
   const txns = [
     tx({ amount: -100, date: '2026-04-05' }),
