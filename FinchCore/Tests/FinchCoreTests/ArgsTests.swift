@@ -21,8 +21,10 @@ final class ArgsTests: XCTestCase {
     ///   ignores the key, as it does `setBudgetOrder`) = 91.
     /// + `restoreTransactions` (native-only — undo of a transaction delete; the
     ///   web has no undo, so it never enters WRITE_SEQUENCE) = 92.
+    /// + `autoPostDueScheduled` (native-only — the app's generator: auto_post
+    ///   templates only, from a high-water mark in app_state) = 93.
     func test_actionCount() {
-        XCTAssertEqual(ActionName.allCases.count, 92)
+        XCTAssertEqual(ActionName.allCases.count, 93)
     }
 
     func test_actionNameRawValues() {
