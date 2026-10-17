@@ -203,4 +203,103 @@ final class InterledgerWriteTests: XCTestCase {
         }
         XCTAssertTrue(try Audit.run(on: q).isEmpty, "an edited pair must still be well-formed")
     }
+
+    // MARK: editing a pair whose account is not in its ledger's base currency
+
+    /// Personal (USD) pays from an SGD account, so that half's account leg has a
+    /// native amount (SGD) and a different base amount (USD). Travel is as above.
+    private func foreignSideLedgers() throws -> DatabaseQueue {
+        let q = try twoLedgers()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('sgd','personal','SGD Savings','cash','SGD',0,1,1,1,datetime('now'),datetime('now'))")
+            try db.execute(sql: "INSERT INTO exchange_rates (date,currency,rate) VALUES ('2026-08-12','SGD',0.75)")
+            try Entries.postOpening(db, ledgerId: "personal", accountId: "sgd",
+                                    amount: 10000, date: "2026-01-01")
+        }
+        try Apply.apply(dbQueue: q, action: "createInterledgerTransfer", args: Args([
+            "fromAccountId": .string("sgd"), "toAccountId": .string("card"),
+            "fromAmount": .double(1000), "toAmount": .double(600), "date": .string("2026-08-12"),
+        ]))
+        return q
+    }
+
+    private func personalHalf(_ q: DatabaseQueue) throws -> String {
+        try q.read { try String.fetchOne($0, sql: "SELECT id FROM entries WHERE ledger_id = 'personal' AND kind = 'interledger'") }!
+    }
+
+    private func fxLegCount(_ db: Database) throws -> Int {
+        try Int.fetchOne(db, sql: """
+            SELECT COUNT(*) FROM postings p JOIN categories c ON c.id = p.category_id
+              JOIN entries e ON e.id = p.entry_id
+             WHERE c.system = 'fx' AND e.kind = 'interledger'
+            """) ?? -1
+    }
+
+    /// The audit's repro: 1000 SGD edited to 2000 booked the equity leg at the
+    /// SGD figure (2000) against an account leg worth 1500 USD, and the gap
+    /// surfaced as a −500 FX leg nobody caused.
+    func test_editingAForeignCurrencySideInventsNoFxLeg() throws {
+        let q = try foreignSideLedgers()
+        try Apply.apply(dbQueue: q, action: "updateInterledgerTransfer", args: Args([
+            "id": .string(try personalHalf(q)), "fromAmount": .double(2000), "toAmount": .double(1200),
+        ]))
+        try q.read { db in
+            XCTAssertEqual(try fxLegCount(db), 0, "an amount edit is not an FX gain or loss")
+            let eq = try Double.fetchOne(db, sql: """
+                SELECT p.amount_base FROM postings p JOIN entries e ON e.id = p.entry_id
+                 WHERE e.ledger_id = 'personal' AND e.kind = 'interledger' AND p.account_id IS NULL
+                """)
+            XCTAssertEqual(eq, 1500, "the equity leg mirrors the account leg's BASE value (2000 SGD × 0.75)")
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id = 'sgd'"), 8000)
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id = 'card'"), 1200)
+        }
+        XCTAssertTrue(try Audit.run(on: q).isEmpty)
+    }
+
+    /// Only one side given: the other follows the transfer's own implied rate
+    /// (600 / 1000), not today's market rate and not "unchanged".
+    func test_editingOneSideScalesTheOtherByTheImpliedRate() throws {
+        let q = try foreignSideLedgers()
+        try Apply.apply(dbQueue: q, action: "updateInterledgerTransfer", args: Args([
+            "id": .string(try personalHalf(q)), "fromAmount": .double(2000),
+        ]))
+        try q.read { db in
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id = 'card'"), 1200)
+            XCTAssertEqual(try fxLegCount(db), 0)
+        }
+        XCTAssertTrue(try Audit.run(on: q).isEmpty)
+    }
+
+    /// The Edit sheet always resends both amounts. A date-only edit must leave
+    /// the amounts and legs as they were, and move BOTH halves.
+    func test_aDateOnlyEditLeavesTheLegsAlone() throws {
+        let q = try foreignSideLedgers()
+        try Apply.apply(dbQueue: q, action: "updateInterledgerTransfer", args: Args([
+            "id": .string(try personalHalf(q)), "fromAmount": .double(1000), "toAmount": .double(600),
+            "date": .string("2026-08-13"), "time": .string("09:30"),
+        ]))
+        try q.read { db in
+            XCTAssertEqual(try fxLegCount(db), 0)
+            XCTAssertEqual(try String.fetchAll(db, sql: "SELECT DISTINCT date FROM entries WHERE kind = 'interledger'"), ["2026-08-13"])
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id = 'sgd'"), 9000)
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id = 'card'"), 600)
+        }
+        XCTAssertTrue(try Audit.run(on: q).isEmpty)
+    }
+
+    /// No amounts at all: the header still reaches both halves — it used to
+    /// reach neither, because a half without a new amount was skipped outright.
+    func test_aNoteOnlyEditReachesBothHalves() throws {
+        let q = try foreignSideLedgers()
+        try Apply.apply(dbQueue: q, action: "updateInterledgerTransfer", args: Args([
+            "id": .string(try personalHalf(q)), "note": .string("trip float"),
+        ]))
+        try q.read { db in
+            XCTAssertEqual(try String.fetchAll(db, sql: "SELECT notes FROM entries WHERE kind = 'interledger'"),
+                           ["trip float", "trip float"])
+            XCTAssertEqual(try fxLegCount(db), 0)
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id = 'card'"), 600)
+        }
+        XCTAssertTrue(try Audit.run(on: q).isEmpty)
+    }
 }

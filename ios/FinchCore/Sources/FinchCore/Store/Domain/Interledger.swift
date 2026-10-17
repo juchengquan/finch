@@ -130,44 +130,74 @@ public enum Interledger {
         let note: String?
     }
 
-    /// Re-amount the pair. Each half is rebuilt in place — ids survive, so
-    /// attachments and any selection pointing at an entry stay valid — and the
-    /// equity leg is restated from the account leg so the half still balances.
+    /// Re-amount and/or re-date the pair. Each half is rebuilt in place — ids
+    /// survive, so attachments and any selection pointing at an entry stay valid.
+    ///
+    /// A half whose amount does not change keeps its legs: the Edit sheet always
+    /// resends both amounts, so a date- or note-only edit arrives looking like a
+    /// re-amount, and restating legs nobody changed is how a phantom FX leg got in.
+    /// A half that does change restates its equity leg from the account leg's
+    /// BASE value — the account may hold a currency other than its ledger's base,
+    /// and mirroring the native figure left a gap `appendResidue` booked as FX.
     static func update(_ db: Database, _ args: Args) throws {
         let a = try args.to(UpdateArgs.self)
         let ids = try pair(db, a.id)
         guard ids.count == 2 else {
             throw I18nError("error.notFound.transaction", [:], "Not a cross-ledger transfer")
         }
-        for entryId in ids {
-            guard let row = try Row.fetchOne(db, sql:
-                "SELECT ledger_id FROM entries WHERE id = ?", arguments: [entryId]) else { continue }
-            let ledgerId: String = row["ledger_id"]
-            guard let leg = try Row.fetchOne(db, sql: """
-                SELECT account_id, amount FROM postings
-                 WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1
-                """, arguments: [entryId]) else { continue }
-            let accountId: String = leg["account_id"]
-            let old: Double = leg["amount"]
-            // The outgoing half is the negative one; each side takes its own new
-            // amount, because across currencies there is no single right number to
-            // derive one from the other (D4).
-            let newMagnitude = old < 0 ? a.fromAmount : a.toAmount
-            guard let magnitude = newMagnitude.map({ abs($0) }) else { continue }
-            guard magnitude > 0 else {
-                throw I18nError("error.transfer.amountGt0", [:], "Transfer amount must be greater than 0")
+        struct Half { let entryId, ledgerId, date, accountId, currency: String; let amount: Double }
+        let halves: [Half] = try ids.compactMap { entryId in
+            guard let r = try Row.fetchOne(db, sql: """
+                SELECT e.ledger_id, e.date, p.account_id, p.amount, a.currency
+                  FROM entries e JOIN postings p ON p.entry_id = e.id AND p.account_id IS NOT NULL
+                  JOIN accounts a ON a.id = p.account_id
+                 WHERE e.id = ? LIMIT 1
+                """, arguments: [entryId]) else { return nil }
+            return Half(entryId: entryId, ledgerId: r["ledger_id"], date: r["date"],
+                        accountId: r["account_id"], currency: r["currency"], amount: r["amount"])
+        }
+        // The outgoing half is the negative one.
+        guard let out = halves.first(where: { $0.amount < 0 }),
+              let inc = halves.first(where: { $0.amount >= 0 }) else {
+            throw I18nError("error.notFound.transaction", [:], "Not a cross-ledger transfer")
+        }
+        let oldFrom = abs(out.amount), oldTo = inc.amount
+        let newFrom = a.fromAmount.map(abs) ?? oldFrom
+        guard newFrom > 0 else {
+            throw I18nError("error.transfer.amountGt0", [:], "Transfer amount must be greater than 0")
+        }
+        // Each side takes its own amount when given, because across currencies
+        // there is no single right number to derive one from the other (D4).
+        // Absent, the received side follows the transfer's own implied rate —
+        // the rate the user effectively chose — not today's market rate.
+        let newTo: Double
+        if let given = a.toAmount {
+            newTo = abs(given)
+            guard newTo > 0 else {
+                throw I18nError("error.transfer.receivedGt0", [:], "Received amount must be greater than 0")
             }
-            let signed = Entries.r2(old < 0 ? -magnitude : magnitude)
-            let category = try Entries.ensureInterledgerCategory(db, ledgerId)
+        } else {
+            newTo = oldFrom > 0 ? Entries.r2(newFrom * oldTo / oldFrom) : oldTo
+        }
+
+        for (half, signed) in [(out, Entries.r2(-newFrom)), (inc, Entries.r2(newTo))] {
             var patch = Entries.EntryPatch()
-            patch.legs = .set([
-                .account(Entries.AccountLeg(accountId: accountId, amount: signed)),
-                .category(Entries.CategoryLeg(categoryId: category, amountBase: -signed)),
-            ])
+            if signed != Entries.r2(half.amount) {
+                let date = a.date ?? half.date
+                let base = try String.fetchOne(db, sql: "SELECT base_currency FROM ledgers WHERE id = ?",
+                                               arguments: [half.ledgerId]) ?? half.currency
+                let conv = try Entries.convertToBase(db, signed, half.currency, base, date)
+                let category = try Entries.ensureInterledgerCategory(db, half.ledgerId)
+                patch.legs = .set([
+                    .account(Entries.AccountLeg(accountId: half.accountId, amount: signed,
+                                                amountBase: conv.amountBase, exchangeRate: conv.rate)),
+                    .category(Entries.CategoryLeg(categoryId: category, amountBase: -conv.amountBase)),
+                ])
+            }
             if let date = a.date { patch.date = .set(date) }
             if let time = a.time { patch.time = .set(time) }
             if let note = a.note { patch.notes = .set(note) }
-            _ = try Entries.rebuildEntry(db, entryId, patch)
+            _ = try Entries.rebuildEntry(db, half.entryId, patch)
         }
     }
 
