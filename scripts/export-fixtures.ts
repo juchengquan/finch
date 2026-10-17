@@ -418,13 +418,15 @@ const SEED_SQL: string[] = [
   `INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a1','personal','Checking','cash','USD',0,0,1,1,${N},${N})`,
   `INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a2','personal','Savings','savings','USD',0,1,1,1,${N},${N})`,
   `INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a3','personal','Brokerage','investment','USD',0,2,1,1,${N},${N})`,
+  // KRW, which has no static fallback rate — the no-rate refusal below.
+  `INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a4','personal','Seoul','cash','KRW',0,3,1,1,${N},${N})`,
 ];
 
 /** A deterministic write-action sequence over the seeded fixed ids. Every entity
  *  it creates is either arg-id-honoring (counterparty/tag/budget/group/scheduled/
  *  rule) or an entry/posting (canonicalState nests those minus ids). No action
  *  references a randomly-generated id, so web + Swift converge on one end state. */
-const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
+const WRITE_SEQUENCE: { action: string; args: Record<string, unknown>; expectError?: string }[] = [
   { action: 'createCounterparty', args: { id: 'cp1', name: 'Starbucks' } },
   { action: 'createTag', args: { id: 'tg1', ledgerId: 'personal', name: 'work', color: '#f00' } },
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: -25, merchant: 'Coffee', categoryId: 'food', date: '2026-05-01', skipRules: true } },
@@ -508,6 +510,14 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   // (s1 becomes splits_enabled=1 in that block, so it's skipped by generateDue;
   // s2 is what actually produces rows below.)
   { action: 'createScheduled', args: { id: 's2', ledgerId: 'personal', name: 'Gym', type: 'expense', amount: 45, frequency: 'monthly', dayOfMonth: 15, accountId: 'a2', startDate: '2026-01-15' } },
+  // No exchange rate for the pair: a KRW purchase on a4 (KRW has no rows and no
+  // static fallback) is REFUSED — it used to book ₩50,000 as 50,000 USD and pin a
+  // 1.0 KRW rate. `expectError` steps must throw that code and leave no trace
+  // (each side rolls the step back, as the real write path does). s4 is the same
+  // account as a template: generateDueScheduled below skips its Feb–Apr
+  // occurrences rather than failing the sweep, and pins no KRW rate.
+  { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a4', amount: -50000, merchant: 'Seoul', categoryId: 'food', date: '2026-05-15', skipRules: true }, expectError: 'error.fx.noRate' },
+  { action: 'createScheduled', args: { id: 's4', ledgerId: 'personal', name: 'Seoul rent', type: 'expense', amount: 500000, frequency: 'monthly', dayOfMonth: 10, accountId: 'a4', startDate: '2026-02-10' } },
   // scheduled split CRUD (add/update/remove → leaves one split on s1).
   { action: 'addScheduledSplit', args: { templateId: 's1', accountId: 'a2', pct: 40 } },
   { action: 'addScheduledSplit', args: { templateId: 's1', accountId: 'a3', pct: 25 } },
@@ -558,6 +568,10 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   // Needs an EUR rate on/before every entry date (the earliest are the Jan
   // generateDue occurrences) — seed one at 2026-01-01.
   { action: 'setExchangeRate', args: { date: '2026-01-01', currency: 'EUR', rate: 1.08 } },
+  // With a real KRW rate in place, the refused purchase books at it (−50,000 ×
+  // 0.00072 = −36 USD) before the base change re-derives everything.
+  { action: 'setExchangeRate', args: { date: '2026-05-01', currency: 'KRW', rate: 0.00072 } },
+  { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a4', amount: -50000, merchant: 'Seoul', categoryId: 'food', date: '2026-05-15', skipRules: true } },
   { action: 'changeLedgerBase', args: { ledgerId: 'personal', newBase: 'EUR' } },
 ];
 
@@ -588,7 +602,17 @@ async function writeWriteParityFixture(): Promise<void> {
   const x = execFor(driver);
   await applySchema(x);
   for (const sql of SEED_SQL) await x(sql, []);
-  for (const step of WRITE_SEQUENCE) await applyMutation(x, step.action, await resolveArgs(x, step.args));
+  for (const step of WRITE_SEQUENCE) {
+    const args = await resolveArgs(x, step.args);
+    if (!step.expectError) { await applyMutation(x, step.action, args); continue; }
+    // The server wraps every mutation in BEGIN/COMMIT (and Swift's Apply in a
+    // write transaction), so a refused step leaves nothing behind; mirror that.
+    await x('SAVEPOINT expect_error', []);
+    const code = await applyMutation(x, step.action, args).then(() => null, (e) => (e as { code?: string }).code ?? String(e));
+    await x('ROLLBACK TO expect_error', []);
+    await x('RELEASE expect_error', []);
+    if (code !== step.expectError) throw new Error(`${step.action}: expected ${step.expectError}, got ${code ?? 'success'}`);
+  }
   const expected = await canonicalState(x);
   const dir = path.join(OUT, 'writeparity');
   await fs.mkdir(dir, { recursive: true });

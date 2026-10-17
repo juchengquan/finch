@@ -132,3 +132,40 @@ test('write-through: static fallback for an unknown currency is pinned too', asy
   expect(Number(pinned.rate)).toBeCloseTo(1.266, 4);
   expect(String(pinned.source)).toBe('derived');
 });
+
+// ─── No rate for the pair: refuse, never 1:1 ─────────────────────────────────
+
+const krwAccount = (exec: Exec) => exec(
+  "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('krw','personal','Seoul','cash','KRW',0,99,1,1,datetime('now'),datetime('now'))",
+);
+
+test('rateToHub: null (and nothing pinned) for a currency with no rows and no fallback', async () => {
+  const exec = await seeded();
+  expect(await rateToHub(exec, 'KRW', '2026-05-24')).toBeNull();
+  expect(await exec("SELECT * FROM exchange_rates WHERE currency = 'KRW'")).toEqual([]);
+});
+
+test('convertToBase: refuses a pair with no rate, naming it — never 1:1', async () => {
+  const exec = await seeded();
+  const err = await convertToBase(exec, -50000, 'KRW', 'USD', '2026-05-24').catch((e) => e);
+  expect(err.code).toBe('error.fx.noRate');
+  expect(err.params).toEqual({ from: 'KRW', to: 'USD', currency: 'KRW' });
+  // The base side too, and a refusal pins nothing for the side that DID resolve.
+  const err2 = await convertToBase(exec, 1000, 'JPY', 'KRW', '2024-01-01').catch((e) => e);
+  expect(err2.params).toEqual({ from: 'JPY', to: 'KRW', currency: 'KRW' });
+  expect(await exec("SELECT * FROM exchange_rates WHERE date = '2024-01-01'")).toEqual([]);
+});
+
+test('addTransaction on an unrated account is refused; once a rate exists it is used', async () => {
+  const exec = await seeded();
+  await krwAccount(exec);
+  const add = () => addTransaction(exec, {
+    ledgerId: 'personal', accountId: 'krw', amount: -50000, merchant: 'Seoul', date: '2026-05-24',
+  });
+  expect((await add().catch((e) => e)).code).toBe('error.fx.noRate');
+  // A real rate dated BEFORE the refused attempt — the old 1.0 pin would shadow it.
+  await exec("INSERT INTO exchange_rates (date, currency, rate) VALUES ('2026-05-01', 'KRW', 0.00072)");
+  const id = await add();
+  const [row] = await exec('SELECT amount_base FROM postings WHERE entry_id = ? AND account_id IS NOT NULL', [id]);
+  expect(Number(row.amount_base)).toBeCloseTo(-36, 2);
+});

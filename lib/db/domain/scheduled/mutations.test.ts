@@ -396,3 +396,21 @@ test('generateDueScheduled: recurring transfer caps at installment_total like ot
   );
   expect(postings.length).toBe(6); // 3 entries × 2 postings
 });
+
+test('generateDueScheduled skips an occurrence it has no exchange rate for, and posts the rest', async () => {
+  const exec = await seededAndAudited();
+  await exec(
+    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('krw','personal','Seoul','cash','KRW',0,99,1,1,datetime('now'),datetime('now'))",
+  );
+  await applyMutation(exec, 'createScheduled', {
+    id: 'rt-krw', ledgerId: 'personal', name: 'Seoul rent', type: 'expense', amount: 500000,
+    frequency: 'monthly', dayOfMonth: 10, accountId: 'krw', startDate: '2026-04-10',
+  });
+  await applyMutation(exec, 'generateDueScheduled', { today: '2026-05-30' });
+  expect(await exec("SELECT id FROM entries WHERE source_template_id = 'rt-krw'")).toEqual([]);
+  expect((await exec("SELECT id FROM entries WHERE source_template_id IS NOT NULL")).length).toBeGreaterThan(0);
+  expect(await exec("SELECT * FROM exchange_rates WHERE currency = 'KRW'")).toEqual([]);
+  // Posting it by hand says why.
+  const err = await applyMutation(exec, 'postScheduled', { templateId: 'rt-krw', date: '2026-05-10' }).catch((e) => e);
+  expect(err.code).toBe('error.fx.noRate');
+});
