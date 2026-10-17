@@ -91,7 +91,7 @@ public enum ActionName: String, Codable, Sendable, CaseIterable {
     case deleteRule
     case backfillRule
 
-    // --- scheduled (8) ---
+    // --- scheduled (9) ---
     case createScheduled
     case updateScheduled
     case deleteScheduled
@@ -100,6 +100,7 @@ public enum ActionName: String, Codable, Sendable, CaseIterable {
     case updateScheduledSplit
     case postScheduled
     case generateDueScheduled
+    case autoPostDueScheduled // native-only (generateDue for auto_post templates, from a high-water mark in app_state — see Scheduled.autoPostDue)
 
     // --- transfers (3) ---
     case createTransfer
