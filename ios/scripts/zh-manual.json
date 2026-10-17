@@ -796,5 +796,19 @@
   "Add automatically when due": "到期时自动添加",
   "Each one is recorded on its due date.": "每笔都会在到期日自动记账。",
   "Each one waits in To confirm on its due date.": "每笔都会在到期日放入待确认。",
-  "Needs a fixed amount.": "需要固定金额。"
+  "Needs a fixed amount.": "需要固定金额。",
+  "Skip": "跳过",
+  "Unskip": "取消跳过",
+  "Skip %@": "跳过 %@",
+  "Unskip %@": "取消跳过 %@",
+  "Skipped": "已跳过",
+  "skipped": "已跳过",
+  "Skipping %@": "将跳过 %@",
+  "%@ · next %@ · ends %@": "%1$@ · 下次 %2$@ · %3$@ 结束",
+  "%@ · ends %@": "%1$@ · %2$@ 结束",
+  "%@ · ended %@": "%1$@ · 已于 %2$@ 结束",
+  "End date": "结束日期",
+  "Ends on": "结束于",
+  "Nothing is posted or reminded after this day.": "此日期之后不会再记账或提醒。",
+  "The end date can't be before the start.": "结束日期不能早于开始日期。"
 }
