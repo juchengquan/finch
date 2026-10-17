@@ -54,6 +54,8 @@ final class ActivityFeedVC: UIViewController {
     private enum SectionID: Hashable {
         case modePicker   // List | Calendar, the list's first row as in SwiftUI
         case savedSearch  // the chip row
+        case reviewBar    // the review queue's count + "Mark all reviewed"
+        case reviewEmpty  // the review queue, cleared
         case calendar     // the month grid
         case day(String)  // calendar mode: the selected day's rows
         case pending
@@ -68,7 +70,7 @@ final class ActivityFeedVC: UIViewController {
         /// uniform `.supplementary` config does) added ~17pt above the picker.
         var wantsHeader: Bool {
             switch self {
-            case .modePicker, .savedSearch, .calendar, .loadMore: return false
+            case .modePicker, .savedSearch, .calendar, .loadMore, .reviewBar, .reviewEmpty: return false
             default: return true
             }
         }
@@ -84,6 +86,8 @@ final class ActivityFeedVC: UIViewController {
     private static let modePickerID = "__mode_picker__"
     private static let savedSearchID = "__saved_searches__"
     private static let calendarID = "__calendar__"
+    private static let reviewBarID = "__review_bar__"
+    private static let reviewEmptyID = "__review_empty__"
 
     private var searchQuery = ""
     /// The app's own sort enum, reused — it carries `sorted(_:)`, so ordering is
@@ -98,6 +102,13 @@ final class ActivityFeedVC: UIViewController {
     private var calMonthAnchor = MonthCashCalendar.firstOfMonth(forISO: nil)
     private var calSelectedDay: String?
     private let savedSearches = SavedSearchStore()
+    /// Set by a review-queue write so the snapshot it triggers animates: the rows
+    /// that were ticked off LEAVE the list, and should be seen going. Every other
+    /// apply stays instant (see `toggleStatus`). Consumed by the next apply.
+    private var animateNextApply = false
+    /// How many rows the queue holds under the current search and filters — what
+    /// its bar counts and "Mark all reviewed" acts on. Set in `applySnapshot`.
+    private var reviewQueueCount = 0
     /// Staged for QuickLook, which reads its item from the data source.
     private var previewURL: URL?
     @AppStorage("finch.feed.groupByMonth") private var groupByMonth = true
@@ -220,6 +231,13 @@ final class ActivityFeedVC: UIViewController {
                 section.contentInsets.top = 0
                 section.contentInsets.bottom = Metrics.modePickerBottomGap
             }
+            // The review bar is a caption for the rows under it, not a card of its
+            // own; the default section padding floated it halfway between the chips
+            // and the first month.
+            if kind == .reviewBar {
+                section.contentInsets.top = 0
+                section.contentInsets.bottom = 0
+            }
             return section
         }
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
@@ -268,6 +286,10 @@ final class ActivityFeedVC: UIViewController {
                 cell.contentConfiguration = UIHostingConfiguration {
                     SavedSearchChips(
                         searches: self.savedSearches.all(ledgerId: self.store.activeLedgerId),
+                        reviewCount: ReviewQueue.count(self.store.txns, ledgerId: self.store.activeLedgerId),
+                        inReview: self.inReview,
+                        onToggleReview: { [weak self] in self?.toggleReviewQueue() },
+                        showsSave: self.showsSaveChip,
                         onApply: { [weak self] s in
                             self?.filter = s.filter
                             self?.applySnapshot()
@@ -297,6 +319,10 @@ final class ActivityFeedVC: UIViewController {
                         masked: self.store.privacyMode)
                 }
                 cell.accessories = []
+                return
+            }
+            if id == Self.reviewBarID || id == Self.reviewEmptyID {
+                self.configureReviewCell(cell, empty: id == Self.reviewEmptyID)
                 return
             }
             if id == Self.loadMoreID {
@@ -430,17 +456,18 @@ final class ActivityFeedVC: UIViewController {
             query: searchQuery.isEmpty ? nil : searchQuery,
             accountId: filter.accountId,
             categoryId: filter.categoryId,
-            status: filter.status,
+            status: ReviewQueue.listStatus(filter.status),
             from: filter.fromYMD,
             to: filter.toYMD,
             minAmount: filter.minAmount,
             maxAmount: filter.maxAmount,
             tagIds: filter.tagIds.isEmpty ? nil : Array(filter.tagIds),
             tagsMatchAll: filter.tagsMatchAll)
-        return sort.sorted(Selectors.selectTransactions(
+        return ReviewQueue.narrow(sort.sorted(Selectors.selectTransactions(
             base, opts,
             categoryNames: Dictionary(uniqueKeysWithValues: store.categories.map { ($0.id, $0.name) }),
-            tagNames: Dictionary(uniqueKeysWithValues: store.tags.map { ($0.id, $0.name) })))
+            tagNames: Dictionary(uniqueKeysWithValues: store.tags.map { ($0.id, $0.name) }))),
+            status: filter.status)
     }
 
     private func applySnapshot() {
@@ -501,9 +528,20 @@ final class ActivityFeedVC: UIViewController {
         // an empty chip row above every feed, which is not a row this screen ever had.
         // `filter.isActive` keeps the "＋ Save" affordance reachable once the user has
         // narrowed the list — that is the only way to create the first saved search.
-        if !savedSearches.all(ledgerId: store.activeLedgerId).isEmpty || filter.isActive {
+        // The review chip is the queue's way in, so the row also shows while anything
+        // needs review — the one case where it appears with no saved search behind it.
+        if !savedSearches.all(ledgerId: store.activeLedgerId).isEmpty || filter.isActive
+            || ReviewQueue.count(store.txns, ledgerId: store.activeLedgerId) > 0 {
             snap.appendSections([.savedSearch])
             snap.appendItems([Self.savedSearchID], toSection: .savedSearch)
+        }
+        // In the queue, its count and "Mark all reviewed" sit above the rows — or,
+        // once it is clear, the empty state replaces them.
+        reviewQueueCount = txns.count
+        if inReview {
+            let section: SectionID = txns.isEmpty ? .reviewEmpty : .reviewBar
+            snap.appendSections([section])
+            snap.appendItems([txns.isEmpty ? Self.reviewEmptyID : Self.reviewBarID], toSection: section)
         }
 
         if !pending.isEmpty {
@@ -516,7 +554,10 @@ final class ActivityFeedVC: UIViewController {
             snap.appendItems(upcoming.map(\.id), toSection: .upcoming)
             headers[.upcoming] = HeaderContent(title: String(localized: "Upcoming (\(upcoming.count))"))
         }
-        if page.isEmpty {
+        if page.isEmpty && inReview {
+            // The queue's own empty state above says it; a bare "Transactions"
+            // header under "All caught up" would be noise.
+        } else if page.isEmpty {
             snap.appendSections([.empty])
             headers[.empty] = HeaderContent(title: String(localized: "Transactions"))
             // At launch the feed is empty because the projection has not landed, not
@@ -548,7 +589,9 @@ final class ActivityFeedVC: UIViewController {
         snap.reconfigureItems(snap.itemIdentifiers.filter(carried.contains))
         headerContent = headers
         sectionIDs = snap.sectionIdentifiers
-        dataSource.apply(snap, animatingDifferences: false) { [weak self] in
+        let animate = animateNextApply
+        animateNextApply = false
+        dataSource.apply(snap, animatingDifferences: animate) { [weak self] in
             self?.refreshVisibleHeaders()
             self?.clearStuckHighlight()
             // `apply` clears the selection, so in column mode the row would stop
@@ -726,6 +769,7 @@ final class ActivityFeedVC: UIViewController {
             previewReceipt: { [weak self] tx in self?.previewReceipt(tx) })
         // The item is omitted when the row has no attachment, as in SwiftUI.
         if store.attachments(for: tx.id).isEmpty { actions.previewReceipt = nil }
+        if inReview { actions.markReviewed = { [weak self] tx in self?.markReviewed([tx.id]) } }
         return (tx, actions)
     }
 
@@ -791,6 +835,73 @@ final class ActivityFeedVC: UIViewController {
     }
 }
 
+// MARK: Review queue — see `ReviewQueue` for what it holds and why
+
+extension ActivityFeedVC {
+    /// The feed is the queue while the filter's status says so — set by the chip,
+    /// the filter sheet's Status picker, or a saved search.
+    private var inReview: Bool { filter.status == ReviewQueue.status }
+
+    /// "＋ Save" offers to save the current filter — so not the review queue alone,
+    /// which already has its chip. The row can now exist for the review chip only,
+    /// and offering to save an empty filter there is a button that does nothing.
+    private var showsSaveChip: Bool {
+        var rest = filter
+        if inReview { rest.status = nil }
+        return rest.isActive || !savedSearches.all(ledgerId: store.activeLedgerId).isEmpty
+    }
+
+    private func toggleReviewQueue() {
+        filter.status = inReview ? nil : ReviewQueue.status
+        applySnapshot()
+    }
+
+    /// The bar ("N to review · Mark all reviewed") and the cleared state share one
+    /// cell kind — both are a bare row, no card, like the mode picker above them.
+    private func configureReviewCell(_ cell: UICollectionViewListCell, empty: Bool) {
+        if empty {
+            let left = ReviewQueue.count(store.txns, ledgerId: store.activeLedgerId)
+            cell.contentConfiguration = UIHostingConfiguration {
+                ReviewQueueEmpty(remainingElsewhere: left)
+            }
+        } else {
+            let n = reviewQueueCount
+            cell.contentConfiguration = UIHostingConfiguration {
+                ReviewQueueBar(count: n) { [weak self] in self?.confirmMarkAllReviewed() }
+            }
+            .margins(.vertical, 0)
+        }
+        cell.backgroundConfiguration = .clear()
+        cell.accessories = []
+    }
+
+    /// Everything the queue holds under the current search and filters — not just
+    /// the 50-row page, which is why the bar prints the full count. Asks first from
+    /// `ReviewQueue.confirmationThreshold` rows up.
+    private func confirmMarkAllReviewed() {
+        let ids = filteredTxns().map(\.id)
+        guard !ids.isEmpty else { return }
+        guard ReviewQueue.needsConfirmation(ids.count) else { markReviewed(ids); Haptics.success(); return }
+        let alert = UIAlertController(title: String(localized: "Mark \(ids.count) transactions reviewed?"),
+                                      message: String(localized: "They leave the review queue. You can unmark one from its editor."),
+                                      preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: String(localized: "Mark all reviewed"), style: .default) { [weak self] _ in
+            self?.markReviewed(ids)
+            Haptics.success()
+        })
+        alert.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel))
+        present(alert, animated: true)
+    }
+
+    /// One write for one row or many. The store publishes, `$txns` lands here on
+    /// the next turn, and that snapshot — flagged to animate — removes the rows.
+    /// No haptic here: the swipe plays its own, and "Mark all" adds a success one.
+    private func markReviewed(_ ids: [String]) {
+        animateNextApply = true
+        report(store.markReviewed(ids), of: ids.count)
+    }
+}
+
 extension ActivityFeedVC: QLPreviewControllerDataSource {
     func numberOfPreviewItems(in controller: QLPreviewController) -> Int { previewURL == nil ? 0 : 1 }
     func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
@@ -806,6 +917,7 @@ extension ActivityFeedVC: UICollectionViewDelegate {
         guard let id = dataSource.itemIdentifier(for: ip) else { return true }
         return id != Self.modePickerID && id != Self.savedSearchID && id != Self.calendarID
             && id != Self.loadingID   // a spinner, not a row
+            && id != Self.reviewBarID && id != Self.reviewEmptyID
     }
 
     func collectionView(_ cv: UICollectionView, didSelectItemAt ip: IndexPath) {
@@ -875,6 +987,12 @@ extension ActivityFeedVC: UISearchResultsUpdating {
 /// Long-press a chip to delete, matching the SwiftUI screen's context menu.
 private struct SavedSearchChips: View {
     let searches: [SavedSearch]
+    /// The review queue's entry chip: shown while anything needs review, and while
+    /// the queue is open (so it can be closed again from where it was opened).
+    let reviewCount: Int
+    let inReview: Bool
+    let onToggleReview: () -> Void
+    let showsSave: Bool
     let onApply: (SavedSearch) -> Void
     let onDelete: (SavedSearch) -> Void
     let onSave: () -> Void
@@ -882,6 +1000,12 @@ private struct SavedSearchChips: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                if reviewCount > 0 || inReview {
+                    Button { onToggleReview() } label: {
+                        ReviewQueueChip(count: reviewCount, selected: inReview)
+                    }
+                    .buttonStyle(.plain)
+                }
                 ForEach(searches) { s in
                     Button { onApply(s) } label: { chip(s.name) }
                         .buttonStyle(.plain)
@@ -896,8 +1020,10 @@ private struct SavedSearchChips: View {
                         // in ActivityTab's chip row, which has the same shape.
                         .accessibilityAction(named: Text(String(localized: "Delete"))) { onDelete(s) }
                 }
-                Button { onSave() } label: { chip(String(localized: "＋ Save")) }
-                    .buttonStyle(.plain)
+                if showsSave {
+                    Button { onSave() } label: { chip(String(localized: "＋ Save")) }
+                        .buttonStyle(.plain)
+                }
             }
         }
     }
