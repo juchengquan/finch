@@ -2,7 +2,7 @@ import Foundation
 import UserNotifications
 import FinchCore
 
-/// User toggles for the 4 categories (global, app-local — not ledger data, so
+/// User toggles for the categories (global, app-local — not ledger data, so
 /// UserDefaults, not the chokepoint). All on by default.
 public enum NotificationPrefs {
     private static let key = "finch.notifications.disabledKinds"
@@ -116,7 +116,11 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
             categories: store.categoryNodes, today: store.today, wallToday: store.wallToday,
             ledgerId: store.activeLedgerId,
             enabled: NotificationPrefs.enabled, money: { store.displayMoneyBase($0) },
-            deliveryHour: NotificationPrefs.deliveryHour)
+            deliveryHour: NotificationPrefs.deliveryHour,
+            // The forecast is in the account's own currency; `displayMoney` converts it
+            // to the display currency exactly as the account screen's figures are, and
+            // masks it in privacy mode like every other alert's amount.
+            accounts: store.accounts, accountMoney: { store.displayMoney($0, from: $1) })
 
         let pending = Set(await center.pendingNotificationRequests().map(\.identifier))
         let delivered = Set(await center.deliveredNotifications().map(\.request.identifier))
@@ -241,7 +245,11 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
         ], intentIdentifiers: [], options: [])
         let digest = UNNotificationCategory(identifier: NotificationKind.weeklyDigest.rawValue, actions: [],
                                             intentIdentifiers: [], options: [])
-        center.setNotificationCategories([scheduled, budget, anomaly, digest])
+        // No action button: the tap itself opens the account (see didReceive), and a
+        // "View account" button would only repeat it.
+        let lowBalance = UNNotificationCategory(identifier: NotificationKind.lowBalance.rawValue, actions: [],
+                                                intentIdentifiers: [], options: [])
+        center.setNotificationCategories([scheduled, budget, lowBalance, anomaly, digest])
     }
 
     // MARK: UNUserNotificationCenterDelegate
@@ -295,7 +303,11 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
             case "viewTransaction":
                 if let id = focusId { router?.route(to: "tx:\(id)") } else { router?.open(.activity) }
             default:                  // tap (UNNotificationDefaultActionIdentifier)
-                if let tabName, let t = Self.tab(from: tabName) { router?.open(t) }
+                // A low-balance alert is about ONE account: open it, where the forecast
+                // is, rather than leaving the user to find it in the list.
+                if kindName == NotificationKind.lowBalance.rawValue, let id = focusId {
+                    router?.route(to: "account:\(id)")
+                } else if let tabName, let t = Self.tab(from: tabName) { router?.open(t) }
             }
         }
     }

@@ -1202,6 +1202,16 @@
         }
       }
     },
+    "Already below zero": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已低于零"
+          }
+        }
+      }
+    },
     "Amount": {
       "localizations": {
         "zh-Hans": {
@@ -2315,6 +2325,16 @@
         }
       }
     },
+    "Day": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日期"
+          }
+        }
+      }
+    },
     "Day (1–31)": {
       "localizations": {
         "zh-Hans": {
@@ -2701,6 +2721,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "拖动滑块试试削减效果。"
+          }
+        }
+      }
+    },
+    "Drops below zero on %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将于 %@ 降至零以下"
           }
         }
       }
@@ -3478,6 +3508,16 @@
         }
       }
     },
+    "In %lld days": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 天后"
+          }
+        }
+      }
+    },
     "In backup folder": {
       "localizations": {
         "zh-Hans": {
@@ -3926,6 +3966,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "“%1$@”（%2$@）似乎已存在。"
+          }
+        }
+      }
+    },
+    "Low balance ahead: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "余额即将不足：%@"
+          }
+        }
+      }
+    },
+    "Low balance warnings": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "余额不足提醒"
           }
         }
       }
@@ -4416,6 +4476,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "下一步"
+          }
+        }
+      }
+    },
+    "Next %lld days": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未来 %lld 天"
           }
         }
       }
@@ -5931,6 +6001,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "计划"
+          }
+        }
+      }
+    },
+    "Scheduled items only — anything unplanned isn't counted.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅计入计划项目，未计划的收支不在其中。"
+          }
+        }
+      }
+    },
+    "Scheduled items take it below zero on %@, down to %@ by %@.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "计划项目将使余额在 %1$@ 降至零以下，并于 %3$@ 降至 %2$@。"
+          }
+        }
+      }
+    },
+    "Scheduled items take it below zero on %@, to %@.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "计划项目将使余额在 %1$@ 降至零以下，届时为 %2$@。"
           }
         }
       }

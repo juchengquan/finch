@@ -64,6 +64,7 @@ struct AccountDetailView: View {
     private func accountDetailContent(_ account: AccountRow) -> some View {
         List {
             modePickerRow
+            forecastSection(account)
             holdingsSection(account)
             if viewMode == .calendar {
                 calendarSection(account)
@@ -191,6 +192,21 @@ struct AccountDetailView: View {
         case .never: return nil
         case .fresh: return .green
         case .stale: return .orange
+        }
+    }
+
+    /// Where the balance is heading — the same card, model and placement as the UIKit
+    /// screen (`AccountForecastPanel`), absent when nothing scheduled lands on this
+    /// account in the window. Shown in both lenses: it is about the balance, not a view
+    /// of the rows.
+    @ViewBuilder private func forecastSection(_ a: AccountRow) -> some View {
+        if let panel = AccountForecastPanel.make(account: a, scheduled: store.scheduled,
+                                                 today: store.wallToday) {
+            Section {
+                AccountForecastCard(panel: panel, currency: a.currency)
+            } header: {
+                Text("Next \(AccountForecastPanel.horizonDays) days")
+            }
         }
     }
 
