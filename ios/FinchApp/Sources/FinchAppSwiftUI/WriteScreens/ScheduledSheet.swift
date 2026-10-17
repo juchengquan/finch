@@ -30,6 +30,10 @@ struct ScheduledSheet: View {
     @State private var startDate: Date
     @State private var installmentEnabled: Bool
     @State private var installmentTotal: String
+    /// `auto_post`. On for a new template — the design's default — and whatever
+    /// the template holds on edit, which for everything created before this
+    /// switch existed is off (native `createScheduled` always wrote 0).
+    @State private var autoPost: Bool
     @State private var errorMessage: String?
 
     private var isEdit: Bool { template != nil }
@@ -74,6 +78,7 @@ struct ScheduledSheet: View {
         _startDate = State(initialValue: seeded ?? prefillStart ?? Date())
         _installmentEnabled = State(initialValue: template?.installmentTotal != nil)
         _installmentTotal = State(initialValue: template?.installmentTotal.map { String($0) } ?? "")
+        _autoPost = State(initialValue: template?.postsAutomatically ?? true)
     }
 
     init(fromCharge c: RecurringCharge) {
@@ -90,6 +95,7 @@ struct ScheduledSheet: View {
         _startDate = State(initialValue: AppDate.isoDay.date(from: c.nextEstimatedDate) ?? Date())
         _installmentEnabled = State(initialValue: false)
         _installmentTotal = State(initialValue: "")
+        _autoPost = State(initialValue: true)
     }
 
     var body: some View {
@@ -154,6 +160,10 @@ struct ScheduledSheet: View {
                         DatePicker("Start", selection: $startDate, displayedComponents: [.date, .hourAndMinute])
                             .labelsHidden()
                     }
+                    FieldRow(glyph: .autoPost, title: "Add automatically when due", help: autoPostHelp) {
+                        Toggle("Add automatically when due", isOn: $autoPost).switchOnlyToggles()
+                            .disabled(isVariableAmount)
+                    }
                 } header: {
                     finchSectionHeader("Schedule")
                 }
@@ -203,6 +213,25 @@ struct ScheduledSheet: View {
         }
     }
 
+    /// A variable amount has nothing to add — the generator skips those, so the
+    /// switch would promise something that never happens.
+    private var isVariableAmount: Bool { amount.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    /// What switching it on does, which differs by kind (design decision 25): income
+    /// and expenses wait for review; a transfer between your own accounts is simply
+    /// recorded.
+    private var autoPostHelp: LocalizedStringKey {
+        if isVariableAmount { return "Needs a fixed amount." }
+        return kind == .transfer ? "Each one is recorded on its due date." : "Each one waits in To confirm on its due date."
+    }
+
+    /// Add today's occurrence now if this save made one due, rather than at the
+    /// next launch — the same run the app makes on every return to the foreground.
+    private func autoPostIfOn() {
+        guard autoPost else { return }
+        Task { await store.autoPostDueScheduled() }
+    }
+
     private func seedDefaults() {
         guard !isEdit else { return }
         if accountId.isEmpty { accountId = accounts.first?.id ?? "" }
@@ -250,7 +279,11 @@ struct ScheduledSheet: View {
             patch["startTime"] = .string(AppDate.isoTime.string(from: startDate))
             if kind != .transfer { patch["category"] = categoryId.isEmpty ? .null : .string(categoryId) }
             patch["installmentTotal"] = installmentN.map { JSONValue.int($0) } ?? .null
-            do { try store.apply(.updateScheduled, Args(["id": .string(template.id), "patch": .object(patch)])); dismiss() }
+            patch["autoPost"] = .bool(autoPost)
+            do {
+                try store.apply(.updateScheduled, Args(["id": .string(template.id), "patch": .object(patch)]))
+                autoPostIfOn(); dismiss()
+            }
             catch { errorMessage = i18nMessage(error) }
             return
         }
@@ -267,7 +300,8 @@ struct ScheduledSheet: View {
         if kind == .transfer { args["fromAccountId"] = .string(fromAccountId) }
         else if !categoryId.isEmpty { args["category"] = .string(categoryId) }
         if let n = installmentN { args["installmentTotal"] = .double(Double(n)) }
-        do { try store.apply(.createScheduled, Args(args)); dismiss() }
+        args["autoPost"] = .bool(autoPost)
+        do { try store.apply(.createScheduled, Args(args)); autoPostIfOn(); dismiss() }
         catch { errorMessage = i18nMessage(error) }
     }
 }

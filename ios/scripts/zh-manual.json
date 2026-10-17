@@ -792,5 +792,9 @@
   "Drops below zero on %@": "将于 %@ 降至零以下",
   "Already below zero": "已低于零",
   "Scheduled items only — anything unplanned isn't counted.": "仅计入计划项目，未计划的收支不在其中。",
-  "Day": "日期"
+  "Day": "日期",
+  "Add automatically when due": "到期时自动添加",
+  "Each one is recorded on its due date.": "每笔都会在到期日自动记账。",
+  "Each one waits in To confirm on its due date.": "每笔都会在到期日放入待确认。",
+  "Needs a fixed amount.": "需要固定金额。"
 }

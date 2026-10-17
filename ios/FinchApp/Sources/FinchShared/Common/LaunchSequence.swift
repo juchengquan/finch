@@ -115,6 +115,17 @@ enum LaunchSequence {
             }
         }
 
+        // Auto-post: add the scheduled occurrences that fell due while the app was
+        // closed. Below first paint (it writes, and waits for the txns projection),
+        // above the notification planner so the plan usually sees the result — though
+        // a run that posts anything re-plans anyway. Lock-gated like Spotlight: a
+        // write re-indexes, and the index must stay empty while locked. Unlocking and
+        // every return to the foreground run it again (the shells' scene-phase and
+        // lock handlers), so a launch behind the lock misses nothing.
+        if !gate.isLocked {
+            Task { await store.autoPostDueScheduled() }
+        }
+
         // Phase 6.2: notifications. `configure` is always wired — it only installs the
         // delegate — but the prompt and the planner are skipped under
         // `-disableNotifications YES`: the demo seed dates transactions at

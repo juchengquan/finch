@@ -284,6 +284,36 @@ public final class FinchStore: ObservableObject {
         return applied.count
     }
 
+    /// Add the scheduled occurrences that have fallen due on templates set to "Add
+    /// automatically" — income/expense into To confirm, transfers recorded outright
+    /// (`Scheduled.autoPostDue` has the rules and the catch-up floor). Called at
+    /// launch, on every return to the foreground and on unlock, so it is idempotent
+    /// and usually finds nothing.
+    ///
+    /// Not `apply`, for that common case: a run that posts nothing fires NO write
+    /// side-effects. Through `apply`, every foreground would reproject, re-index
+    /// Spotlight, rebuild the widget, schedule a backup and log a sync mutation for
+    /// no change at all. When something is posted it takes the exact `apply` path.
+    ///
+    /// Waits for the launch txns projection first. That projection runs detached and
+    /// publishes whatever it read when it lands; a write that reprojects before then
+    /// would be overwritten by the older list, and the new rows would vanish from
+    /// the feed until the next write.
+    ///
+    /// `wallToday`, not `today`: "has it fallen due" is a calendar question, and the
+    /// data-anchored day lags whenever nothing has been recorded lately — which is
+    /// exactly when the generator has the most to add.
+    @discardableResult
+    public func autoPostDueScheduled() async -> Int {
+        await awaitTxnsReady()
+        guard let q = dbQueue else { return 0 }
+        let args = Args(["today": .string(wallToday)])
+        guard let posted = try? Apply.applyReturningCount(dbQueue: q, action: ActionName.autoPostDueScheduled.rawValue,
+                                                         args: args) else { return 0 }
+        if posted > 0 { fireWriteSideEffects(q, mutations: [(.autoPostDueScheduled, args)]) }
+        return posted
+    }
+
     /// Every post-write side effect, fired exactly once per user-visible write
     /// (single action or a whole batch). `mutations` lists what was applied —
     /// the CloudKit outbox logs each one individually.
