@@ -167,4 +167,45 @@ final class ScheduledPostRoutingTests: XCTestCase {
         XCTAssertNil(prefill, "split-income posts silently, no sheet")
         XCTAssertEqual(store.txns.count, txCountBefore + 2, "both 50/50 splits should have posted")
     }
+
+    // MARK: - The row names the date Post opens
+
+    /// The audit's Spotify: monthly, its last two occurrences never posted. The row
+    /// used to read "next <the one ahead>" while Post opened a form dated the OLDEST
+    /// missed one (catch-up is deliberate), so saving booked a backdated row the user
+    /// never meant. Now the row says "overdue <that date>" — the exact occurrence the
+    /// bare Post below opens, through the real `ScheduledPoster` path.
+    @MainActor
+    func test_bareTemplatePost_opensTheDateTheRowNames() async throws {
+        let packURL = try XCTUnwrap(Bundle(for: Self.self).url(
+            forResource: "sample", withExtension: "finch", subdirectory: "Fixtures/roundtrip"))
+        let store = FinchStore()
+        try await store.loadPack(from: try Data(contentsOf: packURL))
+        let accountId = try XCTUnwrap(store.accounts.first?.id)
+        let today = store.wallToday
+        let id = "sch-\(UUID().uuidString.prefix(8))"
+        // Weekly, starting three weeks back: three missed occurrences, none posted.
+        let start = Selectors.horizonDay(from: today, addingDays: -21)
+        try store.apply(.createScheduled, Args([
+            "id": .string(id), "ledgerId": .string(store.activeLedgerId), "name": .string("Spotify"),
+            "type": .string("expense"), "amount": .double(19.99), "frequency": .string("weekly"),
+            "startDate": .string(start), "accountId": .string(accountId),
+        ]))
+        let t = try XCTUnwrap(store.scheduled.first { $0.id == id })
+        let posted = Selectors.scheduledPostedMap(store.txns)
+
+        let caption = ScheduledCaption.cadence(t, posted: posted, today: today)
+        XCTAssertTrue(caption.overdue)
+        XCTAssertEqual(caption.text, "Weekly · overdue \(start)")
+
+        var prefill: PostPrefill?
+        var errorMessage: String?
+        ScheduledPoster.postNow(t, store: store,
+                                prefill: Binding(get: { prefill }, set: { prefill = $0 }),
+                                errorMessage: Binding(get: { errorMessage }, set: { errorMessage = $0 }))
+        XCTAssertNil(errorMessage)
+        XCTAssertEqual(prefill?.occurrence, start, "Post opens the date the row named")
+        XCTAssertEqual(scheduledNextRun(t, posted: posted, today: today), start,
+                       "and the list sorts the row on that same date")
+    }
 }

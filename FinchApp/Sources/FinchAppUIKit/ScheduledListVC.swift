@@ -82,6 +82,9 @@ final class ScheduledListVC: UIViewController {
     /// sections while an apply is in flight, which is how AccountDetailVC's month
     /// figures came out a generation stale.
     private var headers: [SectionID: String] = [:]
+    /// `Selectors.scheduledPostedMap`, rebuilt once per `applySnapshot`: the sort, the
+    /// month groups and every row's caption read it, and it walks every transaction.
+    private var postedMap: [String: Bool] = [:]
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -298,7 +301,8 @@ final class ScheduledListVC: UIViewController {
                     // marked as skipped rather than as money about to move.
                     let skipped = self.isSkippedOccurrence(id)
                     cell.contentConfiguration = UIHostingConfiguration {
-                        ScheduledRow(template: t, occurrenceSkipped: skipped).environmentObject(self.store)
+                        ScheduledRow(template: t, occurrenceSkipped: skipped, posted: self.postedMap)
+                            .environmentObject(self.store)
                             .accessibilityElement(children: .combine)
                             .accessibilityAddTraits(.isButton)
                     }
@@ -325,7 +329,7 @@ final class ScheduledListVC: UIViewController {
                     // One VoiceOver element per row, as the SwiftUI `Button` gave —
                     // hosting `ScheduledRow` bare exposes its name, cadence and amount
                     // as three separate elements. Same fix as `BudgetsListVC`.
-                    ScheduledRow(template: t).environmentObject(self.store)
+                    ScheduledRow(template: t, posted: self.postedMap).environmentObject(self.store)
                         .accessibilityElement(children: .combine)
                         .accessibilityAddTraits(.isButton)
                 }
@@ -362,7 +366,7 @@ final class ScheduledListVC: UIViewController {
         let q = searchQuery.trimmingCharacters(in: .whitespaces).lowercased()
         let base = q.isEmpty ? store.scheduled : store.scheduled.filter { $0.name.lowercased().contains(q) }
         let today = store.wallToday
-        return base.map { (next: scheduledNextRun($0, today: today), t: $0) }
+        return base.map { (next: scheduledNextRun($0, posted: postedMap, today: today), t: $0) }
             .sorted { $0.next != $1.next ? $0.next < $1.next : $0.t.name < $1.t.name }
             .map(\.t)
     }
@@ -375,7 +379,7 @@ final class ScheduledListVC: UIViewController {
         var order: [String] = []
         var by: [String: [ScheduledTemplate]] = [:]
         for t in filteredTemplates() {
-            let next = scheduledNextRun(t, today: today)
+            let next = scheduledNextRun(t, posted: postedMap, today: today)
             let key = next.count >= 7 ? String(next.prefix(7)) : "—"
             if by[key] == nil { order.append(key) }
             by[key, default: []].append(t)
@@ -403,6 +407,7 @@ final class ScheduledListVC: UIViewController {
         // data source is built, and `selectedID` is already stored by then, so skipping
         // here loses nothing.
         guard dataSource != nil else { return }
+        postedMap = Selectors.scheduledPostedMap(store.txns)
         rebuildOccurrences()
         let templates = templatesByMonth()
         let charges = filteredCharges()

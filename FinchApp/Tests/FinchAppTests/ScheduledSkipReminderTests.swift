@@ -80,16 +80,67 @@ final class ScheduledSkipReminderTests: XCTestCase {
 
     // MARK: captions
 
+    /// `scheduledPostedMap` over `dates`, posted (or, `pending`, waiting in To confirm).
+    private func postedMap(_ dates: [String], pending: Bool = false) -> [String: Bool] {
+        Dictionary(uniqueKeysWithValues: dates.map { ("gym|\($0)", pending) })
+    }
+    private var paidMap: [String: Bool] { postedMap(paidThroughMarch) }
+
     func test_cadenceCaption() {
-        XCTAssertEqual(ScheduledCaption.cadence(gym(), today: "2026-04-01"), "Monthly · next 2026-04-15")
-        XCTAssertEqual(ScheduledCaption.cadence(gym(skipped: ["2026-04-15"]), today: "2026-04-01"),
-                       "Monthly · next 2026-05-15", "next passes over a skip")
-        XCTAssertEqual(ScheduledCaption.cadence(gym(endDate: "2026-12-31"), today: "2026-04-01"),
-                       "Monthly · next 2026-04-15 · ends 2026-12-31")
-        XCTAssertEqual(ScheduledCaption.cadence(gym(endDate: "2026-03-31"), today: "2026-04-01"),
-                       "Monthly · ended 2026-03-31")
-        XCTAssertEqual(ScheduledCaption.cadence(gym(skipped: ["2026-04-15"], endDate: "2026-04-30"), today: "2026-04-01"),
+        func text(_ t: ScheduledTemplate) -> String { ScheduledCaption.cadence(t, posted: paidMap, today: "2026-04-01").text }
+        XCTAssertEqual(text(gym()), "Monthly · next 2026-04-15")
+        XCTAssertEqual(text(gym(skipped: ["2026-04-15"])), "Monthly · next 2026-05-15", "next passes over a skip")
+        XCTAssertEqual(text(gym(endDate: "2026-12-31")), "Monthly · next 2026-04-15 · ends 2026-12-31")
+        XCTAssertEqual(text(gym(endDate: "2026-03-31")), "Monthly · ended 2026-03-31")
+        XCTAssertEqual(text(gym(skipped: ["2026-04-15"], endDate: "2026-04-30")),
                        "Monthly · ends 2026-04-30", "nothing left, but the end date is still ahead")
+    }
+
+    // MARK: overdue — the row says the date Post opens
+
+    /// The audit's Spotify: a past occurrence nobody posted. Post catches up
+    /// oldest-first (`resumeOccurrence`), so the row must name THAT date, not the
+    /// next one ahead — "next Apr 15" over a form dated Mar 15 booked a backdated
+    /// duplicate the user never meant.
+    func test_aMissedOccurrenceReadsOverdue_withTheDatePostOpens() {
+        let posted = postedMap(["2026-01-15", "2026-02-15"])
+        let caption = ScheduledCaption.cadence(gym(), posted: posted, today: "2026-04-01")
+        XCTAssertEqual(caption.text, "Monthly · overdue 2026-03-15")
+        XCTAssertTrue(caption.overdue)
+        let postOpens = Selectors.resumeOccurrence(template: gym(), posted: posted, today: "2026-04-01")
+        XCTAssertEqual(postOpens, "2026-03-15")
+        XCTAssertEqual(scheduledNextRun(gym(), posted: posted, today: "2026-04-01"), postOpens,
+                       "the list sorts and groups on the date the row prints")
+        // Several missed: the OLDEST, because that is the one Post fills in.
+        XCTAssertEqual(ScheduledCaption.cadence(gym(), posted: [:], today: "2026-04-01").text,
+                       "Monthly · overdue 2026-01-15")
+    }
+
+    /// A skipped occurrence was not missed — the user said "not this one".
+    func test_aSkippedPastOccurrenceIsNotOverdue() {
+        let caption = ScheduledCaption.cadence(gym(skipped: ["2026-03-15"]),
+                                               posted: postedMap(["2026-01-15", "2026-02-15"]), today: "2026-04-01")
+        XCTAssertEqual(caption.text, "Monthly · next 2026-04-15")
+        XCTAssertFalse(caption.overdue)
+    }
+
+    /// Auto-post already added it: waiting in To confirm counts as posted, so the
+    /// row moves on rather than nagging about a row that already exists.
+    func test_anOccurrenceWaitingInToConfirmIsNotOverdue() {
+        let posted = paidMap.merging(postedMap(["2026-04-15"], pending: true)) { a, _ in a }
+        let caption = ScheduledCaption.cadence(gym(), posted: posted, today: "2026-04-20")
+        XCTAssertEqual(caption.text, "Monthly · next 2026-05-15")
+        XCTAssertFalse(caption.overdue)
+    }
+
+    /// Due today is due, not overdue — and once posted (even early), "next" moves on
+    /// to the occurrence Post would open now.
+    func test_dueTodayIsNext_andAPostedOneIsPassedOver() {
+        XCTAssertEqual(ScheduledCaption.cadence(gym(), posted: paidMap, today: "2026-04-15").text,
+                       "Monthly · next 2026-04-15")
+        let early = paidMap.merging(postedMap(["2026-04-15"])) { a, _ in a }
+        XCTAssertEqual(ScheduledCaption.cadence(gym(), posted: early, today: "2026-04-10").text,
+                       "Monthly · next 2026-05-15")
     }
 
     /// From the current occurrence on: the one just passed (what a bare Skip can

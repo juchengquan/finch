@@ -301,7 +301,8 @@ extension Selectors {
 
     /// The first occurrence on or after `today` that will happen — skipped ones
     /// excluded, the end date honoured — within the ~400-day horizon; nil when there
-    /// is none (the template has ended). What the list prints as "next".
+    /// is none (the template has ended). Blind to what was posted — the list's
+    /// "next" is `resumeOccurrence`, the date Post opens.
     public static func nextOccurrence(_ t: ScheduledTemplate, onOrAfter today: String) -> String? {
         occurrencesInRange([t], from: today, through: horizonDay(from: today, addingDays: 400)).first?.date
     }
@@ -369,9 +370,9 @@ extension Selectors {
     /// ONE calendar (UTC) — parsed and formatted within that same calendar, so
     /// the timezone is unobservable; do not "fix" it to local (ios/CLAUDE.md,
     /// civil-date convention). Single source of truth for the ~400-day
-    /// lookahead horizon shared by `resumeOccurrence` below and
-    /// `scheduledNextRun` (FinchApp/Tabs/ScheduledTab.swift) — both need a
-    /// horizon long enough that a yearly template still resolves.
+    /// lookahead horizon shared by `resumeOccurrence` below (which the app's
+    /// `scheduledNextRun` and row captions print) and `nextOccurrence` — both
+    /// need a horizon long enough that a yearly template still resolves.
     public static func horizonDay(from today: String, addingDays days: Int) -> String {
         var utc = Calendar(identifier: .gregorian)
         utc.timeZone = TimeZone(identifier: "UTC")!
@@ -385,7 +386,9 @@ extension Selectors {
 
     /// The occurrence a bare "Post now" (no occurrence already in hand) should
     /// act on: catch up oldest-first — the same order `generateDue` uses — then
-    /// fall forward to the next due occurrence once nothing is missed. Scans from
+    /// fall forward to the next due occurrence once nothing is missed. It is also
+    /// the date a scheduled row prints (overdue while it is behind today), so the
+    /// row and the Post form cannot disagree. Scans from
     /// the template's anchor (so an old unposted occurrence is still caught) up to a
     /// ~400-day forward horizon, enough that a yearly template still resolves.
     public static func resumeOccurrence(template: ScheduledTemplate, posted: [String: Bool],

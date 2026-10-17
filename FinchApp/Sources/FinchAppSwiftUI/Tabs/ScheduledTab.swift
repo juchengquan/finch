@@ -43,7 +43,8 @@ struct ScheduledTab: View {
         let q = searchQuery.trimmingCharacters(in: .whitespaces).lowercased()
         let base = q.isEmpty ? store.scheduled : store.scheduled.filter { $0.name.lowercased().contains(q) }
         let today = store.wallToday
-        return base.map { (next: scheduledNextRun($0, today: today), t: $0) }
+        let posted = Selectors.scheduledPostedMap(store.txns)
+        return base.map { (next: scheduledNextRun($0, posted: posted, today: today), t: $0) }
             .sorted { $0.next != $1.next ? $0.next < $1.next : $0.t.name < $1.t.name }
             .map(\.t)
     }
@@ -55,8 +56,9 @@ struct ScheduledTab: View {
         let today = store.wallToday
         var order: [String] = []
         var by: [String: [ScheduledTemplate]] = [:]
+        let posted = Selectors.scheduledPostedMap(store.txns)
         for t in filteredScheduled {
-            let next = scheduledNextRun(t, today: today)
+            let next = scheduledNextRun(t, posted: posted, today: today)
             let key = next.count >= 7 ? String(next.prefix(7)) : "—"
             if by[key] == nil { order.append(key) }
             by[key, default: []].append(t)
@@ -73,7 +75,7 @@ struct ScheduledTab: View {
         let unskipDate = Selectors.unskipTarget(template: t, posted: posted)
         Button {
             if let selection { selection.wrappedValue = t.id } else { editing = t }
-        } label: { ScheduledRow(template: t).contentShape(Rectangle()) }
+        } label: { ScheduledRow(template: t, posted: posted).contentShape(Rectangle()) }
             .buttonStyle(.plain)
             .swipeActions(edge: .trailing) {
                 // Edit declared first → sits at the trailing edge (rightmost); Delete to its left.
@@ -295,6 +297,9 @@ struct ScheduledRow: View {
     /// still shows the item — that is where it is un-skipped — without it reading
     /// as money about to move.
     var occurrenceSkipped = false
+    /// `Selectors.scheduledPostedMap(store.txns)`, when the list has it already —
+    /// it walks every transaction, so a list builds it once rather than per row.
+    var posted: [String: Bool]? = nil
 
     private var accountName: String {
         store.accounts.first { $0.id == template.accountId }?.name ?? "—"
@@ -342,8 +347,13 @@ struct ScheduledRow: View {
                 if occurrenceSkipped {
                     Text("Skipped").font(.caption).foregroundStyle(.secondary)
                 } else {
-                    Text(ScheduledCaption.cadence(template, today: store.wallToday))
-                        .font(.caption).foregroundStyle(.secondary)
+                    // Red while overdue — the calendar's "missed" colour — because the
+                    // date it names is the one Post will fill in.
+                    let caption = ScheduledCaption.cadence(template, posted: posted ?? Selectors.scheduledPostedMap(store.txns),
+                                                           today: store.wallToday)
+                    Text(caption.text)
+                        .font(.caption)
+                        .foregroundStyle(caption.overdue ? AnyShapeStyle(Color.red) : AnyShapeStyle(.secondary))
                     if let skips = ScheduledCaption.skips(template, today: store.wallToday) {
                         Text(skips).font(.caption2).foregroundStyle(.secondary)
                     }
@@ -384,11 +394,14 @@ struct ScheduledRow: View {
     }
 }
 
-/// The template's next occurrence date. next_run is never persisted (NULL on
-/// insert), so derive it from the recurrence — a ~400-day horizon covers yearly
-/// templates. Shared by ScheduledRow and ScheduledDetailView. The horizon math
-/// itself lives in FinchCore (`Selectors.horizonDay`) — shared with
-/// `resumeOccurrence`, which needs the same lookahead.
-func scheduledNextRun(_ template: ScheduledTemplate, today: String) -> String {
-    Selectors.nextOccurrence(template, onOrAfter: today) ?? (template.nextRun.isEmpty ? "—" : template.nextRun)
+/// The date a scheduled row prints, sorts and groups by: the occurrence a bare
+/// "Post" opens (`ScheduledCaption.due` — the oldest missed one, else the next due),
+/// so a row never promises one date while Post fills in another. next_run is never
+/// persisted (NULL on insert), so it is only the fallback once nothing is left; a
+/// dash when even that is empty. Shared by ScheduledRow's lists and
+/// ScheduledDetailView. The ~400-day horizon (which covers yearly templates) lives
+/// in FinchCore (`Selectors.horizonDay`), inside `resumeOccurrence`.
+func scheduledNextRun(_ template: ScheduledTemplate, posted: [String: Bool], today: String) -> String {
+    ScheduledCaption.due(template, posted: posted, today: today)?.date
+        ?? (template.nextRun.isEmpty ? "—" : template.nextRun)
 }
