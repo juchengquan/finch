@@ -338,6 +338,24 @@ extension FinchStore {
         return runningBalanceCache?[tx.id]
     }
 
+    /// A transfer row's title: where the money went or came from — "To Savings" on the
+    /// leg that left Checking, "From Checking" on the one that arrived. Both rows used
+    /// to read just "Transfer", which the leading glyph already says, so a pair of them
+    /// in the feed told you nothing about which way anything moved.
+    ///
+    /// Nil when there is no single other account to name (a leg whose partner isn't in
+    /// the active ledger's rows, or a transfer of more than two legs) — the row then
+    /// falls back to "Transfer". The leg → peer map is built once per projection, like
+    /// the running balance, because this runs per visible row.
+    public func transferTitle(for tx: Tx) -> String? {
+        guard tx.kind == "transfer" else { return nil }
+        if transferPeerCache == nil { transferPeerCache = TransferLegs.peers(txns) }
+        guard let peerId = transferPeerCache?[tx.id],
+              let name = accounts.first(where: { $0.id == peerId })?.name, !name.isEmpty
+        else { return nil }
+        return tx.amount < 0 ? String(localized: "To \(name)") : String(localized: "From \(name)")
+    }
+
     // MARK: - Scheduled
 
     /// How many split rows a scheduled template has. Non-zero on an income

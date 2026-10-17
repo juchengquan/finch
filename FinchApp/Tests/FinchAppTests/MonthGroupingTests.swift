@@ -86,4 +86,71 @@ final class MonthGroupingTests: XCTestCase {
         XCTAssertEqual(MonthGrouping.income([]), 0)
         XCTAssertEqual(MonthGrouping.expense([]), 0)
     }
+
+    // MARK: - Transfers between your own accounts
+
+    /// One leg of a two-account transfer, as the projection stamps it.
+    private func leg(_ id: String, _ account: String, _ amount: Double,
+                     group: String = "t1", date: String = "2026-09-10") -> Tx {
+        Tx(id: id, merchant: "", amount: amount, account: account, date: date,
+           kind: "transfer", transferGroupId: group, accountLegCount: 2)
+    }
+
+    /// The reported bug: a $250 Checking → Savings transfer added $250 to the
+    /// ledger-wide month's in AND its out. Both legs are in the rows being summed, so
+    /// the money never left them — it is neither in nor out.
+    func test_transferWithBothLegsPresent_countsInNeitherInNorOut() {
+        let txns = [tx("1", "2026-09-01", amount: 3200), tx("2", "2026-09-02", amount: -54.20),
+                    leg("t-out", "checking", -250), leg("t-in", "savings", 250)]
+        XCTAssertEqual(MonthGrouping.income(txns), 3200, accuracy: 0.001)
+        XCTAssertEqual(MonthGrouping.expense(txns), 54.20, accuracy: 0.001)
+        XCTAssertEqual(MonthGrouping.net(txns), 3145.80, accuracy: 0.001)
+        XCTAssertEqual(MonthGrouping.income(txns) - MonthGrouping.expense(txns),
+                       MonthGrouping.net(txns), accuracy: 0.001)            // identity still holds
+    }
+
+    /// One account's list holds one leg, and for that account the money really did
+    /// arrive or leave — so it counts, on the side it moved.
+    func test_transferWithOneLegPresent_countsOnItsSide() {
+        let checking = [tx("1", "2026-09-02", amount: -54.20), leg("t-out", "checking", -250)]
+        XCTAssertEqual(MonthGrouping.expense(checking), 304.20, accuracy: 0.001)
+        XCTAssertEqual(MonthGrouping.net(checking), -304.20, accuracy: 0.001)
+        let savings = [leg("t-in", "savings", 250)]
+        XCTAssertEqual(MonthGrouping.income(savings), 250, accuracy: 0.001)
+        XCTAssertEqual(MonthGrouping.expense(savings), 0)
+    }
+
+    /// Pairing is per transfer: a transfer with only one leg showing still counts,
+    /// while the complete one beside it does not.
+    func test_onlyCompleteTransfersAreDropped() {
+        let txns = [leg("a-out", "checking", -250, group: "a"), leg("a-in", "savings", 250, group: "a"),
+                    leg("b-out", "checking", -40, group: "b")]
+        XCTAssertEqual(MonthGrouping.income(txns), 0)
+        XCTAssertEqual(MonthGrouping.expense(txns), 40, accuracy: 0.001)
+    }
+
+    /// The calendar's day cells sum the same rows as the month header, so they follow
+    /// the same rule — otherwise the day reads +$250 / −$250 under a header that says 0.
+    func test_dailyIncomeExpense_dropsCompleteTransfers() {
+        let d = MonthGrouping.dailyIncomeExpense([
+            tx("1", "2026-09-10", amount: -12), leg("t-out", "checking", -250), leg("t-in", "savings", 250),
+        ])
+        XCTAssertEqual(d["2026-09-10"]?.income, 0)
+        XCTAssertEqual(d["2026-09-10"]?.expense ?? 0, 12, accuracy: 0.001)
+    }
+
+    // MARK: - Transfer peers (the row title's "To Savings" / "From Checking")
+
+    func test_transferPeers_eachLegNamesTheOtherAccount() {
+        let peers = TransferLegs.peers([
+            leg("t-out", "checking", -250), leg("t-in", "savings", 250), tx("1", "2026-09-10"),
+        ])
+        XCTAssertEqual(peers["t-out"], "savings")
+        XCTAssertEqual(peers["t-in"], "checking")
+        XCTAssertNil(peers["1"])                 // not a transfer
+    }
+
+    func test_transferPeers_aLoneLegHasNoPeer() {
+        XCTAssertTrue(TransferLegs.peers([leg("t-out", "checking", -250)]).isEmpty)
+    }
 }

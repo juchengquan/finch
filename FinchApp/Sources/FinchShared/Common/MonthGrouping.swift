@@ -61,27 +61,40 @@ enum MonthGrouping {
     /// Net change of a month's transactions, in ledger-base amount (`Tx.amount` is
     /// base). Callers format with `store.displayMoneyBase`.
     static func net(_ txns: [Tx]) -> Double {
-        txns.reduce(0) { $0 + $1.amount }
+        counted(txns).reduce(0) { $0 + $1.amount }
     }
 
     /// Inflows (sum of positive amounts) and outflows (magnitude of negative
-    /// amounts) — the header's "Income · Spent" line. Split purely by sign, so
-    /// transfer/refund legs count on the side they move money: the identities
-    /// `income - expense == net` and header-vs-rows agreement hold on every
-    /// surface without kind-based carve-outs.
+    /// amounts) — the header's "Income · Spent" line. Split by sign, so refund legs
+    /// and one-sided transfer legs count on the side they move money: the identities
+    /// `income - expense == net` and header-vs-rows agreement hold on every surface.
+    ///
+    /// The one carve-out is a transfer between your own accounts with BOTH legs in
+    /// the rows (see `counted`). Summed by sign, a $250 Checking → Savings transfer
+    /// added $250 to the ledger-wide feed's in AND its out, for money that never
+    /// left the ledger. One account's list holds one leg, which still counts.
     static func income(_ txns: [Tx]) -> Double {
-        txns.reduce(0) { $1.amount > 0 ? $0 + $1.amount : $0 }
+        counted(txns).reduce(0) { $1.amount > 0 ? $0 + $1.amount : $0 }
     }
     static func expense(_ txns: [Tx]) -> Double {
-        txns.reduce(0) { $1.amount < 0 ? $0 - $1.amount : $0 }
+        counted(txns).reduce(0) { $1.amount < 0 ? $0 - $1.amount : $0 }
     }
 
-    /// Per-day inflow/outflow (ledger-base, same pure sign-split as the month
-    /// headers), keyed by the full ISO date — the Scheduled calendar's daily
-    /// "income / expense" cell lines. Days with no transactions are absent.
+    /// `txns` minus the legs of transfers whose every leg is among them — money
+    /// moved inside the set, which no total over the set should count. Removed from
+    /// net as well as from in/out, so `income - expense == net` holds exactly even
+    /// when a cross-currency transfer's two base amounts don't quite cancel.
+    private static func counted(_ txns: [Tx]) -> [Tx] {
+        let internalLegs = TransferLegs.complete(txns)
+        return internalLegs.isEmpty ? txns : txns.filter { !internalLegs.contains($0.id) }
+    }
+
+    /// Per-day inflow/outflow (ledger-base, same sign-split and same transfer
+    /// carve-out as the month headers), keyed by the full ISO date — the calendar's
+    /// daily "income / expense" cell lines. Days with no transactions are absent.
     static func dailyIncomeExpense(_ txns: [Tx]) -> [String: (income: Double, expense: Double)] {
         var out: [String: (income: Double, expense: Double)] = [:]
-        for t in txns {
+        for t in counted(txns) {
             var day = out[t.date] ?? (0, 0)
             if t.amount > 0 { day.income += t.amount } else { day.expense -= t.amount }
             out[t.date] = day

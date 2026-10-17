@@ -89,6 +89,7 @@ public final class FinchStore: ObservableObject {
     /// row. Invalidated alongside `merchantStatsCache`.
     var anomalyKeysCache: Set<String>?
     var runningBalanceCache: [String: Double]?          // txn.id → account balance (base) after that txn; lazy, invalidated each reproject
+    var transferPeerCache: [String: String]?            // transfer leg id → the other leg's account id; lazy, invalidated with runningBalanceCache
 
     /// A pack that FAILED the audit gate, retained on disk so the iOS-only
     /// `forceImportCurrentPack` (D7) can swap THAT staged DB in later.
@@ -476,6 +477,7 @@ public final class FinchStore: ObservableObject {
             if deferTxns {
                 self.txns = []
                 self.runningBalanceCache = nil
+                self.transferPeerCache = nil
                 self.txnsReady = false
                 Task.detached(priority: .userInitiated) { [q, id] in
                     let txns = (try? Projection.run(dbQueue: q, ledgerId: id)) ?? []
@@ -485,6 +487,7 @@ public final class FinchStore: ObservableObject {
                         guard self.activeLedgerId == id else { return }
                         self.txns = txns
                         self.runningBalanceCache = nil
+                        self.transferPeerCache = nil
                         self.markTxnsReady()
                         #if DEBUG
                         LaunchTiming.mark("txns projected (\(txns.count) legs)")
@@ -494,6 +497,7 @@ public final class FinchStore: ObservableObject {
             } else {
                 self.txns = try Projection.run(dbQueue: q, ledgerId: id)
                 self.runningBalanceCache = nil
+                self.transferPeerCache = nil
                 self.markTxnsReady()
             }
         } catch {
