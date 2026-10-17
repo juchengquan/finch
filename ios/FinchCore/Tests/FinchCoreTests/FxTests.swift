@@ -56,4 +56,87 @@ final class FxTests: XCTestCase {
             XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT amount_base FROM postings WHERE account_id='a1'") ?? 0, -10.87, accuracy: 0.01)
         }
     }
+
+    // MARK: - No rate for the pair: refuse, never 1:1
+
+    private func add(_ q: DatabaseQueue, amount: Double = -50000, currency: String? = nil,
+                     date: String = "2026-05-09") throws {
+        var args: [String: JSONValue] = [
+            "ledgerId": .string("l1"), "accountId": .string("a1"), "amount": .double(amount),
+            "merchant": .string("Seoul"), "categoryId": .string("food"),
+            "date": .string(date), "skipRules": .bool(true)]
+        if let currency { args["currency"] = .string(currency) }
+        try Apply.apply(dbQueue: q, action: "addTransaction", args: Args(args))
+    }
+
+    private func assertNoRate(_ expr: @autoclosure () throws -> Void, from: String, to: String,
+                              file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertThrowsError(try expr(), file: file, line: line) { err in
+            let e = err as? I18nError
+            XCTAssertEqual(e?.code, "error.fx.noRate", file: file, line: line)
+            XCTAssertEqual(e?.params["from"], from, file: file, line: line)
+            XCTAssertEqual(e?.params["to"], to, file: file, line: line)
+        }
+    }
+
+    /// ₩50,000 on a KRW account in a USD ledger, with no KRW rate anywhere, is
+    /// refused — it used to be booked as 50,000 USD. Nothing is written, and no
+    /// made-up 1.0 rate is pinned for KRW.
+    func test_unratedAccountCurrency_refusesTheWrite() throws {
+        let q = try seeded(accountCcy: "KRW", base: "USD")
+        assertNoRate(try add(q), from: "KRW", to: "USD")
+        try q.read { db in
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries"), 0)
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM exchange_rates"), 0)
+        }
+    }
+
+    /// The same when it is the ledger's BASE that has no rate.
+    func test_unratedBaseCurrency_refusesTheWrite() throws {
+        let q = try seeded(accountCcy: "USD", base: "KRW")
+        assertNoRate(try add(q, amount: -10), from: "USD", to: "KRW")
+    }
+
+    /// A foreign-currency amount typed on a rated account: refused too.
+    func test_unratedTypedCurrency_refusesTheWrite() throws {
+        let q = try seeded()
+        assertNoRate(try add(q, currency: "KRW"), from: "KRW", to: "USD")
+    }
+
+    /// Once a real rate exists — even one dated BEFORE the refused attempt — it is
+    /// what the write uses. The old write-through pinned 1.0 at the attempt's date,
+    /// which then shadowed any earlier real rate for good.
+    func test_aRateAddedLater_isUsed() throws {
+        let q = try seeded(accountCcy: "KRW", base: "USD")
+        XCTAssertThrowsError(try add(q))
+        try Apply.apply(dbQueue: q, action: "setExchangeRate", args: Args([
+            "date": .string("2026-05-01"), "currency": .string("KRW"), "rate": .double(0.00072)]))
+        try add(q)
+        try q.read { db in
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT amount_base FROM postings WHERE account_id='a1'") ?? 0,
+                           -36, accuracy: 0.001)
+        }
+    }
+
+    /// A rate on either side of the date is still found (on-or-after for a backdate).
+    func test_aRateDatedAfterTheEntry_isStillUsed() throws {
+        let q = try seeded(accountCcy: "KRW", base: "USD")
+        try q.write { db in try db.execute(sql: "INSERT INTO exchange_rates (date,currency,rate) VALUES ('2026-06-01','KRW',0.0007)") }
+        try add(q)
+        try q.read { db in
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT amount_base FROM postings WHERE account_id='a1'") ?? 0,
+                           -35, accuracy: 0.001)
+        }
+    }
+
+    /// Same currency needs no rate at all.
+    func test_sameCurrency_needsNoRate() throws {
+        let q = try seeded(accountCcy: "KRW", base: "KRW")
+        try add(q)
+        try q.read { db in
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT amount_base FROM postings WHERE account_id='a1'") ?? 0,
+                           -50000, accuracy: 0.001)
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM exchange_rates"), 0)
+        }
+    }
 }

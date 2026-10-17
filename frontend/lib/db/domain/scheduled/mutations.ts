@@ -36,6 +36,20 @@ function postingTime(explicit?: string): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+// One generated occurrence's post, skipped when it is refused for want of an
+// exchange rate. Nobody is looking at a generator run, so rethrowing would fail
+// the whole sweep — every other template's rows with it. Skipped, the occurrence
+// stays unposted and so still due; posting it by hand says why. The refusal comes
+// from the leg conversion, before anything is written. Mirrors the native
+// `Scheduled.materializeDue`.
+async function skippingNoRate(post: () => Promise<unknown>): Promise<void> {
+  try {
+    await post();
+  } catch (e) {
+    if (!(e instanceof I18nError && e.code === 'error.fx.noRate')) throw e;
+  }
+}
+
 export const handlers = {
   createScheduled: async (exec, args: Args['createScheduled']) => {
     const name = str(args.name).trim();
@@ -212,10 +226,10 @@ export const handlers = {
         const fromAmount = Math.abs(Number(r.amount));
         const sourceTemplateId = String(r.id);
         for (const date of dates) {
-          await postTransfer(exec, {
+          await skippingNoRate(() => postTransfer(exec, {
             fromAccountId, toAccountId: acctId, fromAmount, date, time: genTime,
             note: description || null, sourceTemplateId, occurrenceDate: date, timestamp: ts,
-          });
+          }));
         }
         continue;
       }
@@ -224,7 +238,7 @@ export const handlers = {
       const categoryId = r.category_id == null ? null : String(r.category_id);
       const cpId = await resolveCounterpartyIdByName(exec, description);
       for (const date of dates) {
-        await postSimple(exec, {
+        await skippingNoRate(() => postSimple(exec, {
           ledgerId, accountId: acctId, date, time: genTime,
           amount, description, categoryId,
           kind: type === 'income' ? 'income' : 'expense',
@@ -233,7 +247,7 @@ export const handlers = {
           occurrenceDate: date,
           counterpartyId: cpId,
           timestamp: ts,
-        });
+        }));
       }
     }
   },

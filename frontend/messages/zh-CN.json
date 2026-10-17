@@ -1701,7 +1701,8 @@
     "fx": {
       "dateFormat": "日期必须为 YYYY-MM-DD 格式",
       "rateGt0": "汇率必须大于 0",
-      "usdHub": "USD 是中转货币,不会被存储"
+      "usdHub": "USD 是中转货币,不会被存储",
+      "noRate": "还没有 {from} → {to} 的汇率。请在汇率页面添加 {currency} 的汇率。"
     },
     "ledger": {
       "baseISO": "base 必须为 3 字母 ISO 代码",

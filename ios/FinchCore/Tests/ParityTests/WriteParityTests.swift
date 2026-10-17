@@ -9,7 +9,9 @@ import GRDB
 /// comparison is free of float/JSON-format drift.
 final class WriteParityTests: XCTestCase {
 
-    private struct Step: Decodable { let action: String; let args: JSONValue }
+    /// `expectError`: the step must be refused with that I18nError code (and, being
+    /// one write transaction, leaves nothing behind — the oracle rolls it back too).
+    private struct Step: Decodable { let action: String; let args: JSONValue; let expectError: String? }
     private struct Fixture: Decodable { let seedSql: [String]; let sequence: [Step]; let expected: JSONValue }
 
     func test_writeSequenceMatchesWebOracle() throws {
@@ -63,6 +65,13 @@ final class WriteParityTests: XCTestCase {
                 return v
             }
             for (k, v) in o { o[k] = resolve(v) }
+            if let code = step.expectError {
+                XCTAssertThrowsError(try Apply.apply(dbQueue: q, action: step.action, args: Args(o)),
+                                     "\(step.action) should be refused") {
+                    XCTAssertEqual(($0 as? I18nError)?.code, code, step.action)
+                }
+                continue
+            }
             try Apply.apply(dbQueue: q, action: step.action, args: Args(o))
         }
         return (q, fx)

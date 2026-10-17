@@ -1700,7 +1700,8 @@
     "fx": {
       "dateFormat": "Date must be YYYY-MM-DD",
       "rateGt0": "Rate must be greater than 0",
-      "usdHub": "USD is the hub currency and is not stored"
+      "usdHub": "USD is the hub currency and is not stored",
+      "noRate": "No exchange rate for {from} → {to} yet. Add a {currency} rate on the FX page."
     },
     "ledger": {
       "baseISO": "base must be a 3-letter ISO code",

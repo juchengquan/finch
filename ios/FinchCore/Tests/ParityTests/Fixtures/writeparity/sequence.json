@@ -9,7 +9,8 @@
     "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('fun','personal',NULL,'Fun','expense',2,datetime('now'),datetime('now'))",
     "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a1','personal','Checking','cash','USD',0,0,1,1,datetime('now'),datetime('now'))",
     "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a2','personal','Savings','savings','USD',0,1,1,1,datetime('now'),datetime('now'))",
-    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a3','personal','Brokerage','investment','USD',0,2,1,1,datetime('now'),datetime('now'))"
+    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a3','personal','Brokerage','investment','USD',0,2,1,1,datetime('now'),datetime('now'))",
+    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a4','personal','Seoul','cash','KRW',0,3,1,1,datetime('now'),datetime('now'))"
   ],
   "sequence": [
     {
@@ -414,6 +415,33 @@
       }
     },
     {
+      "action": "addTransaction",
+      "args": {
+        "ledgerId": "personal",
+        "accountId": "a4",
+        "amount": -50000,
+        "merchant": "Seoul",
+        "categoryId": "food",
+        "date": "2026-05-15",
+        "skipRules": true
+      },
+      "expectError": "error.fx.noRate"
+    },
+    {
+      "action": "createScheduled",
+      "args": {
+        "id": "s4",
+        "ledgerId": "personal",
+        "name": "Seoul rent",
+        "type": "expense",
+        "amount": 500000,
+        "frequency": "monthly",
+        "dayOfMonth": 10,
+        "accountId": "a4",
+        "startDate": "2026-02-10"
+      }
+    },
+    {
       "action": "addScheduledSplit",
       "args": {
         "templateId": "s1",
@@ -573,6 +601,26 @@
         "date": "2026-01-01",
         "currency": "EUR",
         "rate": 1.08
+      }
+    },
+    {
+      "action": "setExchangeRate",
+      "args": {
+        "date": "2026-05-01",
+        "currency": "KRW",
+        "rate": 0.00072
+      }
+    },
+    {
+      "action": "addTransaction",
+      "args": {
+        "ledgerId": "personal",
+        "accountId": "a4",
+        "amount": -50000,
+        "merchant": "Seoul",
+        "categoryId": "food",
+        "date": "2026-05-15",
+        "skipRules": true
       }
     },
     {
@@ -1317,6 +1365,50 @@
       },
       {
         "ledger_id": "personal",
+        "date": "2026-05-15",
+        "time": null,
+        "description": "Seoul",
+        "kind": "expense",
+        "status": "confirmed",
+        "counterparty_id": null,
+        "refunded_entry_id": null,
+        "source_template_id": null,
+        "occurrence_date": null,
+        "notes": null,
+        "applied_rule_ids": null,
+        "reviewed": false,
+        "sealed": 1,
+        "postings": [
+          {
+            "account_id": "a4",
+            "category_id": null,
+            "amount": "-50000.000000",
+            "currency": "KRW",
+            "amount_base": "-32.730000",
+            "exchange_rate": "0.000655",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 0
+          },
+          {
+            "account_id": null,
+            "category_id": "food",
+            "amount": "32.730000",
+            "currency": "EUR",
+            "amount_base": "32.730000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 1
+          }
+        ]
+      },
+      {
+        "ledger_id": "personal",
         "date": "2026-05-20",
         "time": "10:15",
         "description": "Gym",
@@ -1653,6 +1745,20 @@
         "is_active": 1,
         "archived": false,
         "last_reconciled_at": null
+      },
+      {
+        "id": "a4",
+        "ledger_id": "personal",
+        "group_id": null,
+        "name": "Seoul",
+        "type": "cash",
+        "currency": "KRW",
+        "current_balance": "-50000.000000",
+        "sort_order": 3,
+        "include_in_net_worth": 1,
+        "is_active": 1,
+        "archived": false,
+        "last_reconciled_at": null
       }
     ],
     "categories": [
@@ -1825,6 +1931,12 @@
         "source": null
       },
       {
+        "date": "2026-05-01",
+        "currency": "KRW",
+        "rate": "0.000720",
+        "source": null
+      },
+      {
         "date": "2026-05-02",
         "currency": "EUR",
         "rate": "1.100000",
@@ -1903,6 +2015,18 @@
         "source": "derived"
       },
       {
+        "date": "2026-05-15",
+        "currency": "EUR",
+        "rate": "1.100000",
+        "source": "derived"
+      },
+      {
+        "date": "2026-05-15",
+        "currency": "KRW",
+        "rate": "0.000720",
+        "source": "derived"
+      },
+      {
         "date": "2026-05-20",
         "currency": "EUR",
         "rate": "1.100000",
@@ -1975,6 +2099,20 @@
         "start_date": "2026-01-25",
         "is_active": 1,
         "splits_enabled": 1
+      },
+      {
+        "id": "s4",
+        "ledger_id": "personal",
+        "name": "Seoul rent",
+        "kind": "expense",
+        "amount": "500000.000000",
+        "frequency": "monthly",
+        "day_of_month": 10,
+        "account_id": "a4",
+        "from_account_id": null,
+        "start_date": "2026-02-10",
+        "is_active": 1,
+        "splits_enabled": 0
       }
     ],
     "rules": [
