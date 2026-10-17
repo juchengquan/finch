@@ -62,6 +62,7 @@ struct FinchApp: App {
                 switch phase {
                 case .background:
                     gate.didEnterBackground()
+                    store.expireDeleteUndo()   // an undo offer does not outlive the visit
                     // Fire the debounced widget / Watch / Spotlight round now rather
                     // than leaving it unfired until the next write.
                     store.flushAmbientSideEffects()
@@ -110,6 +111,8 @@ struct FinchApp: App {
             }
             // App-wide transient confirmations (ToastCenter). Hosted once, here.
             .toastOverlay()
+            // Undo after a transaction delete (FinchStore.deleteUndo).
+            .undoBannerOverlay()
         }
         #if os(macOS)
         .defaultSize(width: 1100, height: 720)

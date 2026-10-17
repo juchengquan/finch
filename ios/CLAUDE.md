@@ -169,7 +169,9 @@ Behavioral mirror of the web DB layer, verified against fixtures the web exports
   seed; pure DB I/O).
 - **`Store/`** — the **write chokepoint** (mirror of `lib/db/mutate.ts` + `domain/`).
   `ActionName.swift` = the web's actions **plus native-only** `setEntryAttachment` and
-  native-first `setBudgetOrder` / `setTrackedCurrencies` (web ignores them).
+  native-first `setBudgetOrder` / `setTrackedCurrencies` (web ignores them), and
+  native-only `restoreTransactions` — the undo of a delete (`Domain/TransactionUndo.swift`;
+  never in `WRITE_SEQUENCE`, covered by `TransactionUndoTests`).
   `Apply.apply` / `applyReturningId` dispatch to per-domain `handlers` in
   `Store/Domain/*.swift`; `JSONValue`/`Args` are the value types.
 - **`Project/`** — read model (mirror of `projectState`). `Projection.run()` →

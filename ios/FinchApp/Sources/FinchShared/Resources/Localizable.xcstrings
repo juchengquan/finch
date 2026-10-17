@@ -444,6 +444,16 @@
         }
       }
     },
+    "%lld transactions deleted": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已删除 %lld 笔交易"
+          }
+        }
+      }
+    },
     "%lld transactions will be combined": {
       "localizations": {
         "zh-Hans": {
@@ -2041,6 +2051,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "无法切换：%@"
+          }
+        }
+      }
+    },
+    "Couldn't undo": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法撤销"
           }
         }
       }
@@ -7015,6 +7035,16 @@
         }
       }
     },
+    "Transaction deleted": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已删除交易"
+          }
+        }
+      }
+    },
     "Transaction total": {
       "localizations": {
         "zh-Hans": {
@@ -7141,6 +7171,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "未分类"
+          }
+        }
+      }
+    },
+    "Undo": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撤销"
           }
         }
       }

@@ -125,7 +125,7 @@ extension FinchStore {
     public func attachmentURL(for att: AttachmentRow) -> URL {
         attachmentsRoot.deletingLastPathComponent().appendingPathComponent(att.relPath)
     }
-    private func unlink(relPaths: [String]) {
+    func unlink(relPaths: [String]) {
         let root = attachmentsRoot.deletingLastPathComponent()   // Application Support (relPath includes 'attachments/…')
         for rel in relPaths { try? FileManager.default.removeItem(at: root.appendingPathComponent(rel)) }
     }
@@ -134,12 +134,12 @@ extension FinchStore {
         try apply(.removeAttachment, Args(["id": .string(id)]))
         unlink(relPaths: [relPath])
     }
-    /// Delete a transaction AND unlink its receipts' files (captured before the
-    /// cascade delete drops the rows).
+    /// Delete a transaction and offer to undo it (`deleteUndo`). Its receipts'
+    /// files stay on disk until the undo expires — see `FinchStore+Undo.swift`.
     public func deleteTransaction(_ txId: String) throws {
-        let files = attachments(for: txId).map { $0.relPath }
+        let captured = captureForUndo([txId])
         try apply(.deleteTransaction, Args(["id": .string(txId)]))
-        unlink(relPaths: files)
+        offerUndo(captured, count: 1)
     }
 
     /// Remove files for attachments a write has just orphaned.
@@ -147,7 +147,7 @@ extension FinchStore {
     /// The ledger rows cascade-delete with their entry; the FILES do not, and
     /// the engine is filesystem-agnostic by design. Callers read the paths
     /// BEFORE the write, while the rows still resolve, then call this after —
-    /// the same order `deleteTransaction` uses above.
+    /// the order `removeAttachment` uses above.
     ///
     /// Needed because a grid edit can delete a whole card's transaction as a
     /// side effect of `saveTransaction`, which knows nothing about files.
@@ -190,13 +190,13 @@ extension FinchStore {
                               args: Args(["id": .string($0), "reviewed": .bool(true)])) })
     }
 
-    /// Delete several transactions as one write, unlinking their receipts after.
-    /// Attachment paths are read BEFORE the delete, while the rows still exist.
+    /// Delete several transactions as one write, offering ONE undo for the lot.
+    /// Receipt files are kept until that undo expires, as for a single delete.
     @discardableResult
     public func deleteTransactions(_ ids: [String]) -> Int {
-        let files = ids.flatMap { attachments(for: $0).map { $0.relPath } }
+        let captured = captureForUndo(ids)
         let applied = applyBatch(ids.map { (action: ActionName.deleteTransaction, args: Args(["id": .string($0)])) })
-        unlink(relPaths: files)
+        if applied > 0 { offerUndo(captured, count: applied) }
         return applied
     }
     /// Human-readable transactions CSV for the active ledger, optionally scoped

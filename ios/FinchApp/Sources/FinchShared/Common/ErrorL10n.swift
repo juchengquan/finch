@@ -67,6 +67,8 @@ enum ErrorL10n {
         "error.transfer.sameAccount": "请选择两个不同的账户",
         "error.transfer.sameCurrencyMismatch": "同币种转账金额必须相等",
         "error.unknownAction": "未知操作: {action}",
+        "error.undo.stale": "无法撤销 —— 删除后账本已有更改",
+        "error.undo.unsupported": "此交易无法撤销",
         // Remaining engine codes (the structural/double-entry guards) — completes
         // coverage of all 79 I18nError codes.
         "error.account.differentLedger": "账户属于其他账本",
