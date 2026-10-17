@@ -90,6 +90,19 @@ enum ScheduledPoster {
     /// tap of a future cell still posts.
     static func postNow(_ t: ScheduledTemplate, occurrence: String, store: FinchStore,
                         prefill: Binding<PostPrefill?>, errorMessage: Binding<String?>) {
+        // An occurrence something already posted is not posted again. The SwiftUI
+        // calendar only offers Post on upcoming/missed cells, but the UIKit list
+        // offers it on every occurrence row — and with auto-post, "already there,
+        // waiting in To confirm" is the ordinary state of a due one. Posting it
+        // here would book the same occurrence twice.
+        if let pending = Selectors.scheduledPostedMap(store.txns)["\(t.id)|\(occurrence)"] {
+            errorMessage.wrappedValue = i18nMessage(pending
+                ? I18nError("error.scheduled.awaitingConfirm", ["name": t.name, "date": occurrence],
+                            "\"\(t.name)\" for \(occurrence) is already waiting in To confirm")
+                : I18nError("error.scheduled.alreadyPosted", ["name": t.name, "date": occurrence],
+                            "\"\(t.name)\" was already posted for \(occurrence)"))
+            return
+        }
         // The installment cap lives in `Scheduled.post`, which the sheet path
         // bypasses — re-check it here, with the ENGINE's message key so the copy
         // (and its zh translation) is the same wherever the user hits the cap.

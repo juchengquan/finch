@@ -133,6 +133,8 @@ final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
             // FinchStore.reprojectActiveLedger) and republishes, so "To confirm" is
             // right the moment you look rather than after the next write.
             store.reprojectActiveLedger()
+            // …and the same midnight may have made a scheduled occurrence due.
+            Task { await store.autoPostDueScheduled() }
         }
     }
 
@@ -183,6 +185,19 @@ final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
                     if locked { await SpotlightIndexer.shared.clearAll() }
                     else { await SpotlightIndexer.shared.indexAll(store: self.store) }
                 }
+            }
+            .store(in: &cancellables)
+        // Auto-post is lock-gated at launch and on foreground, so an unlock is when
+        // a launch behind the lock catches up. Transitions only — the publisher
+        // replays the current value on subscribe, and launch has its own call.
+        gate.$isLocked
+            .removeDuplicates()
+            .dropFirst()
+            .filter { !$0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                Task { await self.store.autoPostDueScheduled() }
             }
             .store(in: &cancellables)
     }

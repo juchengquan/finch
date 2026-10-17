@@ -57,6 +57,8 @@ enum ErrorL10n {
         "error.required.symbol": "代号必填",
         "error.required.tagName": "标签名称必填",
         "error.required.templateName": "模板名称必填",
+        "error.scheduled.alreadyPosted": "\"{name}\" 在 {date} 已记账",
+        "error.scheduled.awaitingConfirm": "\"{name}\" 在 {date} 的记录已在待确认中",
         "error.scheduled.installmentDone": "\"{name}\" 的 {total} 期分期付款已完成",
         "error.scheduled.missingAccount": "\"{name}\" 缺少账户",
         "error.scheduled.noSplits": "\"{name}\" 没有可发布的拆分金额",
