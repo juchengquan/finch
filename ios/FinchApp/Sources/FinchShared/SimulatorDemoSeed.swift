@@ -373,7 +373,9 @@ enum SimulatorDemoSeed {
                 "ledgerId": .string("personal"), "name": .string(s.name), "type": .string(s.type),
                 "amount": .double(s.amount), "frequency": .string(s.freq),
                 "accountId": .string(s.acct), "dayOfMonth": .double(Double(s.day)),
-                "startDate": .string(monthStart(2)),
+                // Starts ON its day: a quarterly item recurs on its start day, and a
+                // monthly one lands on the same dates either way.
+                "startDate": .string(String(monthStart(2).prefix(8)) + String(format: "%02d", s.day)),
             ]
             if let from = s.from { args["fromAccountId"] = .string(from) }
             if let cat = s.cat { args["category"] = .string(cat) }

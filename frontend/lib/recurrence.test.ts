@@ -28,6 +28,43 @@ test('quarterly steps three months', () => {
     .toEqual(['2026-01-01', '2026-04-01', '2026-07-01', '2026-10-01']);
 });
 
+// Quarterly and yearly recur on the START DATE's day, and the start itself counts —
+// whatever dayOfMonth says (a row saved without one stores 1). Mirrors
+// ios/FinchCore/Tests/FinchCoreTests/ScheduledStartDayTests.swift.
+test('quarterly recurs on the start day, starting with the start itself', () => {
+  expect(occurrencesUpTo(T({ frequency: 'quarterly', dayOfMonth: 1, startDate: '2026-03-15' }), '2026-12-31'))
+    .toEqual(['2026-03-15', '2026-06-15', '2026-09-15', '2026-12-15']);
+});
+
+test('yearly recurs on the start date', () => {
+  expect(occurrencesUpTo(T({ frequency: 'yearly', dayOfMonth: 1, startDate: '2026-03-15' }), '2028-12-31'))
+    .toEqual(['2026-03-15', '2027-03-15', '2028-03-15']);
+});
+
+test('a stored dayOfMonth does not move a quarterly or yearly item', () => {
+  expect(occurrencesUpTo(T({ frequency: 'quarterly', dayOfMonth: 20, startDate: '2026-03-15' }), '2026-09-30'))
+    .toEqual(['2026-03-15', '2026-06-15', '2026-09-15']);
+  expect(occurrencesUpTo(T({ frequency: 'yearly', dayOfMonth: 0, startDate: '2026-03-15' }), '2027-12-31'))
+    .toEqual(['2026-03-15', '2027-03-15']);
+});
+
+test('a quarterly or yearly start on a late day clamps to short months without drifting', () => {
+  expect(occurrencesUpTo(T({ frequency: 'quarterly', startDate: '2026-03-31' }), '2027-03-31'))
+    .toEqual(['2026-03-31', '2026-06-30', '2026-09-30', '2026-12-31', '2027-03-31']);
+  expect(occurrencesUpTo(T({ frequency: 'yearly', startDate: '2028-02-29' }), '2030-12-31'))
+    .toEqual(['2028-02-29', '2029-02-28', '2030-02-28']);
+});
+
+test('monthly still lands on its own dayOfMonth', () => {
+  expect(occurrencesUpTo(T({ frequency: 'monthly', dayOfMonth: 1, startDate: '2026-03-15' }), '2026-05-31'))
+    .toEqual(['2026-04-01', '2026-05-01']);
+});
+
+test('an end date still stops a quarterly item', () => {
+  expect(occurrencesUpTo(T({ frequency: 'quarterly', startDate: '2026-03-15', endDate: '2026-09-14' }), '2026-12-31'))
+    .toEqual(['2026-03-15', '2026-06-15']);
+});
+
 test('once yields the single start date', () => {
   expect(occurrencesUpTo(T({ frequency: 'once', startDate: '2026-05-10' }), '2026-05-30')).toEqual(['2026-05-10']);
 });

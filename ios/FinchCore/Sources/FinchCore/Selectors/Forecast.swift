@@ -163,9 +163,13 @@ extension Selectors {
             return out
         }
 
-        // monthly / quarterly / yearly: step whole months, landing on dayOfMonth.
+        // monthly / quarterly / yearly: step whole months. Monthly lands on its
+        // dayOfMonth; quarterly and yearly land on the start date's day — the start
+        // already picks their month, and the sheet offers no day of month for them
+        // (a row saved without one stores 1, which would skip the start itself).
         let stepMonths = freq == "quarterly" ? 3 : (freq == "yearly" ? 12 : 1)
-        let day = t.dayOfMonth != 0 ? t.dayOfMonth : cal.component(.day, from: start)
+        let startDay = cal.component(.day, from: start)
+        let day = (freq == "quarterly" || freq == "yearly" || t.dayOfMonth == 0) ? startDay : t.dayOfMonth
         var y = cal.component(.year, from: start)
         var m = cal.component(.month, from: start) - 1   // 0-based
         var guardI = 0

@@ -516,7 +516,8 @@ export default function ScheduledPage() {
                         </SelectContent>
                       </Select>
                     </div>
-                  ) : (
+                  ) : (draft.frequency === 'quarterly' || draft.frequency === 'yearly') ? null : (
+                    // Quarterly and yearly recur on the start date's day (lib/recurrence.ts).
                     <div className="flex flex-col gap-1.5">
                       <Label>{t('form.dayOfMonth')}</Label>
                       <Input type="number" inputMode="numeric" min={1} max={31} value={draft.dayOfMonth} onChange={(e) => setDraft({ ...draft, dayOfMonth: e.target.value })} />
