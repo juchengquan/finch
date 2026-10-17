@@ -33,12 +33,17 @@ public struct ScheduledTemplate: Identifiable, Equatable, Sendable, Codable {
     /// `postsAutomatically`.
     public let autoPost: Int?
 
+    /// Occurrences (`yyyy-MM-dd`) the user chose to skip — native-first, stored in
+    /// `app_state.scheduledSkips` (see `ScheduledSkips`). Optional so the web's
+    /// fixtures, which never carry the key, still decode; nil and empty mean the same.
+    public let skippedDates: [String]?
+
     public init(id: String, name: String, description: String? = nil, type: String,
                 amount: Double? = nil, frequency: String, dayOfMonth: Int, weekDay: Int? = nil,
                 accountId: String, fromAccountId: String? = nil, categoryId: String? = nil,
                 startDate: String? = nil, startTime: String? = nil, endDate: String? = nil, nextRun: String, maxExecutions: Int? = nil,
                 installmentTotal: Int? = nil, installmentPaid: Int? = nil, color: String? = nil,
-                autoPost: Int? = nil) {
+                autoPost: Int? = nil, skippedDates: [String]? = nil) {
         self.id = id; self.name = name; self.description = description; self.type = type
         self.amount = amount; self.frequency = frequency; self.dayOfMonth = dayOfMonth
         self.weekDay = weekDay; self.accountId = accountId; self.fromAccountId = fromAccountId
@@ -48,11 +53,15 @@ public struct ScheduledTemplate: Identifiable, Equatable, Sendable, Codable {
         self.installmentPaid = installmentPaid
         self.color = color
         self.autoPost = autoPost
+        self.skippedDates = skippedDates
     }
 
     /// Whether due occurrences are added for the user (`autoPostDueScheduled`)
     /// rather than waiting to be posted by hand.
     public var postsAutomatically: Bool { (autoPost ?? 0) != 0 }
+
+    /// Whether the user skipped the occurrence on `date` (`yyyy-MM-dd`).
+    public func isSkipped(_ date: String) -> Bool { skippedDates?.contains(date) ?? false }
 }
 
 public struct MonthForecast: Equatable, Sendable, Codable {
@@ -109,9 +118,28 @@ extension Selectors {
         return cal.date(from: dc)!
     }
 
+    /// Every occurrence that will actually happen: the recurrence below, minus the
+    /// ones the user skipped. This is what posting, generation, forecasts and
+    /// reminders all read, so a skip is honoured everywhere by default — only a
+    /// screen that SHOWS a skipped occurrence (to offer un-skipping it) passes
+    /// `includeSkipped`.
+    ///
+    /// A skip is not an execution. It removes one date and nothing else, so the
+    /// `installment_total` / `max_executions` caps, which count what was posted,
+    /// carry on to the next date: a 12-payment plan with one month skipped still
+    /// makes 12 payments, one period later. The end date stays a hard stop.
+    static func occurrencesUpTo(_ t: ScheduledTemplate, _ throughInclusive: String,
+                                includeSkipped: Bool = false) -> [String] {
+        let all = recurrenceUpTo(t, throughInclusive)
+        guard !includeSkipped, let skipped = t.skippedDates, !skipped.isEmpty else { return all }
+        let set = Set(skipped)
+        return all.filter { !set.contains($0) }
+    }
+
     /// Mirror of lib/recurrence.ts::occurrencesUpTo — all occurrence dates from
     /// the template's anchor through `throughInclusive`, bounded by endDate.
-    static func occurrencesUpTo(_ t: ScheduledTemplate, _ throughInclusive: String) -> [String] {
+    /// Skips are NOT applied here; `occurrencesUpTo` above applies them.
+    static func recurrenceUpTo(_ t: ScheduledTemplate, _ throughInclusive: String) -> [String] {
         let anchorIso = String((t.startDate ?? t.nextRun).prefix(10))
         guard isISO(anchorIso), isISO(throughInclusive) else { return [] }
         let start = date(anchorIso)
@@ -182,6 +210,11 @@ extension Selectors {
                 guard let amt = rt.amount else { continue }
                 if rt.dayOfMonth <= dayOfMonth { continue }
                 if rt.dayOfMonth > daysInMo { continue }
+                // This month's occurrence. A skipped one, or one after the end
+                // date, will not happen, so it is not part of the rest of the month.
+                let occurrence = month + "-" + String(format: "%02d", rt.dayOfMonth)
+                if rt.isSkipped(occurrence) { continue }
+                if let end = rt.endDate, String(end.prefix(10)) < occurrence { continue }
                 scheduledRest += abs(amt)
             }
         }
@@ -249,14 +282,83 @@ extension Selectors {
     }
 
     /// All occurrences of `templates` within [from, through] inclusive, each paired
-    /// with its template, sorted by date. Reuses `occurrencesUpTo`.
-    public static func occurrencesInRange(_ templates: [ScheduledTemplate], from: String, through: String)
+    /// with its template, sorted by date. Reuses `occurrencesUpTo`, so skipped
+    /// occurrences are left out unless `includeSkipped` — the calendar passes it,
+    /// to draw a skipped day and offer un-skipping it.
+    public static func occurrencesInRange(_ templates: [ScheduledTemplate], from: String, through: String,
+                                          includeSkipped: Bool = false)
         -> [(date: String, template: ScheduledTemplate)] {
         var out: [(date: String, template: ScheduledTemplate)] = []
         for t in templates {
-            for d in occurrencesUpTo(t, through) where d >= from { out.append((d, t)) }
+            for d in occurrencesUpTo(t, through, includeSkipped: includeSkipped) where d >= from { out.append((d, t)) }
         }
         return out.sorted { $0.date < $1.date }
+    }
+
+    /// The first occurrence on or after `today` that will happen — skipped ones
+    /// excluded, the end date honoured — within the ~400-day horizon; nil when there
+    /// is none (the template has ended). What the list prints as "next".
+    public static func nextOccurrence(_ t: ScheduledTemplate, onOrAfter today: String) -> String? {
+        occurrencesInRange([t], from: today, through: horizonDay(from: today, addingDays: 400)).first?.date
+    }
+
+    /// Whether `date` is an occurrence of `t` at all, skipped or not — the guard on
+    /// skipping, so a stray date can't be written into the skip list.
+    public static func isOccurrence(_ t: ScheduledTemplate, _ date: String) -> Bool {
+        recurrenceUpTo(t, date).last == date
+    }
+
+    /// The occurrence a bare "Skip" (no occurrence already in hand) acts on: the
+    /// first still-open one from the CURRENT occurrence on (`currentOccurrence`).
+    /// So it is this cycle's while that is open, and repeated skips walk forward —
+    /// never back to an older missed one.
+    ///
+    /// Deliberately not `resumeOccurrence` (oldest unresolved first). That is right
+    /// for posting, which catches up a backlog in order, but "no gym fee this month"
+    /// means this month's: with two old missed occurrences, a Skip that took the
+    /// oldest changed nothing the user could see. Older missed occurrences are still
+    /// skippable one by one from their day on the calendar.
+    public static func skipTarget(template: ScheduledTemplate, posted: [String: Bool], today: String) -> String? {
+        guard let current = currentOccurrence(template, today: today) else { return nil }
+        let horizon = horizonDay(from: today, addingDays: 400)
+        return occurrencesUpTo(template, horizon).first { $0 >= current && posted["\(template.id)|\($0)"] == nil }
+    }
+
+    /// The occurrence the present belongs to: of the latest one before today and the
+    /// first on or after it — skipped or posted ones included — whichever is nearer
+    /// to today, the upcoming one on a tie. Nil when the template has no occurrence
+    /// on either side within the horizon.
+    public static func currentOccurrence(_ t: ScheduledTemplate, today: String) -> String? {
+        let previous = previousOccurrence(t, before: today)
+        let next = occurrencesUpTo(t, horizonDay(from: today, addingDays: 400), includeSkipped: true)
+            .first { $0 >= today }
+        guard let previous else { return next }
+        guard let next else { return previous }
+        return daysBetween(previous, today) < daysBetween(today, next) ? previous : next
+    }
+
+    /// The latest occurrence strictly before `today`, skipped or not — where the
+    /// current cycle starts.
+    public static func previousOccurrence(_ t: ScheduledTemplate, before today: String) -> String? {
+        recurrenceUpTo(t, horizonDay(from: today, addingDays: -1)).last
+    }
+
+    private static func daysBetween(_ a: String, _ b: String) -> Int {
+        Int((date(b).timeIntervalSince(date(a)) / 86_400).rounded())
+    }
+
+    /// Skipped occurrences still in effect, oldest first: those nobody posted since.
+    /// A posted occurrence wins over its skip — the money moved, so it is not
+    /// "skipped" any more, whatever the list says.
+    public static func activeSkips(template: ScheduledTemplate, posted: [String: Bool]) -> [String] {
+        (template.skippedDates ?? []).filter { posted["\(template.id)|\($0)"] == nil }.sorted()
+    }
+
+    /// The skip a bare "Unskip" undoes: the LATEST active one. Skipping always takes
+    /// the oldest unresolved occurrence, so repeated skips walk forward and repeated
+    /// unskips walk back — the last skip is the first undone.
+    public static func unskipTarget(template: ScheduledTemplate, posted: [String: Bool]) -> String? {
+        activeSkips(template: template, posted: posted).last
     }
 
     /// `today` (`yyyy-MM-dd`) advanced by `days` calendar days, computed inside
