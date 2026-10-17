@@ -41,6 +41,7 @@ final class UIKitAppDelegate: UIResponder, UIApplicationDelegate {
 final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
     private var lockWindow: UIWindow?
+    private var undoBanner: UndoBannerController?
     private var idleTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
 
@@ -68,6 +69,9 @@ final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
         startIdleTimer()
         installActivityMonitor(on: w)
         installGlobalOverlay(on: w)
+        let banner = UndoBannerController(scene: windowScene, store: store)
+        applyWindowPreferences(to: banner.bannerWindow)
+        undoBanner = banner
         handle(connectionOptions: options)
     }
 
@@ -110,6 +114,9 @@ final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func sceneDidEnterBackground(_ scene: UIScene) {
         gate.didEnterBackground()
+        // An undo offer does not outlive the visit: the banner would be gone or
+        // stale on return, and the receipt files it holds back can be let go now.
+        store.expireDeleteUndo()
         // The debounced widget / Watch / Spotlight round would otherwise sit unfired
         // until the next write — and the home screen the user is returning to is
         // exactly where a stale widget shows.
@@ -182,6 +189,7 @@ final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     private func presentLockWindow() {
         guard lockWindow == nil, let scene = window?.windowScene else { return }
+        store.expireDeleteUndo()   // nothing to act on behind the lock
         let w = UIWindow(windowScene: scene)
         w.windowLevel = .alert + 1        // above every sheet and alert
         w.rootViewController = UIHostingController(rootView: LockView().environmentObject(gate))
@@ -249,6 +257,7 @@ final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
                 guard let self, let w = self.window else { return }
                 self.applyWindowPreferences(to: w)
                 self.lockWindow.map { self.applyWindowPreferences(to: $0) }
+                self.undoBanner.map { self.applyWindowPreferences(to: $0.bannerWindow) }
             }
             .store(in: &cancellables)
     }

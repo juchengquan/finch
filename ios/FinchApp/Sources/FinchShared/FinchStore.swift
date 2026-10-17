@@ -99,6 +99,12 @@ public final class FinchStore: ObservableObject {
     }
     var pendingRejected: PendingRejected?
 
+    /// The undo offer for the most recent transaction delete, or nil. Drives the
+    /// app-wide Undo banner; see `FinchStore+Undo.swift` for when it expires.
+    @Published public internal(set) var deleteUndo: DeleteUndo?
+    /// Ends `deleteUndo` when its window runs out.
+    var deleteUndoExpiry: Task<Void, Never>?
+
     /// True when the process is hosting XCTest (the test bundle injects the
     /// XCTestCase class). Checked once — it can't change mid-process.
     private static let isRunningTests = NSClassFromString("XCTestCase") != nil
@@ -139,6 +145,7 @@ public final class FinchStore: ObservableObject {
             return
         }
         self.dbQueue = live
+        sweepUndoLeftovers()
         if (try? Projection.ledgers(dbQueue: live))?.isEmpty ?? true {
             #if targetEnvironment(simulator)
             // Simulator builds get a richer demo dataset so the tabs are populated
@@ -289,6 +296,10 @@ public final class FinchStore: ObservableObject {
     /// on screen while the row slides. See `scheduleAmbientSideEffects`.
     private func fireWriteSideEffects(_ q: DatabaseQueue, mutations: [(ActionName, Args)]) {
         WriteTiming.begin()
+        // Any write ends the open undo — including the delete that is about to
+        // offer a fresh one, and the restore itself. A snapshot taken before some
+        // other write is not "the state before the delete" any more.
+        expireDeleteUndo()
         // The projection IS the animation: the row cannot move until the new state
         // is published, so this stays synchronous.
         self.ledgers = (try? Projection.ledgers(dbQueue: q)) ?? ledgers
