@@ -782,5 +782,15 @@
   "Undo": "撤销",
   "Couldn't undo": "无法撤销",
   "Transaction deleted": "已删除交易",
-  "%lld transactions deleted": "已删除 %lld 笔交易"
+  "%lld transactions deleted": "已删除 %lld 笔交易",
+  "Low balance warnings": "余额不足提醒",
+  "Low balance ahead: %@": "余额即将不足：%@",
+  "Scheduled items take it below zero on %@, to %@.": "计划项目将使余额在 %1$@ 降至零以下，届时为 %2$@。",
+  "Scheduled items take it below zero on %@, down to %@ by %@.": "计划项目将使余额在 %1$@ 降至零以下，并于 %3$@ 降至 %2$@。",
+  "In %lld days": "%lld 天后",
+  "Next %lld days": "未来 %lld 天",
+  "Drops below zero on %@": "将于 %@ 降至零以下",
+  "Already below zero": "已低于零",
+  "Scheduled items only — anything unplanned isn't counted.": "仅计入计划项目，未计划的收支不在其中。",
+  "Day": "日期"
 }

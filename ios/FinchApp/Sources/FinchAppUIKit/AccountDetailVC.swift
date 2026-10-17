@@ -46,6 +46,7 @@ final class AccountDetailVC: UIViewController {
     private enum SectionID: Hashable {
         case balance        // account balance + reconcile seal, formerly the titleView
         case modePicker
+        case forecast           // where the balance is heading — AccountForecastPanel
         case holdings
         case calendar
         case pending
@@ -82,12 +83,16 @@ final class AccountDetailVC: UIViewController {
     private static let holdingPrefix = "__holding__"
     private static let addHoldingID = "__add_holding__"
     private static let reconcileHeaderID = "__reconcile_header__"
+    private static let forecastID = "__forecast__"
 
     private var collectionView: UICollectionView!
     private var dataSource: UICollectionViewDiffableDataSource<SectionID, String>!
     /// Diffable wants Hashable ids, so the source of truth stays `Tx` keyed by id.
     private var txByID: [String: Tx] = [:]
     private var holdingByID: [String: Holding] = [:]
+    /// Built in `applySnapshot` and read by the cell, for the same reason as
+    /// `headerContent` below: the registration must draw what the snapshot decided.
+    private var forecastPanel: AccountForecastPanel?
     /// The layout's section provider needs the section kinds, and querying the
     /// data source's snapshot from inside that closure races `apply`. Keep the
     /// order here and set it BEFORE applying.
@@ -170,6 +175,12 @@ final class AccountDetailVC: UIViewController {
             pendingReconcileEntry = false
             enterReconcileMode()
         }
+        // The forecast walks the scheduled items, which no other slice above carries —
+        // adding a bill on the Scheduled tab must move this screen's line.
+        store.$scheduled
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.applySnapshot() }
+            .store(in: &cancellables)
         store.$holdings
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
@@ -316,6 +327,18 @@ final class AccountDetailVC: UIViewController {
                 cfg.textProperties.font = .preferredFont(forTextStyle: .caption1)
                 cfg.textProperties.color = .secondaryLabel
                 cell.contentConfiguration = cfg
+                cell.accessories = []
+                return
+            }
+
+            if id == Self.forecastID {
+                guard let panel = self.forecastPanel else { return }
+                // Hosted as a LEAF — the card has no scroll view, so the collection
+                // view stays this screen's scroll view (see the note atop the file).
+                cell.contentConfiguration = UIHostingConfiguration {
+                    AccountForecastCard(panel: panel, currency: self.account?.currency)
+                        .environmentObject(self.store)
+                }
                 cell.accessories = []
                 return
             }
@@ -520,6 +543,17 @@ final class AccountDetailVC: UIViewController {
         // this would only repeat it.
         snap.appendSections([.modePicker])
         snap.appendItems([Self.modePickerID], toSection: .modePicker)
+
+        // Shown in both lenses — it is about the balance, not a view of the rows — and
+        // absent when nothing scheduled lands on this account in the window. Shared with
+        // the macOS screen and the low-balance alert; see AccountForecastPanel.
+        forecastPanel = AccountForecastPanel.make(account: account, scheduled: store.scheduled,
+                                                  today: store.wallToday)
+        if forecastPanel != nil {
+            snap.appendSections([.forecast])
+            snap.appendItems([Self.forecastID], toSection: .forecast)
+            headers[.forecast] = .plain(String(localized: "Next \(AccountForecastPanel.horizonDays) days"))
+        }
 
         // Shared with the SwiftUI screen so the two cannot drift — see HoldingsPanel for
         // why an empty investment account still shows, and why a non-investment one
