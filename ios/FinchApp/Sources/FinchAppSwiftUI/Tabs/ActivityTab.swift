@@ -720,12 +720,18 @@ struct TxRow: View {
     /// merchant by nature. The other kinds do, and a name identifies a row far better
     /// than repeating what the leading glyph and the amount's colour already say.
     ///
+    /// A transfer's word is better still as a direction — "To Savings", "From Checking"
+    /// (`transferTitle`) — since "Transfer" on both legs said nothing the glyph didn't.
+    ///
     /// `tookNote` tells the subtitle to stop printing the note it just lost — see the
     /// second line below. Without it a bare row reads "weekly shop / Aug 5 · weekly shop".
     private var rowTitle: (text: Text, placeholder: Bool, tookNote: Bool, fromKind: Bool) {
         if let category = store.categoryName(txn.category) { return (Text(category), false, false, false) }
         switch txn.kind {
-        case "transfer":   return (Text("Transfer"), false, false, true)
+        case "transfer":
+            // A direction is new information, so it is spoken; the bare kind word is not.
+            if let direction = store.transferTitle(for: txn) { return (Text(direction), false, false, false) }
+            return (Text("Transfer"), false, false, true)
         case "adjustment": return (Text("Adjustment"), false, false, true)
         default: break
         }
