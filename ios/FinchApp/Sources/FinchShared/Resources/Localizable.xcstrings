@@ -3257,6 +3257,16 @@
         }
       }
     },
+    "From %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来自 %@"
+          }
+        }
+      }
+    },
     "From account": {
       "localizations": {
         "zh-Hans": {
@@ -7161,6 +7171,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "到"
+          }
+        }
+      }
+    },
+    "To %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "转至 %@"
           }
         }
       }

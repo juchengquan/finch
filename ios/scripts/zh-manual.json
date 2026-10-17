@@ -810,5 +810,7 @@
   "End date": "结束日期",
   "Ends on": "结束于",
   "Nothing is posted or reminded after this day.": "此日期之后不会再记账或提醒。",
-  "The end date can't be before the start.": "结束日期不能早于开始日期。"
+  "The end date can't be before the start.": "结束日期不能早于开始日期。",
+  "To %@": "转至 %@",
+  "From %@": "来自 %@"
 }
