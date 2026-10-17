@@ -11,7 +11,7 @@ struct TxFilter: Equatable, Codable {
     var tagIds: Set<String> = []
     var tagsMatchAll: Bool = false
     var counterpartyId: String? = nil
-    var status: String? = nil          // nil = all, "pending", "confirmed"
+    var status: String? = nil          // nil = all, "pending", "confirmed", ReviewQueue.status
     var from: Date? = nil
     var to: Date? = nil
     var minAmount: Double? = nil
@@ -122,6 +122,10 @@ struct TransactionFilterSheet: View {
                         Text("All").tag(String?.none)
                         Text("Pending").tag(String?.some("pending"))
                         Text("Confirmed").tag(String?.some("confirmed"))
+                        // The review queue — confirmed rows nobody has looked over yet.
+                        // A status rather than its own toggle: it can never combine with
+                        // "Pending" (see `ReviewQueue`), and a picker says so by shape.
+                        Text("Needs review").tag(String?.some(ReviewQueue.status))
                     }
                 }
                 Section("Date range") {

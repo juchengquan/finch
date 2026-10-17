@@ -25,6 +25,11 @@ struct TxRowActions {
     let edit: (Tx) -> Void
     /// Receipt preview, menu only; nil when the row has no attachment.
     var previewReceipt: ((Tx) -> Void)?
+    /// Ticks the row off the review queue. Only the queue passes it — everywhere
+    /// else the feed is not a to-do list, and a second leading action would push
+    /// Duplicate off the full swipe for nothing. Offered only on a row that still
+    /// needs review (`ReviewQueue.needsReview`).
+    var markReviewed: ((Tx) -> Void)? = nil
 
     /// **No status action on the swipe — tapping the row's glyph does that.**
     ///
@@ -57,7 +62,24 @@ struct TxRowActions {
             done(true)
             duplicate(tx)
         }
-        return UISwipeActionsConfiguration(actions: [dup])
+        guard let markReviewed, ReviewQueue.needsReview(tx) else {
+            return UISwipeActionsConfiguration(actions: [dup])
+        }
+        // In the queue, Reviewed is FIRST — the outer edge, so a full swipe right ticks
+        // the row off, the Mail-inbox gesture. Safe as the full-swipe action: it is
+        // reversible from the editor and writes nothing a balance reads.
+        //
+        // Unlike the old swipe status toggle (#702, above) the row does not RELOCATE
+        // here, it LEAVES: the swipe closes and the row is removed in the same
+        // animated snapshot, so there is no second section for the buttons to be
+        // seen sliding into.
+        let reviewed = SwipeAction.make(String(localized: "Reviewed"),
+                                        systemImage: "text.badge.checkmark",
+                                        tint: .systemTeal) { done in
+            done(true)
+            markReviewed(tx)
+        }
+        return UISwipeActionsConfiguration(actions: [reviewed, dup])
     }
 
     /// Delete only, now that the status action has moved to the glyph.
@@ -92,6 +114,10 @@ struct TxRowActions {
         if let previewReceipt {
             items.append(UIAction(title: String(localized: "Preview receipt"),
                                   image: UIImage(systemName: "paperclip")) { _ in previewReceipt(tx) })
+        }
+        if let markReviewed, ReviewQueue.needsReview(tx) {
+            items.append(UIAction(title: String(localized: "Mark reviewed"),
+                                  image: UIImage(systemName: "text.badge.checkmark")) { _ in markReviewed(tx) })
         }
         let pending = tx.pending == true
         items.append(UIAction(title: statusTitle(pending),
