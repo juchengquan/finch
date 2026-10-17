@@ -59,25 +59,41 @@ enum ScheduledSkipping {
 
 /// What a scheduled row says under its name. Pure — `today` is the wall-clock day.
 enum ScheduledCaption {
+    /// The occurrence a scheduled row speaks for: the one a bare "Post" opens
+    /// (`Selectors.resumeOccurrence` — the oldest missed one, else the next due), so
+    /// the row can never name a date the Post form does not fill in. `overdue` when
+    /// it is already behind `today`. A skipped occurrence is not missed, and one
+    /// auto-post added (waiting in To confirm) counts as posted. Nil when nothing is
+    /// left to post.
+    static func due(_ t: ScheduledTemplate, posted: [String: Bool], today: String) -> (date: String, overdue: Bool)? {
+        Selectors.resumeOccurrence(template: t, posted: posted, today: today).map { ($0, $0 < today) }
+    }
+
     /// "Monthly · next 2026-11-15", plus " · ends 2026-12-31" when an end date is set;
-    /// "Monthly · ended 2026-09-30" once nothing is left before it.
+    /// "Monthly · ended 2026-09-30" once nothing is left before it; "Monthly · overdue
+    /// 2026-08-25" while an occurrence nobody posted is behind today (`overdue` set,
+    /// so the row can colour it).
     ///
-    /// "Next" is the next occurrence that will HAPPEN — a skipped one is passed over,
-    /// so skipping this month's visibly moves it to the next.
-    static func cadence(_ t: ScheduledTemplate, today: String) -> String {
+    /// The date is `due`'s — the one Post opens. So a skipped occurrence is passed
+    /// over (skipping this month's visibly moves it to the next), and so is a posted
+    /// one, even one posted early.
+    static func cadence(_ t: ScheduledTemplate, posted: [String: Bool], today: String) -> (text: String, overdue: Bool) {
         let freq = t.frequency.capitalized
-        let next = Selectors.nextOccurrence(t, onOrAfter: today)
+        let occ = due(t, posted: posted, today: today)
+        // Overdue outranks the end date: it is the thing to act on.
+        if let occ, occ.overdue { return (String(localized: "\(freq) · overdue \(occ.date)"), true) }
+        let next = occ?.date
         if let end = t.endDate.map({ String($0.prefix(10)) }), !end.isEmpty {
-            if let next { return String(localized: "\(freq) · next \(next) · ends \(end)") }
+            if let next { return (String(localized: "\(freq) · next \(next) · ends \(end)"), false) }
             // Nothing left. Past the end date it has ended; before it, the remaining
             // occurrences were skipped (or fall after the last one), so it simply ends.
-            return end < today ? String(localized: "\(freq) · ended \(end)")
-                               : String(localized: "\(freq) · ends \(end)")
+            return (end < today ? String(localized: "\(freq) · ended \(end)")
+                                : String(localized: "\(freq) · ends \(end)"), false)
         }
         // No end date: unchanged — the stored next_run is the fallback for a
         // template whose recurrence has run out (a past "once"), else a dash.
         let shown = next ?? (t.nextRun.isEmpty ? "—" : t.nextRun)
-        return String(localized: "\(freq) · next \(shown)")
+        return (String(localized: "\(freq) · next \(shown)"), false)
     }
 
     /// "Skipping 2026-11-15" while the current occurrence or a later one is skipped;

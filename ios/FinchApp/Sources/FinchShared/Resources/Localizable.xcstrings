@@ -259,6 +259,16 @@
         }
       }
     },
+    "%@ · overdue %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$@ 已逾期"
+          }
+        }
+      }
+    },
     "%@ · will be activated": {
       "localizations": {
         "zh-Hans": {
@@ -5280,6 +5290,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "超支"
+          }
+        }
+      }
+    },
+    "Overdue": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已逾期"
           }
         }
       }
