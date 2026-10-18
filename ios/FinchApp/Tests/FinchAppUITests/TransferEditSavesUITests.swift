@@ -15,8 +15,8 @@ final class TransferEditSavesUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
-        // The demo seed posts one transfer, Everyday → Savings, and Savings holds
-        // nothing else that reads as one.
+        // The demo seed's monthly "Transfer to Savings" posts Everyday → Savings,
+        // and Savings holds nothing else that reads as a transfer.
         app.launchArguments = ["-resetStore", "YES", "-disableNotifications", "YES",
                                "-routeTo", "account:savings"]
         app.launch()
