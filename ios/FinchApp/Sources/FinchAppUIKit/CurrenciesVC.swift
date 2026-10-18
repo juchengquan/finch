@@ -33,11 +33,16 @@ final class CurrenciesVC: UIViewController {
     /// The transient result of a manual refresh, shown beside "Refresh now".
     private var refreshNote: String?
 
-    private enum SectionID: Hashable { case controls, active, inactive }
+    private enum SectionID: Hashable { case fallbackNotice, controls, active, inactive }
 
     private static let autoUpdateID = "__auto_update__"
     private static let lastUpdatedID = "__last_updated__"
     private static let refreshID = "__refresh__"
+    private static let fallbackNoticeID = "__fallback_notice__"
+
+    /// The 1.0 rates pre-#820 code saved by mistake. Re-read on each reprojection,
+    /// not per search keystroke; the notice row shows only while there are any.
+    private var fallbackSuspects: [FallbackFxRates.Suspect] = []
 
     private var collectionView: UICollectionView!
     private var dataSource: UICollectionViewDiffableDataSource<SectionID, String>!
@@ -83,6 +88,7 @@ final class CurrenciesVC: UIViewController {
         lastUpdated = UserDefaults.standard.object(forKey: RateAutoUpdater.stampKey) as? Date
         // Before the first `applySnapshot()` — it is what the sections are built from.
         frozenGrouping = effectiveTracked
+        fallbackSuspects = store.fallbackRateSuspects()
         configureCollectionView()
         configureDataSource()
         configureSearch()
@@ -91,7 +97,11 @@ final class CurrenciesVC: UIViewController {
         // Rates and the tracked set both arrive through a reprojection.
         store.objectWillChange
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.applySnapshot() }
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.fallbackSuspects = self.store.fallbackRateSuspects()
+                self.applySnapshot()
+            }
             .store(in: &cancellables)
     }
 
@@ -219,8 +229,16 @@ final class CurrenciesVC: UIViewController {
             view.contentConfiguration = cfg
         }
 
+        // Its own registration, so no currency row ever reuses the notice's cell.
+        let notice = UICollectionView.CellRegistration<UICollectionViewListCell, String> { [weak self] cell, _, _ in
+            self?.configureFallbackNotice(cell)
+        }
+
         dataSource = UICollectionViewDiffableDataSource<SectionID, String>(collectionView: collectionView) {
-            cv, indexPath, id in cv.dequeueConfiguredReusableCell(using: cell, for: indexPath, item: id)
+            cv, indexPath, id in
+            id == Self.fallbackNoticeID
+                ? cv.dequeueConfiguredReusableCell(using: notice, for: indexPath, item: id)
+                : cv.dequeueConfiguredReusableCell(using: cell, for: indexPath, item: id)
         }
         dataSource.supplementaryViewProvider = { cv, _, indexPath in
             cv.dequeueConfiguredReusableSupplementary(using: footer, for: indexPath)
@@ -235,6 +253,10 @@ final class CurrenciesVC: UIViewController {
         rowByCode = Dictionary(uniqueKeysWithValues: rows.map { ($0.code, $0) })
 
         var snap = NSDiffableDataSourceSnapshot<SectionID, String>()
+        if !fallbackSuspects.isEmpty {
+            snap.appendSections([.fallbackNotice])
+            snap.appendItems([Self.fallbackNoticeID], toSection: .fallbackNotice)
+        }
         snap.appendSections([.controls])
         var controls = [Self.autoUpdateID]
         if lastUpdated != nil { controls.append(Self.lastUpdatedID) }
@@ -271,6 +293,22 @@ final class CurrenciesVC: UIViewController {
         // Plain `.searchable` on the SwiftUI screen, i.e. the DEFAULT placement, which
         // hides on scroll — unlike the Categories/Tags lists, which pin it.
         navigationItem.hidesSearchBarWhenScrolling = true
+    }
+
+    /// "3 rates were saved as 1:1 by mistake" — opens `FallbackRatesReviewVC`, which
+    /// lists them and removes them only on confirmation.
+    private func configureFallbackNotice(_ cell: UICollectionViewListCell) {
+        let n = fallbackSuspects.count
+        var cfg = cell.defaultContentConfiguration()
+        cfg.image = UIImage(systemName: "exclamationmark.triangle.fill")
+        cfg.imageProperties.tintColor = .systemOrange
+        cfg.text = n == 1 ? String(localized: "1 rate was saved as 1:1 by mistake")
+                          : String(localized: "\(n) rates were saved as 1:1 by mistake")
+        cfg.secondaryText = String(localized: "Review and remove them")
+        cfg.secondaryTextProperties.color = .secondaryLabel
+        cell.contentConfiguration = cfg
+        cell.accessories = [.disclosureIndicator()]
+        cell.accessibilityIdentifier = "fallback-rates-notice"
     }
 
     // MARK: Writes
@@ -333,6 +371,7 @@ extension CurrenciesVC: UICollectionViewDelegate {
         if id == Self.autoUpdateID { return false }
         if id == Self.lastUpdatedID { return false }
         if id == Self.refreshID { return !refreshing }
+        if id == Self.fallbackNoticeID { return true }
         return rowByCode[id] != nil
     }
 
@@ -340,6 +379,10 @@ extension CurrenciesVC: UICollectionViewDelegate {
         cv.deselectItem(at: indexPath, animated: true)
         guard let id = dataSource.itemIdentifier(for: indexPath) else { return }
         if id == Self.refreshID { refreshNow(); return }
+        if id == Self.fallbackNoticeID {
+            navigationController?.pushViewController(FallbackRatesReviewVC(), animated: true)
+            return
+        }
         guard let row = rowByCode[id] else { return }
         // Converted too, so this drill is native end to end.
         navigationController?.pushViewController(
