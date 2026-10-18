@@ -218,21 +218,20 @@ enum SimulatorDemoSeed {
         }
 
         // ~3 months of transactions. Expenses negative, income positive.
+        // No rent, salary, Netflix, PG&E or Spotify here: those are scheduled bills,
+        // and their rows come from posting the templates below. Listed here as well,
+        // each would count twice.
         let txns: [(d: Int, acct: String, amt: Double, merchant: String, cat: String,
                     kind: String?, status: String?, tags: [String]?)] = [
             (1,  "credit",   -32.40, "Amazon",             "cat-shopping-electronics",    nil,      nil,       ["tag-online"]),
             (2,  "credit",   -42.18, "Whole Foods",        "cat-groceries",               nil,      "pending", ["tag-reimbursable"]),
             (2,  "everyday",  -58.20, "Target",            "cat-groceries",               nil,      nil,       nil),
             (3,  "credit",   -16.40, "Blue Bottle Coffee", "cat-dining-coffee",           nil,      "pending", nil),
-            (4,  "everyday", -1_850, "Apartment Rent",     "cat-rent",                    nil,      nil,       nil),
             (4,  "credit",  -410.00, "Apple Store",        "cat-shopping-electronics",    nil,      nil,       ["tag-tax"]),
-            (5,  "everyday",  4_200, "Acme Corp Payroll",  "cat-salary",                  nil,      nil,       nil),
             (6,  "credit",   -28.75, "Shell Gas",          "cat-transport-fuel",          nil,      nil,       nil),
             (7,  "cash",     -12.00, "Food Truck",         "cat-dining-fastfood",         nil,      nil,       nil),
             (8,  "credit",   -64.99, "Uniqlo",             "cat-shopping-clothing",       nil,      nil,       nil),
-            (9,  "credit",    -9.99, "Netflix",            "cat-entertainment",           nil,      nil,       ["tag-subscription"]),
             (9,  "credit",   -44.10, "Chevron",            "cat-transport-fuel",          nil,      nil,       nil),
-            (10, "everyday",  -88.30, "PG&E Utilities",    "cat-utilities",               nil,      nil,       nil),
             (11, "credit",    64.99, "Nordstrom Refund",   "cat-shopping",                "refund", nil,       ["tag-vacation"]),
             (12, "credit",   -53.20, "Trader Joe's",       "cat-groceries",               nil,      nil,       nil),
             (13, "credit",   -22.50, "Chipotle",           "cat-dining-restaurants",      nil,      nil,       nil),
@@ -242,23 +241,19 @@ enum SimulatorDemoSeed {
             (17, "cash",     -18.00, "Farmers Market",     "cat-groceries",               nil,      nil,       nil),
             (18, "credit",  -240.00, "IKEA",               "cat-shopping-home-furniture", nil,      nil,       ["tag-gift"]),
             (19, "credit",   -45.60, "CVS Pharmacy",       "cat-health-pharmacy",         nil,      nil,       ["tag-reimbursable"]),
-            (20, "everyday",  4_200, "Acme Corp Payroll",  "cat-salary",                  nil,      nil,       nil),
             (21, "credit",   -38.40, "Safeway",            "cat-groceries",               nil,      nil,       nil),
             (22, "credit",   -68.00, "West Elm",           "cat-shopping-home-decor",     nil,      nil,       nil),
             (23, "credit",   -14.25, "Starbucks",          "cat-dining-coffee",           nil,      nil,       nil),
             (24, "cash",     -12.50, "BART",               "cat-transport-transit",       nil,      nil,       nil),
-            (25, "credit",   -19.99, "Spotify",            "cat-entertainment",           nil,      nil,       ["tag-subscription"]),
             (26, "credit",   -27.30, "Walgreens",          "cat-health-pharmacy",         nil,      nil,       ["tag-medical"]),
             (27, "credit",   -27.80, "Lyft",               "cat-transport-rideshare",     nil,      nil,       ["tag-business", "tag-reimbursable"]),
             (28, "credit",   -85.00, "Home Depot",         "cat-shopping-home",           nil,      nil,       nil),
             (30, "credit",   -58.10, "Whole Foods",        "cat-groceries",               nil,      nil,       nil),
             (33, "credit",   -72.00, "AMC Theatres",       "cat-entertainment",           nil,      nil,       nil),
-            (35, "everyday",  4_200, "Acme Corp Payroll",  "cat-salary",                  nil,      nil,       nil),
             (38, "credit",   -41.30, "Trader Joe's",       "cat-groceries",               nil,      nil,       nil),
             (40, "credit",  -180.00, "Equinox",            "cat-health-fitness",          nil,      nil,       nil),
             (42, "credit",   -33.50, "Olive Garden",       "cat-dining-restaurants",      nil,      nil,       nil),
             (46, "credit",   -95.00, "Best Buy",           "cat-shopping-electronics",    nil,      nil,       ["tag-business"]),
-            (50, "everyday", -1_850, "Apartment Rent",     "cat-rent",                    nil,      nil,       nil),
             (55, "credit",   -49.90, "Costco",             "cat-groceries",               nil,      nil,       ["tag-reimbursable"]),
             (60, "credit",   -24.00, "Shell Gas",          "cat-transport-fuel",          nil,      nil,       nil),
             (68, "credit",   -61.40, "REI",                "cat-shopping",                nil,      nil,       ["tag-vacation"]),
@@ -339,37 +334,27 @@ enum SimulatorDemoSeed {
                 .object(["accountId": .string("everyday"), "categoryId": .string("cat-shopping-home-decor"),     "amount": .double(-45.00)]),
             ])])
 
-        // A real posted transfer (Everyday → Savings) so the transfer kind shows in the feed.
-        try apply("createTransfer", [
-            "fromAccountId": .string("everyday"), "toAccountId": .string("savings"),
-            "fromAmount": .double(500), "date": .string(ymd(15)), "time": .string("12:00")])
-
-        // Reconcile showcase — both looks of the badge/seal: Everyday was checked
-        // against its statement a few days ago (fresh/green, everything cleared);
-        // Savings' last check is ~45 days old (stale/orange with the default
-        // reminder cutoff), cleared + checkpointed only through that date.
-        try seedReconcile(q, accountId: "everyday", asOf: ymd(2), clearThrough: nil)
-        try seedReconcile(q, accountId: "savings", asOf: ymd(45), clearThrough: ymd(45))
-
         // Recurring scheduled templates (bills, subscriptions, salary, a transfer)
         // so the Scheduled tab is populated. Amounts are positive magnitudes —
         // `kind` drives the sign when posted. Transfers carry `from` (source);
-        // `acct` is the destination. Start a few months back so the next run is
-        // a real upcoming date.
-        let scheduled: [(name: String, type: String, amount: Double, freq: String,
-                         acct: String, from: String?, cat: String?, day: Int)] = [
-            ("Apartment Rent",     "expense",  1_850, "monthly",   "everyday", nil,        "cat-rent",          1),
-            ("Acme Corp Payroll",  "income",   4_200, "monthly",   "everyday", nil,        "cat-salary",        5),
-            ("Transfer to Savings","transfer",   500, "monthly",   "savings",  "everyday", nil,                 6),
-            ("Netflix",            "expense",   9.99, "monthly",   "credit",   nil,        "cat-entertainment", 9),
-            ("PG&E Utilities",     "expense",  88.30, "monthly",   "everyday", nil,        "cat-utilities",    10),
-            ("Gym Membership",     "expense",     40, "monthly",   "credit",   nil,        "cat-health",       15),
-            ("Phone Bill",         "expense",     55, "monthly",   "credit",   nil,        "cat-utilities",    18),
-            ("Car Insurance",      "expense",    180, "quarterly", "credit",   nil,        "cat-transport",    20),
-            ("Spotify",            "expense",  19.99, "monthly",   "credit",   nil,        "cat-entertainment",25),
+        // `acct` is the destination. They start two months back, so each has a
+        // history; the posting below fills it in. Before the reconcile showcase,
+        // so the postings are what it clears.
+        let scheduled: [(id: String, name: String, type: String, amount: Double, freq: String,
+                         acct: String, from: String?, cat: String?, day: Int, tags: [String]?)] = [
+            ("sch-rent",     "Apartment Rent",     "expense",  1_850, "monthly",   "everyday", nil,        "cat-rent",          1, nil),
+            ("sch-payroll",  "Acme Corp Payroll",  "income",   4_200, "monthly",   "everyday", nil,        "cat-salary",        5, nil),
+            ("sch-savings",  "Transfer to Savings","transfer",   500, "monthly",   "savings",  "everyday", nil,                 6, nil),
+            ("sch-netflix",  "Netflix",            "expense",   9.99, "monthly",   "credit",   nil,        "cat-entertainment", 9, ["tag-subscription"]),
+            ("sch-pge",      "PG&E Utilities",     "expense",  88.30, "monthly",   "everyday", nil,        "cat-utilities",    10, nil),
+            ("sch-gym",      "Gym Membership",     "expense",     40, "monthly",   "credit",   nil,        "cat-health",       15, nil),
+            ("sch-phone",    "Phone Bill",         "expense",     55, "monthly",   "credit",   nil,        "cat-utilities",    18, nil),
+            ("sch-car",      "Car Insurance",      "expense",    180, "quarterly", "credit",   nil,        "cat-transport",    20, nil),
+            ("sch-spotify",  "Spotify",            "expense",  19.99, "monthly",   "credit",   nil,        "cat-entertainment",25, ["tag-subscription"]),
         ]
         for s in scheduled {
             var args: [String: JSONValue] = [
+                "id": .string(s.id),
                 "ledgerId": .string("personal"), "name": .string(s.name), "type": .string(s.type),
                 "amount": .double(s.amount), "frequency": .string(s.freq),
                 "accountId": .string(s.acct), "dayOfMonth": .double(Double(s.day)),
@@ -384,11 +369,64 @@ enum SimulatorDemoSeed {
 
         // An installment plan so the Scheduled tab shows installment progress.
         try apply("createScheduled", [
+            "id": .string("sch-furniture"),
             "ledgerId": .string("personal"), "name": .string("Furniture Plan"),
             "type": .string("expense"), "amount": .double(120), "frequency": .string("monthly"),
             "accountId": .string("credit"), "dayOfMonth": .double(12),
             "startDate": .string(monthStart(2)), "category": .string("cat-shopping"),
             "installmentTotal": .double(12)])
+
+        // CAUGHT UP. A scheduled row reads "overdue <date>", in red, while an
+        // occurrence nobody posted is behind today (`ScheduledCaption`). Created
+        // two months back and never posted, every item in the tab read overdue —
+        // a user nobody is. So each occurrence already behind today is posted the
+        // way Post posts it: `postScheduled`, dated on the occurrence, linked by
+        // sourceTemplateId/occurrenceDate, walked oldest-first with the same
+        // `resumeOccurrence` the row and the Post form read.
+        //
+        // ONE bill stays unpaid so the overdue state is still there to look at: the
+        // one that fell due most recently, a bill in since a few days and not dealt
+        // with yet. The bills are spread across the month, so that is never more
+        // than a week back, whatever day the demo is seeded on.
+        let today = ymd(0)
+        var due: [(template: ScheduledTemplate, dates: [String])] = []
+        for t in try Projection.scheduledTemplates(dbQueue: q, ledgerId: "personal") {
+            var posted: [String: Bool] = [:]
+            var dates: [String] = []
+            while let occ = Selectors.resumeOccurrence(template: t, posted: posted, today: today), occ < today {
+                dates.append(occ)
+                posted["\(t.id)|\(occ)"] = false
+            }
+            due.append((t, dates))
+        }
+        let unpaid = due.filter { $0.template.type == "expense" }
+            .compactMap { d in d.dates.last.map { (id: d.template.id, date: $0) } }
+            .max { $0.date < $1.date }
+        for d in due {
+            for occ in d.dates where !(d.template.id == unpaid?.id && occ == unpaid?.date) {
+                try apply("postScheduled", [
+                    "templateId": .string(d.template.id), "date": .string(occ),
+                    "occurrenceDate": .string(occ), "time": .string("12:00")])
+            }
+        }
+        // Post carries no tags; the subscriptions had theirs as plain rows, so give
+        // them back.
+        for s in scheduled {
+            guard let tags = s.tags else { continue }
+            let ids = try q.read { db in
+                try String.fetchAll(db, sql: "SELECT id FROM entries WHERE source_template_id = ?", arguments: [s.id])
+            }
+            for id in ids {
+                try apply("setTransactionTags", ["id": .string(id), "tagIds": .array(tags.map { .string($0) })])
+            }
+        }
+
+        // Reconcile showcase — both looks of the badge/seal: Everyday was checked
+        // against its statement a few days ago (fresh/green, everything cleared);
+        // Savings' last check is ~45 days old (stale/orange with the default
+        // reminder cutoff), cleared + checkpointed only through that date.
+        try seedReconcile(q, accountId: "everyday", asOf: ymd(2), clearThrough: nil)
+        try seedReconcile(q, accountId: "savings", asOf: ymd(45), clearThrough: ymd(45))
 
         // A second, EUR-based ledger ("Travel") so the ledger switcher + Manage
         // ledgers aren't single-entry. Kept lightweight (accounts + categories +
