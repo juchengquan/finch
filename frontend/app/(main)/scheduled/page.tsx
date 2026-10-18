@@ -21,6 +21,7 @@ import { useFinanceStore } from '@/lib/store';
 import type { ScheduledTemplate } from '@/lib/store';
 import { scheduledPostedMap } from '@/lib/select';
 import { parseInstallmentTotal } from '@/lib/installment';
+import { occurrenceDaysInMonth } from '@/lib/recurrence';
 import { categoryPath } from '@/lib/db/domain/categories/queries';
 import { cn } from '@/lib/utils';
 
@@ -32,6 +33,9 @@ const MONTH_NAMES = [
 ];
 const TYPES = ['expense', 'income', 'transfer'];
 const FREQUENCIES = ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'];
+// Quarterly and yearly recur on the start date's day, not dayOfMonth (lib/recurrence.ts).
+const recursOnStartDay = (frequency: string) => frequency === 'quarterly' || frequency === 'yearly';
+const startDayOf = (startDate: string | undefined) => Number((startDate ?? '').slice(8, 10)) || 0;
 
 interface DraftForm {
   id: string;
@@ -120,10 +124,12 @@ export default function ScheduledPage() {
     const name = draft.name.trim();
     if (!name) return void toast.error(t('errors.nameRequired'));
     const amount = draft.amount.trim() === '' ? null : Number(draft.amount);
-    const dayOfMonth = Number(draft.dayOfMonth) || 1;
     const weekDay = draft.weekDay !== '' ? Number(draft.weekDay) : undefined;
     const type = draft.type;
     const frequency = draft.isRecurring ? draft.frequency : 'once';
+    // Quarterly and yearly store their start's day, so the column says what the
+    // engine does; their day-of-month input is hidden and would send a stale 1.
+    const dayOfMonth = (recursOnStartDay(frequency) ? startDayOf(draft.startDate) : Number(draft.dayOfMonth)) || 1;
     const category = draft.category || null;
     const startDate = draft.startDate || undefined;
     const endDate = draft.endDate || null;
@@ -228,6 +234,12 @@ export default function ScheduledPage() {
     const v = occPending.get(`${templateId}|${isoOf(day)}`);
     return v === undefined ? 'upcoming' : v ? 'pending' : 'done';
   };
+  // The day an undated list row speaks for: dayOfMonth, except a quarterly or yearly
+  // item's occurrence this month (else its start day) — what the engine posts on.
+  const listDay = (it: ScheduledTemplate) =>
+    recursOnStartDay(it.frequency)
+      ? (occurrenceDaysInMonth(it, view.y, view.m)[0] ?? startDayOf(it.startDate))
+      : it.dayOfMonth || 0;
 
   return (
     <MobilePage
@@ -373,7 +385,7 @@ export default function ScheduledPage() {
           </>
         ) : (
           [...scheduled]
-            .sort((a, b) => (a.dayOfMonth || 0) - (b.dayOfMonth || 0))
+            .sort((a, b) => listDay(a) - listDay(b))
             .map((item) => (
               <ScheduledCard
                 key={item.id}
@@ -383,7 +395,7 @@ export default function ScheduledPage() {
                   amount: item.amount,
                   type: item.type,
                   frequency: item.frequency,
-                  day: item.dayOfMonth || 0,
+                  day: listDay(item),
                   dayOfMonth: item.dayOfMonth || 0,
                   weekDay: item.weekDay,
                   account: item.account ?? '',
@@ -394,7 +406,7 @@ export default function ScheduledPage() {
                   installmentTotal: item.installmentTotal ?? null,
                   installmentPaid: item.installmentPaid ?? 0,
                 }}
-                status={occStatus(item.id, item.dayOfMonth || 0)}
+                status={occStatus(item.id, listDay(item))}
                 onEdit={openEdit}
                 onDelete={() => { deleteScheduled(item.id); toast.success('Scheduled item deleted', { description: item.name }); }}
               />
@@ -633,6 +645,8 @@ function daysForMonth(items: ScheduledTemplate[], viewYear: number, viewMonth: n
         }
         d.setDate(d.getDate() + 14);
       }
+    } else if (recursOnStartDay(it.frequency)) {
+      for (const day of occurrenceDaysInMonth(it, viewYear, viewMonth)) result.push({ ...base, day });
     } else if (it.dayOfMonth >= 1 && it.dayOfMonth <= daysInMonth) {
       result.push({ ...base, day: it.dayOfMonth });
     }
@@ -680,6 +694,12 @@ function buildDotsByDay(items: ScheduledTemplate[], viewYear: number, viewMonth:
           map.set(d.getDate(), arr);
         }
         d.setDate(d.getDate() + 14);
+      }
+    } else if (recursOnStartDay(it.frequency)) {
+      for (const day of occurrenceDaysInMonth(it, viewYear, viewMonth)) {
+        const arr = map.get(day) ?? [];
+        arr.push({ color });
+        map.set(day, arr);
       }
     } else if (it.dayOfMonth >= 1 && it.dayOfMonth <= daysInMonth) {
       const arr = map.get(it.dayOfMonth) ?? [];

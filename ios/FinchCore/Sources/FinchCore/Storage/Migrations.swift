@@ -197,6 +197,15 @@ public enum Migrations {
             try Self.ensureMetadataRow(db)
         }
 
+        // Quarterly and yearly items carry on from the day they actually ran (web
+        // migration 2026-10-19): #817 moved their recurrence onto the start date's
+        // day, which strands the history of every item the sheet had saved with
+        // day_of_month = 1. Data only; see `repairQuarterlyStartDays`.
+        migrator.registerMigration("2026-10-19-quarterly-start-day") { db in
+            try Self.repairQuarterlyStartDays(db)
+            try Self.ensureMetadataRow(db)   // re-stamp schema_version
+        }
+
         return migrator
     }
 
