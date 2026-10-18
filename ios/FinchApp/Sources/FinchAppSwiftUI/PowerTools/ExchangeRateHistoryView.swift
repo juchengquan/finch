@@ -21,7 +21,9 @@ struct ExchangeRateHistoryView: View {
 
     var body: some View {
         List {
-            let series = fxSeries(store.exchangeRates, currency)
+            let series = fxDisplaySeries(store.exchangeRates, currency)
+            // One direction for the whole history, set by the latest rate (FxRateDisplay).
+            let inverted = fxReadsInverted(latest: rows.first?.rate)
             if series.count >= 3 {
                 Section {
                     Sparkline(values: series)
@@ -36,7 +38,9 @@ struct ExchangeRateHistoryView: View {
                     HStack {
                         Text(fxDisplayDay(rate.date, withYear: true))
                         Spacer()
-                        Text(String(format: "%.4f", rate.rate))
+                        Text(verbatim: fxRateDisplay(rate.rate, currency: currency, inverted: inverted) ?? "")
+                            .font(.subheadline).monospacedDigit()
+                            .lineLimit(1).minimumScaleFactor(0.8)
                         SourceBadge(source: rate.source)
                     }
                     // Only a hand-entered rate opens for editing; a fetched one is

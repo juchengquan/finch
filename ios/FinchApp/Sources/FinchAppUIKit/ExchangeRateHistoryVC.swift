@@ -37,6 +37,8 @@ final class ExchangeRateHistoryVC: UIViewController {
     /// is fixed for this screen.
     private var rateByDate: [String: ExchangeRate] = [:]
     private var series: [Double] = []
+    /// Whether the rows read "1 USD = x CUR" — see `fxReadsInverted`.
+    private var inverted = false
     private var moreItem: UIBarButtonItem?
 
     /// Date-descending, as the SwiftUI screen listed them.
@@ -109,7 +111,8 @@ final class ExchangeRateHistoryVC: UIViewController {
             guard let rate = self.rateByDate[id] else { return }
             cell.contentConfiguration = UIHostingConfiguration {
                 RateRowVisual(day: fxDisplayDay(rate.date, withYear: true),
-                              rate: String(format: "%.4f", rate.rate),
+                              rate: fxRateDisplay(rate.rate, currency: self.currency,
+                                                  inverted: self.inverted) ?? "",
                               source: rate.source)
             }
         }
@@ -122,7 +125,9 @@ final class ExchangeRateHistoryVC: UIViewController {
     private func applySnapshot() {
         let current = rows
         rateByDate = Dictionary(uniqueKeysWithValues: current.map { ($0.date, $0) })
-        series = fxSeries(store.exchangeRates, currency)
+        // One direction for the whole history, set by the latest rate (FxRateDisplay).
+        inverted = fxReadsInverted(latest: current.first?.rate)
+        series = fxDisplaySeries(store.exchangeRates, currency)
 
         var snap = NSDiffableDataSourceSnapshot<SectionID, String>()
         // A sparkline over one or two points draws a line that means nothing, so the
@@ -269,7 +274,10 @@ private struct RateRowVisual: View {
         HStack {
             Text(verbatim: day)
             Spacer()
-            Text(verbatim: rate)
+            // Sized like the Currencies list's rate, and kept to one line: the
+            // sentence is wider than the bare figure it replaced.
+            Text(verbatim: rate).font(.subheadline).monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.8)
             SourceBadge(source: source)
         }
     }

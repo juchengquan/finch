@@ -124,8 +124,12 @@ struct CurrenciesView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            Text(row.rate.map { String(format: "%.4f", $0) } ?? "—")
-                .foregroundStyle(row.rate == nil ? Color.secondary : Color.primary)
+            // The hub has no rate of its own; the rest read as a sentence (FxRateDisplay).
+            if !row.isHub {
+                Text(verbatim: row.rate.flatMap { fxRateDisplay($0, currency: row.code) } ?? "—")
+                    .font(.subheadline)
+                    .foregroundStyle(row.rate == nil ? Color.secondary : Color.primary)
+            }
             if !row.isHub {
                 Toggle("", isOn: Binding(get: { row.tracked }, set: { setTracked(row.code, $0) }))
                     .labelsHidden()
