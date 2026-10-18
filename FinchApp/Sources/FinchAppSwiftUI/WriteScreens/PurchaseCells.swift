@@ -197,9 +197,25 @@ enum PurchaseFlow {
     /// totalled $0.00 against an amount of $250.00. A transfer moves money
     /// between accounts; there is nothing on it to divide.
     static func paymentLegs(of txn: Tx, in txns: [Tx]) -> [Tx] {
-        guard txn.kind != "transfer", let entryId = txn.entryId else { return [] }
+        guard isPurchase(txn), let entryId = txn.entryId else { return [] }
         return txns.filter { $0.entryId == entryId }
     }
+
+    /// Whether a feed row is one of several that make up one purchase — a payment
+    /// of a purchase paid from several cards, or one transaction of a grid. The
+    /// row's "part of one purchase" mark (`TxRow`) shows exactly when this is true.
+    ///
+    /// Never a transfer, for the reason `paymentLegs` gives: counted by legs, both
+    /// halves of every transfer carried the mark and VoiceOver called them "Part of
+    /// one purchase". A transfer row already says what it is — its leading glyph and
+    /// its "To Savings" / "From Everyday" title.
+    static func isPartOfOnePurchase(_ txn: Tx) -> Bool {
+        isPurchase(txn) && ((txn.accountLegCount ?? 1) > 1 || txn.groupId != nil)
+    }
+
+    /// The one rule both of the above share, so the Edit sheet and the feed row
+    /// cannot disagree about what a transfer is.
+    private static func isPurchase(_ txn: Tx) -> Bool { txn.kind != "transfer" }
 
     // MARK: - Reopening a saved grid
 
