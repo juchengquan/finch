@@ -307,7 +307,10 @@ enum SaveTransaction {
             // through the FX residue so nothing downstream would flag it.
             let cellCcy = kind == .transfer ? acctCcy : purchaseCcy
             let native = Entries.r2(try Entries.convertToBase(db, amount, cellCcy, acctCcy, date).amountBase)
-            let conv = try Entries.convertToBase(db, amount, cellCcy, base, date)
+            // A transfer's legs are left for `Entries.resolveLegs` to value in base:
+            // it runs this same conversion, and when one side has no rate it values
+            // that side from the other instead of refusing the transfer.
+            let conv = kind == .transfer ? nil : try Entries.convertToBase(db, amount, cellCcy, base, date)
 
             // Match by account (Decision 29): an unchanged card keeps its posting,
             // its memo and its reconcile mark. A changed card is a NEW posting, so
@@ -333,7 +336,7 @@ enum SaveTransaction {
             let typedInAnotherCurrency = cellCcy != acctCcy
             legs.append(.account(Entries.AccountLeg(
                 accountId: accountId, amount: native,
-                amountBase: Entries.r2(conv.amountBase), exchangeRate: conv.rate,
+                amountBase: conv.map { Entries.r2($0.amountBase) }, exchangeRate: conv?.rate,
                 memo: prior?["memo"] ?? transferMemos[accountId], id: prior?["id"],
                 origAmount: typedInAnotherCurrency ? Entries.r2(amount) : nil,
                 origCurrency: typedInAnotherCurrency ? cellCcy : nil,
