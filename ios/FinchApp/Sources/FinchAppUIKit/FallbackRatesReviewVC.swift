@@ -10,7 +10,15 @@ import FinchCore
 /// is removed by opening this screen, and nothing at launch.
 ///
 /// Entries already booked at 1:1 are COUNTED, not changed (see
-/// `FinchStore+FallbackRates` for why there is no "recalculate").
+/// `FinchStore+FallbackRates` for why there is no "recalculate"). Tapping a rate,
+/// or the total, lists them (`TxListDetailVC.Source.bookedAtOneToOne`), each opening
+/// in the Edit sheet, so "check them and correct any that are wrong" has somewhere
+/// to start.
+///
+/// The total stays on screen after the rates are removed, for as long as the
+/// review is open: removing them is what makes the entries worth checking, and
+/// once Currencies' notice is gone nothing else leads back to them. Leaving the
+/// review lets them go.
 final class FallbackRatesReviewVC: UIViewController {
 
     private let store = FinchStore.shared
@@ -27,7 +35,15 @@ final class FallbackRatesReviewVC: UIViewController {
     private var suspects: [FallbackFxRates.Suspect] = []
     private var suspectByID: [String: FallbackFxRates.Suspect] = [:]
 
-    private var entryTotal: Int { suspects.reduce(0) { $0 + $1.entryCount } }
+    /// Every rate this screen has listed, removed or not, oldest first. The entries
+    /// row reads these, so it outlives the rates (see the type's comment).
+    private var listed: [FallbackFxRates.Suspect] = []
+    /// What the entries row shows: every entry `listed` converted, each once, and
+    /// how many of those a transaction list here can't show.
+    private var entryTotal = 0
+    private var entriesUnlisted = 0
+
+    private static func id(_ s: FallbackFxRates.Suspect) -> String { "\(s.currency)|\(s.date)" }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -70,13 +86,27 @@ final class FallbackRatesReviewVC: UIViewController {
         let cell = UICollectionView.CellRegistration<UICollectionViewListCell, String> { [weak self] cell, _, id in
             guard let self else { return }
             cell.accessories = []
-            cell.accessibilityIdentifier = id == Self.removeID ? "fallback-rates-remove" : nil
+            cell.accessibilityIdentifier = switch id {
+            case Self.removeID: "fallback-rates-remove"
+            case Self.entriesID: "fallback-rates-entries"
+            default: nil
+            }
             var cfg = cell.defaultContentConfiguration()
             switch id {
             case Self.entriesID:
                 let n = self.entryTotal
                 cfg.text = n == 1 ? String(localized: "1 entry was booked at 1:1")
                                   : String(localized: "\(n) entries were booked at 1:1")
+                // The list shows the active ledger's transactions, and no ledger lists
+                // an opening balance; say so rather than let the list look short.
+                let m = self.entriesUnlisted
+                if m > 0 {
+                    cfg.secondaryText = m == 1
+                        ? String(localized: "1 is an opening balance or in another ledger, so it isn't listed.")
+                        : String(localized: "\(m) are opening balances or in other ledgers, so they aren't listed.")
+                    cfg.secondaryTextProperties.color = .secondaryLabel
+                }
+                cell.accessories = [.disclosureIndicator()]
             case Self.removeID:
                 cfg.text = self.removeTitle(self.suspects.count)
                 cfg.textProperties.color = .systemRed
@@ -89,6 +119,7 @@ final class FallbackRatesReviewVC: UIViewController {
                 case 1: String(localized: "1 entry")
                 default: String(localized: "\(s.entryCount) entries")
                 }
+                if s.entryCount > 0 { cell.accessories = [.disclosureIndicator()] }
                 TrailingLabel.install(on: cell, text: used, color: .secondaryLabel)
             }
             cell.contentConfiguration = cfg
@@ -120,24 +151,36 @@ final class FallbackRatesReviewVC: UIViewController {
 
     private func applySnapshot() {
         suspects = store.fallbackRateSuspects()
-        // Nothing left to review (removed here, or became real elsewhere): go back.
-        if suspects.isEmpty {
+        let known = Set(listed.map(Self.id))
+        listed = (listed + suspects.filter { !known.contains(Self.id($0)) })
+            .sorted { ($0.date, $0.currency) < ($1.date, $1.currency) }
+        let ids = store.fallbackRateEntryIds(listed)
+        entryTotal = ids.count
+        entriesUnlisted = ids.count - FallbackFxRates.rows(store.txns, entryIds: ids).count
+
+        // Nothing left to review or to check (removed here, or became real
+        // elsewhere, and no entries were booked with them): go back.
+        if suspects.isEmpty && entryTotal == 0 {
             if navigationController?.topViewController === self {
                 navigationController?.popViewController(animated: true)
             }
             return
         }
-        suspectByID = Dictionary(uniqueKeysWithValues: suspects.map { ("\($0.currency)|\($0.date)", $0) })
+        suspectByID = Dictionary(uniqueKeysWithValues: suspects.map { (Self.id($0), $0) })
 
         var snap = NSDiffableDataSourceSnapshot<SectionID, String>()
-        snap.appendSections([.rates])
-        snap.appendItems(suspects.map { "\($0.currency)|\($0.date)" }, toSection: .rates)
+        if !suspects.isEmpty {
+            snap.appendSections([.rates])
+            snap.appendItems(suspects.map(Self.id), toSection: .rates)
+        }
         if entryTotal > 0 {
             snap.appendSections([.entries])
             snap.appendItems([Self.entriesID], toSection: .entries)
         }
-        snap.appendSections([.remove])
-        snap.appendItems([Self.removeID], toSection: .remove)
+        if !suspects.isEmpty {
+            snap.appendSections([.remove])
+            snap.appendItems([Self.removeID], toSection: .remove)
+        }
 
         let carried = Set(dataSource.snapshot().itemIdentifiers)
         snap.reconfigureItems(snap.itemIdentifiers.filter(carried.contains))
@@ -153,16 +196,17 @@ final class FallbackRatesReviewVC: UIViewController {
 
     /// The second, counted step. The action sheet names exactly what goes.
     private func confirmRemove(from source: UIView?) {
-        let listed = suspects
-        guard !listed.isEmpty else { return }
+        let toRemove = suspects
+        guard !toRemove.isEmpty else { return }
         let sheet = UIAlertController(
             title: nil,
             message: String(localized: "A write in these currencies will then ask for a real rate. Turn the currency on in Currencies and tap Refresh now to fetch one."),
             preferredStyle: .actionSheet)
-        sheet.addAction(UIAlertAction(title: removeTitle(listed.count), style: .destructive) { [weak self] _ in
+        sheet.addAction(UIAlertAction(title: removeTitle(toRemove.count), style: .destructive) { [weak self] _ in
             guard let self else { return }
-            self.store.removeFallbackRates(listed)
-            // The reprojection's sink re-reads; an empty list pops back to Currencies.
+            self.store.removeFallbackRates(toRemove)
+            // The reprojection's sink re-reads. The entries row stays to be checked;
+            // with none booked, an empty list pops back to Currencies.
             self.applySnapshot()
         })
         sheet.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel))
@@ -173,14 +217,30 @@ final class FallbackRatesReviewVC: UIViewController {
 }
 
 extension FallbackRatesReviewVC: UICollectionViewDelegate {
-    /// Only the remove row acts; the rate rows are a list to read.
+    /// The remove row confirms; the entries row and any rate that converted
+    /// something list those entries. A rate nothing used has nothing to open.
     func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
-        dataSource.itemIdentifier(for: indexPath) == Self.removeID
+        guard let id = dataSource.itemIdentifier(for: indexPath) else { return false }
+        if id == Self.removeID || id == Self.entriesID { return true }
+        return (suspectByID[id]?.entryCount ?? 0) > 0
     }
 
     func collectionView(_ cv: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         cv.deselectItem(at: indexPath, animated: true)
-        confirmRemove(from: cv.cellForItem(at: indexPath))
+        guard let id = dataSource.itemIdentifier(for: indexPath) else { return }
+        let source: TxListDetailVC.Source
+        switch id {
+        case Self.removeID:
+            confirmRemove(from: cv.cellForItem(at: indexPath))
+            return
+        case Self.entriesID:
+            // `listed`, not `suspects`: after a removal this is the only way back in.
+            source = .bookedAtOneToOne(title: String(localized: "Booked at 1:1"), rates: listed)
+        default:
+            guard let s = suspectByID[id] else { return }
+            source = .bookedAtOneToOne(title: "\(s.currency) · \(fxDisplayDay(s.date))", rates: [s])
+        }
+        navigationController?.pushViewController(TxListDetailVC(source), animated: true)
     }
 }
 #endif

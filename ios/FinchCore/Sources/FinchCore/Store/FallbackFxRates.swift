@@ -60,7 +60,52 @@ public enum FallbackFxRates {
             """, arguments: StatementArguments(excluded))
         return try rows.map { r in
             let c: String = r["c"], d: String = r["d"]
-            return Suspect(currency: c, date: d, entryCount: try entriesUsing(db, currency: c, date: d))
+            return Suspect(currency: c, date: d, entryCount: try entriesUsing(db, currency: c, date: d).count)
+        }
+    }
+
+    /// The ids of the entries `rates` converted, across every ledger — the same
+    /// rule, row for row, as each rate's `entryCount`, so a list built from these
+    /// shows exactly what the review counts. An entry two of the rates converted
+    /// (one dated day, two of the currencies) is in here once, so the total is
+    /// this set's size, not the sum of the counts.
+    ///
+    /// Read on demand rather than stored on `Suspect`: the rule needs only the
+    /// currency and date, so it still finds the entries after the rates are gone.
+    public static func entryIds(_ db: Database, for rates: [Suspect]) throws -> Set<String> {
+        var ids = Set<String>()
+        for r in Set(rates.map { RateKey(currency: $0.currency, date: $0.date) }) {
+            ids.formUnion(try entriesUsing(db, currency: r.currency, date: r.date))
+        }
+        return ids
+    }
+
+    private struct RateKey: Hashable { let currency: String; let date: String }
+
+    /// The rows a transaction list shows for `entryIds`: ONE PER ENTRY, the unit the
+    /// review counts, in `txns`' order.
+    ///
+    /// `txns` is a projection, one row per account leg, so an entry can arrive as
+    /// several rows. A split-tender purchase's legs are summed (`byPurchase`, within
+    /// the entry). A transfer keeps the leg it leaves from — its legs would cancel to
+    /// zero, and that leg already reads "To <account>". Not `byPurchase` over the
+    /// lot: it collapses a grid purchase's entries into one row, and the list would
+    /// then show fewer rows than the count.
+    ///
+    /// An id with no row here is not listed: the app projects only the active
+    /// ledger, and no ledger projects an opening balance.
+    public static func rows(_ txns: [Tx], entryIds: Set<String>) -> [Tx] {
+        var order: [String] = []
+        var legs: [String: [Tx]] = [:]
+        for t in txns {
+            guard let e = t.entryId, entryIds.contains(e) else { continue }
+            if legs[e] == nil { order.append(e) }
+            legs[e, default: []].append(t)
+        }
+        return order.compactMap { e -> Tx? in
+            guard let l = legs[e] else { return nil }
+            if l.first?.kind == "transfer" { return l.first { $0.amount < 0 } ?? l.first }
+            return Selectors.byPurchase(l).first
         }
     }
 
@@ -70,15 +115,17 @@ public enum FallbackFxRates {
     ///
     /// Same date only. A lookup on any other date pinned its own row, which is
     /// counted against that row, so nothing is counted twice.
-    static func entriesUsing(_ db: Database, currency: String, date: String) throws -> Int {
-        try Int.fetchOne(db, sql: """
-            SELECT COUNT(DISTINCT e.id) FROM entries e
+    ///
+    /// The ONE definition: `entryCount` is this set's size and `entryIds` its union.
+    static func entriesUsing(_ db: Database, currency: String, date: String) throws -> Set<String> {
+        Set(try String.fetchAll(db, sql: """
+            SELECT DISTINCT e.id FROM entries e
             JOIN ledgers l ON l.id = e.ledger_id
             JOIN postings p ON p.entry_id = e.id
             WHERE e.date = :d AND (
                  (p.currency = :c AND l.base_currency <> :c)
               OR (l.base_currency = :c AND p.currency <> :c)
               OR (p.orig_currency = :c AND p.currency <> :c))
-            """, arguments: ["c": currency, "d": date]) ?? 0
+            """, arguments: ["c": currency, "d": date]))
     }
 }

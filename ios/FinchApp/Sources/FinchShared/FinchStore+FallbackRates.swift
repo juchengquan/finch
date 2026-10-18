@@ -23,6 +23,14 @@ extension FinchStore {
         return (try? q.read { try FallbackFxRates.find($0) }) ?? []
     }
 
+    /// The entries `rates` converted 1:1, in every ledger (`FallbackFxRates.entryIds`).
+    /// Works for rates already removed: the rule reads only their currency and date.
+    /// Empty on a read failure.
+    public func fallbackRateEntryIds(_ rates: [FallbackFxRates.Suspect]) -> Set<String> {
+        guard let q = dbQueue, !rates.isEmpty else { return [] }
+        return (try? q.read { try FallbackFxRates.entryIds($0, for: rates) }) ?? []
+    }
+
     /// Delete the rows in `rates` that are STILL suspect, in one write; returns how
     /// many went. Re-checked at confirm time, so a row that became a real rate
     /// while the list was open (a refresh, a rate typed in) is kept.
