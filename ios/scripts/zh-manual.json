@@ -814,5 +814,19 @@
   "Nothing is posted or reminded after this day.": "此日期之后不会再记账或提醒。",
   "The end date can't be before the start.": "结束日期不能早于开始日期。",
   "To %@": "转至 %@",
-  "From %@": "来自 %@"
+  "From %@": "来自 %@",
+  "Rates saved as 1:1": "按 1:1 保存的汇率",
+  "1 rate was saved as 1:1 by mistake": "有 1 个汇率被误存为 1:1",
+  "%lld rates were saved as 1:1 by mistake": "有 %lld 个汇率被误存为 1:1",
+  "Review and remove them": "查看并移除",
+  "1 entry was booked at 1:1": "有 1 个条目按 1:1 记账",
+  "%lld entries were booked at 1:1": "有 %lld 个条目按 1:1 记账",
+  "Not used": "未使用",
+  "1 entry": "1 个条目",
+  "%lld entries": "%lld 个条目",
+  "Remove 1 rate": "移除 1 个汇率",
+  "Remove %lld rates": "移除 %lld 个汇率",
+  "An earlier version converted a currency it had no exchange rate for at 1:1, and saved that 1 as the currency's rate. These rates still convert it 1:1. Rates you typed or fetched are never listed here.": "旧版本在缺少汇率时会按 1:1 换算该货币，并把这个 1 保存为它的汇率。这些汇率至今仍按 1:1 换算。您输入或获取的汇率不会出现在这里。",
+  "Removing the rates leaves these entries as they are. They aren't recalculated, because that would change account balances and entries you have reconciled. Once a real rate is in, check them and correct any that are wrong.": "移除汇率不会改动这些条目。它们不会被重新计算，因为那会改变账户余额和已对账的条目。有了真实汇率后，请检查这些条目并更正有误的部分。",
+  "A write in these currencies will then ask for a real rate. Turn the currency on in Currencies and tap Refresh now to fetch one.": "之后用这些货币记账时会要求提供真实汇率。请在「货币」中开启该货币，然后轻点「立即刷新」获取汇率。"
 }
