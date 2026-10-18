@@ -7,7 +7,7 @@
 import { createHash } from 'node:crypto';
 import type { Exec } from './repo';
 import type { Tx } from '@/lib/store';
-import { convertToBase } from '../queries/rates';
+import { convertToBase, hasRateOnOrBefore } from '../queries/rates';
 import { resolveCounterpartyIdByName } from '../queries/counterparties';
 import { listActiveRules } from '../queries/rules';
 import { applyRules } from '@/lib/rules/engine';
@@ -140,12 +140,40 @@ async function ledgerBase(exec: Exec, ledgerId: string): Promise<string> {
   return String(l.base_currency);
 }
 
+/** Which of a transfer's two legs is valued from the other, before anything is
+ *  looked up: the one still to be valued with no rate on or before `date`, when
+ *  its partner has one (or arrives already valued). null when both or neither
+ *  do; those legs are converted as usual.
+ *
+ *  This is what keeps a transfer valued from its partner that way after a rate
+ *  dated LATER appears: the ordinary lookup would reach forward to it on the next
+ *  re-valuation (a date move, a base change), add an FX leg, and save that later
+ *  rate under the transfer's date. The two amounts the user typed say more about
+ *  that day than a later rate does. */
+async function partnerValuedLeg(exec: Exec, base: string, date: string, inputs: LegInput[]): Promise<number | null> {
+  const account = inputs.map((l, i) => (isAccountLeg(l) ? i : -1)).filter((i) => i >= 0);
+  if (account.length !== 2) return null;
+  const rated = async (i: number): Promise<boolean> => {
+    const leg = inputs[i] as AccountLegInput;
+    if (leg.amountBase !== undefined && leg.exchangeRate !== undefined) return true;
+    const [acct] = await exec('SELECT currency FROM accounts WHERE id = ?', [leg.accountId]);
+    if (!acct) return true; // refused below
+    return hasRateOnOrBefore(exec, String(acct.currency), base, date);
+  };
+  const first = await rated(account[0]);
+  const second = await rated(account[1]);
+  if (first === second) return null;
+  return first ? account[1] : account[0];
+}
+
 /** Resolve raw leg inputs: account currency + ledger guards (I3/I5), locked
  *  amount_base at the entry date unless the caller pre-resolved it. `kind`: a
  *  transfer may value one unrated leg from the other (see below). */
 async function resolveLegs(exec: Exec, ledgerId: string, date: string, base: string, inputs: LegInput[], kind: EntryKind): Promise<ResolvedLeg[]> {
   const legs: ResolvedLeg[] = [];
-  // A transfer's leg with no rate to the base, and the refusal it raised.
+  // A transfer's leg with no rate to the base on or before the date, decided up
+  // front; and failing that, a leg whose lookup found no rate at all.
+  const partnerValued = kind === 'transfer' ? await partnerValuedLeg(exec, base, date, inputs) : null;
   let unrated: { index: number; error: unknown } | null = null;
   for (const leg of inputs) {
     if (isAccountLeg(leg)) {
@@ -155,7 +183,10 @@ async function resolveLegs(exec: Exec, ledgerId: string, date: string, base: str
       const currency = String(acct.currency);
       let amountBase = leg.amountBase;
       let exchangeRate = leg.exchangeRate;
-      if (amountBase === undefined || exchangeRate === undefined) {
+      if (legs.length === partnerValued) {
+        amountBase = 0; // valued from the other leg below
+        exchangeRate = 0;
+      } else if (amountBase === undefined || exchangeRate === undefined) {
         try {
           const conv = await convertToBase(exec, leg.amount, currency, base, date);
           amountBase = conv.amountBase;
@@ -193,11 +224,16 @@ async function resolveLegs(exec: Exec, ledgerId: string, date: string, base: str
   // NOT saved to `exchange_rates`. A transfer's figures carry its fees and
   // spread, and a saved row would be found by every later on-or-before lookup
   // for that currency — the shadowing the 1:1 pins caused (#820/#822).
-  if (unrated) {
-    const i = unrated.index;
+  //
+  // `partnerValued` (a leg with no rate on or before the date, while its partner
+  // has one) takes this path without being looked up at all, so no later rate is
+  // used for it or saved under its date.
+  const i = partnerValued ?? unrated?.index;
+  if (i !== undefined) {
     const accountLegs = legs.map((l, j) => (l.accountId != null ? j : -1)).filter((j) => j >= 0);
     const other = accountLegs.find((j) => j !== i);
-    if (accountLegs.length !== 2 || other === undefined) throw unrated.error;
+    // unreachable for partnerValued, which implies two account legs
+    if (accountLegs.length !== 2 || other === undefined) throw unrated?.error;
     legs[i].amountBase = r2(-legs[other].amountBase);
     legs[i].exchangeRate = legs[i].amount !== 0
       ? Math.round((legs[i].amountBase / legs[i].amount) * 1e6) / 1e6 : 0;

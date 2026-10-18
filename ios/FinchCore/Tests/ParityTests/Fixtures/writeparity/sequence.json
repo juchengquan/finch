@@ -481,6 +481,42 @@
       }
     },
     {
+      "action": "setExchangeRate",
+      "args": {
+        "date": "2026-09-01",
+        "currency": "VND",
+        "rate": 0.00004
+      }
+    },
+    {
+      "action": "updateTransfer",
+      "args": {
+        "id": "$lastAccountPosting",
+        "patch": {
+          "note": "Hanoi"
+        }
+      }
+    },
+    {
+      "action": "updateTransaction",
+      "args": {
+        "id": "$lastAccountPosting",
+        "patch": {
+          "date": "2026-05-18"
+        }
+      }
+    },
+    {
+      "action": "updateTransfer",
+      "args": {
+        "id": "$lastAccountPosting",
+        "patch": {
+          "fromAmount": 120,
+          "toAmount": 2800000
+        }
+      }
+    },
+    {
       "action": "addScheduledSplit",
       "args": {
         "templateId": "s1",
@@ -1604,7 +1640,7 @@
       },
       {
         "ledger_id": "personal",
-        "date": "2026-05-17",
+        "date": "2026-05-18",
         "time": null,
         "description": "Transfer",
         "kind": "transfer",
@@ -1613,7 +1649,7 @@
         "refunded_entry_id": null,
         "source_template_id": null,
         "occurrence_date": null,
-        "notes": null,
+        "notes": "Hanoi",
         "applied_rule_ids": null,
         "reviewed": false,
         "sealed": 1,
@@ -1621,9 +1657,9 @@
           {
             "account_id": "a1",
             "category_id": null,
-            "amount": "-100.000000",
+            "amount": "-120.000000",
             "currency": "USD",
-            "amount_base": "-90.910000",
+            "amount_base": "-109.090000",
             "exchange_rate": "0.909091",
             "orig_amount": null,
             "orig_currency": null,
@@ -1634,10 +1670,10 @@
           {
             "account_id": "a5",
             "category_id": null,
-            "amount": "2500000.000000",
+            "amount": "2800000.000000",
             "currency": "VND",
-            "amount_base": "90.910000",
-            "exchange_rate": "0.000036",
+            "amount_base": "109.090000",
+            "exchange_rate": "0.000039",
             "orig_amount": null,
             "orig_currency": null,
             "memo": "Transfer from Checking",
@@ -1950,7 +1986,7 @@
         "name": "Checking",
         "type": "cash",
         "currency": "USD",
-        "current_balance": "-5417.830000",
+        "current_balance": "-5437.830000",
         "sort_order": 3,
         "include_in_net_worth": 1,
         "is_active": 1,
@@ -2006,7 +2042,7 @@
         "name": "Hanoi",
         "type": "cash",
         "currency": "VND",
-        "current_balance": "2500000.000000",
+        "current_balance": "2800000.000000",
         "sort_order": 4,
         "include_in_net_worth": 1,
         "is_active": 1,
@@ -2182,6 +2218,12 @@
         "currency": "KRW",
         "rate": "1.000000",
         "source": "derived"
+      },
+      {
+        "date": "2026-09-01",
+        "currency": "VND",
+        "rate": "0.000040",
+        "source": null
       }
     ],
     "scheduled_templates": [

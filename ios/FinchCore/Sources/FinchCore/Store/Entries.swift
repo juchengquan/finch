@@ -273,11 +273,59 @@ public enum Entries {
             arguments: [name])
     }
 
+    /// Whether `currency` can be valued in `base` at `date` without reaching
+    /// FORWARD: from a rate dated on or before `date` (or the static fallback, which
+    /// the lookup uses only while a currency has no rows at all). A later rate is
+    /// one `lookupRateToHub` would still use; this says it isn't there yet. Like the
+    /// lookup, it ignores `'derived'` rows.
+    static func hasRateOnOrBefore(_ db: Database, _ currency: String, _ base: String,
+                                  _ date: String) throws -> Bool {
+        func has(_ c: String) throws -> Bool {
+            if c == "USD" { return true }
+            if try Int.fetchOne(db, sql: "SELECT 1 FROM exchange_rates WHERE currency = ? AND date <= ? AND COALESCE(source, '') <> 'derived' LIMIT 1",
+                                arguments: [c, date]) != nil { return true }
+            return try fallbackUsdPerUnit[c] != nil
+                && Int.fetchOne(db, sql: "SELECT 1 FROM exchange_rates WHERE currency = ? AND COALESCE(source, '') <> 'derived' LIMIT 1",
+                               arguments: [c]) == nil
+        }
+        return try currency == base || (has(currency) && has(base))
+    }
+
+    /// Which of a transfer's two legs is valued from the other, before anything is
+    /// looked up: the one still to be valued with no rate on or before `date`,
+    /// when its partner has one (or arrives already valued). nil when both or
+    /// neither do; those legs are converted as usual below.
+    ///
+    /// This is what keeps a transfer valued from its partner that way after a
+    /// rate dated LATER appears: the ordinary lookup would reach forward to it on
+    /// the next re-valuation (a date move, a base change, a save from the sheet),
+    /// add an FX leg, and save that later rate under the transfer's date. The two
+    /// amounts the user typed say more about that day than a later rate does.
+    private static func partnerValuedLeg(_ db: Database, _ base: String, _ date: String,
+                                         _ inputs: [Leg]) throws -> Int? {
+        let account = inputs.indices.compactMap { i -> (Int, AccountLeg)? in
+            if case .account(let a) = inputs[i] { return (i, a) }
+            return nil
+        }
+        guard account.count == 2 else { return nil }
+        func rated(_ a: AccountLeg) throws -> Bool {
+            if a.amountBase != nil && a.exchangeRate != nil { return true }
+            guard let ccy = try String.fetchOne(db, sql: "SELECT currency FROM accounts WHERE id = ?",
+                                                arguments: [a.accountId]) else { return true }   // refused below
+            return try hasRateOnOrBefore(db, ccy, base, date)
+        }
+        let first = try rated(account[0].1), second = try rated(account[1].1)
+        if first == second { return nil }
+        return first ? account[1].0 : account[0].0
+    }
+
     /// `kind`: a TRANSFER may value one unrated leg from the other (see below).
     private static func resolveLegs(_ db: Database, _ ledgerId: String, _ date: String,
                                     _ base: String, _ inputs: [Leg], _ kind: Kind) throws -> [ResolvedLeg] {
         var legs: [ResolvedLeg] = []
-        // A transfer's leg with no rate to the base, and the refusal it raised.
+        // A transfer's leg with no rate to the base on or before the date, decided
+        // up front; and failing that, a leg whose lookup found no rate at all.
+        let partnerValued = kind == .transfer ? try partnerValuedLeg(db, base, date, inputs) : nil
         var unrated: (index: Int, error: I18nError)? = nil
         for leg in inputs {
             switch leg {
@@ -291,7 +339,9 @@ public enum Entries {
                 let currency: String = acct["currency"]
                 var amountBase = a.amountBase
                 var rate = a.exchangeRate
-                if amountBase == nil || rate == nil {
+                if legs.count == partnerValued {
+                    amountBase = 0; rate = 0                           // valued from the other leg below
+                } else if amountBase == nil || rate == nil {
                     do {
                         let conv = try convertToBase(db, a.amount, currency, base, date)
                         amountBase = conv.amountBase; rate = conv.rate
@@ -328,10 +378,15 @@ public enum Entries {
         // NOT saved to `exchange_rates`. A transfer's figures carry its fees and
         // spread, and a saved row would be found by every later on-or-before lookup
         // for that currency — the shadowing that the 1:1 pins caused (#820/#822).
-        if let u = unrated {
-            let i = u.index
+        //
+        // `partnerValued` (a leg with no rate on or before the date, while its
+        // partner has one) takes this path without being looked up at all, so no
+        // later rate is used for it or saved under its date.
+        if let i = partnerValued ?? unrated?.index {
             let accountLegs = legs.indices.filter { legs[$0].accountId != nil }
-            guard accountLegs.count == 2, let other = accountLegs.first(where: { $0 != i }) else { throw u.error }
+            guard accountLegs.count == 2, let other = accountLegs.first(where: { $0 != i }) else {
+                throw unrated?.error ?? I18nError("error.fx.noRate", [:], "No exchange rate")   // unreachable: partnerValued implies two account legs
+            }
             legs[i].amountBase = r2(-legs[other].amountBase)
             legs[i].exchangeRate = legs[i].amount != 0
                 ? ((legs[i].amountBase / legs[i].amount) * 1e6).rounded() / 1e6 : 0
