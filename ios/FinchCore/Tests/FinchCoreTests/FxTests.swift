@@ -118,6 +118,43 @@ final class FxTests: XCTestCase {
         }
     }
 
+    /// A rate typed in by hand — the offline user's only way out — unblocks the
+    /// refused write, keeps its "manual" tag, and is used as-is: the write reads it
+    /// at its own date, so nothing derived is pinned over it.
+    func test_aManuallyEnteredRate_unblocksTheRefusedWrite() throws {
+        let q = try seeded(accountCcy: "KRW", base: "USD")
+        assertNoRate(try add(q), from: "KRW", to: "USD")
+        try Apply.apply(dbQueue: q, action: "setExchangeRate", args: Args([
+            "date": .string("2026-05-09"), "currency": .string("KRW"), "rate": .double(0.00073),
+            "source": .string("manual")]))
+        try add(q)
+        try q.read { db in
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT amount_base FROM postings WHERE account_id='a1'") ?? 0,
+                           -36.5, accuracy: 0.001)
+            let rows = try Row.fetchAll(db, sql: "SELECT date, rate, source FROM exchange_rates WHERE currency='KRW'")
+            XCTAssertEqual(rows.count, 1)
+            XCTAssertEqual(rows.first?["source"] as String?, "manual")
+            XCTAssertEqual(rows.first?["rate"] as Double? ?? 0, 0.00073, accuracy: 1e-12)
+        }
+    }
+
+    /// The same in a EUR ledger, where the form pivots through the EUR rate: a KRW
+    /// rate entered as "1 KRW = 0.0007 EUR" (stored as 0.0007 × 1.10 USD) books
+    /// ₩50,000 as €35 on that day.
+    func test_aManualRate_inANonUSDLedger_booksAtTheTypedCrossRate() throws {
+        let q = try seeded(accountCcy: "KRW", base: "EUR")
+        try q.write { db in try db.execute(sql: "INSERT INTO exchange_rates (date,currency,rate,source) VALUES ('2026-05-01','EUR',1.10,'ECB')") }
+        assertNoRate(try add(q), from: "KRW", to: "EUR")
+        try Apply.apply(dbQueue: q, action: "setExchangeRate", args: Args([
+            "date": .string("2026-05-09"), "currency": .string("KRW"), "rate": .double(0.0007 * 1.10),
+            "source": .string("manual")]))
+        try add(q)
+        try q.read { db in
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT amount_base FROM postings WHERE account_id='a1'") ?? 0,
+                           -35, accuracy: 0.001)
+        }
+    }
+
     /// A rate on either side of the date is still found (on-or-after for a backdate).
     func test_aRateDatedAfterTheEntry_isStillUsed() throws {
         let q = try seeded(accountCcy: "KRW", base: "USD")

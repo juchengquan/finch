@@ -9,7 +9,8 @@ import FinchCore
 /// One currency's full rate history: a trend sparkline (only at three or more
 /// points, where a line means something) above date-descending rows. Per-row delete
 /// and "Delete all" both go through the `deleteExchangeRate` chokepoint, and the
-/// screen pops when the last row goes.
+/// screen pops when the last row goes. "+" adds a rate by hand, and a hand-entered
+/// row opens for editing (`ManualRateSheet`).
 ///
 /// This was the LAST hosted SwiftUI screen sitting in a pushed page. With it
 /// converted, every drill chain reachable from a converted list — Categories, Tags,
@@ -157,7 +158,8 @@ final class ExchangeRateHistoryVC: UIViewController {
                                    menu: UIMenu(children: children))
         more.accessibilityLabel = String(localized: "More")
         moreItem = more
-        navigationItem.rightBarButtonItems = [more]
+        // Rightmost first: the ⋯ menu stays at the edge, "+" sits inside it.
+        navigationItem.rightBarButtonItems = [more, addRateBarButton(currency: currency)]
     }
 
     private func swipeActions(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
@@ -225,18 +227,33 @@ final class ExchangeRateHistoryVC: UIViewController {
 }
 
 extension ExchangeRateHistoryVC: UICollectionViewDelegate {
-    /// Rows are read-only here — the SwiftUI row was a plain HStack, not a button.
-    func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool { false }
+    /// Only a rate the user entered by hand opens for editing; a fetched one is
+    /// the provider's figure, and stays read-only (it can still be deleted).
+    func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
+        guard let id = dataSource.itemIdentifier(for: indexPath), let rate = rateByDate[id] else { return false }
+        return fxIsManual(rate)
+    }
+
+    func collectionView(_ cv: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        cv.deselectItem(at: indexPath, animated: true)
+        guard let id = dataSource.itemIdentifier(for: indexPath), let rate = rateByDate[id] else { return }
+        presentManualRateSheet(editing: rate)
+    }
 
     func collectionView(_ cv: UICollectionView,
                         contextMenuConfigurationForItemAt indexPath: IndexPath,
                         point: CGPoint) -> UIContextMenuConfiguration? {
         guard let id = dataSource.itemIdentifier(for: indexPath), let rate = rateByDate[id] else { return nil }
         return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
-            UIMenu(children: [
-                UIAction(title: String(localized: "Delete"), image: UIImage(systemName: "trash"),
-                         attributes: .destructive) { _ in self?.confirmDelete(rate) },
-            ])
+            var children: [UIMenuElement] = []
+            if fxIsManual(rate) {
+                children.append(UIAction(title: String(localized: "Edit"), image: UIImage(systemName: "pencil")) { _ in
+                    self?.presentManualRateSheet(editing: rate)
+                })
+            }
+            children.append(UIAction(title: String(localized: "Delete"), image: UIImage(systemName: "trash"),
+                                     attributes: .destructive) { _ in self?.confirmDelete(rate) })
+            return UIMenu(children: children)
         }
     }
 }

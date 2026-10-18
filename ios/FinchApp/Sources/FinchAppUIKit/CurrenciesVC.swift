@@ -92,6 +92,8 @@ final class CurrenciesVC: UIViewController {
         configureCollectionView()
         configureDataSource()
         configureSearch()
+        // Entering a rate by hand — the way out for a currency no fetch can reach.
+        navigationItem.rightBarButtonItem = addRateBarButton()
         applySnapshot()
 
         // Rates and the tracked set both arrive through a reprojection.
