@@ -1,5 +1,6 @@
 import XCTest
 @testable import FinchApp
+import FinchCore
 
 /// RateAutoUpdater's pure pieces (no network in tests). The enum is @MainActor,
 /// so the class is @MainActor too (suite idiom — see DeepLinkRouterTests).
@@ -215,5 +216,104 @@ final class RateAutoUpdaterChainTests: XCTestCase {
         XCTAssertEqual(rows.map(\.currency), ["EUR"])
         XCTAssertEqual(missing, ["ZZZ"])
         XCTAssertEqual(log.calls.count, RateAutoUpdater.providers.count)
+    }
+}
+
+/// A fetch never overwrites a rate the user typed in. The engine's `setExchangeRate`
+/// is an upsert on (date, currency) — rightly, since an explicit edit must replace
+/// the row — so the fetcher has to leave a hand-entered row alone itself.
+@MainActor
+final class RateAutoUpdaterKeepsManualTests: XCTestCase {
+    private let day = "2027-03-01"   // later than any rate in the sample pack
+
+    private func row(_ currency: String, _ rate: Double, _ source: String?) -> ExchangeRate {
+        ExchangeRate(date: day, currency: currency, rate: rate, source: source)
+    }
+    private func fetched(_ currency: String, date: String? = nil) -> RateAutoUpdater.Row {
+        RateAutoUpdater.Row(date: date ?? day, currency: currency, ratePerUSD: 1, source: "ECB")
+    }
+
+    /// Only a hand-entered row on the same day blocks a fetched one. A fetched or
+    /// derived row is replaced as before, and a manual rate on another day does not
+    /// stop the fetch adding today's.
+    func test_keepingManual_dropsOnlyTheRowsAHandEnteredRateHolds() {
+        let existing = [row("EUR", 1.2, "manual"), row("KRW", 0.0007, nil),
+                        row("JPY", 0.006, "er-api"), row("THB", 1, "derived")]
+        let rows = [fetched("EUR"), fetched("KRW"), fetched("JPY"), fetched("THB"),
+                    fetched("EUR", date: "2027-03-02"), fetched("CHF")]
+        let kept = RateAutoUpdater.keepingManual(rows, existing: existing)
+        XCTAssertEqual(kept.map { "\($0.currency)@\($0.date)" },
+                       ["JPY@\(day)", "THB@\(day)", "EUR@2027-03-02", "CHF@\(day)"])
+    }
+
+    private func loaded() async throws -> FinchStore {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(
+            forResource: "sample", withExtension: "finch", subdirectory: "Fixtures/roundtrip"))
+        let store = FinchStore()
+        try await store.loadPack(from: try Data(contentsOf: url))
+        try store.apply(.setTrackedCurrencies, Args(["codes": .array([.string("EUR"), .string("JPY")])]))
+        return store
+    }
+
+    /// Frankfurter answering EUR 0.8 and JPY 160 per USD, dated `day`.
+    private var provider: RateAutoUpdater.Transport {
+        let day = day
+        return { req in
+            guard req.url?.host?.contains("frankfurter") == true else { return nil }
+            return (Data(#"[{"date":"\#(day)","base":"USD","quote":"EUR","rate":0.8},{"date":"\#(day)","base":"USD","quote":"JPY","rate":160}]"#.utf8), 200)
+        }
+    }
+
+    private func stored(_ store: FinchStore, _ currency: String) -> ExchangeRate? {
+        store.exchangeRates.first { $0.currency == currency && $0.date == day }
+    }
+
+    private func setRate(_ store: FinchStore, _ currency: String, _ rate: Double, _ source: String) throws {
+        try store.apply(.setExchangeRate, Args([
+            "date": .string(day), "currency": .string(currency), "rate": .double(rate), "source": .string(source)]))
+    }
+
+    override func setUp() async throws {
+        stamp = UserDefaults.standard.object(forKey: RateAutoUpdater.stampKey)
+    }
+    override func tearDown() async throws {
+        UserDefaults.standard.set(stamp, forKey: RateAutoUpdater.stampKey)
+    }
+    private var stamp: Any?
+
+    /// The reported bug: a rate typed in for the provider's latest day was replaced
+    /// by the fetched one. It now survives, and it is the rate conversions read.
+    func test_aFetch_keepsAHandEnteredRateForTheSameDay() async throws {
+        let store = try await loaded()
+        try setRate(store, "EUR", 1.2345, "manual")
+        try setRate(store, "JPY", 0.001, "er-api")   // an older fetch: still refreshed
+
+        let outcome = await RateAutoUpdater.refresh(store: store, transport: provider)
+
+        XCTAssertEqual(outcome, .updated(2), "EUR still has a rate; nothing is missing")
+        XCTAssertEqual(stored(store, "EUR")?.source, "manual")
+        XCTAssertEqual(stored(store, "EUR")?.rate ?? 0, 1.2345, accuracy: 1e-9)
+        XCTAssertEqual(store.rateMap["EUR"] ?? 0, 1.2345, accuracy: 1e-9)
+        XCTAssertEqual(Money.convert(100, from: "EUR", to: "USD", rates: store.rateMap) ?? 0, 123.45, accuracy: 1e-6)
+        XCTAssertEqual(stored(store, "JPY")?.source, "ECB")
+        XCTAssertEqual(stored(store, "JPY")?.rate ?? 0, 0.00625, accuracy: 1e-9)
+    }
+
+    /// The user's own edit still replaces their rate, and the next fetch keeps the
+    /// new one. Deleting it hands the day back to the fetch.
+    func test_theUsersEditAndDelete_stillWin() async throws {
+        let store = try await loaded()
+        try setRate(store, "EUR", 1.2345, "manual")
+        _ = await RateAutoUpdater.refresh(store: store, transport: provider)
+
+        try setRate(store, "EUR", 1.3, "manual")
+        XCTAssertEqual(stored(store, "EUR")?.rate ?? 0, 1.3, accuracy: 1e-9)
+        _ = await RateAutoUpdater.refresh(store: store, transport: provider)
+        XCTAssertEqual(stored(store, "EUR")?.rate ?? 0, 1.3, accuracy: 1e-9)
+
+        try store.apply(.deleteExchangeRate, Args(["date": .string(day), "currency": .string("EUR")]))
+        _ = await RateAutoUpdater.refresh(store: store, transport: provider)
+        XCTAssertEqual(stored(store, "EUR")?.source, "ECB")
+        XCTAssertEqual(stored(store, "EUR")?.rate ?? 0, 1.25, accuracy: 1e-9)
     }
 }
