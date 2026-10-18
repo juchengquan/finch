@@ -15,9 +15,9 @@ enum RefreshOutcome: Equatable {
 /// not carrying a currency falls through to the next. Fetches ONLY the effective
 /// tracked set (user's toggles, else the currencies in use), normalizes every
 /// provider to USD-per-unit, and stores via the setExchangeRate chokepoint tagged
-/// with the provider each row came from. Fails silently (offline-first; manual entry
-/// wins by being later). Governed by the master toggle on Settings › Currencies. The
-/// app's only third-party network calls.
+/// with the provider each row came from. Fails silently (offline-first). Never
+/// overwrites a rate the user entered by hand (`keepingManual`). Governed by the
+/// master toggle on Settings › Currencies. The app's only third-party network calls.
 ///
 /// WHY PER-CURRENCY AND NOT FIRST-WINS. This used to stop at the first provider that
 /// returned ANYTHING, which made a currency the first provider doesn't carry
@@ -54,16 +54,18 @@ enum RateAutoUpdater {
     /// it ignores toggle + throttle). Stamps lastAutoUpdate whenever anything was
     /// written, including a partial result — the stamp means "we reached a provider
     /// today", and re-running the chain minutes later would not find more.
-    static func refresh(store: FinchStore) async -> RefreshOutcome {
+    static func refresh(store: FinchStore, transport: Transport = liveTransport) async -> RefreshOutcome {
         let codes = fxEffectiveTracked(stored: store.trackedCurrencies, fallback: currenciesInUse(store: store))
         guard !codes.isEmpty else { return .skipped }
-        let (rows, missing) = await collect(codes: codes)
+        let (rows, missing) = await collect(codes: codes, transport: transport)
         guard !rows.isEmpty else { return .failed }
         // One batched write, NOT one apply per rate: per-rate applies fired
         // the full side-effect train (16 projections + Spotlight re-index +
         // widget/notification replans) N times on the MainActor and froze
         // the UI for seconds right after foregrounding (audit 2026-07-22).
-        store.applyBatch(rows.map { r in
+        // Read against `store.exchangeRates` here, after the await, so a rate
+        // typed in while the request was in flight is still seen.
+        store.applyBatch(keepingManual(rows, existing: store.exchangeRates).map { r in
             (ActionName.setExchangeRate, Args([
                 "date": .string(r.date), "currency": .string(r.currency),
                 "rate": .double(r.ratePerUSD), "source": .string(r.source)]))
@@ -73,6 +75,20 @@ enum RateAutoUpdater {
         // that could not be reached — transient, not an unsupported currency.
         return missing.isEmpty ? .updated(rows.count)
                                : .partial(updated: rows.count, requested: codes.count)
+    }
+
+    /// The fetched rows that may be written: all but those landing on a day the
+    /// user already gave that currency a rate by hand.
+    ///
+    /// `setExchangeRate` is an upsert on (date, currency), which is right for the
+    /// user's own edit, so the fetcher holds back instead. Otherwise a manual rate
+    /// dated on the provider's latest day — typically today — is silently replaced
+    /// by the next refresh. Such a currency still counts as covered in the outcome:
+    /// it has a rate, the user's. A manual rate on another day blocks nothing, and
+    /// deleting the manual row hands the day back to the next fetch.
+    static func keepingManual(_ rows: [Row], existing: [ExchangeRate]) -> [Row] {
+        let held = Set(existing.filter(fxIsManual).map { "\($0.currency)|\($0.date)" })
+        return rows.filter { !held.contains("\($0.currency)|\($0.date)") }
     }
 
     // MARK: - The chain
