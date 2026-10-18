@@ -311,7 +311,14 @@ public final class FinchStore: ObservableObject {
         let args = Args(["today": .string(wallToday)])
         guard let posted = try? Apply.applyReturningCount(dbQueue: q, action: ActionName.autoPostDueScheduled.rawValue,
                                                          args: args) else { return 0 }
-        if posted > 0 { fireWriteSideEffects(q, mutations: [(.autoPostDueScheduled, args)]) }
+        if posted > 0 {
+            fireWriteSideEffects(q, mutations: [(.autoPostDueScheduled, args)])
+        } else if let fresh = try? Projection.scheduledTemplates(dbQueue: q, ledgerId: activeLedgerId), fresh != scheduled {
+            // Posting nothing can still record the day a template's auto-post began
+            // (`AutoPostSince` — a template just created or switched on), which moves
+            // what reads overdue. Republish the templates for that, and only that.
+            scheduled = fresh
+        }
         return posted
     }
 

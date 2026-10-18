@@ -197,4 +197,92 @@ final class AutoPostTests: XCTestCase {
             enabled: Set(NotificationKind.allCases), money: { "\($0)" })
         XCTAssertEqual(planned.filter { $0.kind == .scheduledDue }.compactMap(\.focusId), ["manual", "legacy"])
     }
+
+    // MARK: - "Missed" means missed
+
+    /// A row auto-post added and the user deleted stays deleted: the next foreground
+    /// the same day re-covers the mark's own day and used to add it straight back.
+    /// The delete counts as skipping the occurrence, so the row does not read
+    /// overdue either — and Undo brings back the row and un-skips it.
+    func test_deletedAutoPostedRow_staysDeleted_andUndoBringsItBack() async throws {
+        let store = try await makeStore()
+        let id = try createDaily(store, autoPost: true)
+        await store.autoPostDueScheduled()
+        let row = try XCTUnwrap(rows(store, id).first)
+        try store.deleteTransaction(row.id)
+        let posted = await store.autoPostDueScheduled()
+        XCTAssertEqual(posted, 0, "the same day's next foreground adds nothing")
+        XCTAssertTrue(rows(store, id).isEmpty)
+        var t = try XCTUnwrap(store.scheduled.first { $0.id == id })
+        XCTAssertEqual(t.skippedDates, [store.wallToday])
+        let due = ScheduledCaption.due(t, posted: Selectors.scheduledPostedMap(store.txns), today: store.wallToday)
+        XCTAssertEqual(due?.date, Selectors.horizonDay(from: store.wallToday, addingDays: 1))
+        XCTAssertEqual(due?.overdue, false)
+
+        try store.undoDelete()
+        XCTAssertEqual(rows(store, id).map(\.id), [row.id], "the row is back")
+        t = try XCTUnwrap(store.scheduled.first { $0.id == id })
+        XCTAssertNil(t.skippedDates, "and its occurrence is not skipped any more")
+    }
+
+    /// The bulk delete goes the same way.
+    func test_bulkDeletedAutoPostedRow_isSkippedToo() async throws {
+        let store = try await makeStore()
+        let id = try createDaily(store, autoPost: true, type: "transfer")
+        await store.autoPostDueScheduled()
+        // One transfer, two legs in the feed; the user ticks the one row it shows.
+        XCTAssertEqual(store.deleteTransactions([try XCTUnwrap(rows(store, id).first).id]), 1)
+        await store.autoPostDueScheduled()
+        XCTAssertTrue(rows(store, id).isEmpty, "a transfer must not move the money twice")
+        XCTAssertEqual(store.scheduled.first { $0.id == id }?.skippedDates, [store.wallToday])
+    }
+
+    /// A new "Add automatically" item with a past start date: auto-post never
+    /// back-fills, so a year of earlier days is not overdue.
+    func test_newAutoTemplateWithAPastStart_isNotOverdue() async throws {
+        let store = try await makeStore()
+        let id = try createDaily(store, autoPost: true)
+        await store.autoPostDueScheduled()
+        let t = try XCTUnwrap(store.scheduled.first { $0.id == id })
+        let caption = ScheduledCaption.cadence(t, posted: Selectors.scheduledPostedMap(store.txns), today: store.wallToday)
+        XCTAssertFalse(caption.overdue, caption.text)
+    }
+
+    /// …even on a day it posts nothing. That run fires no write side-effects, but it
+    /// still records when auto-post began, and the store republishes the templates
+    /// for it — otherwise the row read "overdue" until the next unrelated write.
+    func test_aRunThatPostsNothing_stillPublishesWhenAutoPostBegan() async throws {
+        let store = try await makeStore()
+        let id = try createDaily(store, autoPost: true)
+        // Weekly on tomorrow's weekday: a year of past occurrences, none today.
+        let tomorrow = try XCTUnwrap(AppDate.isoDay.date(from: Selectors.horizonDay(from: store.wallToday, addingDays: 1)))
+        let weekDay = Calendar(identifier: .gregorian).component(.weekday, from: tomorrow) - 1
+        try store.apply(.updateScheduled, Args(["id": .string(id), "patch": .object([
+            "frequency": .string("weekly"), "weekDay": .int(weekDay)])]))
+        let before = try XCTUnwrap(store.scheduled.first { $0.id == id })
+        XCTAssertTrue(ScheduledCaption.due(before, posted: [:], today: store.wallToday)?.overdue ?? false,
+                      "precondition: before auto-post ran, the past start reads overdue")
+        let posted = await store.autoPostDueScheduled()
+        XCTAssertEqual(posted, 0)
+        let t = try XCTUnwrap(store.scheduled.first { $0.id == id })
+        XCTAssertNotNil(t.autoPostSince)
+        XCTAssertEqual(ScheduledCaption.due(t, posted: Selectors.scheduledPostedMap(store.txns), today: store.wallToday)?.overdue,
+                       false)
+    }
+
+    /// The past-due reminder reads the same `resumeOccurrence`: a paid monthly item
+    /// moved to another day of the month is not "due" from its history.
+    func test_planner_aRescheduledPaidItem_isNotPastDue() {
+        let t = ScheduledTemplate(id: "rent", name: "Rent", type: "expense", amount: 100, frequency: "monthly",
+                                  dayOfMonth: 20, accountId: "a1", startDate: "2026-01-15", nextRun: "", autoPost: 0)
+        let paid = (1...10).map { m in
+            Tx(id: "p\(m)", merchant: "Rent", amount: -100, account: "a1", date: String(format: "2026-%02d-15", m),
+               ledgerId: "l1", sourceTemplateId: "rent")
+        }
+        let planned = NotificationPlanner.plan(
+            budgets: [], txns: paid, scheduled: [t], categories: [], today: "2026-10-19", wallToday: "2026-10-19",
+            ledgerId: "l1", enabled: Set(NotificationKind.allCases), money: { "\($0)" })
+        let due = planned.first { $0.kind == .scheduledDue && $0.focusId == "rent" }
+        XCTAssertNotNil(due?.deliverOn, "a future reminder for Oct 20, not a past-due one for Jan 20")
+    }
 }

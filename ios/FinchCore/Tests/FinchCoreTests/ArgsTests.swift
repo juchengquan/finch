@@ -25,8 +25,10 @@ final class ArgsTests: XCTestCase {
     ///   templates only, from a high-water mark in app_state) = 93.
     /// + `skipScheduledOccurrence` / `unskipScheduledOccurrence` (native-first, one
     ///   occurrence skipped, app_state — the web ignores the key) = 95.
+    /// + `deleteTransactionSkippingOccurrence` (native-only — the app's delete, which
+    ///   also skips the scheduled occurrence a deleted row fulfilled) = 96.
     func test_actionCount() {
-        XCTAssertEqual(ActionName.allCases.count, 95)
+        XCTAssertEqual(ActionName.allCases.count, 96)
     }
 
     func test_actionNameRawValues() {

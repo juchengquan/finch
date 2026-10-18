@@ -136,10 +136,19 @@ extension FinchStore {
     }
     /// Delete a transaction and offer to undo it (`deleteUndo`). Its receipts'
     /// files stay on disk until the undo expires — see `FinchStore+Undo.swift`.
+    ///
+    /// A row a scheduled item posted takes its occurrence with it: that occurrence
+    /// counts as skipped, so auto-post does not add it back and it does not read
+    /// "overdue" (`deleteTransactionSkippingOccurrence`). Undo un-skips it.
     public func deleteTransaction(_ txId: String) throws {
         let captured = captureForUndo([txId])
-        try apply(.deleteTransaction, Args(["id": .string(txId)]))
+        try apply(.deleteTransactionSkippingOccurrence, deleteArgs(txId))
         offerUndo(captured, count: 1)
+    }
+
+    /// `wallToday`: whether an occurrence is already due is a calendar question.
+    private func deleteArgs(_ txId: String) -> Args {
+        Args(["id": .string(txId), "today": .string(wallToday)])
     }
 
     /// Remove files for attachments a write has just orphaned.
@@ -191,11 +200,12 @@ extension FinchStore {
     }
 
     /// Delete several transactions as one write, offering ONE undo for the lot.
-    /// Receipt files are kept until that undo expires, as for a single delete.
+    /// Receipt files are kept until that undo expires, and scheduled occurrences are
+    /// skipped, as for a single delete.
     @discardableResult
     public func deleteTransactions(_ ids: [String]) -> Int {
         let captured = captureForUndo(ids)
-        let applied = applyBatch(ids.map { (action: ActionName.deleteTransaction, args: Args(["id": .string($0)])) })
+        let applied = applyBatch(ids.map { (action: ActionName.deleteTransactionSkippingOccurrence, args: deleteArgs($0)) })
         if applied > 0 { offerUndo(captured, count: applied) }
         return applied
     }
