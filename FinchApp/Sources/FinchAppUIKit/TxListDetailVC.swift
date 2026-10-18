@@ -32,6 +32,9 @@ final class TxListDetailVC: UIViewController {
         // they are only ever called from `applySnapshot` on the main actor.
         let confirmed: @MainActor (FinchStore) -> [Tx]
         let pending: @MainActor (FinchStore) -> [Tx]
+        /// Turns the two row sets into the rows shown. One row per purchase unless
+        /// the source already picked its own grain.
+        var collapse: ([Tx]) -> [Tx] = Selectors.byPurchase
 
         /// Membership matches `categoryTxCounts`: split legs in, pending out.
         static func category(_ row: CategoryRow) -> Source {
@@ -72,6 +75,20 @@ final class TxListDetailVC: UIViewController {
                                                       st.activeLedgerId, includePending: true)
                            .filter { Selectors.isPendingNow($0, today: st.wallToday) }
                    })
+        }
+
+        /// The entries `rates` booked at 1:1 (`FallbackFxRatesReviewVC`), one row per
+        /// ENTRY so the list and the review's count agree (`FallbackFxRates.rows`).
+        /// Every one is listed, upcoming ones too, since each may need correcting.
+        static func bookedAtOneToOne(title: String, rates: [FallbackFxRates.Suspect]) -> Source {
+            let rows: @MainActor (FinchStore) -> [Tx] = { st in
+                FallbackFxRates.rows(st.txns, entryIds: st.fallbackRateEntryIds(rates))
+            }
+            var source = Source(title: title,
+                                confirmed: { st in rows(st).filter { !Selectors.isPendingNow($0, today: st.wallToday) } },
+                                pending: { st in rows(st).filter { Selectors.isPendingNow($0, today: st.wallToday) } })
+            source.collapse = { $0 }
+            return source
         }
     }
 
@@ -233,8 +250,10 @@ final class TxListDetailVC: UIViewController {
         // paid is not the question here. Collapsing at the source keeps the count,
         // total, average, the pending header and the list itself all agreeing.
         // An account's own screen is the opposite and deliberately does NOT.
-        let txns = Selectors.byPurchase(source.confirmed(store))
-        let pending = Selectors.byPurchase(source.pending(store))
+        // (`Source.collapse`: a source with its own grain — one row per entry for
+        // the 1:1 review — replaces it.)
+        let txns = source.collapse(source.confirmed(store))
+        let pending = source.collapse(source.pending(store))
 
         summary = (txns.count, txns.reduce(0) { $0 + $1.amount })
         txByID = Dictionary(uniqueKeysWithValues: (txns + pending).map { ($0.id, $0) })
