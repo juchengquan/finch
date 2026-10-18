@@ -75,6 +75,12 @@ enum LaunchSequence {
         // `consumeFocus` finds no such record and drops it, and the test then reports a
         // broken deep link that no user could ever hit. Identifier shape is
         // `route(to:)`'s own: `<kind>:<id>`.
+        // `-seedFallbackRates YES` adds the 1.0 rates pre-#820 code saved by mistake,
+        // for the Currencies screen's notice. Below `bootstrap()`: it writes into the
+        // database that opens.
+        if UserDefaults.standard.bool(forKey: "seedFallbackRates") {
+            store.seedPre820FallbackRatesForTesting()
+        }
         if let target = UserDefaults.standard.string(forKey: "routeTo") {
             router.route(to: target)
         }
