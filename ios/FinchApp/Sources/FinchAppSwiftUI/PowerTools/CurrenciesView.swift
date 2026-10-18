@@ -39,6 +39,7 @@ struct CurrenciesView: View {
     /// "Inactive". Don't add section titles — `CurrencyPickerSheet` has them because it
     /// has no toggles to contradict.
     @State private var frozenGrouping: [String]?
+    @State private var addingRate = false
 
     var body: some View {
         List {
@@ -94,6 +95,14 @@ struct CurrenciesView: View {
         }
         .searchable(text: $query)
         .navigationTitle("Currencies")
+        .toolbar {
+            // Entering a rate by hand — the way out for a currency no fetch can reach.
+            ToolbarItem(placement: .primaryAction) {
+                Button { addingRate = true } label: { Image(systemName: "plus") }
+                    .accessibilityLabel("Add rate")
+            }
+        }
+        .sheet(isPresented: $addingRate) { ManualRateSheet() }
         .errorAlert($errorMessage)
         .onAppear {
             lastUpdated = UserDefaults.standard.object(forKey: RateAutoUpdater.stampKey) as? Date
