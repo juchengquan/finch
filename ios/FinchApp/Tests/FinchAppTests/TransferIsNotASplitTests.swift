@@ -68,4 +68,54 @@ final class TransferIsNotASplitTests: XCTestCase {
         XCTAssertEqual(PurchaseFlow.paymentLegs(of: tapped, in: txns).count, 2)
         XCTAssertEqual(page2(opening: tapped, in: txns), .list)
     }
+
+    // MARK: - The feed row's "part of one purchase" mark
+
+    /// The feed row reads the same classification. It marked a row as "part of one
+    /// purchase" whenever its entry had more than one account leg, so both halves of
+    /// every transfer carried the mark, and VoiceOver read "Part of one purchase" on
+    /// money that was never spent.
+    func test_aTransferRowIsNotMarkedAsPartOfOnePurchase() throws {
+        let q = try seed()
+        try Apply.apply(dbQueue: q, action: "createTransfer", args: Args([
+            "fromAccountId": .string("a1"), "toAccountId": .string("a2"),
+            "fromAmount": .double(250), "date": .string("2026-06-01")]))
+        let legs = try Projection.run(dbQueue: q, ledgerId: "l1").filter { $0.kind == "transfer" }
+        XCTAssertEqual(legs.count, 2)
+        for leg in legs {
+            XCTAssertEqual(leg.accountLegCount, 2, "two account legs — the shape that was misread")
+            XCTAssertFalse(PurchaseFlow.isPartOfOnePurchase(leg))
+        }
+    }
+
+    /// Both real shapes keep the mark: one purchase paid from two cards (one entry,
+    /// two account legs), and a grid (several entries sharing a `groupId`).
+    func test_splitPurchaseRowsKeepTheMark() throws {
+        let q = try seed()
+        try Apply.apply(dbQueue: q, action: "saveTransaction", args: Args([
+            "ledgerId": .string("l1"), "merchant": .string("Market"),
+            "date": .string("2026-06-01"), "kind": .string("expense"),
+            "currency": .string("USD"), "skipRules": .bool(true),
+            "cells": .array([
+                .object(["accountId": .string("a1"), "categoryId": .string("c1"), "amount": .double(-60)]),
+                .object(["accountId": .string("a2"), "categoryId": .string("c1"), "amount": .double(-40)]),
+            ]),
+        ]))
+        let tender = try Projection.run(dbQueue: q, ledgerId: "l1")
+        XCTAssertEqual(tender.count, 2)
+        for row in tender { XCTAssertTrue(PurchaseFlow.isPartOfOnePurchase(row), "split tender: \(row.account)") }
+
+        // A grid row: one leg of its own, linked to its siblings by group.
+        let grid = try XCTUnwrap(tender.first)
+        var gridRow = grid
+        gridRow.accountLegCount = 1
+        gridRow.groupId = "g1"
+        XCTAssertTrue(PurchaseFlow.isPartOfOnePurchase(gridRow), "grid")
+
+        // And a plain one-card purchase has nothing to mark.
+        var plain = grid
+        plain.accountLegCount = 1
+        plain.groupId = nil
+        XCTAssertFalse(PurchaseFlow.isPartOfOnePurchase(plain))
+    }
 }
