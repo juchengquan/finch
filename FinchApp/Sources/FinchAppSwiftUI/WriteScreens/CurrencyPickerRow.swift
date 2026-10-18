@@ -126,9 +126,11 @@ private struct CurrencyPickerSheet: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            Text(row.rate.map { String(format: "%.4f", $0) } ?? "—")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            if !row.isHub {
+                Text(verbatim: row.rate.flatMap { fxRateDisplay($0, currency: row.code) } ?? "—")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             if row.code.caseInsensitiveCompare(code) == .orderedSame {
                 Image(systemName: "checkmark").foregroundStyle(.tint)
             }
