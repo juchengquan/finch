@@ -141,9 +141,12 @@ async function ledgerBase(exec: Exec, ledgerId: string): Promise<string> {
 }
 
 /** Resolve raw leg inputs: account currency + ledger guards (I3/I5), locked
- *  amount_base at the entry date unless the caller pre-resolved it. */
-async function resolveLegs(exec: Exec, ledgerId: string, date: string, base: string, inputs: LegInput[]): Promise<ResolvedLeg[]> {
+ *  amount_base at the entry date unless the caller pre-resolved it. `kind`: a
+ *  transfer may value one unrated leg from the other (see below). */
+async function resolveLegs(exec: Exec, ledgerId: string, date: string, base: string, inputs: LegInput[], kind: EntryKind): Promise<ResolvedLeg[]> {
   const legs: ResolvedLeg[] = [];
+  // A transfer's leg with no rate to the base, and the refusal it raised.
+  let unrated: { index: number; error: unknown } | null = null;
   for (const leg of inputs) {
     if (isAccountLeg(leg)) {
       const [acct] = await exec('SELECT currency, ledger_id FROM accounts WHERE id = ?', [leg.accountId]);
@@ -153,9 +156,17 @@ async function resolveLegs(exec: Exec, ledgerId: string, date: string, base: str
       let amountBase = leg.amountBase;
       let exchangeRate = leg.exchangeRate;
       if (amountBase === undefined || exchangeRate === undefined) {
-        const conv = await convertToBase(exec, leg.amount, currency, base, date);
-        amountBase = conv.amountBase;
-        exchangeRate = conv.rate;
+        try {
+          const conv = await convertToBase(exec, leg.amount, currency, base, date);
+          amountBase = conv.amountBase;
+          exchangeRate = conv.rate;
+        } catch (e) {
+          if (kind !== 'transfer' || (e as { code?: string }).code !== 'error.fx.noRate') throw e;
+          if (unrated) throw unrated.error;        // neither side has a rate
+          unrated = { index: legs.length, error: e }; // valued from the other leg below
+          amountBase = 0;
+          exchangeRate = 0;
+        }
       }
       legs.push({
         id: leg.id ?? newId('p'), accountId: leg.accountId, categoryId: null,
@@ -171,6 +182,25 @@ async function resolveLegs(exec: Exec, ledgerId: string, date: string, base: str
       }
       legs.push(categoryLeg(leg.id, leg.categoryId, r2(leg.amountBase), base, leg.memo ?? null));
     }
+  }
+  // A transfer's two amounts are both what the user stated moved, so they imply
+  // the rate between them. When ONE side has no rate to the base, it is worth
+  // exactly what the other side is worth: the entry balances with no FX leg, and
+  // nothing is invented. Only when neither side can be valued (a second unrated
+  // leg rethrows the first refusal above) is it still `error.fx.noRate`.
+  //
+  // The implied rate stays on this posting (`exchange_rate`, as applied) and is
+  // NOT saved to `exchange_rates`. A transfer's figures carry its fees and
+  // spread, and a saved row would be found by every later on-or-before lookup
+  // for that currency — the shadowing the 1:1 pins caused (#820/#822).
+  if (unrated) {
+    const i = unrated.index;
+    const accountLegs = legs.map((l, j) => (l.accountId != null ? j : -1)).filter((j) => j >= 0);
+    const other = accountLegs.find((j) => j !== i);
+    if (accountLegs.length !== 2 || other === undefined) throw unrated.error;
+    legs[i].amountBase = r2(-legs[other].amountBase);
+    legs[i].exchangeRate = legs[i].amount !== 0
+      ? Math.round((legs[i].amountBase / legs[i].amount) * 1e6) / 1e6 : 0;
   }
   return legs;
 }
@@ -278,7 +308,7 @@ export async function postEntry(exec: Exec, e: NewEntry): Promise<{ entryId: str
   const status: EntryStatus = e.status ?? 'confirmed';
   const base = await ledgerBase(exec, e.ledgerId);
 
-  const legs = await resolveLegs(exec, e.ledgerId, e.date, base, e.legs);
+  const legs = await resolveLegs(exec, e.ledgerId, e.date, base, e.legs, e.kind);
 
   if (e.autoBalanceCategoryId !== undefined) {
     const acctSum = r2(legs.filter((l) => l.accountId != null).reduce((s, l) => s + l.amountBase, 0));
@@ -659,7 +689,7 @@ export async function rebuildEntry(exec: Exec, entryId: string, patch: EntryPatc
                 });
       }
       await exec('DELETE FROM postings WHERE entry_id = ?', [entryId]);
-      const resolved = await resolveLegs(exec, ledgerId, date, base, inputs);
+      const resolved = await resolveLegs(exec, ledgerId, date, base, inputs, kind);
       if (patch.legs === undefined) {
         // Date-only re-lock: account legs were re-locked at the new date;
         // kept category legs (incl. opening/adjustment equity legs — only fx

@@ -10,7 +10,8 @@
     "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a1','personal','Checking','cash','USD',0,0,1,1,datetime('now'),datetime('now'))",
     "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a2','personal','Savings','savings','USD',0,1,1,1,datetime('now'),datetime('now'))",
     "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a3','personal','Brokerage','investment','USD',0,2,1,1,datetime('now'),datetime('now'))",
-    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a4','personal','Seoul','cash','KRW',0,3,1,1,datetime('now'),datetime('now'))"
+    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a4','personal','Seoul','cash','KRW',0,3,1,1,datetime('now'),datetime('now'))",
+    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a5','personal','Hanoi','cash','VND',0,4,1,1,datetime('now'),datetime('now'))"
   ],
   "sequence": [
     {
@@ -439,6 +440,35 @@
         "dayOfMonth": 10,
         "accountId": "a4",
         "startDate": "2026-02-10"
+      }
+    },
+    {
+      "action": "createTransfer",
+      "args": {
+        "fromAccountId": "a1",
+        "toAccountId": "a5",
+        "fromAmount": 100,
+        "date": "2026-05-16"
+      },
+      "expectError": "error.fx.noRate"
+    },
+    {
+      "action": "createTransfer",
+      "args": {
+        "fromAccountId": "a1",
+        "toAccountId": "a5",
+        "fromAmount": 100,
+        "toAmount": 2500000,
+        "date": "2026-05-16"
+      }
+    },
+    {
+      "action": "updateTransaction",
+      "args": {
+        "id": "$lastAccountPosting",
+        "patch": {
+          "date": "2026-05-17"
+        }
       }
     },
     {
@@ -1409,6 +1439,50 @@
       },
       {
         "ledger_id": "personal",
+        "date": "2026-05-17",
+        "time": null,
+        "description": "Transfer",
+        "kind": "transfer",
+        "status": "confirmed",
+        "counterparty_id": null,
+        "refunded_entry_id": null,
+        "source_template_id": null,
+        "occurrence_date": null,
+        "notes": null,
+        "applied_rule_ids": null,
+        "reviewed": false,
+        "sealed": 1,
+        "postings": [
+          {
+            "account_id": "a1",
+            "category_id": null,
+            "amount": "-100.000000",
+            "currency": "USD",
+            "amount_base": "-90.910000",
+            "exchange_rate": "0.909091",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": "Transfer to Hanoi",
+            "cleared": false,
+            "sort_order": 0
+          },
+          {
+            "account_id": "a5",
+            "category_id": null,
+            "amount": "2500000.000000",
+            "currency": "VND",
+            "amount_base": "90.910000",
+            "exchange_rate": "0.000036",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": "Transfer from Checking",
+            "cleared": false,
+            "sort_order": 1
+          }
+        ]
+      },
+      {
+        "ledger_id": "personal",
         "date": "2026-05-20",
         "time": "10:15",
         "description": "Gym",
@@ -1711,7 +1785,7 @@
         "name": "Checking",
         "type": "cash",
         "currency": "USD",
-        "current_balance": "-5317.830000",
+        "current_balance": "-5417.830000",
         "sort_order": 3,
         "include_in_net_worth": 1,
         "is_active": 1,
@@ -1755,6 +1829,20 @@
         "currency": "KRW",
         "current_balance": "-50000.000000",
         "sort_order": 3,
+        "include_in_net_worth": 1,
+        "is_active": 1,
+        "archived": false,
+        "last_reconciled_at": null
+      },
+      {
+        "id": "a5",
+        "ledger_id": "personal",
+        "group_id": null,
+        "name": "Hanoi",
+        "type": "cash",
+        "currency": "VND",
+        "current_balance": "2500000.000000",
+        "sort_order": 4,
         "include_in_net_worth": 1,
         "is_active": 1,
         "archived": false,
@@ -2024,6 +2112,12 @@
         "date": "2026-05-15",
         "currency": "KRW",
         "rate": "0.000720",
+        "source": "derived"
+      },
+      {
+        "date": "2026-05-17",
+        "currency": "EUR",
+        "rate": "1.100000",
         "source": "derived"
       },
       {
