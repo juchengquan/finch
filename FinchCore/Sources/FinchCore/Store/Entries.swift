@@ -7,7 +7,8 @@ import GRDB
 //
 // SCOPE: the full posting path including the rules-engine branch (applyRules) on
 // income/expense/refund insert, and the cross-currency `lookupRateToHub` lookup
-// (on-or-before → on-or-after → static fallback, else `error.fx.noRate`) with
+// (on-or-before → on-or-after → static fallback, else `error.fx.noRate`, except
+// that one unrated side of a transfer is valued from the other) with
 // write-through of the resolved derived rate. Single-currency entries take the
 // identity FX path.
 
@@ -278,9 +279,12 @@ public enum Entries {
             arguments: [name])
     }
 
+    /// `kind`: a TRANSFER may value one unrated leg from the other (see below).
     private static func resolveLegs(_ db: Database, _ ledgerId: String, _ date: String,
-                                    _ base: String, _ inputs: [Leg]) throws -> [ResolvedLeg] {
+                                    _ base: String, _ inputs: [Leg], _ kind: Kind) throws -> [ResolvedLeg] {
         var legs: [ResolvedLeg] = []
+        // A transfer's leg with no rate to the base, and the refusal it raised.
+        var unrated: (index: Int, error: I18nError)? = nil
         for leg in inputs {
             switch leg {
             case .account(let a):
@@ -294,8 +298,14 @@ public enum Entries {
                 var amountBase = a.amountBase
                 var rate = a.exchangeRate
                 if amountBase == nil || rate == nil {
-                    let conv = try convertToBase(db, a.amount, currency, base, date)
-                    amountBase = conv.amountBase; rate = conv.rate
+                    do {
+                        let conv = try convertToBase(db, a.amount, currency, base, date)
+                        amountBase = conv.amountBase; rate = conv.rate
+                    } catch let e as I18nError where e.code == "error.fx.noRate" && kind == .transfer {
+                        if let first = unrated { throw first.error }   // neither side has a rate
+                        unrated = (legs.count, e)                      // valued from the other leg below
+                        amountBase = 0; rate = 0
+                    }
                 }
                 legs.append(ResolvedLeg(id: a.id ?? newId("p"), accountId: a.accountId, categoryId: nil,
                     amount: r2(a.amount), currency: currency, amountBase: r2(amountBase!),
@@ -312,6 +322,25 @@ public enum Entries {
                 legs.append(categoryLeg(c.id, c.categoryId, r2(c.amountBase), base, c.memo,
                                         c.origAmount.map(r2), c.origCurrency))
             }
+        }
+        // A transfer's two amounts are both what the user stated moved, so they
+        // imply the rate between them. When ONE side has no rate to the base, it is
+        // worth exactly what the other side is worth: the entry balances with no FX
+        // leg, and nothing is invented. Only when neither side can be valued (a
+        // second unrated leg rethrows the first refusal above) is it still
+        // `error.fx.noRate`.
+        //
+        // The implied rate stays on this posting (`exchange_rate`, as applied) and is
+        // NOT saved to `exchange_rates`. A transfer's figures carry its fees and
+        // spread, and a saved row would be found by every later on-or-before lookup
+        // for that currency — the shadowing that the 1:1 pins caused (#820/#822).
+        if let u = unrated {
+            let i = u.index
+            let accountLegs = legs.indices.filter { legs[$0].accountId != nil }
+            guard accountLegs.count == 2, let other = accountLegs.first(where: { $0 != i }) else { throw u.error }
+            legs[i].amountBase = r2(-legs[other].amountBase)
+            legs[i].exchangeRate = legs[i].amount != 0
+                ? ((legs[i].amountBase / legs[i].amount) * 1e6).rounded() / 1e6 : 0
         }
         return legs
     }
@@ -522,7 +551,7 @@ public enum Entries {
         let status = e.status ?? .confirmed
         let base = try ledgerBase(db, e.ledgerId)
 
-        var legs = try resolveLegs(db, e.ledgerId, e.date, base, e.legs)
+        var legs = try resolveLegs(db, e.ledgerId, e.date, base, e.legs, e.kind)
         if case .category(let autoCat) = e.autoBalance {
             let acctSum = r2(legs.filter { $0.accountId != nil }.reduce(0.0) { $0 + $1.amountBase })
             legs.append(categoryLeg(nil, autoCat, r2(-acctSum), base, nil))
@@ -889,7 +918,7 @@ public enum Entries {
                     }
                 }
                 try db.execute(sql: "DELETE FROM postings WHERE entry_id = ?", arguments: [entryId])
-                var resolved = try resolveLegs(db, ledgerId, date, base, inputs)
+                var resolved = try resolveLegs(db, ledgerId, date, base, inputs, kind)
                 if !legsProvided {
                     // date-only re-lock: scale kept category legs by newSum/oldSum.
                     let oldSum = oldLegRows.filter { ($0["account_id"] as String?) != nil }.reduce(0.0) { $0 + ($1["amount_base"] as Double) }
