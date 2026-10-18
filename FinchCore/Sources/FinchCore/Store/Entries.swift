@@ -228,7 +228,7 @@ public enum Entries {
         guard let rc = c, let rb = b else {
             let missing = c == nil ? currency : base
             throw I18nError("error.fx.noRate", ["from": currency, "to": base, "currency": missing],
-                            "No exchange rate for \(currency) → \(base) yet. Turn on \(missing) in Settings › Currencies, then tap Refresh now.")
+                            "No exchange rate for \(currency) → \(base) yet. Enter a \(missing) rate by hand in Settings › Currencies, or turn \(missing) on there and tap Refresh now.")
         }
         try pinRate(db, currency, date, rc)
         try pinRate(db, base, date, rb)

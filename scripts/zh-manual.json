@@ -828,5 +828,15 @@
   "Remove %lld rates": "移除 %lld 个汇率",
   "An earlier version converted a currency it had no exchange rate for at 1:1, and saved that 1 as the currency's rate. These rates still convert it 1:1. Rates you typed or fetched are never listed here.": "旧版本在缺少汇率时会按 1:1 换算该货币，并把这个 1 保存为它的汇率。这些汇率至今仍按 1:1 换算。您输入或获取的汇率不会出现在这里。",
   "Removing the rates leaves these entries as they are. They aren't recalculated, because that would change account balances and entries you have reconciled. Once a real rate is in, check them and correct any that are wrong.": "移除汇率不会改动这些条目。它们不会被重新计算，因为那会改变账户余额和已对账的条目。有了真实汇率后，请检查这些条目并更正有误的部分。",
-  "A write in these currencies will then ask for a real rate. Turn the currency on in Currencies and tap Refresh now to fetch one.": "之后用这些货币记账时会要求提供真实汇率。请在「货币」中开启该货币，然后轻点「立即刷新」获取汇率。"
+  "A write in these currencies will then ask for a real rate. Turn the currency on in Currencies and tap Refresh now to fetch one.": "之后用这些货币记账时会要求提供真实汇率。请在「货币」中开启该货币，然后轻点「立即刷新」获取汇率。",
+  "%@ has no exchange rate yet, so this one is against USD.": "%@ 还没有汇率，因此这里以 USD 计。",
+  "Delete Rate": "删除汇率",
+  "Edit Rate": "编辑汇率",
+  "Enter a %@ rate": "输入 %@ 汇率",
+  "Enter a rate greater than 0.": "请输入大于 0 的汇率。",
+  "Pick a currency.": "请选择货币。",
+  "Rate": "汇率",
+  "Replaces the rate already saved for this day.": "将替换这一天已保存的汇率。",
+  "Swap direction": "切换方向",
+  "USD is the hub every rate is measured against, so it needs none.": "USD 是所有汇率的基准货币，无需设置汇率。"
 }

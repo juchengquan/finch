@@ -34,6 +34,8 @@ struct EditTransactionSheet: View {
     @State private var partnerAmountText: String = ""
     @State private var selectedTags: Set<String>
     @State private var errorMessage: String?
+    /// The refusal behind `errorMessage` when it was for want of an exchange rate.
+    @State private var noRate: FxNoRateRefusal?
     @State private var confirmingDelete = false
     @State private var attachments: [AttachmentRow] = []
     @State private var pickedPhoto: PhotosPickerItem?
@@ -460,7 +462,13 @@ struct EditTransactionSheet: View {
                 }
 
                 if let errorMessage {
-                    Section { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
+                    Section {
+                        Text(errorMessage).foregroundStyle(.red).font(.footnote)
+                        // Refused for want of an exchange rate: offer to enter it here.
+                        if let noRate, noRate.isShowing(errorMessage) {
+                            NoRateFixButton(currency: noRate.currency) { self.errorMessage = nil }
+                        }
+                    }
                 }
             }
             .navigationTitle("Edit Transaction")
@@ -845,7 +853,11 @@ struct EditTransactionSheet: View {
             store.unlinkOrphanedAttachments(relPaths: orphaned)
             dismiss()
             Haptics.success()
-        } catch { errorMessage = i18nMessage(error); Haptics.warning() }
+        } catch {
+            errorMessage = i18nMessage(error)
+            noRate = FxNoRateRefusal(error, shown: errorMessage ?? "")
+            Haptics.warning()
+        }
     }
 
     /// A transfer saves through the same one write every other kind uses.
@@ -893,7 +905,11 @@ struct EditTransactionSheet: View {
             try store.apply(.saveTransaction, Args(args))
             dismiss()
             Haptics.success()
-        } catch { errorMessage = i18nMessage(error); Haptics.warning() }
+        } catch {
+            errorMessage = i18nMessage(error)
+            noRate = FxNoRateRefusal(error, shown: errorMessage ?? "")
+            Haptics.warning()
+        }
     }
 
     /// Run a lifecycle action then dismiss (these don't re-edit the open form).

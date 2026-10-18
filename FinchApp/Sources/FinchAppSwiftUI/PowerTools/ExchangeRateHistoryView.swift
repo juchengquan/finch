@@ -3,7 +3,8 @@ import FinchCore
 
 /// One currency's full rate history: trend sparkline (shown at ≥3 points) above
 /// date-descending rows. Per-row delete + "Delete all" go through the
-/// deleteExchangeRate chokepoint; when the last row goes, pop back.
+/// deleteExchangeRate chokepoint; when the last row goes, pop back. "+" adds a
+/// rate by hand; a hand-entered row opens for editing (`ManualRateSheet`).
 struct ExchangeRateHistoryView: View {
     let currency: String
     @EnvironmentObject private var store: FinchStore
@@ -11,6 +12,8 @@ struct ExchangeRateHistoryView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showDeleteAll = false
     @State private var errorMessage: String?
+    @State private var addingRate = false
+    @State private var editingRate: ExchangeRate?   // a hand-entered row being edited
 
     private var rows: [ExchangeRate] {
         store.exchangeRates.filter { $0.currency == currency }.sorted { $0.date > $1.date }
@@ -36,11 +39,18 @@ struct ExchangeRateHistoryView: View {
                         Text(String(format: "%.4f", rate.rate))
                         SourceBadge(source: rate.source)
                     }
+                    // Only a hand-entered rate opens for editing; a fetched one is
+                    // the provider's figure.
+                    .contentShape(Rectangle())
+                    .onTapGesture { if fxIsManual(rate) { editingRate = rate } }
                     .swipeActions(edge: .trailing) {
                         // Not role: .destructive — fake removal animation pre-confirm.
                         Button { pendingDelete = rate } label: { Label("Delete", systemImage: "trash") }.tint(.red)
                     }
                     .contextMenu {
+                        if fxIsManual(rate) {
+                            Button { editingRate = rate } label: { Label("Edit", systemImage: "pencil") }
+                        }
                         Button(role: .destructive) { pendingDelete = rate } label: { Label("Delete", systemImage: "trash") }
                     }
                 }
@@ -48,6 +58,10 @@ struct ExchangeRateHistoryView: View {
         }
         .navigationTitle(currency)
         .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { addingRate = true } label: { Image(systemName: "plus") }
+                    .accessibilityLabel("Add rate")
+            }
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     if !rows.isEmpty {
@@ -72,6 +86,10 @@ struct ExchangeRateHistoryView: View {
             Text("\(currency) · \(r.date)")
         }
         .errorAlert($errorMessage)
+        .sheet(isPresented: $addingRate) { ManualRateSheet(currency: currency) }
+        .sheet(isPresented: Binding(get: { editingRate != nil }, set: { if !$0 { editingRate = nil } })) {
+            if let editingRate { ManualRateSheet(editing: editingRate) }
+        }
     }
 
     private func delete(_ r: ExchangeRate) {

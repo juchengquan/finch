@@ -58,6 +58,16 @@
         }
       }
     },
+    "%@ has no exchange rate yet, so this one is against USD.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 还没有汇率，因此这里以 USD 计。"
+          }
+        }
+      }
+    },
     "%@ is %@.": {
       "localizations": {
         "zh-Hans": {
@@ -2565,6 +2575,16 @@
         }
       }
     },
+    "Delete Rate": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除汇率"
+          }
+        }
+      }
+    },
     "Delete all %@ rates": {
       "localizations": {
         "zh-Hans": {
@@ -2955,6 +2975,16 @@
         }
       }
     },
+    "Edit Rate": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编辑汇率"
+          }
+        }
+      }
+    },
     "Edit Rule": {
       "localizations": {
         "zh-Hans": {
@@ -3051,6 +3081,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "结束于"
+          }
+        }
+      }
+    },
+    "Enter a %@ rate": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入 %@ 汇率"
+          }
+        }
+      }
+    },
+    "Enter a rate greater than 0.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请输入大于 0 的汇率。"
           }
         }
       }
@@ -5464,6 +5514,16 @@
         }
       }
     },
+    "Pick a currency.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择货币。"
+          }
+        }
+      }
+    },
     "Pick an iCloud Drive folder to keep a browsable history off-device and share it across your devices.": {
       "localizations": {
         "zh-Hans": {
@@ -5700,6 +5760,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "范围"
+          }
+        }
+      }
+    },
+    "Rate": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "汇率"
           }
         }
       }
@@ -6021,6 +6091,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "替换数据"
+          }
+        }
+      }
+    },
+    "Replaces the rate already saved for this day.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将替换这一天已保存的汇率。"
           }
         }
       }
@@ -6862,6 +6942,16 @@
     },
     "Still open from before": {},
     "Subscribed to %lld ledgers": {},
+    "Swap direction": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换方向"
+          }
+        }
+      }
+    },
     "Swipe right on a backup to restore it, left to delete it. Restoring replaces all current data — your current data is backed up first.": {
       "localizations": {
         "zh-Hans": {
@@ -7581,6 +7671,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "输入命令…"
+          }
+        }
+      }
+    },
+    "USD is the hub every rate is measured against, so it needs none.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "USD 是所有汇率的基准货币，无需设置汇率。"
           }
         }
       }

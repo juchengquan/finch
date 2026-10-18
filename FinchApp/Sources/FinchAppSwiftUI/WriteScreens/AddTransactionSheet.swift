@@ -53,6 +53,8 @@ struct AddTransactionSheet: View {
     @State private var note = ""
     @State private var currencyCode = ""
     @State private var errorMessage: String?
+    /// The refusal behind `errorMessage` when it was for want of an exchange rate.
+    @State private var noRate: FxNoRateRefusal?
     @State private var pendingDuplicate: DuplicateMatch?   // soft duplicate nudge
     @State private var dupConfirmed = false
     @State private var status: Entries.Status = .confirmed
@@ -456,7 +458,13 @@ struct AddTransactionSheet: View {
                 }
 
                 if let errorMessage {
-                    Section { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
+                    Section {
+                        Text(errorMessage).foregroundStyle(.red).font(.footnote)
+                        // Refused for want of an exchange rate: offer to enter it here.
+                        if let noRate, noRate.isShowing(errorMessage) {
+                            NoRateFixButton(currency: noRate.currency) { self.errorMessage = nil }
+                        }
+                    }
                 }
             }
     }
@@ -910,6 +918,7 @@ struct AddTransactionSheet: View {
             Haptics.success()
         } catch {
             errorMessage = i18nMessage(error)   // localizes I18nError (incl. zh), like every other write screen
+            noRate = FxNoRateRefusal(error, shown: errorMessage ?? "")
             Haptics.warning()
         }
     }
