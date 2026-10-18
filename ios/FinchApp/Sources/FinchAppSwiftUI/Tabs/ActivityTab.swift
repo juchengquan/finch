@@ -868,8 +868,9 @@ struct TxRow: View {
                     // ONE symbol, one meaning: "part of one purchase". Deliberately
                     // NOT a promise about deleting — a grid row deletes on its own,
                     // while a split-tender payment takes its siblings. Neutral, and
-                    // chosen not to read as the reconcile tick.
-                    if (txn.accountLegCount ?? 1) > 1 || txn.groupId != nil {
+                    // chosen not to read as the reconcile tick. Never on a transfer,
+                    // whose two legs are not a purchase — see `PurchaseFlow`.
+                    if PurchaseFlow.isPartOfOnePurchase(txn) {
                         Image(systemName: "square.on.square").font(.caption2).foregroundStyle(.secondary)
                             .accessibilityLabel("Part of one purchase")
                     }
