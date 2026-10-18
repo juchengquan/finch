@@ -10,7 +10,9 @@ import GRDB
 /// ordinary `'derived'` row under the conversion's date. Every later lookup took
 /// the nearest rate on or before its date, found the 1.0 and pinned it again — so
 /// one missing rate left a trail of derived 1.0 rows, one per date anything was
-/// converted, and they keep converting the currency 1:1 after #820.
+/// converted. They kept converting the currency 1:1 after #820, until the lookup
+/// stopped reading `'derived'` rows at all; now they only clutter the history, and
+/// mark the entries that were booked 1:1.
 ///
 /// **What gives them away.** Three things, all required:
 /// - `source = 'derived'` and `rate = 1` exactly. A rate the user typed, a fetched

@@ -868,7 +868,9 @@ Lookup for a date with no stored row (`rateToHub`):
 2. nearest stored rate on-or-after the txn date (covers backdates before the first stored row)
 3. static `FALLBACK_USD_PER_UNIT` map (covers an empty table on a fresh DB)
 
-**Write-through:** the resolved rate is then pinned under the requested date (`source = 'derived'`, via `INSERT OR IGNORE` so a user-set row is never clobbered). A backdated conversion may use an approximated rate, but the approximation is *stable*: every future recompute at that date finds the pinned row and reproduces the same figure.
+4. nothing: the write is refused (`error.fx.noRate`)
+
+**No write-through (2026-10).** A conversion saves no rate row; the posting's own `exchange_rate` + `amount_base` record what it was booked at. Rows tagged `source = 'derived'` are skipped at every step of the lookup. Older versions pinned the resolved rate under each conversion's date with that tag, and as the nearest row the copy outranked the rate it came from, so correcting a mistyped rate or adding a closer one changed nothing for later entries, and a pre-#820 1.0 copy kept booking its currency 1:1. A recompute (an amount/date edit, a base-currency change) therefore uses the best rate on record for the entry's date, including any correction made since.
 
 ```sql
 CREATE TABLE exchange_rates (
@@ -885,7 +887,7 @@ CREATE TABLE exchange_rates (
 | `date` | TEXT NOT NULL · PK part | `YYYY-MM-DD` the rate applies to. |
 | `currency` | TEXT NOT NULL · PK part | ISO 4217 code. Never `USD` (the hub). |
 | `rate` | REAL NOT NULL | USD per 1 unit of `currency`. |
-| `source` | TEXT | Where the rate came from (`manual`, `ECB`, etc.). `derived` marks a write-through pin: the nearest-available/fallback rate a conversion resolved for this date. |
+| `source` | TEXT | Where the rate came from (`manual`, `ECB`, etc.). `derived` marks a copy older versions pinned for a conversion; the lookup ignores such rows, and nothing writes new ones. |
 | (PK) | — | `(date, currency)` composite. |
 
 ---
@@ -1375,12 +1377,9 @@ For each data row:
 2. Call external API (Open Exchange Rates / Yahoo Finance) — cache result in `exchange_rates`
 3. If all else fails, prompt user to enter rate manually
 
-The chokepoint then **pins the resolved rate under the requested date**
-(`source = 'derived'`, via `INSERT OR IGNORE` so a user-set row is
-never clobbered), exactly as in v2 — a backdated conversion may use an
-approximated rate, but the approximation is stable: every future
-recompute at that date finds the pinned row and reproduces the same
-figure.
+The chokepoint saves no rate of its own (see "No write-through" above):
+the posting carries the rate it was booked at, and `'derived'` rows left
+by older versions are never read.
 
 ### 11.4 Cross-Ledger Transfer Example
 

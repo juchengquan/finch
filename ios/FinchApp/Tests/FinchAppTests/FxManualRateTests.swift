@@ -40,6 +40,13 @@ final class FxManualRateTests: XCTestCase {
         XCTAssertEqual(FxManualQuote.make(currency: "KRW", base: "EUR", date: "2026-01-01", rates: rates).usdPerQuote, 1.10)
     }
 
+    /// A `'derived'` copy is skipped, as the engine skips it: the quote pivots
+    /// through the rate a write would use, not a stale copy dated closer.
+    func test_eurBase_skipsADerivedCopy() {
+        let withCopy = rates + [ExchangeRate(date: "2026-05-08", currency: "EUR", rate: 9, source: "derived")]
+        XCTAssertEqual(FxManualQuote.make(currency: "KRW", base: "EUR", date: "2026-05-09", rates: withCopy).usdPerQuote, 1.10)
+    }
+
     /// A base with no rate cannot carry the quote, so the form asks against USD.
     func test_unratedBase_fallsBackToUSD() {
         let q = FxManualQuote.make(currency: "KRW", base: "THB", date: "2026-05-09", rates: rates)

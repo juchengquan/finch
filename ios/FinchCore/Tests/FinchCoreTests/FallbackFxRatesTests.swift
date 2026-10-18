@@ -32,6 +32,19 @@ final class FallbackFxRatesTests: XCTestCase {
         }
     }
 
+    /// The 1.0 rows for `pins`, with whatever `book` writes booked 1:1 against them
+    /// the way pre-#820 code booked it. The lookup no longer reads `'derived'` rows,
+    /// so the rows stand in as real 1.0 rates while `book` runs and only then take
+    /// the `'derived'` tag the old code gave them.
+    private func bookTheOldWay(_ q: DatabaseQueue, _ pins: [(currency: String, date: String)],
+                               _ book: () throws -> Void) throws {
+        for p in pins { try rate(q, p.date, p.currency, 1, "pre-820") }
+        try book()
+        try q.write { db in
+            try db.execute(sql: "UPDATE exchange_rates SET source = 'derived' WHERE source = 'pre-820'")
+        }
+    }
+
     private func rate(_ q: DatabaseQueue, _ date: String, _ currency: String, _ rate: Double, _ source: String?) throws {
         try q.write { db in
             try db.execute(sql: "INSERT INTO exchange_rates (date, currency, rate, source) VALUES (?, ?, ?, ?)",
@@ -53,11 +66,11 @@ final class FallbackFxRatesTests: XCTestCase {
     /// The pre-#820 shape: a missing KRW rate pinned as 1.0, then entries booked
     /// against it at 1:1 — in a USD ledger (KRW leg) and a KRW ledger (USD leg).
     private func seedTheBug(_ q: DatabaseQueue) throws {
-        try pinTheOldWay(q, "KRW", "2026-05-09")
-        try spend(q, ledger: "l1", account: "krw", amount: -50000, date: "2026-05-09")
-        try spend(q, ledger: "l1", account: "krw", amount: -12000, date: "2026-05-09")
-        try pinTheOldWay(q, "KRW", "2026-05-12")
-        try spend(q, ledger: "l2", account: "usd", amount: -10, date: "2026-05-12")
+        try bookTheOldWay(q, [("KRW", "2026-05-09"), ("KRW", "2026-05-12")]) {
+            try spend(q, ledger: "l1", account: "krw", amount: -50000, date: "2026-05-09")
+            try spend(q, ledger: "l1", account: "krw", amount: -12000, date: "2026-05-09")
+            try spend(q, ledger: "l2", account: "usd", amount: -10, date: "2026-05-12")
+        }
         try pinTheOldWay(q, "THB", "2026-05-20")   // pinned, nothing on that date
     }
 
@@ -166,11 +179,11 @@ final class FallbackFxRatesTests: XCTestCase {
         try q.write { db in
             try db.execute(sql: "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('thb','l1','Baht','cash','THB',0,1,1,1,datetime('now'),datetime('now'))")
         }
-        try pinTheOldWay(q, "KRW", "2026-05-09")
-        try pinTheOldWay(q, "THB", "2026-05-09")
-        try Apply.apply(dbQueue: q, action: "createTransfer", args: Args([
-            "fromAccountId": .string("krw"), "toAccountId": .string("thb"),
-            "fromAmount": .double(30000), "toAmount": .double(30000), "date": .string("2026-05-09")]))
+        try bookTheOldWay(q, [("KRW", "2026-05-09"), ("THB", "2026-05-09")]) {
+            try Apply.apply(dbQueue: q, action: "createTransfer", args: Args([
+                "fromAccountId": .string("krw"), "toAccountId": .string("thb"),
+                "fromAmount": .double(30000), "toAmount": .double(30000), "date": .string("2026-05-09")]))
+        }
         let all = try suspects(q)
         XCTAssertEqual(all.map(\.entryCount), [1, 1], "the transfer converted through both rates")
         let ids = try entryIds(q, all)
