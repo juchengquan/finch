@@ -129,6 +129,76 @@ final class FallbackFxRatesTests: XCTestCase {
         }
     }
 
+    private func entryIds(_ q: DatabaseQueue, _ rates: [FallbackFxRates.Suspect]) throws -> Set<String> {
+        try q.read { try FallbackFxRates.entryIds($0, for: rates) }
+    }
+
+    /// The list behind a rate is the entries its count counted: the same ids, and
+    /// one row each in the ledger they are in.
+    func test_theListedEntriesAreTheCountedOnes() throws {
+        let q = try seeded()
+        try seedGenuine(q)
+        try seedTheBug(q)
+        let all = try suspects(q)
+        for s in all {
+            XCTAssertEqual(try entryIds(q, [s]).count, s.entryCount, "\(s.currency) \(s.date)")
+        }
+        let l1 = try Projection.run(dbQueue: q, ledgerId: "l1")
+        let l2 = try Projection.run(dbQueue: q, ledgerId: "l2")
+        // KRW on 05-09 converted two purchases in the USD ledger…
+        let may9 = try entryIds(q, [all[0]])
+        XCTAssertEqual(FallbackFxRates.rows(l1, entryIds: may9).map(\.merchant), ["Shop", "Shop"])
+        XCTAssertEqual(Set(FallbackFxRates.rows(l1, entryIds: may9).compactMap(\.entryId)), may9)
+        // …and on 05-12 one in the KRW ledger, which the USD ledger cannot show.
+        let may12 = try entryIds(q, [all[1]])
+        XCTAssertEqual(FallbackFxRates.rows(l2, entryIds: may12).count, 1)
+        XCTAssertEqual(FallbackFxRates.rows(l1, entryIds: may12), [])
+        // The total spans both ledgers, and the unused THB rate adds nothing.
+        XCTAssertEqual(try entryIds(q, all).count, 3)
+        XCTAssertEqual(try entryIds(q, [all[2]]), [])
+    }
+
+    /// One row per ENTRY however the projection splits it: a transfer is one row
+    /// (the side it leaves, not two legs cancelling to zero), and an entry two rates
+    /// converted is counted once in the total.
+    func test_aTransferIsOneRow_andAnEntryTwoRatesConvertedIsCountedOnce() throws {
+        let q = try seeded()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('thb','l1','Baht','cash','THB',0,1,1,1,datetime('now'),datetime('now'))")
+        }
+        try pinTheOldWay(q, "KRW", "2026-05-09")
+        try pinTheOldWay(q, "THB", "2026-05-09")
+        try Apply.apply(dbQueue: q, action: "createTransfer", args: Args([
+            "fromAccountId": .string("krw"), "toAccountId": .string("thb"),
+            "fromAmount": .double(30000), "toAmount": .double(30000), "date": .string("2026-05-09")]))
+        let all = try suspects(q)
+        XCTAssertEqual(all.map(\.entryCount), [1, 1], "the transfer converted through both rates")
+        let ids = try entryIds(q, all)
+        XCTAssertEqual(ids.count, 1, "the total counts the transfer once")
+
+        let legs = try Projection.run(dbQueue: q, ledgerId: "l1")
+        XCTAssertEqual(legs.count, 2, "the projection has a row per leg")
+        let rows = FallbackFxRates.rows(legs, entryIds: ids)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.account, "krw", "the leg the money leaves")
+        XCTAssertLessThan(rows.first?.amount ?? 0, 0)
+    }
+
+    /// Removing the rates does not lose the entries: the rule needs only the
+    /// currency and date, which the review still holds.
+    func test_theEntriesAreStillFoundAfterTheRatesAreRemoved() throws {
+        let q = try seeded()
+        try seedTheBug(q)
+        let all = try suspects(q)
+        let before = try entryIds(q, all)
+        for s in all {
+            try Apply.apply(dbQueue: q, action: "deleteExchangeRate",
+                            args: Args(["date": .string(s.date), "currency": .string(s.currency)]))
+        }
+        XCTAssertEqual(try suspects(q), [])
+        XCTAssertEqual(try entryIds(q, all), before)
+    }
+
     /// Since #820 a write in an unrated currency is refused, so it pins nothing new.
     func test_post820_unratedWritePinsNothingToFlag() throws {
         let q = try seeded()
