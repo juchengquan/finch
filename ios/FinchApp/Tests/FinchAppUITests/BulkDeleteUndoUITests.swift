@@ -32,11 +32,11 @@ final class BulkDeleteUndoUITests: XCTestCase {
         XCTAssertTrue(all.waitForExistence(timeout: 30), "no All Transactions entry on Accounts")
         all.tap()
 
-        let rent = row("Expense, Rent")
-        XCTAssertTrue(rent.waitForExistence(timeout: 30), "the seed's Rent row is missing")
+        let target = row()
+        XCTAssertTrue(target.waitForExistence(timeout: 30), "the seed's Target groceries row is missing")
 
         app.buttons["Select"].firstMatch.tap()
-        rent.tap()
+        target.tap()
 
         let delete = app.buttons["Delete 1"].firstMatch
         XCTAssertTrue(delete.waitForExistence(timeout: 10), "no bulk Delete after ticking a row")
@@ -51,22 +51,28 @@ final class BulkDeleteUndoUITests: XCTestCase {
         let confirm = app.buttons.matching(NSPredicate(format: "label == %@", "Delete 1"))
             .allElementsBoundByIndex.first { $0.frame != toolbarFrame && $0.isHittable }
         XCTAssertNotNil(confirm, "no confirmation before the bulk delete")
-        XCTAssertTrue(row("Expense, Rent").exists, "the row went before it was confirmed")
+        XCTAssertTrue(row().exists, "the row went before it was confirmed")
         confirm?.tap()
 
         let undo = app.buttons["undoDelete"]
         XCTAssertTrue(undo.waitForExistence(timeout: 5), "no Undo banner after the delete")
-        XCTAssertTrue(waitUntil(5) { !self.row("Expense, Rent").exists }, "the row was not deleted")
+        XCTAssertTrue(waitUntil(5) { !self.row().exists }, "the row was not deleted")
         XCTAssertTrue(waitUntil(5) { self.app.tabBars.firstMatch.isHittable },
                       "the tab bar did not come back when selection ended")
 
         undo.tap()
-        XCTAssertTrue(row("Expense, Rent").waitForExistence(timeout: 5), "Undo did not bring the row back")
+        XCTAssertTrue(row().waitForExistence(timeout: 5), "Undo did not bring the row back")
         XCTAssertTrue(waitUntil(5) { !undo.exists }, "the banner outlived its undo")
     }
 
-    private func row(_ prefix: String) -> XCUIElement {
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", prefix)).firstMatch
+    /// The seed's Target shop, two days back: near the top of the feed whatever the
+    /// date, and the only Groceries row for $58.20, so once it is deleted no other row
+    /// matches. It used to be "Expense, Rent", but rent is now posted from its
+    /// scheduled template on the 1st, which late in the month is far enough down the
+    /// feed that its cell is never loaded.
+    private func row() -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@",
+                                         "Expense, Groceries", "58.20")).firstMatch
     }
 
     private func waitUntil(_ timeout: TimeInterval, _ condition: () -> Bool) -> Bool {
