@@ -7,7 +7,7 @@ import FinchCore
 /// Phase 2, screen 8: `CurrenciesView` converted to UIKit.
 ///
 /// The FX home: auto-update controls on top, then every ISO currency (hub first,
-/// tracked A–Z, rest A–Z, searchable) with its latest USD-per-unit rate and a
+/// tracked A–Z, rest A–Z, searchable) with its latest rate (`fxRateDisplay`) and a
 /// tracking switch. Tap a row for that currency's history. Writes stay on the
 /// `setTrackedCurrencies` chokepoint and `RateAutoUpdater`.
 ///
@@ -209,9 +209,11 @@ final class CurrenciesVC: UIViewController {
                 cell.contentConfiguration = cfg
 
                 // Mutated in place on a reconfigure — a fresh rate arriving must not
-                // cost the row its switch.
+                // cost the row its switch. The hub has no rate, so no label (nil).
                 TrailingLabel.install(on: cell,
-                                      text: row.rate.map { String(format: "%.4f", $0) } ?? "—",
+                                      text: row.isHub ? nil
+                                          : row.rate.map { fxRateDisplay($0, currency: row.code) ?? "" } ?? "—",
+                                      font: .preferredFont(forTextStyle: .subheadline),
                                       color: row.rate == nil ? .secondaryLabel : .label)
                 // `tracked` is LIVE here; `grouped` decided the section. See FxDerive.
                 if !row.isHub {
