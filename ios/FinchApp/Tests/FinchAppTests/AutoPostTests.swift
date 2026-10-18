@@ -109,7 +109,7 @@ final class AutoPostTests: XCTestCase {
         let store = try await makeStore()
         let id = try createDaily(store, autoPost: true)
         await store.autoPostDueScheduled()
-        NotificationService.confirmNow(templateId: id, store: store)
+        try NotificationService.confirmNow(templateId: id, occurrence: store.wallToday, store: store)
         let after = rows(store, id)
         XCTAssertEqual(after.count, 1, "no second row")
         XCTAssertEqual(after.first?.pending, false, "the waiting row was confirmed")
@@ -121,11 +121,10 @@ final class AutoPostTests: XCTestCase {
     func test_confirmNowFirst_thenTheGenerator_addsNothing() async throws {
         let store = try await makeStore()
         let id = try createDaily(store, autoPost: true)
-        // Starting today, so the occurrence Confirm now resolves is today's (it takes
-        // the oldest unposted one).
+        // Starting today, so today's is the only occurrence there is to post.
         try store.apply(.updateScheduled, Args(["id": .string(id), "patch": .object([
             "startDate": .string(store.wallToday)])]))
-        NotificationService.confirmNow(templateId: id, store: store)
+        try NotificationService.confirmNow(templateId: id, occurrence: store.wallToday, store: store)
         XCTAssertEqual(rows(store, id).map(\.occurrenceDate), [store.wallToday])
         let posted = await store.autoPostDueScheduled()
         XCTAssertEqual(posted, 0)
@@ -138,7 +137,7 @@ final class AutoPostTests: XCTestCase {
         let id = try createDaily(store, autoPost: false)
         try store.apply(.updateScheduled, Args(["id": .string(id), "patch": .object([
             "startDate": .string(store.wallToday)])]))
-        NotificationService.confirmNow(templateId: id, store: store)
+        try NotificationService.confirmNow(templateId: id, occurrence: store.wallToday, store: store)
         XCTAssertEqual(rows(store, id).count, 1)
         XCTAssertEqual(rows(store, id).first?.pending, false)
     }
