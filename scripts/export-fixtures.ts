@@ -459,7 +459,7 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown>; expectErr
   // Cross-currency: a JPY purchase on a USD account. Exercises the foreign-
   // currency path — orig_amount/orig_currency carried, native+base derived via
   // rateToHub (a JPY rate is set first so the conversion is deterministic), plus
-  // the FX residue + the write-through 'derived' USD-rate row. Verified byte-for-
+  // the FX residue. No rate row is written by the conversion. Verified byte-for-
   // byte against the oracle.
   { action: 'setExchangeRate', args: { date: '2026-05-08', currency: 'JPY', rate: 0.0065 } },
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: -3820, currency: 'JPY', merchant: 'Yodobashi', categoryId: 'food', date: '2026-05-08', skipRules: true } },
@@ -518,6 +518,9 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown>; expectErr
   // (each side rolls the step back, as the real write path does). s4 is the same
   // account as a template: generateDueScheduled below skips its Feb–Apr
   // occurrences rather than failing the sweep, and pins no KRW rate.
+  // A 1:1 KRW row left by pre-#820 code ('derived', exactly 1) is in the table and
+  // changes none of that: the lookup skips 'derived' rows, so it books nothing.
+  { action: 'setExchangeRate', args: { date: '2026-05-14', currency: 'KRW', rate: 1, source: 'derived' } },
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a4', amount: -50000, merchant: 'Seoul', categoryId: 'food', date: '2026-05-15', skipRules: true }, expectError: 'error.fx.noRate' },
   { action: 'createScheduled', args: { id: 's4', ledgerId: 'personal', name: 'Seoul rent', type: 'expense', amount: 500000, frequency: 'monthly', dayOfMonth: 10, accountId: 'a4', startDate: '2026-02-10' } },
   // A transfer INTO the unrated a5 (VND never gets a rate here). With only the
@@ -578,10 +581,18 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown>; expectErr
   // Needs an EUR rate on/before every entry date (the earliest are the Jan
   // generateDue occurrences) — seed one at 2026-01-01.
   { action: 'setExchangeRate', args: { date: '2026-01-01', currency: 'EUR', rate: 1.08 } },
-  // With a real KRW rate in place, the refused purchase books at it (−50,000 ×
-  // 0.00072 = −36 USD) before the base change re-derives everything.
+  // A KRW rate mistyped ten times too high books a taxi at it (−20,000 × 0.0072 =
+  // −144 USD). Then, with the rate corrected, the refused purchase books at the
+  // corrected one (−50,000 × 0.00072 = −36 USD) although the taxi shares its date:
+  // the taxi used to save a copy of 0.0072 under that date, which outranked the
+  // correction. A closer rate dated between them wins the same way (−30,000 ×
+  // 0.00075 = −22.50). The base change then re-derives everything.
+  { action: 'setExchangeRate', args: { date: '2026-05-01', currency: 'KRW', rate: 0.0072, source: 'manual' } },
+  { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a4', amount: -20000, merchant: 'Seoul taxi', categoryId: 'food', date: '2026-05-15', skipRules: true } },
   { action: 'setExchangeRate', args: { date: '2026-05-01', currency: 'KRW', rate: 0.00072 } },
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a4', amount: -50000, merchant: 'Seoul', categoryId: 'food', date: '2026-05-15', skipRules: true } },
+  { action: 'setExchangeRate', args: { date: '2026-05-12', currency: 'KRW', rate: 0.00075, source: 'manual' } },
+  { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a4', amount: -30000, merchant: 'Seoul market', categoryId: 'food', date: '2026-05-15', skipRules: true } },
   { action: 'changeLedgerBase', args: { ledgerId: 'personal', newBase: 'EUR' } },
 ];
 

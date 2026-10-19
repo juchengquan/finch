@@ -7,23 +7,25 @@
 //
 // The table is an append-only record: rows are never pruned (a decade of
 // daily rates for every supported currency is ~1 MB — there is no size
-// problem to solve), and every rate the app actually relies on is
-// write-through persisted under the date it was used for (see rateToHub).
-// That makes locked conversions reproducible forever: re-deriving a
-// transaction's amount_base (e.g. recomputeAmountBases on a base-currency
-// change) finds the same rate and produces the same figure, no matter how
-// far in the past the transaction sits.
+// problem to solve). It holds only rates the user typed, fetched or
+// imported; a conversion saves nothing back. Each posting stores the rate it
+// was booked at (exchange_rate + amount_base), and re-deriving one (an edit
+// that moves its amount or date, recomputeAmountBases on a base-currency
+// change) looks the rate up afresh, so a corrected rate reaches it.
 //
 // Lookup order for a date with no stored row (backdate or missing currency):
 //   1. nearest stored rate on-or-before the txn date
 //   2. nearest stored rate on-or-after the txn date (closest in time)
 //   3. static FALLBACK_USD_PER_UNIT map (works on an empty table)
 //   4. nothing — convertToBase refuses the write (`error.fx.noRate`)
-// The resolved rate is then pinned under the requested date (source
-// 'derived') so the approximation is at least stable across future lookups.
+// Rows tagged 'derived' are skipped at every step. Older versions pinned the
+// resolved rate under each conversion's date with that tag, and as the
+// nearest row the copy outranked the rate it was copied from: correcting a
+// mistyped rate, or adding a closer one, changed nothing for later entries.
 //
 // Step 4 used to be "1": ₩50,000 was booked as 50,000 USD, and the 1.0 was
-// pinned, shadowing any real KRW rate added later for every date after it.
+// pinned as a 'derived' row, which converted the currency 1:1 for every date
+// after it until the lookup stopped reading such rows.
 
 import type { Exec } from '../core/repo';
 import { I18nError } from '@/lib/i18n-error';
@@ -49,56 +51,28 @@ export async function ledgerBaseCurrency(exec: Exec, ledgerId: string): Promise<
   return rows.length ? String(rows[0].base_currency) : 'USD';
 }
 
-/** A resolved hub rate, and whether it must be pinned under the lookup date. */
-interface HubRate { rate: number; pin: boolean }
-
 /**
  * USD-per-1-unit of `currency`, looked up against the table at `date`:
  *   1. exact / nearest on-or-before, else
  *   2. nearest on-or-after, else
  *   3. static fallback, else
  *   4. null — there is no rate.
- * USD itself is the hub and short-circuits to 1. Reads only; `pinRate` writes.
+ * 'derived' rows (copies older versions saved) never count — see the header.
+ * USD itself is the hub and short-circuits to 1. Reads only.
  */
-async function lookupRateToHub(exec: Exec, currency: string, date: string): Promise<HubRate | null> {
-  if (currency === HUB_CURRENCY) return { rate: 1, pin: false };
-  const before = await exec(
-    'SELECT date AS d, rate AS r FROM exchange_rates WHERE currency = ? AND date <= ? ORDER BY date DESC LIMIT 1',
-    [currency, date],
-  );
-  if (before.length && String(before[0].d) === date) return { rate: Number(before[0].r), pin: false };
-  if (before.length) return { rate: Number(before[0].r), pin: true };
-  const after = await exec(
-    'SELECT rate AS r FROM exchange_rates WHERE currency = ? AND date >= ? ORDER BY date ASC LIMIT 1',
-    [currency, date],
-  );
-  if (after.length) return { rate: Number(after[0].r), pin: true };
-  const fallback = FALLBACK_USD_PER_UNIT[currency];
-  return fallback === undefined ? null : { rate: fallback, pin: true };
-}
-
-/**
- * Write-through: when no exact-date row exists, the resolved rate is pinned
- * under `date` (source 'derived', INSERT OR IGNORE so a user-set rate is
- * never clobbered). Every conversion the app locks onto a row is thereby
- * reproducible — a later recompute at the same date finds the same rate even
- * if neighboring rows change.
- */
-async function pinRate(exec: Exec, currency: string, date: string, r: HubRate): Promise<void> {
-  if (!r.pin) return;
-  await exec(
-    "INSERT OR IGNORE INTO exchange_rates (date, currency, rate, source) VALUES (?, ?, ?, 'derived')",
-    [date, currency, r.rate],
-  );
-}
-
-/** USD-per-1-unit of `currency` at `date` (lookup + write-through), or null
- *  when there is no rate at all. */
 export async function rateToHub(exec: Exec, currency: string, date: string): Promise<number | null> {
-  const r = await lookupRateToHub(exec, currency, date);
-  if (!r) return null;
-  await pinRate(exec, currency, date, r);
-  return r.rate;
+  if (currency === HUB_CURRENCY) return 1;
+  const before = await exec(
+    "SELECT rate AS r FROM exchange_rates WHERE currency = ? AND date <= ? AND COALESCE(source, '') <> 'derived' ORDER BY date DESC LIMIT 1",
+    [currency, date],
+  );
+  if (before.length) return Number(before[0].r);
+  const after = await exec(
+    "SELECT rate AS r FROM exchange_rates WHERE currency = ? AND date >= ? AND COALESCE(source, '') <> 'derived' ORDER BY date ASC LIMIT 1",
+    [currency, date],
+  );
+  if (after.length) return Number(after[0].r);
+  return FALLBACK_USD_PER_UNIT[currency] ?? null;
 }
 
 export interface Conversion {
@@ -108,8 +82,7 @@ export interface Conversion {
 
 /** Convert a native amount into the base currency via the USD pivot, as-of `date`.
  *  A side with no rate at all refuses (`error.fx.noRate`) rather than converting
- *  1:1. Both sides are looked up before either is pinned, so a refusal writes
- *  nothing. */
+ *  1:1. Reads only. */
 export async function convertToBase(
   exec: Exec,
   native: number,
@@ -118,16 +91,13 @@ export async function convertToBase(
   date: string,
 ): Promise<Conversion> {
   if (currency === base) return { amountBase: native, rate: 1 };
-  const c = await lookupRateToHub(exec, currency, date);
-  const b = await lookupRateToHub(exec, base, date);
-  if (!c || !b) {
-    const missing = c ? base : currency;
+  const rc = await rateToHub(exec, currency, date);
+  const rb = await rateToHub(exec, base, date);
+  if (rc === null || rb === null) {
+    const missing = rc !== null ? base : currency;
     throw new I18nError('error.fx.noRate', { from: currency, to: base, currency: missing },
       `No exchange rate for ${currency} → ${base} yet. Add a ${missing} rate on the FX page.`);
   }
-  await pinRate(exec, currency, date, c);
-  await pinRate(exec, base, date, b);
-  const rc = c.rate, rb = b.rate;
   const rate = rb !== 0 ? rc / rb : 1;
   return { amountBase: Math.round(native * rate * 100) / 100, rate: Math.round(rate * 1e6) / 1e6 };
 }

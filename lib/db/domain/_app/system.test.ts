@@ -3,6 +3,8 @@ import { rateToHub, convertToBase, HUB_CURRENCY } from '@/lib/db/domain/_app/sys
 import { addTransaction } from '@/lib/db/domain/transactions/queries';
 import { seededDb } from '@/lib/db/core/test-utils';
 import type { Exec } from '@/lib/db/core/repo';
+import { applyMutation } from '@/lib/db/mutate';
+import { auditLedger } from '@/lib/db/core/entries';
 
 async function seeded(): Promise<Exec> {
   const { exec } = await seededDb();
@@ -88,49 +90,29 @@ test('addTransaction converts a foreign amount and locks the rate', async () => 
   expect(effectiveRate).toBeCloseTo(0.00650, 6);
 });
 
-test('write-through: a resolved fallback rate is pinned under the requested date', async () => {
+test('a conversion saves no copy of the rate it used', async () => {
   const exec = await seeded();
-  // 2024-01-01 predates the seed range (2026-05-13 →) — resolution falls
-  // forward to the earliest stored JPY rate (0.00650) and must pin it.
-  const rate = await rateToHub(exec, 'JPY', '2024-01-01');
-  expect(rate).toBeCloseTo(0.0065, 6);
-  const [pinned] = await exec(
-    "SELECT rate, source FROM exchange_rates WHERE currency = 'JPY' AND date = '2024-01-01'",
-  );
-  expect(Number(pinned.rate)).toBeCloseTo(0.0065, 6);
-  expect(String(pinned.source)).toBe('derived');
-});
-
-test('write-through: the pinned rate keeps old-date conversions stable when neighbors change', async () => {
-  const exec = await seeded();
-  const first = await convertToBase(exec, 1000, 'JPY', 'SGD', '2024-01-01');
-  // Rewrite the rates the original resolution fell forward to. Without the
-  // pin, re-running the same conversion would now produce a different figure.
-  await exec("UPDATE exchange_rates SET rate = 0.0099 WHERE currency = 'JPY' AND date >= '2026-01-01'");
-  const second = await convertToBase(exec, 1000, 'JPY', 'SGD', '2024-01-01');
-  expect(second.rate).toBeCloseTo(first.rate, 6);
-  expect(second.amountBase).toBeCloseTo(first.amountBase, 2);
-});
-
-test('write-through: never clobbers an exact user-set rate', async () => {
-  const exec = await seeded();
-  // Exact-date hit returns the stored row untouched (no 'derived' overwrite).
-  expect(await rateToHub(exec, 'JPY', '2026-05-24')).toBeCloseTo(0.0065, 6);
-  const [row] = await exec(
-    "SELECT rate, source FROM exchange_rates WHERE currency = 'JPY' AND date = '2026-05-24'",
-  );
-  expect(String(row.source)).not.toBe('derived');
-});
-
-test('write-through: static fallback for an unknown currency is pinned too', async () => {
-  const exec = await seeded();
-  // GBP has no seed rows → static FALLBACK_USD_PER_UNIT['GBP'] = 1.266, pinned.
+  const before = await exec('SELECT * FROM exchange_rates ORDER BY date, currency');
+  // 2024-01-01 predates the seed range (falls forward to the earliest JPY row);
+  // GBP has no rows (static fallback 1.266). Neither used to be pinned for nothing.
+  expect(await rateToHub(exec, 'JPY', '2024-01-01')).toBeCloseTo(0.0065, 6);
   expect(await rateToHub(exec, 'GBP', '2026-05-24')).toBeCloseTo(1.266, 4);
-  const [pinned] = await exec(
-    "SELECT rate, source FROM exchange_rates WHERE currency = 'GBP' AND date = '2026-05-24'",
-  );
-  expect(Number(pinned.rate)).toBeCloseTo(1.266, 4);
-  expect(String(pinned.source)).toBe('derived');
+  await convertToBase(exec, 1000, 'JPY', 'SGD', '2024-01-01');
+  await addTransaction(exec, {
+    ledgerId: 'personal', accountId: 'cc', amount: -10, currency: 'GBP', merchant: 'London', date: '2026-05-24',
+  });
+  expect(await exec('SELECT * FROM exchange_rates ORDER BY date, currency')).toEqual(before);
+  expect(await exec("SELECT * FROM exchange_rates WHERE source = 'derived'")).toEqual([]);
+});
+
+test('rateToHub skips a derived copy, on the date and before it', async () => {
+  const exec = await seeded();
+  await exec("INSERT INTO exchange_rates (date, currency, rate, source) VALUES ('2026-05-25', 'JPY', 0.0099, 'derived')");
+  expect(await rateToHub(exec, 'JPY', '2026-05-25')).toBeCloseTo(0.0065, 6);
+  expect(await rateToHub(exec, 'JPY', '2026-05-26')).toBeCloseTo(0.0065, 6);
+  // …and a copy is no rate at all: GBP with only a derived row takes the fallback.
+  await exec("INSERT INTO exchange_rates (date, currency, rate, source) VALUES ('2026-05-01', 'GBP', 9, 'derived')");
+  expect(await rateToHub(exec, 'GBP', '2026-05-24')).toBeCloseTo(1.266, 4);
 });
 
 // ─── No rate for the pair: refuse, never 1:1 ─────────────────────────────────
@@ -168,4 +150,78 @@ test('addTransaction on an unrated account is refused; once a rate exists it is 
   const id = await add();
   const [row] = await exec('SELECT amount_base FROM postings WHERE entry_id = ? AND account_id IS NOT NULL', [id]);
   expect(Number(row.amount_base)).toBeCloseTo(-36, 2);
+});
+
+// ─── A rate the user set or fetched always outranks a copy ───────────────────
+
+const setRate = (exec: Exec, date: string, rate: number, source = 'manual') =>
+  applyMutation(exec, 'setExchangeRate', { date, currency: 'KRW', rate, source });
+const spendKrw = (exec: Exec, amount: number, date: string) => addTransaction(exec, {
+  ledgerId: 'personal', accountId: 'krw', amount, merchant: 'Seoul', date,
+});
+async function krwBase(exec: Exec, amount: number, date: string): Promise<number> {
+  const [row] = await exec(
+    "SELECT p.amount_base FROM postings p JOIN entries e ON e.id = p.entry_id WHERE p.account_id = 'krw' AND p.amount = ? AND e.date = ?",
+    [amount, date],
+  );
+  return Number(row.amount_base);
+}
+const krwRates = (exec: Exec) => exec("SELECT * FROM exchange_rates WHERE currency = 'KRW'");
+
+test('F1: a corrected rate is what later entries use', async () => {
+  const exec = await seeded();
+  await krwAccount(exec);
+  await setRate(exec, '2026-05-01', 0.0073);              // mistyped
+  await spendKrw(exec, -50000, '2026-05-10');
+  expect(await krwBase(exec, -50000, '2026-05-10')).toBeCloseTo(-365, 2);
+  expect(await krwRates(exec)).toHaveLength(1);           // no copy saved
+  await setRate(exec, '2026-05-01', 0.00073);             // corrected
+  await spendKrw(exec, -50001, '2026-05-10');
+  await spendKrw(exec, -50000, '2026-05-12');
+  expect(await krwBase(exec, -50001, '2026-05-10')).toBeCloseTo(-36.5, 2);
+  expect(await krwBase(exec, -50000, '2026-05-12')).toBeCloseTo(-36.5, 2);
+});
+
+test('F1: a backdated rate is what later entries use', async () => {
+  const exec = await seeded();
+  await krwAccount(exec);
+  await setRate(exec, '2026-05-01', 0.00072, 'ECB');
+  await spendKrw(exec, -50000, '2026-05-10');
+  await setRate(exec, '2026-05-05', 0.0008);              // backdated, by hand
+  await spendKrw(exec, -50001, '2026-05-10');
+  await spendKrw(exec, -50000, '2026-05-12');
+  expect(await krwBase(exec, -50001, '2026-05-10')).toBeCloseTo(-40, 2);
+  expect(await krwBase(exec, -50000, '2026-05-12')).toBeCloseTo(-40, 2);
+  expect(await krwBase(exec, -50000, '2026-05-10')).toBeCloseTo(-36, 2); // booked before it
+});
+
+test('W1: a leftover 1:1 derived rate does not book new money', async () => {
+  const exec = await seeded();
+  await krwAccount(exec);
+  await exec("INSERT INTO exchange_rates (date, currency, rate, source) VALUES ('2026-05-01', 'KRW', 1, 'derived')");
+  for (const date of ['2026-05-09', '2026-05-01']) {
+    const err = await spendKrw(exec, -10000, date).catch((e) => e);
+    expect(err.code).toBe('error.fx.noRate');
+    expect(err.params).toEqual({ from: 'KRW', to: 'USD', currency: 'KRW' });
+  }
+  expect(await krwRates(exec)).toHaveLength(1);
+  await setRate(exec, '2026-05-09', 0.00073);             // the "Enter a rate" path
+  await spendKrw(exec, -10000, '2026-05-09');
+  expect(await krwBase(exec, -10000, '2026-05-09')).toBeCloseTo(-7.3, 2);
+});
+
+test('an existing entry keeps its rate until an edit re-values it', async () => {
+  const exec = await seeded();
+  await krwAccount(exec);
+  await setRate(exec, '2026-05-01', 0.0073);              // mistyped
+  const id = await spendKrw(exec, -50000, '2026-05-10');
+  await setRate(exec, '2026-05-01', 0.00073);             // corrected
+  await applyMutation(exec, 'updateTransaction', { id, patch: { note: 'dinner' } });
+  expect(await krwBase(exec, -50000, '2026-05-10')).toBeCloseTo(-365, 2);   // header edit: kept
+  await applyMutation(exec, 'updateTransaction', { id, patch: { date: '2026-05-11' } });
+  expect(await krwBase(exec, -50000, '2026-05-11')).toBeCloseTo(-36.5, 2);  // date edit: re-valued
+  await applyMutation(exec, 'updateTransaction', { id, patch: { amount: -60000 } });
+  expect(await krwBase(exec, -60000, '2026-05-11')).toBeCloseTo(-43.8, 2);
+  expect(await krwRates(exec)).toHaveLength(1);
+  expect(await auditLedger(exec, 'personal', { checkBalances: true })).toEqual([]);
 });
