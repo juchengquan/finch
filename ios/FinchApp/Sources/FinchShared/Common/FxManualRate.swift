@@ -56,14 +56,14 @@ struct FxManualQuote: Equatable {
     /// Quote against `base` when that is possible, else against USD (the hub).
     ///
     /// The base's own rate is looked up the way the engine looks one up for a
-    /// write — nearest on-or-before `date`, else nearest after — so a rate typed
-    /// as "1 KRW = 0.00067 EUR" is stored as the figure that converts back to
-    /// exactly that on the same day.
+    /// write — nearest on-or-before `date`, else nearest after, never a `'derived'`
+    /// copy — so a rate typed as "1 KRW = 0.00067 EUR" is stored as the figure that
+    /// converts back to exactly that on the same day.
     static func make(currency: String, base: String, date: String,
                      rates: [ExchangeRate]) -> FxManualQuote {
         let hub = FxManualQuote(currency: currency, quote: "USD", usdPerQuote: 1)
         guard base != currency, base != "USD" else { return hub }
-        let mine = rates.filter { $0.currency == base }
+        let mine = rates.filter { $0.currency == base && $0.source != "derived" }
         let rate = mine.filter { $0.date <= date }.max { $0.date < $1.date }
             ?? mine.filter { $0.date > date }.min { $0.date < $1.date }
         guard let rate, rate.rate > 0 else { return hub }

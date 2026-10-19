@@ -416,6 +416,15 @@
       }
     },
     {
+      "action": "setExchangeRate",
+      "args": {
+        "date": "2026-05-14",
+        "currency": "KRW",
+        "rate": 1,
+        "source": "derived"
+      }
+    },
+    {
       "action": "addTransaction",
       "args": {
         "ledgerId": "personal",
@@ -638,6 +647,27 @@
       "args": {
         "date": "2026-05-01",
         "currency": "KRW",
+        "rate": 0.0072,
+        "source": "manual"
+      }
+    },
+    {
+      "action": "addTransaction",
+      "args": {
+        "ledgerId": "personal",
+        "accountId": "a4",
+        "amount": -20000,
+        "merchant": "Seoul taxi",
+        "categoryId": "food",
+        "date": "2026-05-15",
+        "skipRules": true
+      }
+    },
+    {
+      "action": "setExchangeRate",
+      "args": {
+        "date": "2026-05-01",
+        "currency": "KRW",
         "rate": 0.00072
       }
     },
@@ -648,6 +678,27 @@
         "accountId": "a4",
         "amount": -50000,
         "merchant": "Seoul",
+        "categoryId": "food",
+        "date": "2026-05-15",
+        "skipRules": true
+      }
+    },
+    {
+      "action": "setExchangeRate",
+      "args": {
+        "date": "2026-05-12",
+        "currency": "KRW",
+        "rate": 0.00075,
+        "source": "manual"
+      }
+    },
+    {
+      "action": "addTransaction",
+      "args": {
+        "ledgerId": "personal",
+        "accountId": "a4",
+        "amount": -30000,
+        "merchant": "Seoul market",
         "categoryId": "food",
         "date": "2026-05-15",
         "skipRules": true
@@ -1397,6 +1448,107 @@
         "ledger_id": "personal",
         "date": "2026-05-15",
         "time": null,
+        "description": "Seoul market",
+        "kind": "expense",
+        "status": "confirmed",
+        "counterparty_id": null,
+        "refunded_entry_id": null,
+        "source_template_id": null,
+        "occurrence_date": null,
+        "notes": null,
+        "applied_rule_ids": null,
+        "reviewed": false,
+        "sealed": 1,
+        "postings": [
+          {
+            "account_id": "a4",
+            "category_id": null,
+            "amount": "-30000.000000",
+            "currency": "KRW",
+            "amount_base": "-20.450000",
+            "exchange_rate": "0.000682",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 0
+          },
+          {
+            "account_id": null,
+            "category_id": "food",
+            "amount": "20.450000",
+            "currency": "EUR",
+            "amount_base": "20.450000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 1
+          }
+        ]
+      },
+      {
+        "ledger_id": "personal",
+        "date": "2026-05-15",
+        "time": null,
+        "description": "Seoul taxi",
+        "kind": "expense",
+        "status": "confirmed",
+        "counterparty_id": null,
+        "refunded_entry_id": null,
+        "source_template_id": null,
+        "occurrence_date": null,
+        "notes": null,
+        "applied_rule_ids": null,
+        "reviewed": false,
+        "sealed": 1,
+        "postings": [
+          {
+            "account_id": "a4",
+            "category_id": null,
+            "amount": "-20000.000000",
+            "currency": "KRW",
+            "amount_base": "-13.640000",
+            "exchange_rate": "0.000682",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 0
+          },
+          {
+            "account_id": null,
+            "category_id": "food",
+            "amount": "130.910000",
+            "currency": "EUR",
+            "amount_base": "130.910000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 1
+          },
+          {
+            "account_id": null,
+            "category_id": "sys-fx",
+            "amount": "-117.270000",
+            "currency": "EUR",
+            "amount_base": "-117.270000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 2
+          }
+        ]
+      },
+      {
+        "ledger_id": "personal",
+        "date": "2026-05-15",
+        "time": null,
         "description": "Seoul",
         "kind": "expense",
         "status": "confirmed",
@@ -1414,8 +1566,8 @@
             "category_id": null,
             "amount": "-50000.000000",
             "currency": "KRW",
-            "amount_base": "-32.730000",
-            "exchange_rate": "0.000655",
+            "amount_base": "-34.090000",
+            "exchange_rate": "0.000682",
             "orig_amount": null,
             "orig_currency": null,
             "memo": null,
@@ -1434,6 +1586,19 @@
             "memo": null,
             "cleared": false,
             "sort_order": 1
+          },
+          {
+            "account_id": null,
+            "category_id": "sys-fx",
+            "amount": "1.360000",
+            "currency": "EUR",
+            "amount_base": "1.360000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 2
           }
         ]
       },
@@ -1827,7 +1992,7 @@
         "name": "Seoul",
         "type": "cash",
         "currency": "KRW",
-        "current_balance": "-50000.000000",
+        "current_balance": "-100000.000000",
         "sort_order": 3,
         "include_in_net_worth": 1,
         "is_active": 1,
@@ -1989,30 +2154,6 @@
         "source": null
       },
       {
-        "date": "2026-01-15",
-        "currency": "EUR",
-        "rate": "1.080000",
-        "source": "derived"
-      },
-      {
-        "date": "2026-02-15",
-        "currency": "EUR",
-        "rate": "1.080000",
-        "source": "derived"
-      },
-      {
-        "date": "2026-03-15",
-        "currency": "EUR",
-        "rate": "1.080000",
-        "source": "derived"
-      },
-      {
-        "date": "2026-04-15",
-        "currency": "EUR",
-        "rate": "1.080000",
-        "source": "derived"
-      },
-      {
         "date": "2026-05-01",
         "currency": "EUR",
         "rate": "1.100000",
@@ -2025,129 +2166,21 @@
         "source": null
       },
       {
-        "date": "2026-05-02",
-        "currency": "EUR",
-        "rate": "1.100000",
-        "source": "derived"
-      },
-      {
-        "date": "2026-05-03",
-        "currency": "EUR",
-        "rate": "1.100000",
-        "source": "derived"
-      },
-      {
-        "date": "2026-05-04",
-        "currency": "EUR",
-        "rate": "1.100000",
-        "source": "derived"
-      },
-      {
-        "date": "2026-05-05",
-        "currency": "EUR",
-        "rate": "1.100000",
-        "source": "derived"
-      },
-      {
-        "date": "2026-05-06",
-        "currency": "EUR",
-        "rate": "1.100000",
-        "source": "derived"
-      },
-      {
-        "date": "2026-05-07",
-        "currency": "EUR",
-        "rate": "1.100000",
-        "source": "derived"
-      },
-      {
-        "date": "2026-05-08",
-        "currency": "EUR",
-        "rate": "1.100000",
-        "source": "derived"
-      },
-      {
         "date": "2026-05-08",
         "currency": "JPY",
         "rate": "0.006500",
         "source": null
-      },
-      {
-        "date": "2026-05-09",
-        "currency": "EUR",
-        "rate": "1.100000",
-        "source": "derived"
-      },
-      {
-        "date": "2026-05-11",
-        "currency": "EUR",
-        "rate": "1.100000",
-        "source": "derived"
       },
       {
         "date": "2026-05-12",
-        "currency": "JPY",
-        "rate": "0.006500",
-        "source": "derived"
-      },
-      {
-        "date": "2026-05-13",
-        "currency": "EUR",
-        "rate": "1.100000",
-        "source": "derived"
+        "currency": "KRW",
+        "rate": "0.000750",
+        "source": "manual"
       },
       {
         "date": "2026-05-14",
-        "currency": "EUR",
-        "rate": "1.100000",
-        "source": "derived"
-      },
-      {
-        "date": "2026-05-15",
-        "currency": "EUR",
-        "rate": "1.100000",
-        "source": "derived"
-      },
-      {
-        "date": "2026-05-15",
         "currency": "KRW",
-        "rate": "0.000720",
-        "source": "derived"
-      },
-      {
-        "date": "2026-05-17",
-        "currency": "EUR",
-        "rate": "1.100000",
-        "source": "derived"
-      },
-      {
-        "date": "2026-05-20",
-        "currency": "EUR",
-        "rate": "1.100000",
-        "source": "derived"
-      },
-      {
-        "date": "2026-05-21",
-        "currency": "EUR",
-        "rate": "1.100000",
-        "source": "derived"
-      },
-      {
-        "date": "2026-05-25",
-        "currency": "EUR",
-        "rate": "1.100000",
-        "source": "derived"
-      },
-      {
-        "date": "2026-05-31",
-        "currency": "EUR",
-        "rate": "1.100000",
-        "source": "derived"
-      },
-      {
-        "date": "2026-06-03",
-        "currency": "EUR",
-        "rate": "1.100000",
+        "rate": "1.000000",
         "source": "derived"
       }
     ],
