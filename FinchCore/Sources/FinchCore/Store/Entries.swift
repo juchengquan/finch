@@ -8,9 +8,8 @@ import GRDB
 // SCOPE: the full posting path including the rules-engine branch (applyRules) on
 // income/expense/refund insert, and the cross-currency `lookupRateToHub` lookup
 // (on-or-before → on-or-after → static fallback, else `error.fx.noRate`, except
-// that one unrated side of a transfer is valued from the other) with
-// write-through of the resolved derived rate. Single-currency entries take the
-// identity FX path.
+// that one unrated side of a transfer is valued from the other), which saves no
+// rate of its own. Single-currency entries take the identity FX path.
 
 public enum Entries {
     public enum Kind: String, Sendable { case opening, income, expense, transfer, adjustment, refund, interledger }
@@ -216,12 +215,12 @@ public enum Entries {
 
     /// USD-hub FX (HUB_CURRENCY = "USD"). Verbatim port of the web's
     /// queries/rates.ts: cross-rate via the hub, with `lookupRateToHub` doing the
-    /// on-or-before → on-or-after → static-fallback lookup + write-through of the
-    /// resolved rate. Single-currency (currency == base) returns identity.
+    /// on-or-before → on-or-after → static-fallback lookup. Single-currency
+    /// (currency == base) returns identity. Reads only: the posting stores the rate
+    /// it was booked at, so nothing needs a copy in the rates table.
     ///
     /// A side with NO rate at all refuses the write (`error.fx.noRate`) instead of
     /// converting 1:1 — that booked ₩50,000 as 50,000 USD and pinned the 1.0 for good.
-    /// Both sides are looked up before either is pinned, so a refusal writes nothing.
     static func convertToBase(_ db: Database, _ native: Double, _ currency: String,
                               _ base: String, _ date: String) throws -> (amountBase: Double, rate: Double) {
         if currency == base { return (native, 1) }
@@ -231,9 +230,7 @@ public enum Entries {
             throw I18nError("error.fx.noRate", ["from": currency, "to": base, "currency": missing],
                             "No exchange rate for \(currency) → \(base) yet. Enter a \(missing) rate by hand in Settings › Currencies, or turn \(missing) on there and tap Refresh now.")
         }
-        try pinRate(db, currency, date, rc)
-        try pinRate(db, base, date, rb)
-        let rate = rb.rate != 0 ? rc.rate / rb.rate : 1
+        let rate = rb != 0 ? rc / rb : 1
         return (r2(native * rate), (rate * 1e6).rounded() / 1e6)
     }
 
@@ -244,31 +241,28 @@ public enum Entries {
         "USD": 1, "EUR": 1.087, "GBP": 1.266, "JPY": 0.0064, "SGD": 0.741, "CNY": 0.138,
     ]
 
-    /// USD-per-1-unit of `currency` at `date`, and whether it must be pinned:
-    /// exact/on-or-before → on-or-after → static fallback → nil (no rate). When no
-    /// exact-date row exists, `pinRate` pins the resolved rate under `date` (source
-    /// 'derived', INSERT OR IGNORE so a user-set rate is never clobbered) — making
-    /// every locked conversion reproducible.
-    private static func lookupRateToHub(_ db: Database, _ currency: String, _ date: String) throws -> (rate: Double, pin: Bool)? {
-        if currency == "USD" { return (1, false) }
-        let before = try Row.fetchOne(db, sql:
-            "SELECT date AS d, rate AS r FROM exchange_rates WHERE currency = ? AND date <= ? ORDER BY date DESC LIMIT 1",
-            arguments: [currency, date])
-        if let before, (before["d"] as String) == date { return (before["r"], false) }   // exact → no write-through
-        if let before { return (before["r"], true) }
-        if let after = try Double.fetchOne(db, sql:
-            "SELECT rate FROM exchange_rates WHERE currency = ? AND date >= ? ORDER BY date ASC LIMIT 1",
+    /// USD-per-1-unit of `currency` at `date`: on-or-before → on-or-after → static
+    /// fallback → nil (no rate).
+    ///
+    /// Only rates the user typed, fetched or imported count. A `'derived'` row is a
+    /// copy older versions saved under each conversion's date, and as the nearest
+    /// row it outranked the rate it was copied from: correcting a mistyped rate, or
+    /// adding a closer one, changed nothing for later entries. The 1.0 rows pre-#820
+    /// code saved for an unrated currency are such copies too (`FallbackFxRates`), so
+    /// skipping them refuses the write instead of booking ₩10,000 as $10,000.
+    private static func lookupRateToHub(_ db: Database, _ currency: String, _ date: String) throws -> Double? {
+        if currency == "USD" { return 1 }
+        if let before = try Double.fetchOne(db, sql:
+            "SELECT rate FROM exchange_rates WHERE currency = ? AND date <= ? AND COALESCE(source, '') <> 'derived' ORDER BY date DESC LIMIT 1",
             arguments: [currency, date]) {
-            return (after, true)
+            return before
         }
-        return fallbackUsdPerUnit[currency].map { ($0, true) }
-    }
-
-    private static func pinRate(_ db: Database, _ currency: String, _ date: String,
-                                _ r: (rate: Double, pin: Bool)) throws {
-        guard r.pin else { return }
-        try db.execute(sql: "INSERT OR IGNORE INTO exchange_rates (date, currency, rate, source) VALUES (?, ?, ?, 'derived')",
-                       arguments: [date, currency, r.rate])
+        if let after = try Double.fetchOne(db, sql:
+            "SELECT rate FROM exchange_rates WHERE currency = ? AND date >= ? AND COALESCE(source, '') <> 'derived' ORDER BY date ASC LIMIT 1",
+            arguments: [currency, date]) {
+            return after
+        }
+        return fallbackUsdPerUnit[currency]
     }
 
     static func resolveCounterpartyIdByName(_ db: Database, _ name: String) throws -> String? {

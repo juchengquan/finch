@@ -49,7 +49,9 @@ extension FinchStore {
     /// left behind. A KRW wallet with two purchases booked 1:1 against 1.0 rates
     /// pinned at their dates, plus one pinned THB rate nothing used. Written the way
     /// the old code wrote them — straight into the table as 'derived' — because no
-    /// current action can produce them.
+    /// current action can produce them. The lookup skips 'derived' rows, so the
+    /// rows go in untagged, the purchases book 1:1 against them, and only then do
+    /// they take the tag.
     func seedPre820FallbackRatesForTesting() {
         guard let q = dbQueue, !activeLedgerId.isEmpty else { return }
         let cal = Calendar.current
@@ -60,7 +62,7 @@ extension FinchStore {
         do {
             try q.write { db in
                 for (c, d) in pins {
-                    try db.execute(sql: "INSERT OR IGNORE INTO exchange_rates (date, currency, rate, source) VALUES (?, ?, 1, 'derived')",
+                    try db.execute(sql: "INSERT OR IGNORE INTO exchange_rates (date, currency, rate, source) VALUES (?, ?, 1, 'pre-820')",
                                    arguments: [d, c])
                 }
             }
@@ -72,6 +74,9 @@ extension FinchStore {
                     "ledgerId": .string(activeLedgerId), "accountId": .string("won-wallet"),
                     "amount": .double(amount), "merchant": .string("Seoul market"),
                     "date": .string(day(ago)), "skipRules": .bool(true)]))
+            }
+            try q.write { db in
+                try db.execute(sql: "UPDATE exchange_rates SET source = 'derived' WHERE source = 'pre-820'")
             }
         } catch {
             NSLog("seedFallbackRates failed: \(error)")

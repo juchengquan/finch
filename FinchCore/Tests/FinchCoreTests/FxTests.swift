@@ -39,21 +39,19 @@ final class FxTests: XCTestCase {
         }
     }
 
-    /// rateToHub with no stored rate falls back to the static map AND writes the
-    /// resolved rate through as a 'derived' row pinned under the date.
-    func test_rateToHubStaticFallbackWriteThrough() throws {
+    /// rateToHub with no stored rate falls back to the static map, and saves no
+    /// copy of it: the posting carries the rate it used.
+    func test_rateToHubStaticFallback_savesNoCopy() throws {
         let q = try seeded(accountCcy: "EUR", base: "USD")   // no EUR rate seeded
         try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
             "ledgerId": .string("l1"), "accountId": .string("a1"), "amount": .double(-10),
             "merchant": .string("Paris"), "categoryId": .string("food"),
             "date": .string("2026-05-09"), "skipRules": .bool(true)]))
         try q.read { db in
-            // EUR static fallback = 1.087 → a 'derived' row pinned at the txn date.
-            let r = try Row.fetchOne(db, sql: "SELECT rate, source FROM exchange_rates WHERE currency='EUR' AND date='2026-05-09'")
-            XCTAssertEqual(r?["rate"] as Double?, 1.087)
-            XCTAssertEqual(r?["source"] as String?, "derived")
-            // base amount = -10 EUR × 1.087 = -10.87 USD.
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM exchange_rates"), 0)
+            // base amount = -10 EUR × 1.087 (static fallback) = -10.87 USD.
             XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT amount_base FROM postings WHERE account_id='a1'") ?? 0, -10.87, accuracy: 0.01)
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT exchange_rate FROM postings WHERE account_id='a1'") ?? 0, 1.087, accuracy: 1e-6)
         }
     }
 
@@ -175,5 +173,125 @@ final class FxTests: XCTestCase {
                            -50000, accuracy: 0.001)
             XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM exchange_rates"), 0)
         }
+    }
+
+    // MARK: - A rate the user set or fetched always outranks a copy
+
+    private func setRate(_ q: DatabaseQueue, _ date: String, _ rate: Double,
+                         _ currency: String = "KRW", source: String = "manual") throws {
+        try Apply.apply(dbQueue: q, action: "setExchangeRate", args: Args([
+            "date": .string(date), "currency": .string(currency), "rate": .double(rate),
+            "source": .string(source)]))
+    }
+
+    private func baseOf(_ q: DatabaseQueue, amount: Double, date: String) throws -> Double? {
+        try q.read { db in
+            try Double.fetchOne(db, sql: """
+                SELECT p.amount_base FROM postings p JOIN entries e ON e.id = p.entry_id
+                WHERE p.account_id = 'a1' AND p.amount = ? AND e.date = ?
+                """, arguments: [amount, date])
+        }
+    }
+
+    private func rateRows(_ q: DatabaseQueue) throws -> [Row] {
+        try q.read { try Row.fetchAll($0, sql: "SELECT date, currency, rate, source FROM exchange_rates ORDER BY date, currency") }
+    }
+
+    /// F1: a mistyped manual KRW rate (0.0073 for 0.00073) is corrected. Entries
+    /// added after the correction book at it, on the date of an earlier entry and
+    /// after it. The earlier entry used to save a copy of 0.0073 under its date,
+    /// and that copy outranked the corrected rate: ₩50,000 still booked as $365.
+    func test_aCorrectedRate_isWhatLaterEntriesUse() throws {
+        let q = try seeded(accountCcy: "KRW", base: "USD")
+        try setRate(q, "2026-05-01", 0.0073)                 // mistyped
+        try add(q, amount: -50000, date: "2026-05-10")
+        XCTAssertEqual(try baseOf(q, amount: -50000, date: "2026-05-10") ?? 0, -365, accuracy: 0.001)
+        XCTAssertEqual(try rateRows(q).count, 1, "the conversion saved no copy of the rate")
+
+        try setRate(q, "2026-05-01", 0.00073)                // corrected
+        try add(q, amount: -50001, date: "2026-05-10")
+        try add(q, amount: -50000, date: "2026-05-12")
+        XCTAssertEqual(try baseOf(q, amount: -50001, date: "2026-05-10") ?? 0, -36.5, accuracy: 0.001)
+        XCTAssertEqual(try baseOf(q, amount: -50000, date: "2026-05-12") ?? 0, -36.5, accuracy: 0.001)
+    }
+
+    /// F1: a manual rate dated between an older rate and a later entry is the
+    /// nearest one, so it is what an entry after it uses.
+    func test_aBackdatedRate_isWhatLaterEntriesUse() throws {
+        let q = try seeded(accountCcy: "KRW", base: "USD")
+        try setRate(q, "2026-05-01", 0.00072, source: "ECB")
+        try add(q, amount: -50000, date: "2026-05-10")
+        XCTAssertEqual(try baseOf(q, amount: -50000, date: "2026-05-10") ?? 0, -36, accuracy: 0.001)
+
+        try setRate(q, "2026-05-05", 0.0008)                 // backdated, by hand
+        try add(q, amount: -50001, date: "2026-05-10")
+        try add(q, amount: -50000, date: "2026-05-12")
+        XCTAssertEqual(try baseOf(q, amount: -50001, date: "2026-05-10") ?? 0, -40, accuracy: 0.001)
+        XCTAssertEqual(try baseOf(q, amount: -50000, date: "2026-05-12") ?? 0, -40, accuracy: 0.001)
+        // The entry booked before the backdated rate keeps what it was booked at.
+        XCTAssertEqual(try baseOf(q, amount: -50000, date: "2026-05-10") ?? 0, -36, accuracy: 0.001)
+    }
+
+    /// Copies saved by earlier versions are ignored too, whatever they say: a real
+    /// rate is found past them.
+    func test_anOldCopy_isIgnored() throws {
+        let q = try seeded(accountCcy: "KRW", base: "USD")
+        try setRate(q, "2026-05-01", 0.00073)
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO exchange_rates (date, currency, rate, source) VALUES ('2026-05-08', 'KRW', 0.0073, 'derived')")
+        }
+        try add(q, amount: -50000, date: "2026-05-08")
+        try add(q, amount: -50001, date: "2026-05-10")
+        XCTAssertEqual(try baseOf(q, amount: -50000, date: "2026-05-08") ?? 0, -36.5, accuracy: 0.001)
+        XCTAssertEqual(try baseOf(q, amount: -50001, date: "2026-05-10") ?? 0, -36.5, accuracy: 0.001)
+    }
+
+    /// W1: a 1:1 KRW rate left by pre-#820 code (`'derived'`, exactly 1) does not
+    /// book new money. A new ₩10,000 entry is refused like any unrated write —
+    /// it used to book silently as $10,000 and save another 1:1 copy dated today.
+    func test_aLeftover1to1Rate_doesNotBookNewMoney() throws {
+        let q = try seeded(accountCcy: "KRW", base: "USD")
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO exchange_rates (date, currency, rate, source) VALUES ('2026-05-01', 'KRW', 1, 'derived')")
+        }
+        assertNoRate(try add(q, amount: -10000, date: "2026-05-09"), from: "KRW", to: "USD")
+        assertNoRate(try add(q, amount: -10000, date: "2026-05-01"), from: "KRW", to: "USD")
+        try q.read { db in
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries"), 0)
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM exchange_rates"), 1)
+        }
+        // Once a real rate is entered — the "Enter a rate" path — the write books at it.
+        try setRate(q, "2026-05-09", 0.00073)
+        try add(q, amount: -10000, date: "2026-05-09")
+        XCTAssertEqual(try baseOf(q, amount: -10000, date: "2026-05-09") ?? 0, -7.3, accuracy: 0.001)
+    }
+
+    /// An entry booked before a correction keeps its figure until it is edited in
+    /// a way that re-values it. A note keeps the booked rate; a new amount or date
+    /// looks the rate up again and finds the corrected one (there is no copy of the
+    /// old rate under the entry's date to find instead).
+    func test_anExistingEntry_keepsItsRateUntilAnEditRevaluesIt() throws {
+        let q = try seeded(accountCcy: "KRW", base: "USD")
+        try setRate(q, "2026-05-01", 0.0073)                 // mistyped
+        try add(q, amount: -50000, date: "2026-05-10")
+        try setRate(q, "2026-05-01", 0.00073)                // corrected
+        let id = try q.read { db in try String.fetchOne(db, sql: "SELECT id FROM postings WHERE account_id = 'a1'")! }
+        func edit(_ patch: [String: JSONValue]) throws {
+            try Apply.apply(dbQueue: q, action: "updateTransaction",
+                            args: Args(["id": .string(id), "patch": .object(patch)]))
+        }
+
+        try edit(["note": .string("dinner")])
+        XCTAssertEqual(try baseOf(q, amount: -50000, date: "2026-05-10") ?? 0, -365, accuracy: 0.001,
+                       "a header edit keeps the rate the entry was booked at")
+
+        try edit(["date": .string("2026-05-11")])
+        XCTAssertEqual(try baseOf(q, amount: -50000, date: "2026-05-11") ?? 0, -36.5, accuracy: 0.001,
+                       "a date edit re-values at the rate for the new date")
+
+        try edit(["amount": .double(-60000)])
+        XCTAssertEqual(try baseOf(q, amount: -60000, date: "2026-05-11") ?? 0, -43.8, accuracy: 0.001)
+        XCTAssertEqual(try rateRows(q).count, 1, "no edit saved a copy of the rate")
+        try q.read { db in XCTAssertTrue(try Audit.run(on: db, ledgerId: "l1", checkBalances: true).isEmpty) }
     }
 }
