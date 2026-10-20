@@ -41,9 +41,12 @@ public struct PlannedNotification: Equatable, Identifiable, Sendable {
     /// Declared LAST with a default so every existing construction site compiles
     /// untouched — this is a public struct with a memberwise init.
     public let deliverOn: Date?
+    /// The occurrence a scheduled reminder is about (`yyyy-MM-dd`), so its "Confirm
+    /// now" posts that one and no other. Nil for every other kind.
+    public let occurrence: String?
 
     public init(id: String, kind: NotificationKind, title: String, body: String,
-                tab: AppTab?, focusId: String?, deliverOn: Date? = nil) {
+                tab: AppTab?, focusId: String?, deliverOn: Date? = nil, occurrence: String? = nil) {
         self.id = id
         self.kind = kind
         self.title = title
@@ -51,6 +54,7 @@ public struct PlannedNotification: Equatable, Identifiable, Sendable {
         self.tab = tab
         self.focusId = focusId
         self.deliverOn = deliverOn
+        self.occurrence = occurrence
     }
 }
 
@@ -174,6 +178,15 @@ public enum NotificationPlanner {
             // next write. Emitting it on every run is what keeps it alive — and because
             // the id is stable, re-planning replaces rather than duplicates.
             //
+            // The id carries the OCCURRENCE, as the low-balance id carries its crossing
+            // day. On a template-only id every occurrence shared one id: `toSchedule`
+            // never re-adds an id already pending, and `fired` remembered it for as
+            // long as the template had a next run — which a recurring one always does.
+            // So the first reminder was the only one, and a reminder pending for the
+            // 15th still fired after the 15th was skipped or paid early. Per
+            // occurrence, a skip, an early payment or an edit that moves the day plans
+            // a new id: the old request is withdrawn and the new one scheduled.
+            //
             // Past-due carries no date: it is true NOW, so policy decides when it lands.
             // Future carries its run date at the delivery hour, and iOS holds it.
             //
@@ -196,11 +209,12 @@ public enum NotificationPlanner {
                 guard let due = Selectors.resumeOccurrence(template: s, posted: posted, today: wallToday) else { continue }
                 let isFuture = due > wallToday
                 out.append(PlannedNotification(
-                    id: "scheduled:\(s.id)", kind: .scheduledDue,
+                    id: scheduledId(s.id, due), kind: .scheduledDue,
                     title: String(localized: "Scheduled: \(s.name)"),
                     body: String(localized: "\(s.name) is due. Confirm now?"),
                     tab: .scheduled, focusId: s.id,
-                    deliverOn: isFuture ? deliverAt(due, hour: deliveryHour, calendar) : nil))
+                    deliverOn: isFuture ? deliverAt(due, hour: deliveryHour, calendar) : nil,
+                    occurrence: due))
             }
         }
 
@@ -275,8 +289,79 @@ public enum NotificationPlanner {
         return byId.filter { keep.contains($0.key) }
     }
 
-    /// Same pruning for the plain id set.
-    public static func retainedFired(_ fired: Set<String>, planned: [PlannedNotification]) -> Set<String> {
-        fired.intersection(planned.map(\.id))
+    /// Same pruning for the plain id set, with one exception: the latest scheduled
+    /// reminder already SHOWN for each template is kept after its occurrence leaves
+    /// the plan.
+    ///
+    /// Paying an occurrence and then undoing the payment makes it due again. Pruned,
+    /// its reminder would fire a second time seconds after the undo, about something
+    /// the user has just been looking at. "Shown" is "its day has come": a reminder is
+    /// recorded in `fired` when it is SCHEDULED, so a future one that leaves the plan
+    /// — skipped, paid early, moved — is forgotten like any other id. It was never
+    /// seen, and if it comes back (un-skipped) it has to be scheduled again.
+    ///
+    /// The latest only, and only while its template exists, so the set holds at most
+    /// two ids per template — that one and the planned one — instead of a reminder a
+    /// month for ever. `templateIds` is every template the plan was built from.
+    public static func retainedFired(_ fired: Set<String>, planned: [PlannedNotification],
+                                     templateIds: Set<String>, wallToday: String) -> Set<String> {
+        let keep = Set(planned.map(\.id))
+        var latestShown: [String: String] = [:]   // templateId → occurrence
+        for id in fired.subtracting(keep) {
+            guard let shown = scheduledOccurrence(fromId: id),
+                  templateIds.contains(shown.templateId), shown.date <= wallToday else { continue }
+            if shown.date > latestShown[shown.templateId] ?? "" { latestShown[shown.templateId] = shown.date }
+        }
+        return fired.intersection(keep).union(latestShown.map { scheduledId($0.key, $0.value) })
+    }
+
+    /// `scheduled:<templateId>:<occurrence>` — one reminder per occurrence.
+    static func scheduledId(_ templateId: String, _ occurrence: String) -> String {
+        "scheduled:\(templateId):\(occurrence)"
+    }
+
+    /// The template and occurrence a scheduled reminder's id names; nil for any
+    /// other id, including the undated `scheduled:<templateId>` of earlier builds.
+    /// Nothing plans that one any more, so the first refresh after the update
+    /// withdraws it, pending or delivered, through `cancelIDs` — and this returning
+    /// nil is what lets `retainedFired` forget it too.
+    public static func scheduledOccurrence(fromId id: String) -> (templateId: String, date: String)? {
+        let prefix = "scheduled:"
+        guard id.hasPrefix(prefix) else { return nil }
+        let rest = id.dropFirst(prefix.count)
+        guard let colon = rest.lastIndex(of: ":") else { return nil }
+        let template = rest[..<colon]
+        let date = rest[rest.index(after: colon)...]
+        guard !template.isEmpty,
+              date.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil else { return nil }
+        return (String(template), String(date))
+    }
+
+    /// What one `NotificationService.refresh` does before it schedules anything:
+    /// which requests to withdraw, what the durable records become, and what is
+    /// left to schedule. Pure, so a sequence of refreshes can be tested against a
+    /// fake notification centre.
+    public struct Reconciliation: Equatable {
+        public let cancelPending: [String]
+        public let cancelDelivered: [String]
+        public let fired: Set<String>
+        public let snoozedUntil: [String: Date]
+        public let schedule: [PlannedNotification]
+    }
+
+    public static func reconcile(planned: [PlannedNotification], pending: Set<String>, delivered: Set<String>,
+                                 fired: Set<String>, snoozedUntil: [String: Date], now: Date,
+                                 templateIds: Set<String>, wallToday: String) -> Reconciliation {
+        // Forget ids whose condition has resolved, so the same budget can alert
+        // again next time it crosses. Pruning BEFORE the schedule decision keeps
+        // "already shown" scoped to the current episode.
+        let keptFired = retainedFired(fired, planned: planned, templateIds: templateIds, wallToday: wallToday)
+        let keptSnoozes = retained(snoozedUntil, planned: planned)
+        return Reconciliation(
+            cancelPending: cancelIDs(planned: planned, existing: pending),
+            cancelDelivered: cancelIDs(planned: planned, existing: delivered),
+            fired: keptFired, snoozedUntil: keptSnoozes,
+            schedule: toSchedule(planned: planned, existing: pending.union(delivered),
+                                 fired: keptFired, snoozedUntil: keptSnoozes, now: now))
     }
 }
