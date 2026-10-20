@@ -74,3 +74,17 @@ export function occurrencesUpTo(t: ScheduledTemplate, throughInclusive: string):
   }
   return out;
 }
+
+/**
+ * The days of month (1-based) on which `t` occurs in the given month (`month0`
+ * 0-based) — the calendar's view of `occurrencesUpTo`, so a dot lands where the
+ * engine says the occurrence is (a quarterly item on its start day, in its months
+ * only).
+ */
+export function occurrenceDaysInMonth(t: ScheduledTemplate, year: number, month0: number): number[] {
+  const prefix = `${year}-${String(month0 + 1).padStart(2, '0')}-`;
+  const last = `${prefix}${String(daysInMonth(year, month0)).padStart(2, '0')}`;
+  return occurrencesUpTo(t, last)
+    .filter((d) => d.startsWith(prefix))
+    .map((d) => Number(d.slice(8, 10)));
+}

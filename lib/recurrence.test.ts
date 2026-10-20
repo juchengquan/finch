@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { occurrencesUpTo } from '@/lib/recurrence';
+import { occurrenceDaysInMonth, occurrencesUpTo } from '@/lib/recurrence';
 import type { ScheduledTemplate } from '@/lib/store';
 
 const T = (o: Partial<ScheduledTemplate>): ScheduledTemplate => ({
@@ -71,4 +71,12 @@ test('once yields the single start date', () => {
 
 test('no valid anchor → no occurrences', () => {
   expect(occurrencesUpTo(T({ startDate: undefined, nextRun: '' }), '2026-05-30')).toEqual([]);
+});
+
+test('occurrenceDaysInMonth places a quarterly item on its start day, in its months only', () => {
+  const q = T({ frequency: 'quarterly', dayOfMonth: 1, startDate: '2026-03-15' });
+  expect(occurrenceDaysInMonth(q, 2026, 5)).toEqual([15]); // June
+  expect(occurrenceDaysInMonth(q, 2026, 6)).toEqual([]); // July
+  expect(occurrenceDaysInMonth(q, 2026, 1)).toEqual([]); // February, before the start
+  expect(occurrenceDaysInMonth(T({ frequency: 'yearly', startDate: '2026-03-15T09:30' }), 2027, 2)).toEqual([15]);
 });

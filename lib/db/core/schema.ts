@@ -10,6 +10,7 @@
 // One file holds ALL ledgers; every per-ledger table carries `ledger_id`.
 
 import { ENTRIES_SCHEMA, CATEGORIES_UPGRADE } from './entries-schema';
+import { repairQuarterlyStartDays } from './repair-quarterly-start-day';
 
 // Receipt attachments for the double-entry entries layer (PR B). Same
 // pointer-only design as transaction_attachments (RECEIPT_PHOTOS_PLAN §2),
@@ -473,13 +474,20 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-08-12T01:00:00Z';
+export const SCHEMA_VERSION = '2026-10-19T00:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.
 // Applied in lex (== chronological) order for versions strictly greater than a
 // database's recorded schema_version.
 const MIGRATIONS: Record<string, string[] | ((exec: ExecFn) => Promise<void>)> = {
+  // Data only, no shape change: quarterly and yearly templates carry on from the day
+  // they actually ran. #817 moved their recurrence onto the start date's day, which
+  // strands the history of every template saved with day_of_month = 1 (all of iOS's)
+  // — and generateDueScheduled, run on every load, would book those dates again.
+  // See repair-quarterly-start-day.ts. FinchCore runs the same repair as its
+  // "2026-10-19-quarterly-start-day" migration.
+  '2026-10-19T00:00:00Z': (exec) => repairQuarterlyStartDays(exec),
   // entries.pending_kind — which kind of pending a row is. Additive and nullable;
   // the refresh backfills it from the date, so no data migration is needed. An
   // hour past the account-fields bump because both land the same day and versions
