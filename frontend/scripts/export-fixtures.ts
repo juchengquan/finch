@@ -420,7 +420,7 @@ const SEED_SQL: string[] = [
   `INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a3','personal','Brokerage','investment','USD',0,2,1,1,${N},${N})`,
   // KRW, which has no static fallback rate — the no-rate refusal below.
   `INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a4','personal','Seoul','cash','KRW',0,3,1,1,${N},${N})`,
-  // VND, unrated for the whole sequence — the both-amounts transfer below.
+  // VND, unrated until a rate dated after its transfer appears — the both-amounts transfer below.
   `INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a5','personal','Hanoi','cash','VND',0,4,1,1,${N},${N})`,
 ];
 
@@ -523,14 +523,22 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown>; expectErr
   { action: 'setExchangeRate', args: { date: '2026-05-14', currency: 'KRW', rate: 1, source: 'derived' } },
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a4', amount: -50000, merchant: 'Seoul', categoryId: 'food', date: '2026-05-15', skipRules: true }, expectError: 'error.fx.noRate' },
   { action: 'createScheduled', args: { id: 's4', ledgerId: 'personal', name: 'Seoul rent', type: 'expense', amount: 500000, frequency: 'monthly', dayOfMonth: 10, accountId: 'a4', startDate: '2026-02-10' } },
-  // A transfer INTO the unrated a5 (VND never gets a rate here). With only the
-  // sent amount there is nothing to convert $100 by: refused. With BOTH amounts
-  // typed, the two imply the rate, so the VND leg is valued at the $100 that left
-  // — balanced, no FX leg, no VND rate saved. Moving its date re-values the legs,
-  // and so does changeLedgerBase at the end, both still without a VND rate.
+  // A transfer INTO the unrated a5. With only the sent amount there is nothing
+  // to convert $100 by: refused. With BOTH amounts typed, the two imply the rate,
+  // so the VND leg is valued at the $100 that left — balanced, no FX leg, no VND
+  // rate saved. Moving its date re-values the legs, still without a VND rate.
   { action: 'createTransfer', args: { fromAccountId: 'a1', toAccountId: 'a5', fromAmount: 100, date: '2026-05-16' }, expectError: 'error.fx.noRate' },
   { action: 'createTransfer', args: { fromAccountId: 'a1', toAccountId: 'a5', fromAmount: 100, toAmount: 2500000, date: '2026-05-16' } },
   { action: 'updateTransaction', args: { id: '$lastAccountPosting', patch: { date: '2026-05-17' } } },
+  // Then a VND rate appears, dated AFTER the transfer (a September refresh).
+  // Nothing below may reach forward to it: a note edit leaves the legs as booked;
+  // a date move that still precedes it keeps the VND leg worth the dollars; so do
+  // both amounts changed (each leg used to scale its own old base, leaving an FX
+  // leg) and changeLedgerBase at the end. No VND rate is saved under May.
+  { action: 'setExchangeRate', args: { date: '2026-09-01', currency: 'VND', rate: 0.00004 } },
+  { action: 'updateTransfer', args: { id: '$lastAccountPosting', patch: { note: 'Hanoi' } } },
+  { action: 'updateTransaction', args: { id: '$lastAccountPosting', patch: { date: '2026-05-18' } } },
+  { action: 'updateTransfer', args: { id: '$lastAccountPosting', patch: { fromAmount: 120, toAmount: 2800000 } } },
   // scheduled split CRUD (add/update/remove → leaves one split on s1).
   { action: 'addScheduledSplit', args: { templateId: 's1', accountId: 'a2', pct: 40 } },
   { action: 'addScheduledSplit', args: { templateId: 's1', accountId: 'a3', pct: 25 } },

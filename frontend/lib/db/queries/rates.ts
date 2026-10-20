@@ -101,3 +101,18 @@ export async function convertToBase(
   const rate = rb !== 0 ? rc / rb : 1;
   return { amountBase: Math.round(native * rate * 100) / 100, rate: Math.round(rate * 1e6) / 1e6 };
 }
+
+/** Whether `currency` can be valued in `base` at `date` without reaching
+ *  FORWARD: from a rate dated on or before `date` (or the static fallback, which
+ *  the lookup uses only while a currency has no rows at all). A later rate is one
+ *  `lookupRateToHub` would still use; this says it isn't there yet. Like the
+ *  lookup, it ignores 'derived' rows. Reads only. */
+export async function hasRateOnOrBefore(exec: Exec, currency: string, base: string, date: string): Promise<boolean> {
+  const has = async (c: string): Promise<boolean> => {
+    if (c === HUB_CURRENCY) return true;
+    if ((await exec("SELECT 1 FROM exchange_rates WHERE currency = ? AND date <= ? AND COALESCE(source, '') <> 'derived' LIMIT 1", [c, date])).length) return true;
+    return FALLBACK_USD_PER_UNIT[c] !== undefined
+      && (await exec("SELECT 1 FROM exchange_rates WHERE currency = ? AND COALESCE(source, '') <> 'derived' LIMIT 1", [c])).length === 0;
+  };
+  return currency === base || ((await has(currency)) && (await has(base)));
+}

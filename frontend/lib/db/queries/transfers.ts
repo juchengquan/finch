@@ -5,6 +5,7 @@
 
 import type { Exec } from '../core/repo';
 import { rebuildEntry, deleteEntry, resolveEntryRef } from '../core/entries';
+import { hasRateOnOrBefore, ledgerBaseCurrency } from './rates';
 import { I18nError } from '@/lib/i18n-error';
 import { TRANSFER_ERROR_CODES } from '@/lib/db/domain/transfers/errors';
 import type { Transfer, TransferPatch } from '@/lib/db/domain/transfers/types';
@@ -96,7 +97,7 @@ export async function updateTransfer(exec: Exec, groupId: string, patch: Transfe
   const entryId = ref.entryId;
 
   // Load current entry + postings.
-  const [entry] = await exec('SELECT date, time, notes, kind FROM entries WHERE id = ?', [entryId]);
+  const [entry] = await exec('SELECT ledger_id, date, time, notes, kind FROM entries WHERE id = ?', [entryId]);
   if (!entry) return;
 
   // A split purchase now legally carries ≥2 account legs too (the invariant
@@ -158,8 +159,20 @@ export async function updateTransfer(exec: Exec, groupId: string, patch: Transfe
     const oldTo2 = Math.abs(Number(toLeg.amount));
     const scaleFrom = oldFrom2 > 0 ? newFromNative / oldFrom2 : 1;
     const scaleTo = oldTo2 > 0 ? newToNative / oldTo2 : 1;
-    const newFromBase = r2(oldFromBase * scaleFrom);
-    const newToBase = r2(oldToBase * scaleTo);
+    let newFromBase = r2(oldFromBase * scaleFrom);
+    let newToBase = r2(oldToBase * scaleTo);
+    // A side with no rate on or before the transfer's date was valued from its
+    // partner (core/entries resolveLegs), so it has no pinned rate of its own to
+    // preserve: it stays worth what the other side is worth. Scaling it by its own
+    // ratio instead left an FX leg ($100 → ₩137,000 edited to ₩140,000 booked a
+    // $2.19 one).
+    if (!sameCurrency) {
+      const base = await ledgerBaseCurrency(exec, String(entry.ledger_id));
+      const fromRated = await hasRateOnOrBefore(exec, fromCurrency, base, String(entry.date));
+      const toRated = await hasRateOnOrBefore(exec, toCurrency, base, String(entry.date));
+      if (fromRated && !toRated) newToBase = newFromBase;
+      else if (toRated && !fromRated) newFromBase = newToBase;
+    }
     const newFromRate = newFromNative !== 0 ? Math.round((newFromBase / newFromNative) * 1e6) / 1e6 : Number(fromLeg.exchange_rate);
     const newToRate = newToNative !== 0 ? Math.round((newToBase / newToNative) * 1e6) / 1e6 : Number(toLeg.exchange_rate);
 

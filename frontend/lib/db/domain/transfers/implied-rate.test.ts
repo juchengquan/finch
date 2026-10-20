@@ -122,3 +122,86 @@ test('changing the base re-values every leg; the unrated one follows its partner
   expect(b.to.base).toBeCloseTo(-b.fromBase, 3);
   expect(b.fxLegs).toBe(0);
 });
+
+// --- Editing a transfer valued from its partner, after a rate appears ---
+
+const setRate = (exec: Exec, date: string, rate: number, currency = 'KRW') =>
+  applyMutation(exec, 'setExchangeRate', { date, currency, rate });
+
+const krwRows = async (exec: Exec) =>
+  (await exec("SELECT date FROM exchange_rates WHERE currency = 'KRW' ORDER BY date")).map((r) => String(r.date));
+
+/** The pairing, unchanged: the KRW leg is still worth exactly the dollars, at
+ *  the rate the two amounts imply, with no FX leg. */
+async function expectPaired(exec: Exec, usd = 100, krw = 137000) {
+  const b = await booked(exec);
+  expect(b.fromBase).toBeCloseTo(-usd, 3);
+  expect(b.to.amount).toBeCloseTo(krw, 3);
+  expect(b.to.base).toBeCloseTo(usd, 3);
+  expect(b.to.rate).toBeCloseTo(Math.round((usd / krw) * 1e6) / 1e6, 9);
+  expect(b.fxLegs).toBe(0);
+  expect(b.sum).toBeCloseTo(0, 3);
+}
+
+const entryId = async (exec: Exec) => String((await exec('SELECT id FROM entries'))[0].id);
+const toPosting = async (exec: Exec) => String((await exec("SELECT id FROM postings WHERE account_id = 'a2'"))[0].id);
+
+test('a later rate, then a note edit: the transfer stays as booked', async () => {
+  const exec = await seeded();
+  await transfer(exec);
+  await setRate(exec, '2026-10-19', 0.0007);
+  await applyMutation(exec, 'updateTransfer', { id: await entryId(exec), patch: { note: 'rent deposit' } });
+  await expectPaired(exec);
+  expect(await krwRows(exec)).toEqual(['2026-10-19']);
+});
+
+test('a later rate, then a date move: still paired, the later rate not reached back for', async () => {
+  const exec = await seeded();
+  await transfer(exec);
+  await setRate(exec, '2026-10-19', 0.0007);
+  await applyMutation(exec, 'updateTransaction', { id: await toPosting(exec), patch: { date: '2026-05-20' } });
+  await expectPaired(exec);
+  expect(await krwRows(exec)).toEqual(['2026-10-19']);
+});
+
+test('a later rate, then a base change: the KRW leg still follows the dollars', async () => {
+  const exec = await seeded();
+  await transfer(exec);
+  await setRate(exec, '2026-10-19', 0.0007);
+  await applyMutation(exec, 'changeLedgerBase', { ledgerId: 'l1', newBase: 'EUR' });
+  const b = await booked(exec);
+  expect(b.fromBase).toBeCloseTo(-92, 3); // $100 at EUR's static 1.087
+  expect(b.to.base).toBeCloseTo(-b.fromBase, 3);
+  expect(b.fxLegs).toBe(0);
+  expect(await krwRows(exec)).toEqual(['2026-10-19']);
+});
+
+test('both amounts changed through updateTransfer: the legs stay paired', async () => {
+  const exec = await seeded();
+  await transfer(exec);
+  await applyMutation(exec, 'updateTransfer', { id: await entryId(exec), patch: { fromAmount: 100, toAmount: 140000 } });
+  await expectPaired(exec, 100, 140000); // was a $2.19 FX leg
+  await applyMutation(exec, 'updateTransfer', { id: await entryId(exec), patch: { fromAmount: 120 } });
+  await expectPaired(exec, 120, 168000);
+});
+
+test('a rate dated on or before the transfer: a re-valuation uses it, as a fresh booking would', async () => {
+  const exec = await seeded();
+  await transfer(exec);
+  await setRate(exec, '2026-05-01', 0.00072);
+  await applyMutation(exec, 'updateTransfer', { id: await entryId(exec), patch: { note: 'still as booked' } });
+  await expectPaired(exec);
+  await applyMutation(exec, 'updateTransaction', { id: await toPosting(exec), patch: { date: '2026-05-20' } });
+  const b = await booked(exec);
+  expect(b.to.base).toBeCloseTo(98.64, 3); // 137,000 × 0.00072
+  expect(b.fxLegs).toBe(1);
+  expect(b.sum).toBeCloseTo(0, 3);
+});
+
+test('booking when the only rate is dated later: valued from the partner, nothing saved under its date', async () => {
+  const exec = await seeded();
+  await setRate(exec, '2026-10-19', 0.0007);
+  await transfer(exec);
+  await expectPaired(exec);
+  expect(await krwRows(exec)).toEqual(['2026-10-19']);
+});
