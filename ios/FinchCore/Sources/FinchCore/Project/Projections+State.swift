@@ -293,6 +293,7 @@ extension Projection {
             // Skips ride along on each template, so every reader of `store.scheduled`
             // honours them without a second slice to keep in step.
             let skips = try ScheduledSkips.load(db)
+            let autoPostSince = try AutoPostSince.load(db)
             return try Row.fetchAll(db, sql: """
                 SELECT t.id, t.name, t.description, t.kind, t.amount, t.frequency,
                        t.day_of_month, t.day_of_week, t.account_id, t.from_account_id, t.category_id,
@@ -316,7 +317,8 @@ extension Projection {
                     nextRun: (r["next_run"] as String?) ?? "", maxExecutions: r["max_executions"],
                     installmentTotal: r["installment_total"], installmentPaid: r["installment_paid"], color: r["color"],
                     autoPost: r["auto_post"],
-                    skippedDates: skips[r["id"] as String])
+                    skippedDates: skips[r["id"] as String],
+                    autoPostSince: autoPostSince[r["id"] as String])
             }
         }
     }

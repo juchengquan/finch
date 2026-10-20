@@ -25,6 +25,7 @@ public enum ActionName: String, Codable, Sendable, CaseIterable {
     case bulkRecategorize
     case deleteTransaction
     case restoreTransactions  // native-only — undo of a delete (TransactionUndo); the web has no undo
+    case deleteTransactionSkippingOccurrence // native-only — the app's delete: also skips the scheduled occurrence the row fulfilled (Scheduled.deleteSkippingOccurrence)
     case removeAttachment
     case setEntryAttachment   // Phase 6.5 — the 75th action (native-only; the web uses POST /api/attachments)
     case confirmTransaction
