@@ -22,7 +22,10 @@ import GRDB
 ///   member has its `group_id` cleared (`clearGroupIfAlone`);
 /// - **cached figures the delete rewrote**: each touched account's
 ///   `updated_at` (its balance is recomputed, not restored) and any budget
-///   rollover the delete invalidated.
+///   rollover the delete invalidated;
+/// - the **skip the app's delete recorded** (`deleteTransactionSkippingOccurrence`)
+///   for the scheduled occurrence a row fulfilled — derived from the restored
+///   rows themselves, so it needs nothing in the capture.
 ///
 /// Every row comes back under its ORIGINAL id — and rowid, where it is free — so
 /// a route, a selection, a Spotlight item or a receipt path naming it still
@@ -179,6 +182,16 @@ public enum TransactionUndo {
             for b in snap.budgets {
                 try db.execute(sql: "UPDATE budgets SET last_rolled_period = ?, carry_forward = ?, updated_at = ? WHERE id = ?",
                                arguments: [bind(b["last_rolled_period"]), bind(b["carry_forward"]), bind(b["updated_at"]), bind(b["id"])])
+            }
+            // The app's delete counted a linked row's occurrence as skipped. With the
+            // row back the occurrence is posted again, so the skip goes — otherwise a
+            // later delete by any other path would leave it skipped, not due. A no-op
+            // for a row nothing skipped.
+            for e in snap.entries {
+                guard case .string(let template)? = e["source_template_id"],
+                      case .string(let date)? = e["occurrence_date"].flatMap({ $0 == .null ? nil : $0 }) ?? e["date"]
+                else { continue }
+                try Scheduled.unskip(db, Args(["templateId": .string(template), "date": .string(date)]))
             }
         } catch is DatabaseError {
             // A foreign key with nothing left to point at, a dedup collision, a

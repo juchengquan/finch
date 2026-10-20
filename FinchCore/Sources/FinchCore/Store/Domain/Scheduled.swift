@@ -17,6 +17,7 @@ public enum Scheduled {
         .postScheduled: post,
         .skipScheduledOccurrence: skip,
         .unskipScheduledOccurrence: unskip,
+        .deleteTransactionSkippingOccurrence: deleteSkippingOccurrence,
     ]
 
     /// The time a posting carries: an explicitly requested one, else the template's
@@ -229,7 +230,9 @@ public enum Scheduled {
     ///   - a new template with a start date in the past does not back-fill;
     ///   - a template switched on later starts from that day;
     ///   - days the app was not opened ARE caught up, because the mark stays put;
-    ///   - a generated row the user deleted is not re-created once its day has passed.
+    ///   - a generated row the user deleted is not re-created once its day has passed —
+    ///     nor on its own day, when the app deleted it (`deleteSkippingOccurrence`
+    ///     skips the occurrence).
     ///
     /// A run on a later day starts the day AFTER the mark; a run on the mark's own
     /// day re-covers it, so a template created or switched on after that morning's
@@ -253,7 +256,22 @@ public enum Scheduled {
         if let mark, mark < a.today { since = Selectors.horizonDay(from: mark, addingDays: 1) } else { since = a.today }
         let posted = try materializeDue(db, today: a.today, explicitTime: a.time, autoPostOnly: true, since: since)
         if mark.map({ $0 < a.today }) ?? true { try AutoPostMark.save(db, a.today) }
+        try recordAutoPostSince(db, from: since)
         return posted
+    }
+
+    /// Keep `AutoPostSince` in step with the templates this run covered: one newly
+    /// covered (created or switched on since the last run, or there before this was
+    /// recorded) starts from this run's floor; one no longer covered (switched off,
+    /// paused, deleted) is dropped, so switching it on again starts afresh. Written
+    /// here, in the native-only generator, because the template actions are the
+    /// web's — and its parity snapshot includes app_state.
+    private static func recordAutoPostSince(_ db: Database, from since: String) throws {
+        let covered = Set(try String.fetchAll(db, sql: "SELECT id FROM scheduled_templates WHERE is_active = 1 AND auto_post = 1"))
+        let before = try AutoPostSince.load(db)
+        var map = before.filter { covered.contains($0.key) }
+        for id in covered where map[id] == nil { map[id] = since }
+        if map != before { try AutoPostSince.save(db, map) }
     }
 
     /// null/empty → nil; otherwise a positive whole number (else throws).
@@ -393,6 +411,49 @@ public enum Scheduled {
         try ScheduledSkips.save(db, skips)
     }
 
+    // MARK: deleting a posted occurrence (native-only)
+
+    /// The app's transaction delete: `deleteTransaction`, and then the occurrence a
+    /// deleted row fulfilled counts as SKIPPED. A deleted row used to leave no trace,
+    /// so "missed" came back for it: auto-post re-covers its mark's own day and
+    /// re-posted a row deleted that day on the next foreground (for a transfer, the
+    /// money moved twice), and one deleted on a later day read "overdue" instead.
+    /// Undo (`restoreTransactions`) un-skips it again.
+    ///
+    /// Only an occurrence dated on or before `today`, still a real occurrence of an
+    /// existing template, and fulfilled by nothing else — `skip`'s own refusals,
+    /// which here mean "nothing to record". A row posted early and deleted puts its
+    /// occurrence back to upcoming rather than skipping it: it is not missed, and
+    /// Skip is right there if that is what the user meant.
+    ///
+    /// Native-only and never in WRITE_SEQUENCE: the web's `deleteTransaction` stays
+    /// exactly the web's, and the skip list is native-first app_state.
+    static func deleteSkippingOccurrence(_ db: Database, _ args: Args) throws {
+        struct A: Decodable { let id: String; let today: String }
+        let a = try args.to(A.self)
+        guard isYMD(a.today) else {
+            throw I18nError("error.invalidArgs", [:], "deleteTransactionSkippingOccurrence requires today as YYYY-MM-DD")
+        }
+        guard let ref = try Entries.resolveEntryRef(db, a.id) else { return }
+        // Read before the delete takes them: the entry, plus the other half of a
+        // cross-ledger transfer, which `deleteTransaction` deletes too.
+        let fulfilled = try Row.fetchAll(db, sql: """
+            SELECT DISTINCT source_template_id AS t, COALESCE(occurrence_date, date) AS d FROM entries
+             WHERE source_template_id IS NOT NULL
+               AND (id = ? OR interledger_link_id = (SELECT interledger_link_id FROM entries WHERE id = ?))
+            """, arguments: [ref.entryId, ref.entryId]).map { (template: $0["t"] as String, date: $0["d"] as String) }
+        try Transactions.deleteTransaction(db, Args(["id": .string(a.id)]))
+        for o in fulfilled where o.date <= a.today {
+            do { try skip(db, Args(["templateId": .string(o.template), "date": .string(o.date)])) }
+            catch let e as I18nError where Self.nothingToSkip.contains(e.code) { continue }
+        }
+    }
+
+    /// `skip`'s refusals that mean there is no occurrence to record a skip for.
+    private static let nothingToSkip: Set<String> = [
+        "error.notFound.template", "error.scheduled.notAnOccurrence", "error.scheduled.skipAlreadyPosted",
+    ]
+
     static func addSplit(_ db: Database, _ args: Args) throws {
         struct A: Decodable { let templateId: String; let accountId: String; let pct: Double? }
         let a = try args.to(A.self)
@@ -451,6 +512,36 @@ public enum AutoPostMark {
 
     static func save(_ db: Database, _ day: String) throws {
         try AppDomain.setAppState(db, stateKey, String(data: try JSONEncoder().encode(day), encoding: .utf8) ?? "null")
+    }
+}
+
+/// The first day auto-post covered each "Add automatically" template
+/// (`app_state.scheduledAutoPostSince`): `{ templateId: "yyyy-MM-dd" }`. The floor
+/// below which none of its occurrences counts as missed (`Selectors.missedFloor`),
+/// since auto-post never back-fills: a template created with a past start date, or
+/// switched on later, would otherwise read "overdue" for occurrences nobody owed.
+///
+/// Per template, not the global `AutoPostMark`: an occurrence auto-post could not
+/// add after that day (no exchange rate) is still really missed, and the mark — the
+/// latest run — would hide it. Kept by `autoPostDueScheduled` (`recordAutoPostSince`),
+/// which the app runs straight after the sheet saves. Native-first app_state, like
+/// the mark: the web ignores the key, and an export carries it.
+public enum AutoPostSince {
+    /// The app_state key holding the map.
+    public static let stateKey = "scheduledAutoPostSince"
+
+    /// The whole map; `[:]` when absent or unreadable — an unreadable one only means
+    /// the next run re-records every template from its own floor.
+    public static func load(_ db: Database) throws -> [String: String] {
+        guard let raw = try AppDomain.getAppState(db, stateKey), let data = raw.data(using: .utf8),
+              let map = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
+        return map.filter { isYMD($0.value) }
+    }
+
+    static func save(_ db: Database, _ map: [String: String]) throws {
+        let enc = JSONEncoder()
+        enc.outputFormatting = .sortedKeys
+        try AppDomain.setAppState(db, stateKey, String(data: try enc.encode(map), encoding: .utf8) ?? "{}")
     }
 }
 

@@ -38,12 +38,18 @@ public struct ScheduledTemplate: Identifiable, Equatable, Sendable, Codable {
     /// fixtures, which never carry the key, still decode; nil and empty mean the same.
     public let skippedDates: [String]?
 
+    /// The first day auto-post covered this template (`app_state.scheduledAutoPostSince`,
+    /// see `AutoPostSince`) — nil when it never ran with "Add automatically" on.
+    /// Occurrences before it were never auto-post's to add, so they are not missed
+    /// (`missedFloor`). Native-only and optional, like `skippedDates`.
+    public let autoPostSince: String?
+
     public init(id: String, name: String, description: String? = nil, type: String,
                 amount: Double? = nil, frequency: String, dayOfMonth: Int, weekDay: Int? = nil,
                 accountId: String, fromAccountId: String? = nil, categoryId: String? = nil,
                 startDate: String? = nil, startTime: String? = nil, endDate: String? = nil, nextRun: String, maxExecutions: Int? = nil,
                 installmentTotal: Int? = nil, installmentPaid: Int? = nil, color: String? = nil,
-                autoPost: Int? = nil, skippedDates: [String]? = nil) {
+                autoPost: Int? = nil, skippedDates: [String]? = nil, autoPostSince: String? = nil) {
         self.id = id; self.name = name; self.description = description; self.type = type
         self.amount = amount; self.frequency = frequency; self.dayOfMonth = dayOfMonth
         self.weekDay = weekDay; self.accountId = accountId; self.fromAccountId = fromAccountId
@@ -54,6 +60,7 @@ public struct ScheduledTemplate: Identifiable, Equatable, Sendable, Codable {
         self.color = color
         self.autoPost = autoPost
         self.skippedDates = skippedDates
+        self.autoPostSince = autoPostSince
     }
 
     /// Whether due occurrences are added for the user (`autoPostDueScheduled`)
@@ -391,14 +398,64 @@ extension Selectors {
     /// row and the Post form cannot disagree. Scans from
     /// the template's anchor (so an old unposted occurrence is still caught) up to a
     /// ~400-day forward horizon, enough that a yearly template still resolves.
+    ///
+    /// "Missed" is `isMissed`: an occurrence below `missedFloor` is passed over, so
+    /// the backlog never reaches back past the template's real history.
     public static func resumeOccurrence(template: ScheduledTemplate, posted: [String: Bool],
                                         today: String) -> String? {
         let horizon = horizonDay(from: today, addingDays: 400)
         let all = occurrencesUpTo(template, horizon)
-        if let missed = all.first(where: { $0 < today && posted["\(template.id)|\($0)"] == nil }) {
-            return missed
+        let unposted = { (d: String) in posted["\(template.id)|\(d)"] == nil }
+        // The floor scans the posted map, so it is only worked out when there is a
+        // past unposted occurrence for it to rule on — not for a caught-up template.
+        if all.contains(where: { $0 < today && unposted($0) }) {
+            let floor = missedFloor(template: template, posted: posted, today: today) ?? ""
+            if let missed = all.first(where: { $0 >= floor && $0 < today && unposted($0) }) { return missed }
         }
-        return all.first { $0 >= today && posted["\(template.id)|\($0)"] == nil }
+        return all.first { $0 >= today && unposted($0) }
+    }
+
+    /// Whether the occurrence on `date` is MISSED: behind `today`, not posted, not
+    /// skipped, and not below `missedFloor`. The row's "overdue" caption, Post and
+    /// the reminders all reach it through `resumeOccurrence`; the calendar's badge
+    /// asks this directly, so the two agree.
+    public static func isMissed(template: ScheduledTemplate, date: String, posted: [String: Bool],
+                                today: String) -> Bool {
+        guard date < today, posted["\(template.id)|\(date)"] == nil, !template.isSkipped(date) else { return false }
+        guard let floor = missedFloor(template: template, posted: posted, today: today) else { return true }
+        return date >= floor
+    }
+
+    /// The earliest day an unposted occurrence can count as missed; nil when the
+    /// template's whole recurrence still can. Without it, "missed" was read off the
+    /// template alone, so occurrences came back that nobody owed:
+    ///
+    /// - **The latest occurrence posted or skipped, on or before `today`.** History
+    ///   ends there, so nothing older is missed. A paid monthly item whose day of
+    ///   month, start date or frequency changed has a new recurrence that its old
+    ///   postings do not land on — its whole history read "overdue" from January.
+    ///   Keyed on the posted map's occurrence dates, not the recurrence, for that
+    ///   reason. Only the past counts: posting next month's early, or skipping it in
+    ///   advance, does not forgive this month's.
+    /// - **For an "Add automatically" template, the day auto-post started covering
+    ///   it** (`autoPostSince`). It never back-fills, by design, so a new one with a
+    ///   past start date otherwise read "overdue <start>" for good. Occurrences from
+    ///   that day on are still missed when auto-post could not add them (no exchange
+    ///   rate, a split template).
+    public static func missedFloor(template: ScheduledTemplate, posted: [String: Bool], today: String) -> String? {
+        let prefix = "\(template.id)|"
+        var floor: String?
+        for key in posted.keys where key.hasPrefix(prefix) {
+            let d = String(key.dropFirst(prefix.count))
+            if d <= today, floor.map({ d > $0 }) ?? true { floor = d }
+        }
+        for d in template.skippedDates ?? [] where d <= today {
+            if floor.map({ d > $0 }) ?? true { floor = d }
+        }
+        if template.postsAutomatically, let since = template.autoPostSince, floor.map({ since > $0 }) ?? true {
+            floor = since
+        }
+        return floor
     }
 
     /// "templateId|occurrenceDate" → isPending, for every posted occurrence (txns

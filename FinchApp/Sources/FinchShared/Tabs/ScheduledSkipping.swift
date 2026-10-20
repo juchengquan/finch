@@ -62,7 +62,8 @@ enum ScheduledCaption {
     /// The occurrence a scheduled row speaks for: the one a bare "Post" opens
     /// (`Selectors.resumeOccurrence` — the oldest missed one, else the next due), so
     /// the row can never name a date the Post form does not fill in. `overdue` when
-    /// it is already behind `today`. A skipped occurrence is not missed, and one
+    /// it is already behind `today`. A skipped occurrence is not missed, nor is one
+    /// older than the template's real history (`Selectors.missedFloor`), and one
     /// auto-post added (waiting in To confirm) counts as posted. Nil when nothing is
     /// left to post.
     static func due(_ t: ScheduledTemplate, posted: [String: Bool], today: String) -> (date: String, overdue: Bool)? {

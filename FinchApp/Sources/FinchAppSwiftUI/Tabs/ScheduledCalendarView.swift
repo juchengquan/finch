@@ -175,10 +175,11 @@ struct ScheduledCalendarView: View {
         }
         .swipeActions(edge: .leading) {
             // Unposted either way — a missed occurrence needs Post more than an upcoming one.
+            // A lapsed one can still be posted on purpose, from its own cell.
             // Same occurrence-aware call as the context menu: this row IS a cell, so
             // `date` is the occurrence being posted — passing the template alone would
             // stamp today and leave the badge unchanged (the bug this branch fixes).
-            if st == .upcoming || st == .missed {
+            if st == .upcoming || st == .missed || st == .lapsed {
                 SwipeButton("Post", systemImage: "checkmark.circle") { onPost(t, date) }.tint(.green)
                 SwipeButton("Skip", systemImage: "forward.end") { onSkip(t, date) }.tint(.orange)
             }
@@ -187,7 +188,7 @@ struct ScheduledCalendarView: View {
         .contextMenu {
             Button { onEdit(t) } label: { Label("Edit", systemImage: "pencil") }
             // Unposted either way — a missed occurrence needs this more than an upcoming one.
-            if st == .upcoming || st == .missed {
+            if st == .upcoming || st == .missed || st == .lapsed {
                 Button { onPost(t, date) } label: { Label("Post now", systemImage: "checkmark.circle") }
                 Button { onSkip(t, date) } label: { Label("Skip", systemImage: "forward.end") }
             }
@@ -196,12 +197,14 @@ struct ScheduledCalendarView: View {
         }
     }
 
-    private enum OccStatus { case upcoming, missed, pending, done, skipped }
+    private enum OccStatus { case upcoming, missed, lapsed, pending, done, skipped }
     /// No posting record means "nobody posted this yet" — which is only `upcoming`
     /// while the date is still ahead. A past occurrence nobody posted is `missed`,
-    /// and it's the state that most needs action. Both are ISO `yyyy-MM-dd`, so a
-    /// string compare is a date compare. `wallToday`, not `today`: this is a literal
-    /// "has it happened yet" question, not a data-anchored one.
+    /// and it's the state that most needs action — unless it falls below the
+    /// template's real history (`Selectors.isMissed`), where it is `lapsed`: no
+    /// badge, as the row's caption does not call it overdue either. Both are ISO
+    /// `yyyy-MM-dd`, so a string compare is a date compare. `wallToday`, not `today`:
+    /// this is a literal "has it happened yet" question, not a data-anchored one.
     /// A posted occurrence reads as posted even if it was also skipped — the money
     /// moved (`Selectors.activeSkips` applies the same rule).
     private func status(_ t: ScheduledTemplate, _ date: String, _ posted: [String: Bool]) -> OccStatus {
@@ -210,21 +213,25 @@ struct ScheduledCalendarView: View {
         case .some(false): return .done
         case .none:
             if t.isSkipped(date) { return .skipped }
-            return date < store.wallToday ? .missed : .upcoming
+            if date >= store.wallToday { return .upcoming }
+            return Selectors.isMissed(template: t, date: date, posted: posted, today: store.wallToday) ? .missed : .lapsed
         }
     }
     @ViewBuilder private func statusBadge(_ s: OccStatus) -> some View {
         // LocalizedStringKey, not String — a String binds Text's non-localizing init.
-        let (label, color): (LocalizedStringKey, Color) = {
+        let badge: (label: LocalizedStringKey, color: Color)? = {
             switch s {
             case .upcoming: return ("upcoming", .secondary)
             case .missed:   return ("missed", .red)
+            case .lapsed:   return nil
             case .pending:  return ("pending", .orange)
             case .done:     return ("done", .green)
             case .skipped:  return ("skipped", .secondary)
             }
         }()
-        Text(label).font(.caption2).padding(.horizontal, 6).padding(.vertical, 2)
-            .background(color.opacity(0.15)).foregroundStyle(color).clipShape(Capsule())
+        if let badge {
+            Text(badge.label).font(.caption2).padding(.horizontal, 6).padding(.vertical, 2)
+                .background(badge.color.opacity(0.15)).foregroundStyle(badge.color).clipShape(Capsule())
+        }
     }
 }
