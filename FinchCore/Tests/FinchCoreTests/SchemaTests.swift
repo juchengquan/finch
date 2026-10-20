@@ -10,7 +10,8 @@ final class SchemaTests: XCTestCase {
         // 2026-07-22: entries gain occurrence_date (scheduled occurrence link).
         // 2026-08-12: accounts gain icon / notes / statement_day / due_day / credit_limit.
         // 2026-08-12T01: entries gain pending_kind (upcoming vs due).
-        XCTAssertEqual(Schema.version, "2026-08-12T01:00:00Z")
+        // 2026-10-19: data only — quarterly/yearly items move onto the day they ran.
+        XCTAssertEqual(Schema.version, "2026-10-19T00:00:00Z")
         XCTAssertEqual(Schema.appName, "finch")
     }
 }
