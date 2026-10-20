@@ -45,7 +45,7 @@ final class ScheduledSkipReminderTests: XCTestCase {
 
     func test_theReminderIsDatedFromTheRecurrence_notTheStoredNextRun() {
         let out = reminders(gym(), txns: posted(paidThroughMarch), wallToday: "2026-04-01")
-        XCTAssertEqual(out.map(\.id), ["scheduled:gym"],
+        XCTAssertEqual(out.map(\.id), ["scheduled:gym:2026-04-15"],
                        "nextRun is empty, as for every template made in the app — it must still be reminded")
         XCTAssertEqual(day(out.first?.deliverOn), "2026-04-15")
     }

@@ -29,7 +29,7 @@ final class NotificationLogicTests: XCTestCase {
         // last recorded transaction was a week ago; the item is due today
         let out = plan(today: "2026-05-08", wallToday: "2026-05-15",
                        scheduled: [template("s1", nextRun: "2026-05-15")])
-        XCTAssertEqual(out.map(\.id), ["scheduled:s1"], "due today must fire even with stale data")
+        XCTAssertEqual(out.map(\.id), ["scheduled:s1:2026-05-15"], "due today must fire even with stale data")
         XCTAssertNil(out.first?.deliverOn, "due today is due now, not held for a later date")
     }
 
@@ -44,7 +44,7 @@ final class NotificationLogicTests: XCTestCase {
     func test_notYetDueIsPlannedButDated() {
         let out = plan(today: "2026-05-20", wallToday: "2026-05-15",
                        scheduled: [template("s1", nextRun: "2026-05-18")])
-        XCTAssertEqual(out.map(\.id), ["scheduled:s1"])
+        XCTAssertEqual(out.map(\.id), ["scheduled:s1:2026-05-18"])
         XCTAssertNotNil(out.first?.deliverOn, "a future alert must carry its date, not fire now")
     }
 
@@ -63,7 +63,7 @@ final class NotificationLogicTests: XCTestCase {
     /// recurrence alerts again rather than being silenced forever.
     func test_firedIsForgottenWhenConditionResolves() {
         let stillPlanned = NotificationPlanner.retainedFired(["budget:b1", "budget:b2"],
-                                                             planned: [])
+                                                             planned: [], templateIds: [], wallToday: "2026-05-15")
         XCTAssertTrue(stillPlanned.isEmpty)
     }
 

@@ -66,6 +66,8 @@ enum ErrorL10n {
         "error.scheduled.noSplits": "\"{name}\" 没有可发布的拆分金额",
         "error.scheduled.notAnOccurrence": "该日期不是这个计划的发生日",
         "error.scheduled.nothingToPost": "\"{name}\" 没有可发布的项目",
+        "error.scheduled.notDueYet": "\"{name}\" 在 {date} 的这一期还没到期",
+        "error.scheduled.occurrenceSkipped": "\"{name}\" 在 {date} 的这一期已跳过",
         "error.scheduled.variableAmount": "\"{name}\" 金额可变 — 请手动添加",
         "error.transfer.amountGt0": "转账金额必须大于 0",
         "error.transfer.receivedGt0": "收到金额必须大于 0",

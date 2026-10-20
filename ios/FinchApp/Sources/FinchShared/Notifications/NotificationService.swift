@@ -124,23 +124,17 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
 
         let pending = Set(await center.pendingNotificationRequests().map(\.identifier))
         let delivered = Set(await center.deliveredNotifications().map(\.request.identifier))
-        let existing = pending.union(delivered)
-
-        let stalePending = NotificationPlanner.cancelIDs(planned: planned, existing: pending)
-        if !stalePending.isEmpty { center.removePendingNotificationRequests(withIdentifiers: stalePending) }
-        let staleDelivered = NotificationPlanner.cancelIDs(planned: planned, existing: delivered)
-        if !staleDelivered.isEmpty { center.removeDeliveredNotifications(withIdentifiers: staleDelivered) }
-
-        // Forget ids whose condition has resolved, so the same budget can alert
-        // again next time it crosses. Pruning BEFORE the schedule decision keeps
-        // "already shown" scoped to the current episode.
-        NotificationState.fired = NotificationPlanner.retainedFired(NotificationState.fired, planned: planned)
-        NotificationState.snoozedUntil = NotificationPlanner.retained(NotificationState.snoozedUntil, planned: planned)
-
         let now = Date()
-        let due = NotificationPlanner.toSchedule(
-            planned: planned, existing: existing,
-            fired: NotificationState.fired, snoozedUntil: NotificationState.snoozedUntil, now: now)
+        let decision = NotificationPlanner.reconcile(
+            planned: planned, pending: pending, delivered: delivered,
+            fired: NotificationState.fired, snoozedUntil: NotificationState.snoozedUntil, now: now,
+            templateIds: Set(store.scheduled.map(\.id)), wallToday: store.wallToday)
+
+        if !decision.cancelPending.isEmpty { center.removePendingNotificationRequests(withIdentifiers: decision.cancelPending) }
+        if !decision.cancelDelivered.isEmpty { center.removeDeliveredNotifications(withIdentifiers: decision.cancelDelivered) }
+        NotificationState.fired = decision.fired
+        NotificationState.snoozedUntil = decision.snoozedUntil
+        let due = decision.schedule
 
         // Send at most a few at once. A statement import can make many alerts true in
         // one write -- anomaly scoring runs over the 50 most recent purchases -- and
@@ -187,14 +181,19 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
     /// Tell the user about a write the engine refused while nobody was looking — a
     /// wrist add the phone turned down, which would otherwise vanish. Shown now, or
     /// when quiet hours end. The id carries `unplannedPrefix`, so re-planning keeps it.
-    public func notifyRefused(id: String, title: String, body: String) async {
+    ///
+    /// `holdForQuietHours: false` is for a refusal answering a tap the user has just
+    /// made ("Confirm now"): they are awake and waiting for the result, so holding it
+    /// to 08:00 would only make it look as if nothing happened.
+    public func notifyRefused(id: String, title: String, body: String, holdForQuietHours: Bool = true) async {
         guard await center.notificationSettings().authorizationStatus != .denied else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         content.sound = .default
         let now = Date()
-        let when = NotificationPolicy.deliveryTime(raisedAt: now, quiet: NotificationPrefs.quietHours)
+        let when = holdForQuietHours
+            ? NotificationPolicy.deliveryTime(raisedAt: now, quiet: NotificationPrefs.quietHours) : now
         let trigger: UNNotificationTrigger = when <= now
             ? UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
             : UNCalendarNotificationTrigger(
@@ -223,6 +222,7 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
         var info: [String: String] = ["kind": p.kind.rawValue]
         if let tab = p.tab { info["tab"] = String(describing: tab) }
         if let fid = p.focusId { info["focusId"] = fid }
+        if let occ = p.occurrence { info["occurrence"] = occ }
         content.userInfo = info
         return content
     }
@@ -286,6 +286,7 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
         let focusId = info["focusId"] as? String
         let tabName = info["tab"] as? String   // extract before the @Sendable hop (info isn't Sendable)
         let kindName = info["kind"] as? String
+        let occurrence = info["occurrence"] as? String   // nil on a reminder from before they named one
         let notifId = request.identifier
         let title = request.content.title
         let body = request.content.body
@@ -297,15 +298,25 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
             // didn't keep. Re-arm the same alert on a 1h trigger and record the
             // deadline so re-planning leaves it alone until then.
             await snooze(id: notifId, title: title, body: body, kind: kindName,
-                         tab: tabName, focusId: focusId)
+                         tab: tabName, focusId: focusId, occurrence: occurrence)
             return
         }
 
-        await MainActor.run {
+        let refusal: (title: String, body: String)? = await MainActor.run {
             switch action {
             case "confirmNow":
-                if let id = focusId, let store { Self.confirmNow(templateId: id, store: store) }
                 router?.open(.scheduled)
+                guard let id = focusId, let store else { return nil }
+                do {
+                    try Self.confirmNow(templateId: id, occurrence: occurrence, store: store)
+                    return nil
+                } catch {
+                    // Said, not swallowed: the button opens Scheduled, and with the item
+                    // still due there and no message the tap looked like it did nothing.
+                    // Most often a missing exchange rate, which the user has to fix.
+                    let name = store.scheduled.first { $0.id == id }?.name ?? title
+                    return (name, String(localized: "Couldn't add it: \(i18nMessage(error))"))
+                }
             case "viewBudgets": router?.open(.budgets)
             case "viewTransaction":
                 if let id = focusId { router?.route(to: "tx:\(id)") } else { router?.open(.activity) }
@@ -316,44 +327,89 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
                     router?.route(to: "account:\(id)")
                 } else if let tabName, let t = Self.tab(from: tabName) { router?.open(t) }
             }
+            return nil
+        }
+        if let refusal {
+            await notifyRefused(id: "confirm:\(notifId)", title: refusal.title, body: refusal.body,
+                                holdForQuietHours: false)
         }
     }
 
-    /// The "Confirm now" button on a scheduled reminder.
+    /// The "Confirm now" button on a scheduled reminder: book exactly the occurrence
+    /// the reminder named, or throw why not, for the caller to tell the user.
+    ///
+    /// The NAMED one, not whatever `resumeOccurrence` says now. By the time the button
+    /// is tapped that occurrence may have been skipped, paid from the app, or moved by
+    /// an edit — and resolving afresh then fell forward to the next one, posting a
+    /// confirmed expense dated weeks ahead. Each of those is now refused instead, and
+    /// so is any occurrence after today: there is no sheet here to confirm a date, the
+    /// rule `ScheduledPoster.postNow` applies to its silent path.
     ///
     /// When auto-post already added the occurrence, it is sitting in To confirm as a
-    /// pending row, and confirming THAT is what the button says. Posting instead
-    /// would add a second one: `resumeOccurrence` counts a pending row as resolved,
-    /// so it would fall forward and book the NEXT occurrence early. The planner no
-    /// longer reminds about auto-post templates, but an alert delivered before the
-    /// switch was turned on — or before the generator ran on this launch — can
-    /// still be tapped.
+    /// pending row, and confirming THAT is what the button says; posting would add a
+    /// second one. The planner does not remind about auto-post templates, but an
+    /// alert delivered before the switch was turned on can still be tapped.
     ///
-    /// Otherwise: headless, with no sheet to confirm a date, so resolve the
-    /// occurrence the same way ScheduledPoster.postNow does (oldest unresolved, else
-    /// next >= today) and post it silently. The bug this fixes was posting WITHOUT
-    /// resolving an occurrence when one existed; resolving closes that. `date` is
-    /// omitted only when nothing resolves, where stamping today is the correct
-    /// fallback.
-    static func confirmNow(templateId id: String, store: FinchStore) {
+    /// `occurrence` is nil only on a reminder delivered by an earlier build. That one
+    /// resolves as before — the oldest waiting row, else the occurrence Post would
+    /// open — and is held to the same rules.
+    static func confirmNow(templateId id: String, occurrence named: String?, store: FinchStore) throws {
         let today = store.wallToday
-        if let waiting = store.txns
-            .filter({ $0.sourceTemplateId == id && ($0.pending ?? false) && ($0.occurrenceDate ?? $0.date) <= today })
-            .min(by: { ($0.occurrenceDate ?? $0.date) < ($1.occurrenceDate ?? $1.date) }) {
-            try? store.apply(.confirmTransaction, Args(["id": .string(waiting.id)]))
-            return
+        guard let t = store.scheduled.first(where: { $0.id == id }) else {
+            throw I18nError("error.notFound.template", [:], "Template not found")
         }
         let posted = Selectors.scheduledPostedMap(store.txns)
-        let t = store.scheduled.first { $0.id == id }
-        let occ = t.flatMap { Selectors.resumeOccurrence(template: $0, posted: posted, today: today) }
-        var args: [String: JSONValue] = ["templateId": .string(id)]
-        if let occ { args["date"] = .string(occ) }
-        try? store.apply(.postScheduled, Args(args))
+        func waiting(_ matches: (String) -> Bool) -> Tx? {
+            store.txns
+                .filter { $0.sourceTemplateId == id && ($0.pending ?? false) && matches($0.occurrenceDate ?? $0.date) }
+                .min { ($0.occurrenceDate ?? $0.date) < ($1.occurrenceDate ?? $1.date) }
+        }
+
+        let occ: String
+        if let named {
+            occ = named
+        } else {
+            if let row = waiting({ $0 <= today }) {
+                try store.apply(.confirmTransaction, Args(["id": .string(row.id)]))
+                return
+            }
+            guard let resumed = Selectors.resumeOccurrence(template: t, posted: posted, today: today) else {
+                throw I18nError("error.scheduled.nothingToPost", ["name": t.name],
+                                "Nothing left to post for \"\(t.name)\".")
+            }
+            occ = resumed
+        }
+        if occ > today {
+            throw I18nError("error.scheduled.notDueYet", ["name": t.name, "date": occ],
+                            "\"\(t.name)\" for \(occ) isn't due yet")
+        }
+        switch posted["\(id)|\(occ)"] {
+        case true?:
+            if let row = waiting({ $0 == occ }) {
+                try store.apply(.confirmTransaction, Args(["id": .string(row.id)]))
+            }
+            return
+        case false?:
+            throw I18nError("error.scheduled.alreadyPosted", ["name": t.name, "date": occ],
+                            "\"\(t.name)\" was already posted for \(occ)")
+        case nil:
+            break
+        }
+        // Moved by an edit, or past the end date: not an occurrence any more.
+        guard Selectors.isOccurrence(t, occ) else {
+            throw I18nError("error.scheduled.notAnOccurrence", ["name": t.name, "date": occ],
+                            "\(occ) is not an occurrence of \"\(t.name)\"")
+        }
+        if Selectors.activeSkips(template: t, posted: posted).contains(occ) {
+            throw I18nError("error.scheduled.occurrenceSkipped", ["name": t.name, "date": occ],
+                            "\"\(t.name)\" for \(occ) was skipped")
+        }
+        try store.apply(.postScheduled, Args(["templateId": .string(id), "date": .string(occ)]))
     }
 
     /// Re-arm a notification an hour out and mark it snoozed until then.
     private func snooze(id: String, title: String, body: String,
-                        kind: String?, tab: String?, focusId: String?) async {
+                        kind: String?, tab: String?, focusId: String?, occurrence: String?) async {
         NotificationState.snoozedUntil[id] = Date().addingTimeInterval(Self.snoozeInterval)
         // Clear the once-only record: this alert is deliberately meant to return.
         NotificationState.fired.remove(id)
@@ -367,6 +423,7 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
         if let kind { info["kind"] = kind }
         if let tab { info["tab"] = tab }
         if let focusId { info["focusId"] = focusId }
+        if let occurrence { info["occurrence"] = occurrence }   // so the snoozed one's Confirm still names it
         content.userInfo = info
 
         try? await center.add(UNNotificationRequest(
