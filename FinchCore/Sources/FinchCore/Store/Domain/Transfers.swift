@@ -60,8 +60,22 @@ public enum Transfers {
         }
         let oldFromBase = abs(fromLeg["amount_base"] as Double), oldToBase = abs(toLeg["amount_base"] as Double)
         let oldFrom2 = abs(fromLeg["amount"] as Double), oldTo2 = abs(toLeg["amount"] as Double)
-        let newFromBase = Entries.r2(oldFromBase * (oldFrom2 > 0 ? newFromNative / oldFrom2 : 1))
-        let newToBase = Entries.r2(oldToBase * (oldTo2 > 0 ? newToNative / oldTo2 : 1))
+        var newFromBase = Entries.r2(oldFromBase * (oldFrom2 > 0 ? newFromNative / oldFrom2 : 1))
+        var newToBase = Entries.r2(oldToBase * (oldTo2 > 0 ? newToNative / oldTo2 : 1))
+        // A side with no rate on or before the transfer's date was valued from its
+        // partner (`Entries.resolveLegs`), so it has no pinned rate of its own to
+        // preserve: it stays worth what the other side is worth. Scaling it by its
+        // own ratio instead left an FX leg ($100 → ₩137,000 edited to ₩140,000
+        // booked a $2.19 one).
+        if hasFrom || hasTo, !sameCurrency {
+            let date = try String.fetchOne(db, sql: "SELECT date FROM entries WHERE id = ?", arguments: [entryId]) ?? ""
+            let base = try String.fetchOne(db, sql: "SELECT l.base_currency FROM ledgers l JOIN entries e ON e.ledger_id = l.id WHERE e.id = ?",
+                                           arguments: [entryId]) ?? "USD"
+            let fromRated = try Entries.hasRateOnOrBefore(db, fromLeg["currency"], base, date)
+            let toRated = try Entries.hasRateOnOrBefore(db, toLeg["currency"], base, date)
+            if fromRated && !toRated { newToBase = newFromBase }
+            else if toRated && !fromRated { newFromBase = newToBase }
+        }
         let newFromRate = newFromNative != 0 ? ((newFromBase / newFromNative) * 1e6).rounded() / 1e6 : (fromLeg["exchange_rate"] as Double)
         let newToRate = newToNative != 0 ? ((newToBase / newToNative) * 1e6).rounded() / 1e6 : (toLeg["exchange_rate"] as Double)
 

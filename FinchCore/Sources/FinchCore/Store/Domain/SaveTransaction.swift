@@ -284,10 +284,24 @@ enum SaveTransaction {
                                   priorEntryId: String?) throws -> [Entries.Leg] {
         let oldLegs = try priorEntryId.map { id in
             try Row.fetchAll(db, sql: """
-                SELECT id, account_id, amount, memo, cleared_at
+                SELECT id, account_id, amount, amount_base, exchange_rate, memo, cleared_at
                   FROM postings WHERE entry_id = ? AND account_id IS NOT NULL
                 """, arguments: [id])
         } ?? []
+        // A transfer saved with the same date, cards and amounts — the sheet sends
+        // both legs on every save, so a note, tag or status edit looks like this —
+        // keeps the values it was booked at. Re-valuing it would read today's rates
+        // table: a transfer valued from its partner because one side had no rate
+        // would pick up a rate added since, grow an FX leg, and save that rate under
+        // the transfer's date.
+        let priorDate = try priorEntryId.flatMap {
+            try String.fetchOne(db, sql: "SELECT date FROM entries WHERE id = ?", arguments: [$0])
+        }
+        let keepsValuation = kind == .transfer && priorDate == date && oldLegs.count == row.count
+            && row.allSatisfy { cell in
+                oldLegs.contains { ($0["account_id"] as String?) == cell.id
+                    && abs(($0["amount"] as Double) - Entries.r2(cell.amount)) < 0.005 }
+            }
 
         var legs: [Entries.Leg] = []
         for (accountId, amount) in row {
@@ -336,7 +350,8 @@ enum SaveTransaction {
             let typedInAnotherCurrency = cellCcy != acctCcy
             legs.append(.account(Entries.AccountLeg(
                 accountId: accountId, amount: native,
-                amountBase: conv.map { Entries.r2($0.amountBase) }, exchangeRate: conv?.rate,
+                amountBase: keepsValuation ? prior?["amount_base"] : conv.map { Entries.r2($0.amountBase) },
+                exchangeRate: keepsValuation ? prior?["exchange_rate"] : conv?.rate,
                 memo: prior?["memo"] ?? transferMemos[accountId], id: prior?["id"],
                 origAmount: typedInAnotherCurrency ? Entries.r2(amount) : nil,
                 origCurrency: typedInAnotherCurrency ? cellCcy : nil,
