@@ -6,8 +6,10 @@ import FinchCore
 ///
 /// The question is asked as a sentence, "1 KRW = ___ EUR", against the ledger's base,
 /// and the ⇅ button flips it to "1 EUR = ___ KRW" for a figure quoted the other way
-/// round. The footer always reads the answer back in the opposite direction, so a
-/// rate typed upside down shows up as an absurd number before it is saved.
+/// round. It opens the way the Currencies list reads that currency
+/// (`fxManualOpensInverted`), so the figure in the list is the one asked for. The
+/// footer always reads the answer back in the opposite direction, so a rate typed
+/// upside down shows up as an absurd number before it is saved.
 /// `FxManualQuote` does the arithmetic into the engine's USD-per-unit figure.
 ///
 /// Saved through `setExchangeRate` with source "manual" — the same action and tag
@@ -31,8 +33,17 @@ struct ManualRateSheet: View {
     /// The text an edit opened with — six significant digits of the stored figure.
     /// Saved untouched, the stored figure is kept rather than its rounding.
     @State private var seedText: String?
+    /// The direction the form opened in, which `seedText` reads in.
+    @State private var seedInverted = false
     @State private var errorMessage: String?
     @State private var confirmingDelete = false
+    /// The user flipped the sentence themselves, so picking another currency no
+    /// longer turns it the way the list reads that one.
+    @State private var flippedByUser = false
+    /// Saving would overwrite another row for this currency and day (`replaced`),
+    /// so ✓ asks first. Moving an edited rate onto a day that already had one
+    /// replaced that day's rate with nothing on screen but a footnote.
+    @State private var confirmingReplace = false
 
     /// `currency` pre-fills the add form (from a currency's history, or from a
     /// refused save); `editing` opens an existing manual row.
@@ -108,6 +119,13 @@ struct ManualRateSheet: View {
                         .confirmCheckmarkStyle()
                 }
             }
+            .alert(Text("Replace the rate for \(fxDisplayDay(day, withYear: true))?"),
+                   isPresented: $confirmingReplace, presenting: replaced) { _ in
+                Button("Replace", role: .destructive) { save(replacing: true) }
+                Button("Cancel", role: .cancel) {}
+            } message: { old in
+                Text("\(code) already has a rate for that day: \(fxRateDisplay(old.rate, currency: code) ?? ""). Saving replaces it.")
+            }
             .alert("Delete rate?", isPresented: $confirmingDelete) {
                 Button("Delete", role: .destructive) { delete() }
                 Button("Cancel", role: .cancel) {}
@@ -115,6 +133,12 @@ struct ManualRateSheet: View {
                 Text(verbatim: "\(code) · \(editing?.date ?? "")")
             }
             .onAppear(perform: seed)
+            // A currency picked on the add form turns the sentence the way the list
+            // reads it — until the user has flipped it, or typed against it.
+            .onChange(of: code) { _, newCode in
+                guard !flippedByUser, rateText.isEmpty else { return }
+                inverted = fxManualOpensInverted(currency: newCode, rates: store.exchangeRates)
+            }
         }
     }
 
@@ -153,7 +177,9 @@ struct ManualRateSheet: View {
                 // down is off by a factor of a million here, and plainly so.
                 if let typed = DecimalInput.parse(rateText), typed > 0 {
                     let terms = quote.terms(inverted: !inverted)
-                    let other = flipStillShown.map { $0.typed } ?? fxRateText(1 / typed)
+                    let other = flipStillShown.map { $0.typed } ?? untouchedEdit.map {
+                        fxRateText(quote.entered(usdPerUnit: $0.rate, inverted: !inverted))
+                    } ?? fxRateText(1 / typed)
                     Text(verbatim: "1 \(terms.one) = \(other) \(terms.other)")
                         .accessibilityIdentifier("manualRate.inverse")
                 }
@@ -167,11 +193,13 @@ struct ManualRateSheet: View {
         }
     }
 
-    /// Editing opens on the stored figure, read in the form's direction. Runs once:
-    /// the store is not reachable from `init`.
+    /// Opens in the list's direction, and an edit on the stored figure read that way.
+    /// Runs once: the store is not reachable from `init`.
     private func seed() {
         guard !seeded else { return }
         seeded = true
+        inverted = fxManualOpensInverted(currency: code, rates: store.exchangeRates)
+        seedInverted = inverted
         if let editing {
             rateText = fxRateText(quote.entered(usdPerUnit: editing.rate, inverted: inverted))
             seedText = rateText
@@ -195,23 +223,38 @@ struct ManualRateSheet: View {
             rateText = shown
         }
         inverted.toggle()
+        flippedByUser = true
+    }
+
+    /// The row being edited, while the field still shows what it opened with. Its
+    /// stored figure is what counts — for the save and the read-back — not the
+    /// six-digit rounding in the field: an edit opening on "1 USD = 1369.86 KRW"
+    /// would otherwise read back, and save, 0.000730002 for a stored 0.00073.
+    private var untouchedEdit: ExchangeRate? {
+        guard let editing, inverted == seedInverted, rateText == seedText else { return nil }
+        return editing
     }
 
     /// The stored USD-per-unit figure for what is on the form, nil unless > 0.
     private var usdPerUnit: Double? {
-        if let editing, !inverted, rateText == seedText { return editing.rate }
+        if let untouchedEdit { return untouchedEdit.rate }
         if let b = flipStillShown, let typed = DecimalInput.parse(b.typed) {
             return quote.usdPerUnit(entered: typed, inverted: !inverted)
         }
         return DecimalInput.parse(rateText).flatMap { quote.usdPerUnit(entered: $0, inverted: inverted) }
     }
 
-    private func save() {
+    private func save() { save(replacing: false) }
+
+    /// `replacing` is the answer to the replace question; until it is given, a save
+    /// that would overwrite another row for this day asks instead of writing.
+    private func save(replacing: Bool) {
         errorMessage = nil
         guard !code.isEmpty else { errorMessage = String(localized: "Pick a currency."); return }
         guard let usdPerUnit else {
             errorMessage = String(localized: "Enter a rate greater than 0."); return
         }
+        if replaced != nil, !replacing { confirmingReplace = true; return }
         // Snapshot before the write, which reprojects (see AddLedgerSheet).
         let activation = editing == nil ? fxTrackedAfterActivating(code, tracked: activated) : nil
         do {

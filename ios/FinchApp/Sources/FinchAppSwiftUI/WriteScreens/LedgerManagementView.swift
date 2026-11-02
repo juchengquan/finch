@@ -200,6 +200,9 @@ struct EditLedgerSheet: View {
     @State private var name: String
     @State private var base: String
     @State private var errorMessage: String?
+    /// A base change refused for want of a rate — offers to enter it, as the
+    /// transaction sheets do under the same refusal.
+    @State private var noRate: FxNoRateRefusal?
 
     init(ledger: Ledger) {
         self.ledger = ledger
@@ -223,6 +226,7 @@ struct EditLedgerSheet: View {
                 Section {
                     TextField("Name", text: $name)
                     CurrencyPickerRow(title: "Base currency", glyph: .currency, code: $base, activated: activated)
+                        .accessibilityIdentifier("editLedger.base")
                 } footer: {
                     if baseChanged {
                         Text("Changing the base currency re-derives every entry's base amount.")
@@ -233,7 +237,16 @@ struct EditLedgerSheet: View {
                         run(.setDefaultLedger, ["id": .string(ledger.id)]) { store.activeLedgerId = ledger.id }
                     }.disabled(ledger.id == store.activeLedgerId)
                 }
-                if let errorMessage { Section { Text(errorMessage).foregroundStyle(.red).font(.footnote) } }
+                if let errorMessage {
+                    Section {
+                        Text(errorMessage).foregroundStyle(.red).font(.footnote)
+                        // Re-deriving every entry needs the new base's rate (or an
+                        // account currency's): offer to enter it here.
+                        if let noRate, noRate.isShowing(errorMessage) {
+                            NoRateFixButton(currency: noRate.currency) { self.errorMessage = nil }
+                        }
+                    }
+                }
             }
             .navigationTitle("Edit Ledger")
             .finchSectionSpacing()
@@ -278,7 +291,10 @@ struct EditLedgerSheet: View {
                 }
             }
             dismiss()
-        } catch { errorMessage = i18nMessage(error) }
+        } catch {
+            errorMessage = i18nMessage(error)
+            noRate = FxNoRateRefusal(error, shown: errorMessage ?? "")
+        }
     }
 
     private func run(_ action: ActionName, _ args: [String: JSONValue], then: () -> Void) {

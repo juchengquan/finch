@@ -38,6 +38,16 @@
       }
     },
     "%@ / %@": {},
+    "%@ already has a rate for that day: %@. Saving replaces it.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ 这一天已有汇率：%2$@。保存将替换它。"
+          }
+        }
+      }
+    },
     "%@ currently count every account. Excluding this one pins them to the accounts that exist today — accounts you add later will not be counted.": {
       "localizations": {
         "zh-Hans": {
@@ -3969,6 +3979,26 @@
         }
       }
     },
+    "Kept the rate you entered": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已保留你输入的汇率"
+          }
+        }
+      }
+    },
+    "Kept the rates you entered": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已保留你输入的汇率"
+          }
+        }
+      }
+    },
     "Kind": {
       "localizations": {
         "zh-Hans": {
@@ -6115,12 +6145,32 @@
         }
       }
     },
+    "Replace": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "替换"
+          }
+        }
+      }
+    },
     "Replace data": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "替换数据"
+          }
+        }
+      }
+    },
+    "Replace the rate for %@?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "替换 %@ 的汇率？"
           }
         }
       }
@@ -7875,12 +7925,42 @@
         }
       }
     },
+    "Updated %lld of %lld, kept %lld you entered": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已更新 %lld 条，共 %lld 条，保留了你输入的 %lld 条"
+          }
+        }
+      }
+    },
     "Updated %lld rates": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "已更新 %lld 条汇率"
+          }
+        }
+      }
+    },
+    "Updated %lld, kept %lld you entered": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已更新 %lld 条，保留了你输入的 %lld 条"
+          }
+        }
+      }
+    },
+    "Updated 1 rate": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已更新 1 条汇率"
           }
         }
       }

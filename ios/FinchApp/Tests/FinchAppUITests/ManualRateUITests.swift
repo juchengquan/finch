@@ -91,12 +91,37 @@ final class ManualRateUITests: XCTestCase {
         XCTAssertTrue(manual.waitForExistence(timeout: 10), "KRW's history has no manual row")
         snapshot("history")
 
-        // A hand-entered row opens for editing, seeded with what was saved.
+        // A hand-entered row opens for editing, seeded with what was saved — read the
+        // way the history reads KRW ("1 USD = 1,369.86 KRW"), not "1 KRW = ? USD".
         manual.tap()
         let editField = app.textFields["manualRate.rate"].firstMatch
         XCTAssertTrue(editField.waitForExistence(timeout: 10), "the manual row did not open for editing")
-        XCTAssertEqual(editField.value as? String, "0.00073")
+        XCTAssertEqual(editField.value as? String, "1369.86")
+        XCTAssertTrue(app.staticTexts["1 USD ="].exists, "the edit sheet does not open the way the list reads KRW")
+        // The read-back is the stored figure, not the reciprocal of the rounded field.
+        XCTAssertEqual(app.staticTexts["manualRate.inverse"].firstMatch.label, "1 KRW = 0.00073 USD")
         XCTAssertTrue(app.buttons["Delete Rate"].exists, "the edit sheet has no Delete Rate")
         snapshot("edit-rate")
+        app.buttons["Cancel"].firstMatch.tap()
+
+        // A second rate for the same day asks before it replaces the first.
+        let addHere = app.buttons["Add rate"].firstMatch
+        XCTAssertTrue(addHere.waitForExistence(timeout: 10), "KRW's history has no Add rate button")
+        addHere.tap()
+        let again = app.textFields["manualRate.rate"].firstMatch
+        XCTAssertTrue(again.waitForExistence(timeout: 10), "Add rate did not open on KRW")
+        XCTAssertTrue(app.staticTexts["1 USD ="].exists, "Add rate does not open the way the list reads KRW")
+        again.tap()
+        again.typeText("1400")
+        app.buttons["Save"].firstMatch.tap()
+        let replace = app.alerts.buttons["Replace"].firstMatch
+        XCTAssertTrue(replace.waitForExistence(timeout: 5), "saving over the day's rate did not ask first")
+        snapshot("replace-rate")
+        app.alerts.buttons["Cancel"].firstMatch.tap()
+        XCTAssertTrue(again.waitForExistence(timeout: 5), "cancelling the question closed the sheet")
+        app.buttons["Save"].firstMatch.tap()
+        XCTAssertTrue(replace.waitForExistence(timeout: 5))
+        replace.tap()
+        XCTAssertTrue(addHere.waitForExistence(timeout: 10), "the sheet did not close after Replace")
     }
 }
