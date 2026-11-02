@@ -96,6 +96,23 @@ public struct ForecastTrough: Equatable, Sendable, Codable {
     public let date: String
     public let balance: Double
 }
+/// What the template walk alone cannot see, for `Selectors.accountForecast`.
+/// Native-only: the web's `accountForecast` has no such input (see there).
+public struct ForecastActivity {
+    /// The ledger's projected rows — what was already posted, and what is pending.
+    public let txns: [Tx]
+    /// Account id → its currency, for the far side of a scheduled transfer.
+    public let accountCurrencies: [String: String]
+    /// `amount` in `from`, as `to`, on the day `date` — the engine's rate lookup
+    /// (`FxConvert`). nil when there is no rate, where posting would refuse.
+    public let convert: (_ amount: Double, _ from: String, _ to: String, _ date: String) -> Double?
+
+    public init(txns: [Tx], accountCurrencies: [String: String] = [:],
+                convert: @escaping (_ amount: Double, _ from: String, _ to: String, _ date: String) -> Double? = { _, _, _, _ in nil }) {
+        self.txns = txns; self.accountCurrencies = accountCurrencies; self.convert = convert
+    }
+}
+
 public struct AccountForecast: Equatable, Sendable, Codable {
     public let today: String
     public let horizonDays: Int
@@ -241,10 +258,37 @@ extension Selectors {
 
     // MARK: accountForecast
 
+    /// The account's balance walked forward `horizonDays` from `today` over the
+    /// fixed-amount scheduled items that touch it. Mirror of the web's
+    /// `accountForecast` (lib/select.ts), which the parity fixtures pin — when
+    /// `activity` is nil it is exactly that: every occurrence after today, a
+    /// transfer credited at its nominal amount.
+    ///
+    /// With `activity` (the app always passes it; native-only) it also counts what
+    /// the template walk cannot see. Without it, three things went wrong:
+    ///
+    /// - **Posted occurrences are left out** (A2). A bill paid early is already in
+    ///   the balance; counting it again on its due day forecast an overdraft that
+    ///   would never happen. Confirmed rows are in the balance; pending ones are
+    ///   counted as rows, below.
+    /// - **Pending rows and occurrences due by today land today** (A3). A pending
+    ///   row is not in the stored balance, and the occurrence is not after today,
+    ///   so on a bill's due day it was in neither — the card and its warning
+    ///   vanished. Pending rows a scheduled item posted, unposted occurrences due
+    ///   today and MISSED ones (`isMissed`, the rule the overdue caption and Post
+    ///   use) all leave the balance on day 0. Their events keep their own date,
+    ///   so an event dated on or before `today` means "owed now".
+    /// - **A transfer between currencies is converted** (A4). The template's
+    ///   amount is in the SENDING account's currency; the receiving side is
+    ///   valued with `activity.convert` on the occurrence's day, the lookup posting
+    ///   uses. With no rate it is left out: posting would be refused, and guessing
+    ///   1:1 is what turned $100 into ¥100, or ¥150,000 into $150,000.
     public static func accountForecast(_ account: AccountRow, _ scheduled: [ScheduledTemplate],
-                                       _ today: String, _ horizonDays: Int) -> AccountForecast {
+                                       _ today: String, _ horizonDays: Int,
+                                       activity: ForecastActivity? = nil) -> AccountForecast {
         let start = account.balance
         let end = addDaysIso(today, horizonDays)
+        let posted = activity.map { scheduledPostedMap($0.txns) }
 
         var events: [ForecastEvent] = []
         for t in scheduled {
@@ -258,22 +302,52 @@ extension Selectors {
             else if t.type == "transfer" && isToHere { sign = 1 }
             else if t.type == "transfer" && isFromHere { sign = -1 }
             if sign == 0 { continue }
-            let future = occurrencesUpTo(t, end).filter { $0 > today }
-            if future.isEmpty { continue }
-            var cap = future.count
-            if let total = t.installmentTotal {
-                cap = Swift.min(cap, Swift.max(0, total - (t.installmentPaid ?? 0)))
+
+            let dates: [String]
+            var cap: Int
+            if let posted {
+                // Unposted only, oldest first — posting catches up in this order, so
+                // the caps below spend themselves the same way.
+                let unposted = occurrencesUpTo(t, end).filter { posted["\(t.id)|\($0)"] == nil }
+                let missed = missedPredicate(template: t, posted: posted, today: today)
+                dates = unposted.filter { $0 >= today || missed($0) }
+                // Everything posted counts against a cap, pending rows too: they are
+                // counted below as rows, not as occurrences still to come.
+                let prefix = "\(t.id)|"
+                let postedCount = posted.keys.reduce(0) { $0 + ($1.hasPrefix(prefix) ? 1 : 0) }
+                cap = dates.count
+                if let total = t.installmentTotal { cap = Swift.min(cap, Swift.max(0, total - postedCount)) }
+                if let maxEx = t.maxExecutions { cap = Swift.min(cap, Swift.max(0, maxEx - postedCount)) }
+            } else {
+                dates = occurrencesUpTo(t, end).filter { $0 > today }
+                cap = dates.count
+                if let total = t.installmentTotal {
+                    cap = Swift.min(cap, Swift.max(0, total - (t.installmentPaid ?? 0)))
+                }
+                if let maxEx = t.maxExecutions { cap = Swift.min(cap, maxEx) }
             }
-            if let maxEx = t.maxExecutions { cap = Swift.min(cap, maxEx) }
-            for i in 0..<cap {
-                events.append(ForecastEvent(date: future[i], amount: Double(sign) * abs(amt),
+            for d in dates.prefix(cap) {
+                guard let value = scheduledAmount(t, amt, onto: account, isToHere: isToHere, on: d,
+                                                  activity: activity) else { continue }
+                events.append(ForecastEvent(date: d, amount: Double(sign) * value,
                                             description: t.description ?? t.name, templateId: t.id))
+            }
+        }
+        if let activity {
+            // A pending row a scheduled item posted: owed, and not in the balance yet.
+            // On its own date when that is still ahead, else today.
+            for tx in activity.txns where tx.account == account.id && (tx.pending ?? false) {
+                guard let templateId = tx.sourceTemplateId, tx.date <= end,
+                      let value = amountInAccountCurrency(tx, account, activity) else { continue }
+                events.append(ForecastEvent(date: tx.date, amount: value, description: tx.merchant,
+                                            templateId: templateId))
             }
         }
         events.sort { $0.date != $1.date ? $0.date < $1.date : $0.templateId < $1.templateId }   // tie-break: deterministic across templates
 
+        // Anything dated on or before today is owed now: it lands on the first day.
         var eventsByDate: [String: Double] = [:]
-        for e in events { eventsByDate[e.date, default: 0] += e.amount }
+        for e in events { eventsByDate[Swift.max(e.date, today), default: 0] += e.amount }
         var series: [ForecastSeriesPoint] = []
         var balance = start
         var troughDate = today
@@ -290,6 +364,31 @@ extension Selectors {
             startingBalance: r2(start), endingBalance: r2(balance),
             trough: ForecastTrough(date: troughDate, balance: r2(troughBalance)),
             events: events, series: series)
+    }
+
+    /// One occurrence's size on `account`, unsigned. The template's amount is in its
+    /// `fromAccountId`'s currency for a transfer, its account's otherwise — so only
+    /// the receiving side of a transfer can need converting. nil leaves it out: no
+    /// rate, where posting would refuse. A sending account the activity does not know
+    /// (another ledger's) keeps the nominal amount, as without activity.
+    private static func scheduledAmount(_ t: ScheduledTemplate, _ amount: Double, onto account: AccountRow,
+                                        isToHere: Bool, on date: String,
+                                        activity: ForecastActivity?) -> Double? {
+        let value = abs(amount)
+        guard let activity, t.type == "transfer", isToHere,
+              let here = account.currency, let from = t.fromAccountId.flatMap({ activity.accountCurrencies[$0] }),
+              from != here else { return value }
+        return activity.convert(value, from, here, date).map(abs)
+    }
+
+    /// A row's posting in its account's currency, signed. `nativeAmount` is what was
+    /// typed, in `currency`, which is the account's unless the row was entered in
+    /// another — then it is converted the way the posting was, on the row's date.
+    private static func amountInAccountCurrency(_ tx: Tx, _ account: AccountRow,
+                                                _ activity: ForecastActivity) -> Double? {
+        let native = tx.nativeAmount ?? tx.amount
+        guard let ccy = tx.currency, let here = account.currency, ccy != here else { return native }
+        return activity.convert(native, ccy, here, tx.date)
     }
 
     /// All occurrences of `templates` within [from, through] inclusive, each paired
@@ -421,9 +520,20 @@ extension Selectors {
     /// asks this directly, so the two agree.
     public static func isMissed(template: ScheduledTemplate, date: String, posted: [String: Bool],
                                 today: String) -> Bool {
-        guard date < today, posted["\(template.id)|\(date)"] == nil, !template.isSkipped(date) else { return false }
-        guard let floor = missedFloor(template: template, posted: posted, today: today) else { return true }
-        return date >= floor
+        missedPredicate(template: template, posted: posted, today: today)(date)
+    }
+
+    /// `isMissed` for many dates of one template: the floor is worked out once,
+    /// not once per date. The rule itself lives here, so the two cannot differ.
+    static func missedPredicate(template: ScheduledTemplate, posted: [String: Bool],
+                                today: String) -> (String) -> Bool {
+        var floor: String??    // worked out on first need: most dates fail the cheap checks
+        return { date in
+            guard date < today, posted["\(template.id)|\(date)"] == nil, !template.isSkipped(date) else { return false }
+            if floor == nil { floor = .some(missedFloor(template: template, posted: posted, today: today)) }
+            guard let f = floor! else { return true }
+            return date >= f
+        }
     }
 
     /// The earliest day an unposted occurrence can count as missed; nil when the

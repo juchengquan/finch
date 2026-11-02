@@ -85,7 +85,8 @@ public enum NotificationPlanner {
         categories: [CategoryNode], today: String, wallToday: String, ledgerId: String,
         enabled: Set<NotificationKind>, money: (Double) -> String, recentLimit: Int = 50,
         deliveryHour: Int = 9, calendar: Calendar = .current,
-        accounts: [AccountRow] = [], accountMoney: ((Double, String?) -> String)? = nil
+        accounts: [AccountRow] = [], accountMoney: ((Double, String?) -> String)? = nil,
+        fxConvert: ((Double, String, String, String) -> Double?)? = nil
     ) -> [PlannedNotification] {
         var out: [PlannedNotification] = []
 
@@ -127,9 +128,15 @@ public enum NotificationPlanner {
             func format(_ amount: Double, _ currency: String?) -> String {
                 accountMoney?(amount, currency) ?? money(amount)
             }
+            //
+            // A bill due today or missed takes it below zero TODAY, on every day it
+            // stays unpaid; the id then carries `crossingKey`, the bill's own date, so
+            // it is one alert, not one each morning.
+            let activity = AccountForecastPanel.activity(txns: txns, accounts: accounts, convert: fxConvert)
             for a in accounts where a.isActive != false {
-                guard let panel = AccountForecastPanel.make(account: a, scheduled: scheduled, today: wallToday),
-                      let crossing = panel.crossesBelowZeroOn else { continue }
+                guard let panel = AccountForecastPanel.make(account: a, scheduled: scheduled, today: wallToday,
+                                                            activity: activity),
+                      let crossing = panel.crossesBelowZeroOn, let key = panel.crossingKey else { continue }
                 let name = a.name ?? String(localized: "Account")
                 let notifyDay = Selectors.horizonDay(from: crossing, addingDays: -lowBalanceLeadDays)
                 let crossingLabel = AccountForecastPanel.dayLabel(crossing)
@@ -140,7 +147,7 @@ public enum NotificationPlanner {
                     ? String(localized: "Scheduled items take it below zero on \(crossingLabel), to \(lowAmount).")
                     : String(localized: "Scheduled items take it below zero on \(crossingLabel), down to \(lowAmount) by \(AccountForecastPanel.dayLabel(panel.low.date)).")
                 out.append(PlannedNotification(
-                    id: "lowBalance:\(a.id):\(crossing)", kind: .lowBalance,
+                    id: "lowBalance:\(a.id):\(key)", kind: .lowBalance,
                     title: String(localized: "Low balance ahead: \(name)"),
                     body: body,
                     tab: .accounts, focusId: a.id,

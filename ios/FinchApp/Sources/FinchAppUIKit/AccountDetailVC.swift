@@ -547,8 +547,7 @@ final class AccountDetailVC: UIViewController {
         // Shown in both lenses — it is about the balance, not a view of the rows — and
         // absent when nothing scheduled lands on this account in the window. Shared with
         // the macOS screen and the low-balance alert; see AccountForecastPanel.
-        forecastPanel = AccountForecastPanel.make(account: account, scheduled: store.scheduled,
-                                                  today: store.wallToday)
+        forecastPanel = store.forecastPanel(for: account)
         if forecastPanel != nil {
             snap.appendSections([.forecast])
             snap.appendItems([Self.forecastID], toSection: .forecast)
