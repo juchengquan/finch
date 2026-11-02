@@ -8,6 +8,11 @@ import FinchCore
 /// look". The queue is what lets you work through those like an inbox: see them,
 /// tick them off one at a time or all together, and watch the list empty.
 ///
+/// It starts from what was entered after the update that brought it: iOS had no
+/// queue before #809, so nothing stamped `reviewed_at` and an existing install's
+/// whole history read "needs review". The update marks that history reviewed once
+/// (`Migrations.clearReviewBacklog`, which also covers a restored older backup).
+///
 /// **Not the "To confirm" bucket.** That one is about STATUS: a pending row is money
 /// that has not settled yet (a scheduled item that came due, a wrist add from the
 /// Watch), and confirming it changes balances. Review is about ATTENTION: the row is
@@ -40,19 +45,44 @@ enum ReviewQueue {
         status == Self.status ? "confirmed" : status
     }
 
-    /// Narrow an already-filtered list to the queue, when the status asks for it.
-    /// Order is preserved, so the sort menu still applies.
+    /// Narrow an already-filtered list to the queue, when the status asks for it:
+    /// the unreviewed rows, one per entry (`onePerEntry`). Order is preserved, so
+    /// the sort menu still applies.
     static func narrow(_ txns: [Tx], status: String?) -> [Tx] {
-        status == Self.status ? txns.filter(needsReview) : txns
+        status == Self.status ? onePerEntry(txns.filter(needsReview)) : txns
     }
 
-    /// How many rows in a ledger still need review — the number on the entry chip.
+    /// What the queue counts and lists: the ENTRY. `Tx.id` is a posting id, so a
+    /// transfer is two rows and a purchase paid from two cards is two rows — but
+    /// `reviewed_at` lives on the entry, and reviewing either row reviews both
+    /// (`setReviewed` resolves the posting to its entry). Counted per row, six
+    /// transfers read "12 to review" and one swipe took two off.
+    static func entryKey(_ tx: Tx) -> String { tx.entryId ?? tx.id }
+
+    /// One row per entry, in the order given, so the queue's rows and its count say
+    /// the same number. The row kept is the leg money left from when there is one —
+    /// a transfer reads "To Savings", the way it was made — otherwise the first.
+    /// Under an account filter only the leg on that account is there, and it stays.
+    /// The other legs are not lost: they leave with the entry when it is reviewed,
+    /// and the feed outside the queue still shows every one.
+    static func onePerEntry(_ rows: [Tx]) -> [Tx] {
+        var kept: [String: Tx] = [:]
+        for tx in rows {
+            let key = entryKey(tx)
+            if let current = kept[key], !(current.amount >= 0 && tx.amount < 0) { continue }
+            kept[key] = tx
+        }
+        return rows.filter { kept[entryKey($0)]?.id == $0.id }
+    }
+
+    /// How many entries in a ledger still need review — the number on the entry
+    /// chip, and the same number the queue then lists with no filter on.
     /// Deliberately ignores the feed's search and filters: it says how big the whole
     /// queue is, so it does not shrink as you type into the search field.
     static func count(_ txns: [Tx], ledgerId: String) -> Int {
-        txns.reduce(0) { n, tx in
-            n + ((tx.ledgerId ?? "personal") == ledgerId && needsReview(tx) ? 1 : 0)
-        }
+        Set(txns.lazy
+            .filter { ($0.ledgerId ?? "personal") == ledgerId && needsReview($0) }
+            .map(entryKey)).count
     }
 
     /// "Mark all reviewed" asks first from this many rows up.

@@ -1,14 +1,29 @@
 import XCTest
 @testable import FinchApp
 import FinchCore
+import GRDB
 
 /// `ReviewQueue` — which rows Activity's review queue holds, how it is counted, and
 /// that "Mark all reviewed" touches exactly the rows it was handed.
 final class ReviewQueueTests: XCTestCase {
     private func tx(_ id: String, pending: Bool? = nil, reviewedAt: String? = nil,
-                    ledgerId: String? = "personal") -> Tx {
-        Tx(id: id, merchant: "m", amount: -10, account: "a", date: "2026-09-01",
-           pending: pending, ledgerId: ledgerId, reviewedAt: reviewedAt)
+                    ledgerId: String? = "personal", entryId: String? = nil,
+                    amount: Double = -10, account: String = "a") -> Tx {
+        var t = Tx(id: id, merchant: "m", amount: amount, account: account, date: "2026-09-01",
+                   pending: pending, ledgerId: ledgerId, reviewedAt: reviewedAt)
+        t.entryId = entryId
+        return t
+    }
+
+    /// Both rows of one transfer: the leg that left `from`, the leg that reached `to`.
+    /// Same entry — reviewing either reviews both.
+    private func transfer(_ entry: String, from: String = "chk", to: String = "sav") -> [Tx] {
+        var out = tx("\(entry)-in", entryId: entry, amount: 500, account: to)
+        out.kind = "transfer"
+        var leg = tx("\(entry)-out", entryId: entry, amount: -500, account: from)
+        leg.kind = "transfer"
+        // Incoming first, so "keeps the outgoing leg" is not just "keeps the first".
+        return [out, leg]
     }
 
     // MARK: Membership
@@ -68,6 +83,38 @@ final class ReviewQueueTests: XCTestCase {
         XCTAssertEqual(ReviewQueue.count([], ledgerId: "personal"), 0)
     }
 
+    /// A transfer is ONE entry with two rows. Six of them used to read "12 to
+    /// review"; reviewing is per entry, so the count is too.
+    func test_count_is_per_entry_not_per_row() {
+        let six = (1...6).flatMap { transfer("t\($0)") }
+        XCTAssertEqual(six.count, 12)
+        XCTAssertEqual(ReviewQueue.count(six, ledgerId: "personal"), 6)
+        // A purchase paid from two cards is one entry too.
+        let split = [tx("p1", entryId: "e1", account: "visa"), tx("p2", entryId: "e1", account: "amex")]
+        XCTAssertEqual(ReviewQueue.count(split + [tx("solo")], ledgerId: "personal"), 2)
+    }
+
+    /// The queue lists each entry once, so the rows and the count say the same
+    /// number. A transfer keeps the leg money left from ("To Savings").
+    func test_queue_lists_each_entry_once_keeping_the_outgoing_leg() {
+        let input = [tx("a")] + transfer("t1") + [tx("b")]
+        let rows = ReviewQueue.narrow(input, status: ReviewQueue.status)
+        XCTAssertEqual(rows.map(\.id), ["a", "t1-out", "b"])
+        XCTAssertEqual(rows.count, ReviewQueue.count(input, ledgerId: "personal"))
+    }
+
+    /// Outside the queue nothing collapses: the feed still shows both legs.
+    func test_only_the_queue_collapses_legs() {
+        let input = transfer("t1")
+        XCTAssertEqual(ReviewQueue.narrow(input, status: nil).map(\.id), ["t1-in", "t1-out"])
+    }
+
+    /// Filtered to one account, the transfer shows the leg that is there.
+    func test_a_filtered_queue_keeps_the_leg_it_has() {
+        let savingsOnly = transfer("t1").filter { $0.account == "sav" }
+        XCTAssertEqual(ReviewQueue.narrow(savingsOnly, status: ReviewQueue.status).map(\.id), ["t1-in"])
+    }
+
     // MARK: Confirmation
 
     func test_mark_all_asks_from_the_threshold_up() {
@@ -97,15 +144,57 @@ final class ReviewQueueTests: XCTestCase {
 
         // Whole purchases, so a sibling leg leaving with its row cannot blur the count.
         let picked = Set(queue.prefix(2).map(\.purchaseKey))
-        let ids = queue.filter { picked.contains($0.purchaseKey) }.map(\.id)
+        let rows = queue.filter { picked.contains($0.purchaseKey) }
+        let ids = rows.map(\.id)
+        let entries = Set(rows.map { $0.entryId ?? $0.id })
         let before = ReviewQueue.count(store.txns, ledgerId: ledger)
 
         XCTAssertEqual(store.markReviewed(ids), ids.count)
 
         let after = store.txns.filter { ids.contains($0.id) }
         XCTAssertTrue(after.allSatisfy { $0.reviewedAt != nil }, "every passed row is stamped")
-        XCTAssertEqual(ReviewQueue.count(store.txns, ledgerId: ledger), before - ids.count,
+        // The count is per entry, so it drops by the entries the rows belong to.
+        XCTAssertEqual(ReviewQueue.count(store.txns, ledgerId: ledger), before - entries.count,
                        "nothing outside the passed rows left the queue")
+    }
+
+    // MARK: After the update
+
+    /// Restoring a backup an iOS build made before the review queue existed brings
+    /// back no backlog: `loadPack` migrates the staged copy, and the one-time clear
+    /// (`Migrations.clearReviewBacklog`) runs on it like on the live database.
+    ///
+    /// The sample fixture is a WEB pack — the web has had its queue all along, so
+    /// it keeps its unreviewed rows (the test above depends on that). Opening it
+    /// once with the migrator, minus the clear's record, makes it the database an
+    /// older iOS build would have exported.
+    /// Synchronous on purpose: inside an async test GRDB's `write` resolves to its
+    /// async overload.
+    private func makePreUpdateIOSDatabase(_ url: URL) throws {
+        let q = try DatabaseQueue(path: url.path)
+        try Migrations.runAll(on: q)
+        // An older iOS build's bookkeeping: every migration but the clear.
+        try q.write { try $0.execute(sql: "DELETE FROM grdb_migrations WHERE identifier = '2026-11-02-review-backlog'") }
+        try q.close()
+    }
+
+    @MainActor
+    func test_restoring_a_pre_update_backup_brings_no_backlog() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("rq-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let extracted = try Pack.extract(try Pack.parse(try Data(contentsOf: fixture("sample"))),
+                                         to: dir.appendingPathComponent("old"))
+        try makePreUpdateIOSDatabase(extracted.dbPath)
+        let pack = try Pack.build(.init(
+            dbBytes: try Data(contentsOf: extracted.dbPath),
+            meta: .init(appVersion: "1", schemaVersion: Schema.version, exportedAt: "2026-10-30T00:00:00Z",
+                        exportedFrom: nil, rowCounts: [:])))
+
+        let store = FinchStore()
+        try await store.loadPack(from: pack.bytes)
+        XCTAssertFalse(store.txns.isEmpty)
+        XCTAssertTrue(store.txns.allSatisfy { $0.pending == true || $0.reviewedAt != nil })
+        XCTAssertEqual(ReviewQueue.count(store.txns, ledgerId: store.activeLedgerId), 0)
     }
 
     @MainActor
