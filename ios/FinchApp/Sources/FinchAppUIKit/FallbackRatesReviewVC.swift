@@ -15,10 +15,13 @@ import FinchCore
 /// in the Edit sheet, so "check them and correct any that are wrong" has somewhere
 /// to start.
 ///
-/// The total stays on screen after the rates are removed, for as long as the
-/// review is open: removing them is what makes the entries worth checking, and
-/// once Currencies' notice is gone nothing else leads back to them. Leaving the
-/// review lets them go.
+/// The entries are found from their postings, not from the rates, so the total
+/// outlives the rates: it stays here, and Currencies' notice keeps leading back
+/// here, until every entry has been saved again at a real rate. The screen closes
+/// itself only when there is nothing left at all.
+///
+/// The "+" enters a rate by hand: correcting an entry needs a real rate first, and
+/// a currency no fetch reaches has no other way to get one.
 final class FallbackRatesReviewVC: UIViewController {
 
     private let store = FinchStore.shared
@@ -35,13 +38,13 @@ final class FallbackRatesReviewVC: UIViewController {
     private var suspects: [FallbackFxRates.Suspect] = []
     private var suspectByID: [String: FallbackFxRates.Suspect] = [:]
 
-    /// Every rate this screen has listed, removed or not, oldest first. The entries
-    /// row reads these, so it outlives the rates (see the type's comment).
-    private var listed: [FallbackFxRates.Suspect] = []
-    /// What the entries row shows: every entry `listed` converted, each once, and
-    /// how many of those a transaction list here can't show.
+    /// What the entries row shows: every entry booked at 1:1, each once, and how
+    /// many of those a transaction list here can't show.
     private var entryTotal = 0
     private var entriesUnlisted = 0
+    /// The currency the "+" opens on — the one currency left to rate, else none —
+    /// once the button is built (the outer optional is "not built yet").
+    private var addRateCurrency: String?? = nil
 
     private static func id(_ s: FallbackFxRates.Suspect) -> String { "\(s.currency)|\(s.date)" }
 
@@ -53,11 +56,20 @@ final class FallbackRatesReviewVC: UIViewController {
         configureDataSource()
         applySnapshot()
 
-        // A refresh or a rate typed elsewhere can turn a suspect row into a real one.
+        // A refresh or a rate typed elsewhere can turn a suspect row into a real
+        // one, and an entry saved again at a real rate leaves the total. Memoized
+        // in the store, so a write that changes neither costs no query.
         store.objectWillChange
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.applySnapshot() }
             .store(in: &cancellables)
+    }
+
+    /// Back from the entries list, where the last ones may have been corrected:
+    /// the sink skips the pop while another screen is on top, so check again here.
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        applySnapshot()
     }
 
     // MARK: Collection view
@@ -119,8 +131,16 @@ final class FallbackRatesReviewVC: UIViewController {
                 case 1: String(localized: "1 entry")
                 default: String(localized: "\(s.entryCount) entries")
                 }
-                if s.entryCount > 0 { cell.accessories = [.disclosureIndicator()] }
-                TrailingLabel.install(on: cell, text: used, color: .secondaryLabel)
+                // Built fresh on every configure, not `TrailingLabel`: that one keeps
+                // its label across reconfigures by never touching `accessories`, and
+                // the reset above throws it away, so the count vanished on the first
+                // reconfigure. Nothing here has a switch to protect.
+                let label = UILabel()
+                label.text = used
+                label.font = .preferredFont(forTextStyle: .body)
+                label.textColor = .secondaryLabel
+                cell.accessories = (s.entryCount > 0 ? [.disclosureIndicator()] : [])
+                    + [.customView(configuration: .init(customView: label, placement: .trailing()))]
             }
             cell.contentConfiguration = cfg
         }
@@ -132,9 +152,9 @@ final class FallbackRatesReviewVC: UIViewController {
             var cfg = view.defaultContentConfiguration()
             switch self.sectionIDs[indexPath.section] {
             case .rates:
-                cfg.text = String(localized: "An earlier version converted a currency it had no exchange rate for at 1:1, and saved that 1 as the currency's rate. These rates still convert it 1:1. Rates you typed or fetched are never listed here.")
+                cfg.text = String(localized: "An earlier version converted a currency it had no exchange rate for at 1:1, and saved that 1 as the currency's rate. New entries no longer use these, but they still show as the currency's rate. Rates you typed or fetched are never listed here.")
             case .entries:
-                cfg.text = String(localized: "Removing the rates leaves these entries as they are. They aren't recalculated, because that would change account balances and entries you have reconciled. Once a real rate is in, check them and correct any that are wrong.")
+                cfg.text = String(localized: "These entries aren't recalculated for you, because that would change account balances and entries you have reconciled. Give the currency a real rate (tap + to enter one by hand, or turn it on in Currencies and tap Refresh now), then open each entry, check it and save it. Each one leaves this list once it's saved at a real rate.")
             case .remove:
                 break
             }
@@ -150,23 +170,27 @@ final class FallbackRatesReviewVC: UIViewController {
     }
 
     private func applySnapshot() {
-        suspects = store.fallbackRateSuspects()
-        let known = Set(listed.map(Self.id))
-        listed = (listed + suspects.filter { !known.contains(Self.id($0)) })
-            .sorted { ($0.date, $0.currency) < ($1.date, $1.currency) }
-        let ids = store.fallbackRateEntryIds(listed)
+        let review = store.fallbackRateReview()
+        suspects = review.rates
+        let ids = review.entryIds
         entryTotal = ids.count
         entriesUnlisted = ids.count - FallbackFxRates.rows(store.txns, entryIds: ids).count
 
-        // Nothing left to review or to check (removed here, or became real
-        // elsewhere, and no entries were booked with them): go back.
-        if suspects.isEmpty && entryTotal == 0 {
+        // Nothing left to remove or to correct: go back.
+        if review.isEmpty {
             if navigationController?.topViewController === self {
                 navigationController?.popViewController(animated: true)
             }
             return
         }
         suspectByID = Dictionary(uniqueKeysWithValues: suspects.map { (Self.id($0), $0) })
+
+        let currencies = Set(suspects.map(\.currency)).union(review.entries.flatMap(\.currencies))
+        let preset: String? = currencies.count == 1 ? currencies.first : nil
+        if addRateCurrency != .some(preset) {
+            addRateCurrency = .some(preset)
+            navigationItem.rightBarButtonItem = addRateBarButton(currency: preset)
+        }
 
         var snap = NSDiffableDataSourceSnapshot<SectionID, String>()
         if !suspects.isEmpty {
@@ -200,13 +224,13 @@ final class FallbackRatesReviewVC: UIViewController {
         guard !toRemove.isEmpty else { return }
         let sheet = UIAlertController(
             title: nil,
-            message: String(localized: "A write in these currencies will then ask for a real rate. Turn the currency on in Currencies and tap Refresh now to fetch one."),
+            message: String(localized: "Removing them changes no entry. The entries booked at 1:1 stay listed here, and in Currencies, until you correct them."),
             preferredStyle: .actionSheet)
         sheet.addAction(UIAlertAction(title: removeTitle(toRemove.count), style: .destructive) { [weak self] _ in
             guard let self else { return }
             self.store.removeFallbackRates(toRemove)
             // The reprojection's sink re-reads. The entries row stays to be checked;
-            // with none booked, an empty list pops back to Currencies.
+            // with none booked, an empty review pops back to Currencies.
             self.applySnapshot()
         })
         sheet.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel))
@@ -234,11 +258,10 @@ extension FallbackRatesReviewVC: UICollectionViewDelegate {
             confirmRemove(from: cv.cellForItem(at: indexPath))
             return
         case Self.entriesID:
-            // `listed`, not `suspects`: after a removal this is the only way back in.
-            source = .bookedAtOneToOne(title: String(localized: "Booked at 1:1"), rates: listed)
+            source = .bookedAtOneToOne(title: String(localized: "Booked at 1:1"))
         default:
             guard let s = suspectByID[id] else { return }
-            source = .bookedAtOneToOne(title: "\(s.currency) · \(fxDisplayDay(s.date))", rates: [s])
+            source = .bookedAtOneToOne(title: "\(s.currency) · \(fxDisplayDay(s.date))", rate: s)
         }
         navigationController?.pushViewController(TxListDetailVC(source), animated: true)
     }

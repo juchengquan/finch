@@ -250,7 +250,9 @@ public enum Entries {
     /// adding a closer one, changed nothing for later entries. The 1.0 rows pre-#820
     /// code saved for an unrated currency are such copies too (`FallbackFxRates`), so
     /// skipping them refuses the write instead of booking ₩10,000 as $10,000.
-    private static func lookupRateToHub(_ db: Database, _ currency: String, _ date: String) throws -> Double? {
+    /// `FallbackFxRates` reads rates through this too, so the 1:1 review and a
+    /// write agree on what a currency's rate on a date is.
+    static func lookupRateToHub(_ db: Database, _ currency: String, _ date: String) throws -> Double? {
         if currency == "USD" { return 1 }
         if let before = try Double.fetchOne(db, sql:
             "SELECT rate FROM exchange_rates WHERE currency = ? AND date <= ? AND COALESCE(source, '') <> 'derived' ORDER BY date DESC LIMIT 1",

@@ -40,9 +40,11 @@ final class CurrenciesVC: UIViewController {
     private static let refreshID = "__refresh__"
     private static let fallbackNoticeID = "__fallback_notice__"
 
-    /// The 1.0 rates pre-#820 code saved by mistake. Re-read on each reprojection,
-    /// not per search keystroke; the notice row shows only while there are any.
-    private var fallbackSuspects: [FallbackFxRates.Suspect] = []
+    /// The 1.0 rates pre-#820 code saved by mistake, and the entries it booked at
+    /// 1:1. Re-read on each reprojection (memoized, so a write that cannot change
+    /// it costs no query), not per search keystroke. The notice row shows while
+    /// either remains: once the rates are removed it is the way back to the entries.
+    private var fallbackReview = FallbackFxRates.Review.empty
 
     private var collectionView: UICollectionView!
     private var dataSource: UICollectionViewDiffableDataSource<SectionID, String>!
@@ -88,7 +90,7 @@ final class CurrenciesVC: UIViewController {
         lastUpdated = UserDefaults.standard.object(forKey: RateAutoUpdater.stampKey) as? Date
         // Before the first `applySnapshot()` — it is what the sections are built from.
         frozenGrouping = effectiveTracked
-        fallbackSuspects = store.fallbackRateSuspects()
+        fallbackReview = store.fallbackRateReview()
         configureCollectionView()
         configureDataSource()
         configureSearch()
@@ -101,7 +103,7 @@ final class CurrenciesVC: UIViewController {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self else { return }
-                self.fallbackSuspects = self.store.fallbackRateSuspects()
+                self.fallbackReview = self.store.fallbackRateReview()
                 self.applySnapshot()
             }
             .store(in: &cancellables)
@@ -257,7 +259,7 @@ final class CurrenciesVC: UIViewController {
         rowByCode = Dictionary(uniqueKeysWithValues: rows.map { ($0.code, $0) })
 
         var snap = NSDiffableDataSourceSnapshot<SectionID, String>()
-        if !fallbackSuspects.isEmpty {
+        if !fallbackReview.isEmpty {
             snap.appendSections([.fallbackNotice])
             snap.appendItems([Self.fallbackNoticeID], toSection: .fallbackNotice)
         }
@@ -300,15 +302,22 @@ final class CurrenciesVC: UIViewController {
     }
 
     /// "3 rates were saved as 1:1 by mistake" — opens `FallbackRatesReviewVC`, which
-    /// lists them and removes them only on confirmation.
+    /// lists them and removes them only on confirmation. With the rates gone it
+    /// reads "2 entries were booked at 1:1" until those are corrected.
     private func configureFallbackNotice(_ cell: UICollectionViewListCell) {
-        let n = fallbackSuspects.count
+        let n = fallbackReview.rates.count, m = fallbackReview.entries.count
         var cfg = cell.defaultContentConfiguration()
         cfg.image = UIImage(systemName: "exclamationmark.triangle.fill")
         cfg.imageProperties.tintColor = .systemOrange
-        cfg.text = n == 1 ? String(localized: "1 rate was saved as 1:1 by mistake")
-                          : String(localized: "\(n) rates were saved as 1:1 by mistake")
-        cfg.secondaryText = String(localized: "Review and remove them")
+        if n > 0 {
+            cfg.text = n == 1 ? String(localized: "1 rate was saved as 1:1 by mistake")
+                              : String(localized: "\(n) rates were saved as 1:1 by mistake")
+            cfg.secondaryText = String(localized: "Review and remove them")
+        } else {
+            cfg.text = m == 1 ? String(localized: "1 entry was booked at 1:1")
+                              : String(localized: "\(m) entries were booked at 1:1")
+            cfg.secondaryText = String(localized: "Check and correct them")
+        }
         cfg.secondaryTextProperties.color = .secondaryLabel
         cell.contentConfiguration = cfg
         cell.accessories = [.disclosureIndicator()]

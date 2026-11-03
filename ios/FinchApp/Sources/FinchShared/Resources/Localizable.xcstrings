@@ -749,16 +749,6 @@
         }
       }
     },
-    "A write in these currencies will then ask for a real rate. Turn the currency on in Currencies and tap Refresh now to fetch one.": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "之后用这些货币记账时会要求提供真实汇率。请在「货币」中开启该货币，然后轻点「立即刷新」获取汇率。"
-          }
-        }
-      }
-    },
     "About": {
       "localizations": {
         "zh-Hans": {
@@ -1402,12 +1392,12 @@
         }
       }
     },
-    "An earlier version converted a currency it had no exchange rate for at 1:1, and saved that 1 as the currency's rate. These rates still convert it 1:1. Rates you typed or fetched are never listed here.": {
+    "An earlier version converted a currency it had no exchange rate for at 1:1, and saved that 1 as the currency's rate. New entries no longer use these, but they still show as the currency's rate. Rates you typed or fetched are never listed here.": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "旧版本在缺少汇率时会按 1:1 换算该货币，并把这个 1 保存为它的汇率。这些汇率至今仍按 1:1 换算。您输入或获取的汇率不会出现在这里。"
+            "value": "旧版本在缺少汇率时会按 1:1 换算该货币，并把这个 1 保存为它的汇率。新条目已不再使用这些汇率，但它们仍会显示为该货币的汇率。您输入或获取的汇率不会出现在这里。"
           }
         }
       }
@@ -1949,6 +1939,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "查看余额"
+          }
+        }
+      }
+    },
+    "Check and correct them": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查并更正"
           }
         }
       }
@@ -6095,12 +6095,12 @@
         }
       }
     },
-    "Removing the rates leaves these entries as they are. They aren't recalculated, because that would change account balances and entries you have reconciled. Once a real rate is in, check them and correct any that are wrong.": {
+    "Removing them changes no entry. The entries booked at 1:1 stay listed here, and in Currencies, until you correct them.": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "移除汇率不会改动这些条目。它们不会被重新计算，因为那会改变账户余额和已对账的条目。有了真实汇率后，请检查这些条目并更正有误的部分。"
+            "value": "移除汇率不会改动任何条目。按 1:1 记账的条目会继续列在这里和「货币」中，直到您更正它们。"
           }
         }
       }
@@ -7360,6 +7360,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "目前没有可与 %@ 合并的商户。"
+          }
+        }
+      }
+    },
+    "These entries aren't recalculated for you, because that would change account balances and entries you have reconciled. Give the currency a real rate (tap + to enter one by hand, or turn it on in Currencies and tap Refresh now), then open each entry, check it and save it. Each one leaves this list once it's saved at a real rate.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这些条目不会被自动重新计算，因为那会改变账户余额和已对账的条目。请先为该货币提供真实汇率（轻点 + 手动输入，或在「货币」中开启该货币并轻点「立即刷新」），然后逐一打开条目，检查后保存。按真实汇率保存后，条目就会从此列表中移除。"
           }
         }
       }

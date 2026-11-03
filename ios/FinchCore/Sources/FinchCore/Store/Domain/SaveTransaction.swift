@@ -297,11 +297,15 @@ enum SaveTransaction {
         let priorDate = try priorEntryId.flatMap {
             try String.fetchOne(db, sql: "SELECT date FROM entries WHERE id = ?", arguments: [$0])
         }
-        let keepsValuation = kind == .transfer && priorDate == date && oldLegs.count == row.count
+        //
+        // Except one booked at 1:1 by pre-#820 code (`FallbackFxRates`): those values
+        // are the mistake, and saving it again is how the 1:1 review says to correct it.
+        let keepsValuation = try kind == .transfer && priorDate == date && oldLegs.count == row.count
             && row.allSatisfy { cell in
                 oldLegs.contains { ($0["account_id"] as String?) == cell.id
                     && abs(($0["amount"] as Double) - Entries.r2(cell.amount)) < 0.005 }
             }
+            && !(priorEntryId.map { try FallbackFxRates.isBookedAtOneToOne(db, entryId: $0) } ?? false)
 
         var legs: [Entries.Leg] = []
         for (accountId, amount) in row {

@@ -62,7 +62,11 @@ public final class FinchStore: ObservableObject {
     @Published public internal(set) var dataError: String?
 
     // Shared with the ImportExport / ViewHelpers extensions (hence internal).
-    var dbQueue: DatabaseQueue?
+    var dbQueue: DatabaseQueue? {
+        // A different database (an import, a restore) can hold different entries
+        // under the same rates and ledgers, which the review's key would not see.
+        didSet { fallbackReviewCache = nil }
+    }
     var categories: [CategoryRow] = [] {
         // Kept in step here rather than at the assignment site: `categories` is written
         // from reprojection AND from tests, and a map rebuilt in only one of those goes
@@ -90,6 +94,12 @@ public final class FinchStore: ObservableObject {
     var anomalyKeysCache: Set<String>?
     var runningBalanceCache: [String: Double]?          // txn.id → account balance (base) after that txn; lazy, invalidated each reproject
     var transferPeerCache: [String: String]?            // transfer leg id → the other leg's account id; lazy, invalidated with runningBalanceCache
+    /// The last 1:1-rate review and what it was computed from (`fallbackRateReview`).
+    /// NOT invalidated each reproject: most writes cannot change it, and the point
+    /// is to skip the scan for those.
+    var fallbackReviewCache: (key: FallbackReviewKey, review: FallbackFxRates.Review)?
+    /// How many times the review was actually computed. The seam the tests assert on.
+    var fallbackReviewRunCount = 0
 
     /// A pack that FAILED the audit gate, retained on disk so the iOS-only
     /// `forceImportCurrentPack` (D7) can swap THAT staged DB in later.
