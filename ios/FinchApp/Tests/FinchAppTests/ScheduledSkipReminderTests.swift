@@ -156,6 +156,25 @@ final class ScheduledSkipReminderTests: XCTestCase {
                        "Skipping 2026-04-15, 2026-05-15")
     }
 
+    /// The list row's swipe offers Unskip for exactly the skips its caption shows. It
+    /// used to offer Skip again, which took the NEXT month too.
+    @MainActor
+    func test_swipeUnskip_offeredForTheSkipsTheCaptionShows() {
+        let paid = postedMap(paidThroughMarch)
+        XCTAssertNil(ScheduledSkipping.swipeUnskipTarget(gym(), posted: paid, today: "2026-04-01"))
+        XCTAssertNil(ScheduledSkipping.swipeUnskipTarget(gym(skipped: ["2026-02-15"]), posted: [:], today: "2026-04-01"),
+                     "an older skip is history — the calendar still un-skips it")
+        XCTAssertEqual(ScheduledSkipping.swipeUnskipTarget(gym(skipped: ["2026-04-15"]), posted: paid, today: "2026-04-01"),
+                       "2026-04-15")
+        XCTAssertEqual(ScheduledSkipping.swipeUnskipTarget(gym(skipped: ["2026-04-15", "2026-05-15"]), posted: paid,
+                                                           today: "2026-04-01"),
+                       "2026-05-15", "the last skip is the first undone, as in the menu")
+        XCTAssertNil(ScheduledSkipping.swipeUnskipTarget(gym(skipped: ["2026-04-15"]),
+                                                         posted: postedMap(paidThroughMarch + ["2026-04-15"]),
+                                                         today: "2026-04-01"),
+                     "a skipped occurrence posted since is not skipped any more")
+    }
+
     func test_shortDayNamesTheYearOnlyWhenItDiffers() {
         XCTAssertFalse(ScheduledCaption.shortDay("2026-04-15", today: "2026-04-01").contains("2026"))
         XCTAssertTrue(ScheduledCaption.shortDay("2025-12-15", today: "2026-04-01").contains("2025"))

@@ -28,15 +28,20 @@ public struct DeleteUndo: Identifiable, Equatable {
 /// transfer, the refund links and grid membership the delete cleared on rows
 /// nobody selected — under the original ids.
 ///
-/// **When the offer ends** (`expireDeleteUndo`): after `undoWindow`; on ANY other
+/// **When the offer ends** (`expireDeleteUndo`): after `undoWindow`; on any other
 /// write through the chokepoint, including a new delete (which offers its own);
 /// when a pack import replaces the database; and when the app goes to the
-/// background. Expiring on every write is the rule that keeps an undo from
+/// background. Expiring on writes is the rule that keeps an undo from
 /// resurrecting stale state: the snapshot is only "the ledger before the delete"
 /// while nothing else has changed it. The engine refuses a stale restore on its
 /// own as a backstop, but the app never lets one get that far. The reprojection
 /// that follows the delete is not a write in this sense — it goes around `apply`
 /// — so the offer survives it.
+///
+/// The one exception is `keepsDeleteUndo`: a reviewed or cleared mark on another
+/// row. It changes nothing the snapshot holds (the deleted rows are gone, so the
+/// mark cannot land on them), and in the review queue it is the very next thing
+/// the user does — expiring on it ended the offer the instant it was made.
 ///
 /// **Receipt files:** the engine is filesystem-agnostic, so the delete only drops
 /// the attachment ROWS. The files used to be unlinked immediately; now they stay
@@ -44,16 +49,25 @@ public struct DeleteUndo: Identifiable, Equatable {
 /// pending paths are also written to UserDefaults, so a kill inside the window
 /// leaves nothing behind: the next launch sweeps them.
 extension FinchStore {
-    /// How long the offer stays up. Longer under VoiceOver, where reaching the
-    /// button takes several gestures after the announcement.
+    /// How long the offer stays up. Eight seconds, not five: the banner floats over
+    /// the rows, so a hand reaching for Undo just as it went landed on the row
+    /// underneath (the banner also swallows that late tap — `UndoBannerController`).
+    /// Longer under VoiceOver, where reaching the button takes several gestures
+    /// after the announcement.
     static var undoWindow: Duration {
         #if canImport(UIKit) && !os(watchOS)
         if UIAccessibility.isVoiceOverRunning { return .seconds(12) }
         #endif
-        return .seconds(5)
+        return .seconds(8)
     }
 
     static let undoLeftoversKey = "finch.undo.pendingUnlink"
+
+    /// Writes that leave the offer up: a flag on one other row. Not
+    /// `markAllReviewed` — that one would come back unreviewed under a "mark all".
+    static func keepsDeleteUndo(_ action: ActionName) -> Bool {
+        action == .setReviewed || action == .setCleared
+    }
 
     /// Snapshot what deleting `ids` will take. Nil only on a read failure, in which
     /// case the delete still happens — it just can't be undone.

@@ -59,7 +59,9 @@ final class UndoBannerController {
     private func render(_ offer: DeleteUndo?) {
         guard let offer else { return hide() }
         banner.message = offer.message
-        if window.isHidden {
+        window.swallowTaps(in: .null, for: 0)
+        // Faded but not yet hidden: still inside the tap guard of the last offer.
+        if window.isHidden || banner.alpha < 0.01 {
             window.isHidden = false   // NOT makeKey — the app's window keeps focus
             banner.alpha = 0
             banner.transform = CGAffineTransform(translationX: 0, y: 24)
@@ -73,16 +75,27 @@ final class UndoBannerController {
         UIAccessibility.post(notification: .announcement, argument: offer.message)
     }
 
+    /// How long, from the moment the banner starts to go, a touch on its spot is
+    /// swallowed rather than passed to the row underneath. The banner floats over
+    /// the list, so a tap aimed at Undo just as it went used to open the
+    /// transaction below — the opposite of what the hand was reaching for.
+    private static let tapGuard: TimeInterval = 0.75
+
     private func hide() {
         guard !window.isHidden else { return }
+        window.swallowTaps(in: banner.frame, for: Self.tapGuard)
         UIView.animate(withDuration: 0.2, animations: {
             self.banner.alpha = 0
             self.banner.transform = CGAffineTransform(translationX: 0, y: 24)
         }, completion: { _ in
             // A newer offer may have arrived while this one faded.
-            if self.store.deleteUndo == nil { self.window.isHidden = true }
-            else { self.banner.alpha = 1; self.banner.transform = .identity }
+            if self.store.deleteUndo != nil { self.banner.alpha = 1; self.banner.transform = .identity }
         })
+        // The window stays up through the guard — a hidden window takes no touches,
+        // so it would pass the late tap straight through.
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.tapGuard) {
+            if self.store.deleteUndo == nil, self.banner.alpha < 0.01 { self.window.isHidden = true }
+        }
     }
 
     private func undo() {
@@ -106,13 +119,28 @@ final class UndoBannerController {
     }
 }
 
-/// A window that only takes touches landing on `passthroughTarget`.
+/// A window that only takes touches landing on `passthroughTarget` — and, for a
+/// moment after the target goes, swallows the ones landing where it was.
 final class PassthroughWindow: UIWindow {
     weak var passthroughTarget: UIView?
+    private var swallowRect = CGRect.null
+    private var swallowUntil = Date.distantPast
+
+    /// Take, and drop, every touch inside `rect` (window coordinates) for the next
+    /// `duration` seconds. A zero duration ends the guard.
+    func swallowTaps(in rect: CGRect, for duration: TimeInterval) {
+        swallowRect = rect
+        swallowUntil = Date().addingTimeInterval(duration)
+    }
+
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        guard let target = passthroughTarget, target.alpha > 0.01,
-              let hit = super.hitTest(point, with: event), hit.isDescendant(of: target) else { return nil }
-        return hit
+        guard let target = passthroughTarget else { return nil }
+        if target.alpha > 0.01, let hit = super.hitTest(point, with: event), hit.isDescendant(of: target) {
+            return hit
+        }
+        // The window itself has no gestures, so returning it swallows the touch.
+        if Date() < swallowUntil, swallowRect.contains(point) { return self }
+        return nil
     }
 }
 

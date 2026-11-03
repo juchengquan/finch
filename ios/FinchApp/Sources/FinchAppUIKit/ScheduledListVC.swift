@@ -594,7 +594,10 @@ final class ScheduledListVC: UIViewController {
 
     /// Post outermost (a full swipe posts), Skip inside it. A calendar row's actions
     /// both act on that row's occurrence; a list row's Skip takes this cycle's
-    /// (`Selectors.skipTarget`). A skipped calendar occurrence offers only Unskip.
+    /// (`Selectors.skipTarget`). A skipped calendar occurrence offers only Unskip,
+    /// and a list row whose caption reads "Skipping …" offers Unskip in Skip's place:
+    /// Skip again there took the NEXT occurrence too, and the list had no way back.
+    /// Skipping several ahead stays in the row's menu, which names each date.
     private func leadingSwipe(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         // A calendar row posts the occurrence it is showing; a list row has no single
         // occurrence, so it passes nil and `post` resolves which one is meant.
@@ -617,6 +620,14 @@ final class ScheduledListVC: UIViewController {
         // A posted calendar occurrence can't be skipped — the engine refuses it, so
         // the button isn't offered. A list row skips this cycle's occurrence, if any.
         let posted = Selectors.scheduledPostedMap(store.txns)
+        if occ == nil, let unskipDate = ScheduledSkipping.swipeUnskipTarget(t, posted: posted, today: store.wallToday) {
+            actions.append(SwipeAction.make(String(localized: "Unskip"),
+                                            systemImage: "arrow.uturn.backward",
+                                            tint: .systemIndigo) { [weak self] done in
+                self?.unskip(t, unskipDate); done(true)
+            })
+            return UISwipeActionsConfiguration(actions: actions)
+        }
         let skipDate = occ.map { posted["\(t.id)|\($0.date)"] == nil ? $0.date : nil }
             ?? ScheduledSkipping.skipTarget(t, store: store)
         if let skipDate {

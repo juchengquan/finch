@@ -376,12 +376,22 @@ extension FinchStore {
     /// the active ledger's rows, or a transfer of more than two legs) — the row then
     /// falls back to "Transfer". The leg → peer map is built once per projection, like
     /// the running balance, because this runs per visible row.
+    ///
+    /// The peer may be ARCHIVED: archiving keeps an account's history, and `accounts`
+    /// lists only the active ones, so those transfers used to read just "Transfer".
+    /// The archived names are read once, with the map, and only when a peer needs one.
     public func transferTitle(for tx: Tx) -> String? {
         guard tx.kind == "transfer" else { return nil }
-        if transferPeerCache == nil { transferPeerCache = TransferLegs.peers(txns) }
-        guard let peerId = transferPeerCache?[tx.id],
-              let name = accounts.first(where: { $0.id == peerId })?.name, !name.isEmpty
-        else { return nil }
+        if transferPeerCache == nil {
+            var names: [String: String] = [:]
+            for a in accounts where names[a.id] == nil { names[a.id] = a.name }
+            let peers = TransferLegs.peers(txns)
+            if peers.values.contains(where: { names[$0] == nil }) {
+                for a in archivedAccounts() where names[a.id] == nil { names[a.id] = a.name }
+            }
+            transferPeerCache = peers.compactMapValues { names[$0] }
+        }
+        guard let name = transferPeerCache?[tx.id], !name.isEmpty else { return nil }
         return tx.amount < 0 ? String(localized: "To \(name)") : String(localized: "From \(name)")
     }
 
