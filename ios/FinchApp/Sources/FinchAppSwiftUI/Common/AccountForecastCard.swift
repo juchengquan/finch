@@ -55,13 +55,13 @@ struct AccountForecastCard: View {
 
     /// "Today" when the balance never dips — the low point is where it starts.
     private var lowCaption: String {
-        panel.dips ? AccountForecastPanel.dayLabel(panel.low.date) : String(localized: "Today")
+        panel.dips ? panel.dayLabel(panel.low.date) : String(localized: "Today")
     }
 
     private var warning: String? {
         guard panel.warns else { return nil }
         if let day = panel.crossesBelowZeroOn {
-            return String(localized: "Drops below zero on \(AccountForecastPanel.dayLabel(day))")
+            return String(localized: "Drops below zero on \(panel.dayLabel(day))")
         }
         return String(localized: "Already below zero")
     }
