@@ -17,14 +17,17 @@ final class DemoSeedScheduledTests: XCTestCase {
 
     private struct Demo { let txns: [Tx]; let templates: [ScheduledTemplate]; let today: String }
 
+    /// One clock read for the seed and the test: reading it twice could fall either
+    /// side of midnight, and then "today" was a day the seed never saw.
     @MainActor
     private func seeded() throws -> Demo {
+        let now = Date()
         let q = try DatabaseQueue()
         try Migrations.runAll(on: q)
-        try SimulatorDemoSeed.seed(q)
+        try SimulatorDemoSeed.seed(q, now: now)
         return Demo(txns: try Projection.run(dbQueue: q, ledgerId: "personal"),
                     templates: try Projection.scheduledTemplates(dbQueue: q, ledgerId: "personal"),
-                    today: FinchStore.isoDay(Date()))
+                    today: FinchStore.isoDay(now))
     }
 
     @MainActor
