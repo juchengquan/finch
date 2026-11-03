@@ -200,8 +200,7 @@ struct AccountDetailView: View {
     /// account in the window. Shown in both lenses: it is about the balance, not a view
     /// of the rows.
     @ViewBuilder private func forecastSection(_ a: AccountRow) -> some View {
-        if let panel = AccountForecastPanel.make(account: a, scheduled: store.scheduled,
-                                                 today: store.wallToday) {
+        if let panel = store.forecastPanel(for: a) {
             Section {
                 AccountForecastCard(panel: panel, currency: a.currency)
             } header: {

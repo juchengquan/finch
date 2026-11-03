@@ -120,7 +120,8 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
             // The forecast is in the account's own currency; `displayMoney` converts it
             // to the display currency exactly as the account screen's figures are, and
             // masks it in privacy mode like every other alert's amount.
-            accounts: store.accounts, accountMoney: { store.displayMoney($0, from: $1) })
+            accounts: store.accounts, accountMoney: { store.displayMoney($0, from: $1) },
+            fxConvert: { store.fxConvert($0, from: $1, to: $2, on: $3) })
 
         let pending = Set(await center.pendingNotificationRequests().map(\.identifier))
         let delivered = Set(await center.deliveredNotifications().map(\.request.identifier))
