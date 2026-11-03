@@ -54,15 +54,21 @@ final class BulkDeleteUndoUITests: XCTestCase {
         XCTAssertTrue(row().exists, "the row went before it was confirmed")
         confirm?.tap()
 
+        // Undo the moment the banner is up. The offer lasts a few seconds and every
+        // query on a slow simulator spends some of them: checking the row, then
+        // polling the tab bar, and only then tapping could use up the whole window,
+        // and the tap went to a banner that had already gone. The row leaves with the
+        // same write that puts the banner up, so that check costs one query; the tab
+        // bar waits until after the tap, when nothing is timed.
         let undo = app.buttons["undoDelete"]
-        XCTAssertTrue(undo.waitForExistence(timeout: 5), "no Undo banner after the delete")
-        XCTAssertTrue(waitUntil(5) { !self.row().exists }, "the row was not deleted")
-        XCTAssertTrue(waitUntil(5) { self.app.tabBars.firstMatch.isHittable },
-                      "the tab bar did not come back when selection ended")
-
+        XCTAssertTrue(undo.waitForExistence(timeout: 10), "no Undo banner after the delete")
+        XCTAssertTrue(waitUntil(10) { !self.row().exists }, "the row was not deleted")
         undo.tap()
-        XCTAssertTrue(row().waitForExistence(timeout: 5), "Undo did not bring the row back")
-        XCTAssertTrue(waitUntil(5) { !undo.exists }, "the banner outlived its undo")
+
+        XCTAssertTrue(row().waitForExistence(timeout: 10), "Undo did not bring the row back")
+        XCTAssertTrue(waitUntil(10) { !undo.exists }, "the banner outlived its undo")
+        XCTAssertTrue(waitUntil(10) { self.app.tabBars.firstMatch.isHittable },
+                      "the tab bar did not come back when selection ended")
     }
 
     /// The seed's Target shop, two days back: near the top of the feed whatever the

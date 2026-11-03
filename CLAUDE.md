@@ -92,7 +92,8 @@ build, not the code — so iOS-only modifiers stay shimmed in `Common/PlatformCo
 
 ```bash
 ios/scripts/ci-local.sh                        # the GATE — run before every push (~40 s warm · ~2.5 min cold)
-ios/scripts/ci-local.sh --ui                   # + the iPhone UI tests (navigation work)
+ios/scripts/ci-local.sh --ui                   # + the iPhone UI tests, whatever the diff
+ios/scripts/ci-local.sh --no-ui                # never the UI tests, whatever the diff
 ios/scripts/ci-local.sh --full                 # cold full rehearsal of the post-merge CI job
 ios/scripts/ci-local.sh --all                  # + the frontend job
 ios/scripts/ci-local.sh --sim "ios-mysim"      # pin the simulator
@@ -105,9 +106,15 @@ the base.**
 
 - **The default run IS the gate**: seconds-cost checks + app build + `FinchAppTests` on
   **warm per-worktree DerivedData** (`ios/DerivedData/ci-local`, gitignored). It skips the
-  33 UI tests (add via `--ui` for navigational changes), the duplicated `FinchCoreTests`
-  (step 2's `swift test` already ran those 434 methods), and untouched platform builds. Skips are
-  listed every run; all of them run post-merge in CI — deferred, not lost, coverage.
+  duplicated `FinchCoreTests` (step 2's `swift test` already ran those 434 methods) and
+  untouched platform builds. Skips are listed every run; all of them run post-merge in CI —
+  deferred, not lost, coverage.
+- **The iPhone UI tests are diff-gated**: they join the default run on their own when the
+  branch touches `FinchAppUIKit/`, `FinchAppSwiftUI/`, `FinchAppUITests/` or `project.yml`,
+  and are skipped otherwise (the skip line gives the current count, read from the sources).
+  `--ui` forces them on — use it when a `FinchShared` change moves what a screen shows —
+  and `--no-ui` forces them off. A test that passed only on a retry is a pass, but the run
+  names it as a non-gating warning: post-merge CI's three retries hide the same flake.
 - **`--full`** = everything, cold `mktemp` DerivedData, mirroring the post-merge job
   fail-fast. A warm gate can pass on a stale product (has happened twice); acceptable now
   only because the cold post-merge run backstops every merge. Use `--full` — or the

@@ -13,13 +13,18 @@ import GRDB
 /// To remove the demo entirely: delete this file and the `SimulatorDemoSeed.seed(...)`
 /// line in FinchStore.swift (real devices already fall back to `seedMinimalStarter`).
 enum SimulatorDemoSeed {
-    static func seed(_ q: DatabaseQueue) throws {
+    /// `now` is the one clock read the whole seed dates from; a test passes its own so
+    /// that it compares against the same day the seed used, even across midnight.
+    static func seed(_ q: DatabaseQueue, now: Date = Date()) throws {
         func apply(_ action: String, _ args: [String: JSONValue]) throws {
             try Apply.apply(dbQueue: q, action: action, args: Args(args))
         }
-        let cal = Calendar.current
-        let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd"; df.timeZone = cal.timeZone
-        let now = Date()
+        // Gregorian, whatever the device's region. `Calendar.current` and a bare
+        // DateFormatter follow the region's calendar, so in Thailand (Buddhist) every
+        // seeded date came out as 2569-…, 543 years ahead, and in Japan the year of
+        // the era.
+        let cal = AppDate.civil
+        let df = AppDate.isoDay
         func ymd(_ daysAgo: Int) -> String {
             df.string(from: cal.date(byAdding: .day, value: -daysAgo, to: now) ?? now)
         }

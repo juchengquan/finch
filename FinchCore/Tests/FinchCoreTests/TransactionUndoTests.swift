@@ -327,7 +327,9 @@ final class TransactionUndoTests: XCTestCase {
     }
 
     /// A snapshot naming a column the table does not have is refused rather than
-    /// spliced into SQL.
+    /// spliced into SQL, and the refusal writes nothing. (This last check used to be
+    /// "COUNT(*) of entries is not nil", which a COUNT never is: it passed with the
+    /// table emptied.)
     func test_unknownColumn_isRefused() throws {
         let q = try seeded()
         let args = try delete(q, [try txId(q, try add(q))])
@@ -335,8 +337,9 @@ final class TransactionUndoTests: XCTestCase {
         e["bogus\"; DROP TABLE entries; --"] = .string("x")
         entries[0] = .object(e)
         var v = args.values; v["entries"] = .array(entries)
+        let before = try dump(q)
         XCTAssertThrowsError(try restore(q, Args(v))) { XCTAssertEqual(($0 as? I18nError)?.code, "error.undo.stale") }
-        XCTAssertNotNil(try q.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries") })
+        assertSameDB(before, try dump(q))
     }
 }
 

@@ -145,6 +145,8 @@ final class AccountForecastPanelTests: XCTestCase {
     func testAFutureCrossingIsItsOwnKey() throws {
         let panel = try XCTUnwrap(make(account: account(500), scheduled: [monthly("rent", "expense", 900, day: 20)],
                                        today: "2026-05-15"))
-        XCTAssertEqual(panel.crossingKey, panel.crossesBelowZeroOn)
+        // Pinned, not just equal: with no crossing found, nil == nil passed.
+        XCTAssertEqual(panel.crossesBelowZeroOn, "2026-05-20")
+        XCTAssertEqual(panel.crossingKey, "2026-05-20")
     }
 }
