@@ -71,6 +71,36 @@ final class FxManualRateTests: XCTestCase {
         XCTAssertEqual(q.entered(usdPerUnit: 0.00077, inverted: false), 0.0007, accuracy: 1e-12)
     }
 
+    /// The form opens the way the Currencies list reads the currency: the list's
+    /// "1 USD = 149.254 JPY" is asked as "1 USD = ___ JPY", not "1 JPY = ___ USD".
+    func test_opensInTheListsDirection() {
+        let rated = rates + [
+            ExchangeRate(date: "2026-05-01", currency: "JPY", rate: 0.0064, source: "ECB"),
+            ExchangeRate(date: "2026-06-01", currency: "JPY", rate: 0.0067, source: "manual"),
+            ExchangeRate(date: "2026-06-01", currency: "KWD", rate: 3.25, source: "ECB"),
+        ]
+        XCTAssertTrue(fxManualOpensInverted(currency: "JPY", rates: rated))
+        XCTAssertEqual(fxManualOpensInverted(currency: "JPY", rates: rated),
+                       fxReadsInverted(latest: fxLatest(rated, "JPY")?.rate))
+        XCTAssertFalse(fxManualOpensInverted(currency: "EUR", rates: rated))
+        XCTAssertFalse(fxManualOpensInverted(currency: "KWD", rates: rated))
+        // Nothing to go by yet: the plain "1 KRW = ___ USD".
+        XCTAssertFalse(fxManualOpensInverted(currency: "KRW", rates: rated))
+    }
+
+    /// An edit of "1 USD = 155 JPY" opens on 155 — in a EUR ledger, on the same
+    /// rate read as "1 EUR = ___ JPY" — and saves back the stored figure.
+    func test_anEditOpensOnTheFigureTheListShows() {
+        let jpy = ExchangeRate(date: "2026-06-01", currency: "JPY", rate: 1 / 155.0, source: "manual")
+        let usd = FxManualQuote.make(currency: "JPY", base: "USD", date: jpy.date, rates: rates + [jpy])
+        let inverted = fxManualOpensInverted(currency: "JPY", rates: rates + [jpy])
+        XCTAssertEqual(usd.terms(inverted: inverted).one, "USD")
+        XCTAssertEqual(fxRateText(usd.entered(usdPerUnit: jpy.rate, inverted: inverted)), "155")
+        let eur = FxManualQuote.make(currency: "JPY", base: "EUR", date: jpy.date, rates: rates + [jpy])
+        XCTAssertEqual(eur.terms(inverted: inverted).one, "EUR")
+        XCTAssertEqual(fxRateText(eur.entered(usdPerUnit: jpy.rate, inverted: inverted)), "186")
+    }
+
     func test_nonPositive_isNoRate() {
         let q = FxManualQuote.make(currency: "KRW", base: "USD", date: "2026-05-09", rates: rates)
         XCTAssertNil(q.usdPerUnit(entered: 0, inverted: false))

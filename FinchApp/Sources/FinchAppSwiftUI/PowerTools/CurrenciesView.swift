@@ -12,7 +12,7 @@ struct CurrenciesView: View {
     @State private var errorMessage: String?
     @State private var refreshing = false
     @State private var lastUpdated: Date?
-    @State private var refreshNote: LocalizedStringKey?
+    @State private var refreshNote: String?
     @State private var query = ""
 
     /// The user's explicit tracked set, or the seeded default before first toggle.
@@ -55,7 +55,7 @@ struct CurrenciesView: View {
                         if refreshing {
                             ProgressView()
                         } else if let refreshNote {
-                            Text(refreshNote).font(.caption).foregroundStyle(.secondary)
+                            Text(verbatim: refreshNote).font(.caption).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -158,13 +158,9 @@ struct CurrenciesView: View {
             let outcome = await RateAutoUpdater.refresh(store: store)
             refreshing = false
             lastUpdated = UserDefaults.standard.object(forKey: RateAutoUpdater.stampKey) as? Date
-            switch outcome {
-            case .updated(let n): refreshNote = "Updated \(n) rates"
-            // Names the shortfall without guessing its cause — a provider we could
-            // not reach and a currency nobody carries look identical from here.
-            case .partial(let n, let requested): refreshNote = "Updated \(n) of \(requested)"
-            case .skipped: refreshNote = "Nothing to update"
-            case .failed: errorMessage = String(localized: "Couldn't fetch exchange rates. Check your connection and try again.")
+            refreshNote = outcome.note
+            if outcome == .failed {
+                errorMessage = String(localized: "Couldn't fetch exchange rates. Check your connection and try again.")
             }
         }
     }

@@ -14,8 +14,9 @@ import FinchCore
 ///   "1 USD = 1,369.86 KRW" — how a bank quotes a small-unit currency.
 /// - **The direction is per currency, decided by its latest rate**, so a currency's
 ///   history never flips mid-list as it drifts across 1.
-/// - **Six significant digits at most, four at least**, in the user's locale: the
-///   precision follows the size of the figure rather than a fixed four decimals.
+/// - **Six significant digits at most, and no trailing zeros**, in the user's
+///   locale: the precision follows the size of the figure rather than a fixed four
+///   decimals, and a rate typed as 155 reads back as 155, not "155.0".
 
 /// Whether `currency` reads "1 USD = x CUR" rather than "1 CUR = x USD" — true when
 /// its latest rate is under a dollar.
@@ -53,15 +54,18 @@ func fxDisplaySeries(_ rates: [ExchangeRate], _ currency: String) -> [Double] {
     return series.map { $0 > 0 ? 1 / $0 : 0 }
 }
 
-/// A rate figure: 4–6 significant digits, never an exponent, grouped and with the
-/// decimal mark of `locale`. 1369.863 → "1,369.86", 1.08 → "1.080", 1 → "1.000".
-/// The four-digit floor keeps a currency's history in an even column.
+/// A rate figure: up to 6 significant digits, never an exponent, grouped and with
+/// the decimal mark of `locale`. 1369.863 → "1,369.86", 1.08 → "1.08", 155 → "155".
+///
+/// No floor of significant digits. A four-digit floor padded every short figure
+/// with zeros the user never typed — 155 read "155.0", 1.08 read "1.080" — so a
+/// hand-entered rate looked like a different, more precise one in the list.
 func fxRateNumber(_ value: Double, locale: Locale = .autoupdatingCurrent) -> String {
     let f = NumberFormatter()
     f.locale = locale
     f.numberStyle = .decimal
     f.usesSignificantDigits = true
-    f.minimumSignificantDigits = 4
+    f.minimumSignificantDigits = 1
     f.maximumSignificantDigits = 6
     return f.string(from: NSNumber(value: value)) ?? String(value)
 }

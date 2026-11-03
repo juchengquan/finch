@@ -2,11 +2,41 @@ import Foundation
 import FinchCore
 
 /// What a fetch attempt did — drives "Refresh now" feedback (auto path discards it).
+///
+/// `written` counts the rows actually stored and `kept` the fetched rows held back
+/// because the user had already entered that day's rate by hand (`keepingManual`).
+/// They are reported apart: counted together, a refresh that wrote nothing — every
+/// fetched day already had a hand-entered rate, as the demo seed's undated-source
+/// rates do — read "Updated 4 rates".
 enum RefreshOutcome: Equatable {
-    case updated(Int)                            // every requested code got a rate
-    case partial(updated: Int, requested: Int)   // some did; the rest are still missing
-    case failed                                  // every provider failed — nothing written
-    case skipped                                 // no non-USD currencies in use — nothing to fetch
+    case updated(written: Int, kept: Int)                  // every requested code has a rate
+    case partial(written: Int, kept: Int, requested: Int)  // some do; the rest are still missing
+    case failed                                            // every provider failed — nothing written
+    case skipped                                           // no non-USD currencies in use — nothing to fetch
+
+    /// The line shown under "Refresh now". Nil for `.failed`, which is an alert.
+    var note: String? {
+        switch self {
+        case .updated(let written, 0):
+            return written == 1 ? String(localized: "Updated 1 rate")
+                                : String(localized: "Updated \(written) rates")
+        case .updated(0, let kept):
+            return kept == 1 ? String(localized: "Kept the rate you entered")
+                             : String(localized: "Kept the rates you entered")
+        case .updated(let written, let kept):
+            return String(localized: "Updated \(written), kept \(kept) you entered")
+        // Names the shortfall without guessing its cause — a provider we could
+        // not reach and a currency nobody carries look identical from here.
+        case .partial(let written, 0, let requested):
+            return String(localized: "Updated \(written) of \(requested)")
+        case .partial(let written, let kept, let requested):
+            return String(localized: "Updated \(written) of \(requested), kept \(kept) you entered")
+        case .skipped:
+            return String(localized: "Nothing to update")
+        case .failed:
+            return nil
+        }
+    }
 }
 
 /// Daily FX auto-refresh. Walks a chain of free, no-key reference-rate providers
@@ -65,16 +95,21 @@ enum RateAutoUpdater {
         // the UI for seconds right after foregrounding (audit 2026-07-22).
         // Read against `store.exchangeRates` here, after the await, so a rate
         // typed in while the request was in flight is still seen.
-        store.applyBatch(keepingManual(rows, existing: store.exchangeRates).map { r in
+        let writable = keepingManual(rows, existing: store.exchangeRates)
+        let written = store.applyBatch(writable.map { r in
             (ActionName.setExchangeRate, Args([
                 "date": .string(r.date), "currency": .string(r.currency),
                 "rate": .double(r.ratePerUSD), "source": .string(r.source)]))
         })
         UserDefaults.standard.set(Date(), forKey: stampKey)
+        // Counted AFTER the filter, from what the batch actually applied: a row held
+        // back for the user's own rate was not updated, and reporting the fetched
+        // count claimed writes that never happened.
+        let kept = rows.count - writable.count
         // Union coverage is complete, so anything still missing here is a provider
         // that could not be reached — transient, not an unsupported currency.
-        return missing.isEmpty ? .updated(rows.count)
-                               : .partial(updated: rows.count, requested: codes.count)
+        return missing.isEmpty ? .updated(written: written, kept: kept)
+                               : .partial(written: written, kept: kept, requested: codes.count)
     }
 
     /// The fetched rows that may be written: all but those landing on a day the
@@ -218,6 +253,13 @@ enum RateAutoUpdater {
     }
 
     // MARK: - Parsers (pure + testable). All emit USD-per-unit, drop USD/invalid.
+    //
+    // The inverse is stored UNROUNDED. Rounding it to six decimal places kept only
+    // one or two significant digits for a small-unit currency: IDR at 16,350 per
+    // USD stored 0.000061 (booking every IDR amount 0.27% low, and reading back as
+    // "16,393.4 IDR"), LBP at 89,500 stored 0.000011 (1.55% low). A Double already
+    // holds the provider's figure to ~16 digits; every place a rate is shown rounds
+    // it for display, and the engine rounds each conversion's own rate as it books.
 
     /// Frankfurter: array of {date, quote, rate} with rate = quote-per-USD.
     static func parseFrankfurter(_ data: Data) -> [(date: String, currency: String, ratePerUSD: Double)] {
@@ -225,7 +267,7 @@ enum RateAutoUpdater {
         guard let rows = try? JSONDecoder().decode([Row].self, from: data) else { return [] }
         return rows.compactMap { r in
             guard r.rate > 0, r.quote.uppercased() != "USD" else { return nil }
-            return (r.date, r.quote.uppercased(), round6(1.0 / r.rate))
+            return (r.date, r.quote.uppercased(), 1.0 / r.rate)
         }
     }
 
@@ -238,7 +280,7 @@ enum RateAutoUpdater {
         return resp.rates.compactMap { (code, unitsPerUSD) in
             let up = code.uppercased()
             guard want.contains(up), up != "USD", unitsPerUSD > 0 else { return nil }
-            return (date, up, round6(1.0 / unitsPerUSD))
+            return (date, up, 1.0 / unitsPerUSD)
         }
     }
 
@@ -250,11 +292,10 @@ enum RateAutoUpdater {
         return resp.usd.compactMap { (code, unitsPerUSD) in
             let lc = code.lowercased()
             guard want.contains(lc), lc != "usd", unitsPerUSD > 0 else { return nil }
-            return (resp.date, lc.uppercased(), round6(1.0 / unitsPerUSD))
+            return (resp.date, lc.uppercased(), 1.0 / unitsPerUSD)
         }
     }
 
-    private static func round6(_ v: Double) -> Double { (v * 1_000_000).rounded() / 1_000_000 }
     private static func todayISO() -> String { AppDate.isoDay.string(from: Date()) }
     private static func isoDay(fromUnix t: Double) -> String { AppDate.isoDay.string(from: Date(timeIntervalSince1970: t)) }
 
