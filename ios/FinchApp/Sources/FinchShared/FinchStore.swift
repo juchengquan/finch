@@ -93,7 +93,7 @@ public final class FinchStore: ObservableObject {
     /// row. Invalidated alongside `merchantStatsCache`.
     var anomalyKeysCache: Set<String>?
     var runningBalanceCache: [String: Double]?          // txn.id → account balance (base) after that txn; lazy, invalidated each reproject
-    var transferPeerCache: [String: String]?            // transfer leg id → the other leg's account id; lazy, invalidated with runningBalanceCache
+    var transferPeerCache: [String: String]?            // transfer leg id → the other leg's account NAME (archived ones too); lazy, invalidated with runningBalanceCache
     /// The last 1:1-rate review and what it was computed from (`fallbackRateReview`).
     /// NOT invalidated each reproject: most writes cannot change it, and the point
     /// is to skip the scan for those.
@@ -344,10 +344,11 @@ public final class FinchStore: ObservableObject {
     /// on screen while the row slides. See `scheduleAmbientSideEffects`.
     private func fireWriteSideEffects(_ q: DatabaseQueue, mutations: [(ActionName, Args)]) {
         WriteTiming.begin()
-        // Any write ends the open undo — including the delete that is about to
+        // A write ends the open undo — including the delete that is about to
         // offer a fresh one, and the restore itself. A snapshot taken before some
-        // other write is not "the state before the delete" any more.
-        expireDeleteUndo()
+        // other write is not "the state before the delete" any more. Except a
+        // reviewed/cleared mark on another row, which leaves it as it was.
+        if !mutations.allSatisfy({ Self.keepsDeleteUndo($0.0) }) { expireDeleteUndo() }
         // The projection IS the animation: the row cannot move until the new state
         // is published, so this stays synchronous.
         self.ledgers = (try? Projection.ledgers(dbQueue: q)) ?? ledgers

@@ -3467,6 +3467,26 @@
         }
       }
     },
+    "From today on, each one is recorded on its due date. Earlier ones aren't added.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从今天起，每笔都会在到期日自动记账。之前的不会补加。"
+          }
+        }
+      }
+    },
+    "From today on, each one waits in To confirm on its due date. Earlier ones aren't added.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从今天起，每笔都会在到期日放入待确认。之前的不会补加。"
+          }
+        }
+      }
+    },
     "General": {
       "localizations": {
         "zh-Hans": {

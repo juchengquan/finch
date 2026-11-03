@@ -25,6 +25,14 @@ enum ScheduledSkipping {
         Selectors.unskipTarget(template: t, posted: Selectors.scheduledPostedMap(store.txns))
     }
 
+    /// The skip a list row's swipe undoes: `unskipTarget`, but only while the row's
+    /// "Skipping …" caption still shows it (`ScheduledCaption.skips` — from the
+    /// current occurrence on). An older skip is history; the calendar un-skips it.
+    static func swipeUnskipTarget(_ t: ScheduledTemplate, posted: [String: Bool], today: String) -> String? {
+        guard let target = Selectors.unskipTarget(template: t, posted: posted) else { return nil }
+        return target >= (Selectors.currentOccurrence(t, today: today) ?? today) ? target : nil
+    }
+
     /// Skip `occurrence`. Returns the error to show, or nil on success.
     @discardableResult
     static func skip(_ t: ScheduledTemplate, occurrence: String, store: FinchStore) -> String? {

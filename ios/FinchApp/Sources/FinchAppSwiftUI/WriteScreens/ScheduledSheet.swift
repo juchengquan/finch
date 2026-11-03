@@ -255,10 +255,24 @@ struct ScheduledSheet: View {
     /// What switching it on does, which differs by kind (design decision 25): income
     /// and expenses wait for review; a transfer between your own accounts is simply
     /// recorded.
+    ///
+    /// Auto-post covers what falls due from the day it is switched on and never
+    /// back-fills (`Scheduled.autoPostDue`), so a start in the past says so: the
+    /// occurrences before today are not added, and the switch would otherwise read
+    /// as a promise to catch them up.
     private var autoPostHelp: LocalizedStringKey {
         if isVariableAmount { return "Needs a fixed amount." }
+        if startsBeforeToday && !(template?.postsAutomatically ?? false) {
+            return kind == .transfer
+                ? "From today on, each one is recorded on its due date. Earlier ones aren't added."
+                : "From today on, each one waits in To confirm on its due date. Earlier ones aren't added."
+        }
         return kind == .transfer ? "Each one is recorded on its due date." : "Each one waits in To confirm on its due date."
     }
+
+    /// Whether the schedule starts before today — when it can have occurrences that
+    /// switching auto-post on will not add.
+    private var startsBeforeToday: Bool { AppDate.isoDay.string(from: startDate) < store.wallToday }
 
     /// What is stored: off for a variable amount, whatever the switch held, so the
     /// row never says "on" for something the generator will not touch.

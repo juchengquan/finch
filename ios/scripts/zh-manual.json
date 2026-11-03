@@ -804,6 +804,8 @@
   "Add automatically when due": "到期时自动添加",
   "Each one is recorded on its due date.": "每笔都会在到期日自动记账。",
   "Each one waits in To confirm on its due date.": "每笔都会在到期日放入待确认。",
+  "From today on, each one is recorded on its due date. Earlier ones aren't added.": "从今天起，每笔都会在到期日自动记账。之前的不会补加。",
+  "From today on, each one waits in To confirm on its due date. Earlier ones aren't added.": "从今天起，每笔都会在到期日放入待确认。之前的不会补加。",
   "Needs a fixed amount.": "需要固定金额。",
   "Skip": "跳过",
   "Unskip": "取消跳过",
