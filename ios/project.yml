@@ -193,6 +193,12 @@ schemes:
         FinchApp: all
     test:
       targets: [FinchAppTests, FinchAppUITests, FinchCoreTests]
+      # The tests read English: unit tests compare captions and messages to English
+      # text, and every UI test finds its buttons by their English labels. Pinned so
+      # a simulator left in zh-Hans (the translation walkthroughs do that) runs them
+      # in English instead of failing 19 unit tests and every UI test. A zh run is
+      # still one flag away: `xcodebuild test -testLanguage zh-Hans`.
+      language: en
   # NOTE: no FinchMac scheme here — the macOS app lives in its own project
   # (project-mac.yml -> FinchMac.xcodeproj). See that file for why.
   FinchWatch:
