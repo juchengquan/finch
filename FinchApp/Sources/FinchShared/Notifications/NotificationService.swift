@@ -50,6 +50,14 @@ public enum NotificationPrefs {
 enum NotificationState {
     private static let firedKey = "finch.notifications.firedIds"
     private static let snoozeKey = "finch.notifications.snoozedUntil"
+    private static let autoPostToldKey = "finch.notifications.autoPostRefusalsTold"
+
+    /// The auto-post refusals the last run reported, as `templateId:occurrence`
+    /// (`NotificationPlanner.autoPostRefusalAlerts`).
+    static var autoPostRefusalsTold: Set<String> {
+        get { Set(UserDefaults.standard.array(forKey: autoPostToldKey) as? [String] ?? []) }
+        set { UserDefaults.standard.set(Array(newValue).sorted(), forKey: autoPostToldKey) }
+    }
 
     static var fired: Set<String> {
         get { Set(UserDefaults.standard.array(forKey: firedKey) as? [String] ?? []) }
@@ -186,12 +194,16 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
     /// `holdForQuietHours: false` is for a refusal answering a tap the user has just
     /// made ("Confirm now"): they are awake and waiting for the result, so holding it
     /// to 08:00 would only make it look as if nothing happened.
-    public func notifyRefused(id: String, title: String, body: String, holdForQuietHours: Bool = true) async {
+    ///
+    /// `tab` is where a tap on it opens.
+    public func notifyRefused(id: String, title: String, body: String, holdForQuietHours: Bool = true,
+                              tab: AppTab? = nil) async {
         guard await center.notificationSettings().authorizationStatus != .denied else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         content.sound = .default
+        if let tab { content.userInfo = ["tab": String(describing: tab)] }
         let now = Date()
         let when = holdForQuietHours
             ? NotificationPolicy.deliveryTime(raisedAt: now, quiet: NotificationPrefs.quietHours) : now
@@ -202,6 +214,20 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
                 repeats: false)
         try? await center.add(UNNotificationRequest(
             identifier: NotificationPlanner.unplannedPrefix + id, content: content, trigger: trigger))
+    }
+
+    /// Tell the user about the occurrences an auto-post run could not add, once each
+    /// (`NotificationPlanner.autoPostRefusalAlerts`). Every run reports here, an empty
+    /// one too, so what is remembered stays this run's. Under the Scheduled toggle:
+    /// these are about scheduled items, and someone who turned their reminders off
+    /// asked not to hear about them. A tap opens Scheduled, where the item reads
+    /// overdue and Post says why.
+    func notifyAutoPostRefused(_ refused: [AutoPostRefusal]) async {
+        let (alerts, told) = NotificationPlanner.autoPostRefusalAlerts(
+            refused, alreadyTold: NotificationState.autoPostRefusalsTold, reason: { i18nMessage($0) })
+        NotificationState.autoPostRefusalsTold = told
+        guard NotificationPrefs.isOn(.scheduledDue) else { return }
+        for a in alerts { await notifyRefused(id: a.id, title: a.title, body: a.body, tab: .scheduled) }
     }
 
     // NO app-icon badge, deliberately. One was added alongside these fixes to
@@ -308,16 +334,7 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
             case "confirmNow":
                 router?.open(.scheduled)
                 guard let id = focusId, let store else { return nil }
-                do {
-                    try Self.confirmNow(templateId: id, occurrence: occurrence, store: store)
-                    return nil
-                } catch {
-                    // Said, not swallowed: the button opens Scheduled, and with the item
-                    // still due there and no message the tap looked like it did nothing.
-                    // Most often a missing exchange rate, which the user has to fix.
-                    let name = store.scheduled.first { $0.id == id }?.name ?? title
-                    return (name, String(localized: "Couldn't add it: \(i18nMessage(error))"))
-                }
+                return Self.confirmNowRefusal(templateId: id, occurrence: occurrence, title: title, store: store)
             case "viewBudgets": router?.open(.budgets)
             case "viewTransaction":
                 if let id = focusId { router?.route(to: "tx:\(id)") } else { router?.open(.activity) }
@@ -333,6 +350,22 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
         if let refusal {
             await notifyRefused(id: "confirm:\(notifId)", title: refusal.title, body: refusal.body,
                                 holdForQuietHours: false)
+        }
+    }
+
+    /// "Confirm now", and what to tell the user when it is refused: nil when it
+    /// booked, else the alert's title and body. Said, not swallowed: the button opens
+    /// Scheduled, and with the item still due there and no message the tap looked
+    /// like it did nothing. Most often a missing exchange rate, which the user has to
+    /// fix. `title` is the reminder's, for a template no longer there.
+    static func confirmNowRefusal(templateId id: String, occurrence: String?, title: String,
+                                  store: FinchStore) -> (title: String, body: String)? {
+        do {
+            try confirmNow(templateId: id, occurrence: occurrence, store: store)
+            return nil
+        } catch {
+            let name = store.scheduled.first { $0.id == id }?.name ?? title
+            return (name, String(localized: "Couldn't add it: \(i18nMessage(error))"))
         }
     }
 

@@ -89,6 +89,7 @@
   "Commands": "命令",
   "Confirm transaction": "确认交易",
   "Cost basis": "成本基础",
+  "Couldn't add it automatically: %@": "无法自动添加：%@",
   "Couldn't add it: %@": "无法添加：%@",
   "Couldn't complete that": "无法完成该操作",
   "Couldn't create it: %@": "无法创建：%@",

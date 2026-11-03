@@ -2183,6 +2183,16 @@
         }
       }
     },
+    "Couldn't add it automatically: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法自动添加：%@"
+          }
+        }
+      }
+    },
     "Couldn't add it: %@": {
       "localizations": {
         "zh-Hans": {
