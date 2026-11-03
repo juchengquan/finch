@@ -104,6 +104,25 @@ extension FinchStore {
             categoryColorHex: category.map { effectiveColor($0, categoriesById) })
     }
 
+    /// `amount` in `from`, as `to`, on `date` — by the lookup posting uses
+    /// (`FxConvert`), not the latest-rate map the display figures use, so a forecast
+    /// credits what the write will book. nil without a rate. Reads the database: for
+    /// the few conversions a forecast makes, not for a feed.
+    func fxConvert(_ amount: Double, from: String, to: String, on date: String) -> Double? {
+        guard let q = dbQueue else { return nil }
+        return FxConvert.convert(dbQueue: q, amount, from: from, to: to, on: date)
+    }
+
+    /// The account screens' forecast, on the wall-clock day — the panel the low-balance
+    /// alert plans from (`NotificationPlanner`), over the same rows and rates.
+    func forecastPanel(for account: AccountRow) -> AccountForecastPanel? {
+        AccountForecastPanel.make(
+            account: account, scheduled: scheduled, today: wallToday,
+            activity: AccountForecastPanel.activity(
+                txns: txns, accounts: accounts,
+                convert: { [weak self] in self?.fxConvert($0, from: $1, to: $2, on: $3) }))
+    }
+
     public func toBase(_ amount: Double, from currency: String?) -> Double {
         Money.convert(amount, from: currency ?? baseCurrency, to: baseCurrency, rates: rateMap) ?? amount
     }
