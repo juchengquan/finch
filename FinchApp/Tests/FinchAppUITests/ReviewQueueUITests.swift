@@ -46,15 +46,15 @@ final class ReviewQueueUITests: XCTestCase {
         let reviewed = app.buttons["Reviewed"].firstMatch
         if reviewed.waitForExistence(timeout: 1) { reviewed.tap() }
 
-        // The engine stamps the whole purchase, so a split row can take a sibling with
-        // it — fewer, never the same.
+        // The queue lists and counts entries, so one swipe is exactly one fewer —
+        // a transfer's second leg is not a second row to take with it.
         let deadline = Date().addingTimeInterval(5)
         var after = queueCount()
         while (after ?? before) >= before && Date() < deadline {
             usleep(100_000)
             after = queueCount()
         }
-        XCTAssertLessThan(after ?? before, before, "the swiped row did not leave the queue")
+        XCTAssertEqual(after, before - 1, "the swiped row did not leave the queue, or took others with it")
 
         let markAll = app.buttons["markAllReviewed"].firstMatch
         XCTAssertTrue(markAll.waitForExistence(timeout: 5), "no Mark all reviewed")

@@ -7,7 +7,10 @@ import GRDB
 /// `2026-06-14` DE data-move is intentionally absent from `MIGRATIONS` (dead
 /// code in git history only) — there is no `cutover.ts` to port (D1).
 public enum Migrations {
-    public static func makeMigrator() -> DatabaseMigrator {
+    /// `clearsReviewBacklog`: whether the database being migrated was already an
+    /// iOS one before this pass — see `clearReviewBacklog` for why a web-made one
+    /// keeps its queue. `runAll` works it out; nothing else builds a migrator.
+    public static func makeMigrator(clearsReviewBacklog: Bool = false) -> DatabaseMigrator {
         var migrator = DatabaseMigrator()
 
         // The single baseline migration: apply the full canonical schema, then
@@ -204,6 +207,14 @@ public enum Migrations {
         migrator.registerMigration("2026-10-19-quarterly-start-day") { db in
             try Self.repairQuarterlyStartDays(db)
             try Self.ensureMetadataRow(db)   // re-stamp schema_version
+        }
+
+        // The review queue (#809) arrived on iOS long after `reviewed_at`, so an
+        // existing install's whole history read "needs review". Mark what was
+        // already settled reviewed, once. iOS-only and data-only: no shape change,
+        // so the shared SCHEMA_VERSION stays. See `clearReviewBacklog`.
+        migrator.registerMigration("2026-11-02-review-backlog") { db in
+            if clearsReviewBacklog { try Self.clearReviewBacklog(db) }
         }
 
         return migrator
@@ -417,6 +428,6 @@ END
 
     /// Run the migration on the given queue. Idempotent.
     public static func runAll(on dbQueue: DatabaseQueue) throws {
-        try makeMigrator().migrate(dbQueue)
+        try makeMigrator(clearsReviewBacklog: try wasOpenedByIOS(dbQueue)).migrate(dbQueue)
     }
 }
