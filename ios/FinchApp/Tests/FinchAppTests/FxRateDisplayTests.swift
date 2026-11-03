@@ -33,10 +33,17 @@ final class FxRateDisplayTests: XCTestCase {
         XCTAssertEqual(fxRateDisplay(3.25411, currency: "KWD", locale: en), "1 KWD = 3.25411 USD")
     }
 
-    /// Exactly 1 is not under a dollar, so it reads as stored, at four digits.
+    /// Exactly 1 is not under a dollar, so it reads as stored.
     func test_pegged_one() {
         XCTAssertFalse(fxReadsInverted(latest: 1.0))
-        XCTAssertEqual(fxRateDisplay(1.0, currency: "PAB", locale: en), "1 PAB = 1.000 USD")
+        XCTAssertEqual(fxRateDisplay(1.0, currency: "PAB", locale: en), "1 PAB = 1 USD")
+    }
+
+    /// A rate typed as "1 USD = 155 JPY" reads back as 155, not "155.0": a padded
+    /// figure looked like a different, more precise rate than the one entered.
+    func test_aShortFigure_getsNoTrailingZeros() {
+        XCTAssertEqual(fxRateDisplay(1 / 155.0, currency: "JPY", locale: en), "1 USD = 155 JPY")
+        XCTAssertEqual(fxRateDisplay(1.08, currency: "EUR", locale: en), "1 EUR = 1.08 USD")
     }
 
     /// The hub has no rate of its own to show.
@@ -47,8 +54,8 @@ final class FxRateDisplayTests: XCTestCase {
     /// A history keeps one direction: an older figure on the far side of 1 still
     /// reads the way the latest does.
     func test_explicitDirection_isKeptForEveryRow() {
-        XCTAssertEqual(fxRateDisplay(0.98, currency: "CHF", inverted: false, locale: en), "1 CHF = 0.9800 USD")
-        XCTAssertEqual(fxRateDisplay(1.25, currency: "CAD", inverted: true, locale: en), "1 USD = 0.8000 CAD")
+        XCTAssertEqual(fxRateDisplay(0.98, currency: "CHF", inverted: false, locale: en), "1 CHF = 0.98 USD")
+        XCTAssertEqual(fxRateDisplay(1.25, currency: "CAD", inverted: true, locale: en), "1 USD = 0.8 CAD")
     }
 
     /// Grouping and the decimal mark follow the locale.

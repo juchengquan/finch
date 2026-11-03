@@ -89,6 +89,19 @@ struct FxManualQuote: Equatable {
     }
 }
 
+/// Whether the form opens flipped — "1 USD = ___ JPY" rather than "1 JPY = ___ USD".
+///
+/// The way the Currencies list and the currency's history read it
+/// (`fxReadsInverted`, decided by its latest rate), so the figure the user sees in
+/// the list is the figure the form asks for: the list read "1 USD = 149.254 JPY"
+/// while Add Rate and Edit opened as "1 JPY = ___ USD", and nearly every rate was
+/// typed after a flip. In a EUR ledger the form still asks against EUR, the same
+/// way round: "1 EUR = ___ KRW" beside the list's "1 USD = 1,369.86 KRW". A
+/// currency with no rate yet has nothing to go by and opens unflipped.
+func fxManualOpensInverted(currency: String, rates: [ExchangeRate]) -> Bool {
+    fxReadsInverted(latest: fxLatest(rates, currency)?.rate)
+}
+
 /// A rate as text: six significant digits, never an exponent, "." decimal, no
 /// grouping — so it reads the same everywhere and seeds a field that `DecimalInput`
 /// parses back. 0.000730 → "0.00073", 1369.863 → "1369.86".

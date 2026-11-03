@@ -14,6 +14,22 @@ final class RateAutoUpdaterTests: XCTestCase {
         XCTAssertEqual(rows[0].currency, "EUR")
         XCTAssertEqual(rows[0].ratePerUSD, 1.146250, accuracy: 0.000001)   // 1/0.87241, 6-dp
     }
+    /// A small-unit currency keeps the provider's figure. Rounded to six decimal
+    /// places, IDR at 16,350 per USD stored 0.000061 — two significant digits —
+    /// booking every IDR amount 0.27% low; LBP at 89,500 stored 0.000011, 1.55% low.
+    func test_everyParser_keepsTheDigitsOfASmallUnitCurrency() {
+        let frank = RateAutoUpdater.parseFrankfurter(Data(#"[{"date":"2026-07-17","base":"USD","quote":"IDR","rate":16350},{"date":"2026-07-17","base":"USD","quote":"LBP","rate":89500}]"#.utf8))
+        let er = RateAutoUpdater.parseErApi(Data(#"{"time_last_update_unix":1721260801,"rates":{"IDR":16350,"LBP":89500}}"#.utf8), codes: ["IDR", "LBP"])
+        let cdn = RateAutoUpdater.parseCurrencyApi(Data(#"{"date":"2026-07-17","usd":{"idr":16350,"lbp":89500}}"#.utf8), codes: ["IDR", "LBP"])
+        for (name, rows) in [("Frankfurter", frank), ("er-api", er), ("currency-api", cdn)] {
+            let byCode = Dictionary(uniqueKeysWithValues: rows.map { ($0.currency, $0.ratePerUSD) })
+            XCTAssertEqual((byCode["IDR"] ?? 0) * 16350, 1, accuracy: 1e-9, name)
+            XCTAssertEqual((byCode["LBP"] ?? 0) * 89500, 1, accuracy: 1e-9, name)
+            // …and it reads back as the provider's figure, not "16,393.4 IDR".
+            XCTAssertEqual(fxRateDisplay(byCode["IDR"] ?? 0, currency: "IDR", locale: Locale(identifier: "en_US")),
+                           "1 USD = 16,350 IDR", name)
+        }
+    }
     func test_frankfurter_malformed_returnsEmpty() {
         XCTAssertTrue(RateAutoUpdater.parseFrankfurter(Data("nope".utf8)).isEmpty)
     }
@@ -290,13 +306,41 @@ final class RateAutoUpdaterKeepsManualTests: XCTestCase {
 
         let outcome = await RateAutoUpdater.refresh(store: store, transport: provider)
 
-        XCTAssertEqual(outcome, .updated(2), "EUR still has a rate; nothing is missing")
+        XCTAssertEqual(outcome, .updated(written: 1, kept: 1),
+                       "JPY was written; EUR still has a rate, the user's, and nothing is missing")
         XCTAssertEqual(stored(store, "EUR")?.source, "manual")
         XCTAssertEqual(stored(store, "EUR")?.rate ?? 0, 1.2345, accuracy: 1e-9)
         XCTAssertEqual(store.rateMap["EUR"] ?? 0, 1.2345, accuracy: 1e-9)
         XCTAssertEqual(Money.convert(100, from: "EUR", to: "USD", rates: store.rateMap) ?? 0, 123.45, accuracy: 1e-6)
         XCTAssertEqual(stored(store, "JPY")?.source, "ECB")
         XCTAssertEqual(stored(store, "JPY")?.rate ?? 0, 0.00625, accuracy: 1e-9)
+    }
+
+    /// "Refresh now" said "Updated 2 rates" when every fetched row landed on a day the
+    /// user had already rated by hand, so nothing was written. It now says so.
+    func test_aFetchThatWroteNothing_saysItKeptTheUsersRates() async throws {
+        let store = try await loaded()
+        try setRate(store, "EUR", 1.2345, "manual")
+        try setRate(store, "JPY", 0.0066, "manual")
+
+        let outcome = await RateAutoUpdater.refresh(store: store, transport: provider)
+
+        XCTAssertEqual(outcome, .updated(written: 0, kept: 2))
+        XCTAssertEqual(outcome.note, "Kept the rates you entered")
+        XCTAssertEqual(stored(store, "JPY")?.rate ?? 0, 0.0066, accuracy: 1e-12)
+    }
+
+    /// The note says what was written and what was kept, apart.
+    func test_theNote_countsWritesAndKeptRatesApart() {
+        XCTAssertEqual(RefreshOutcome.updated(written: 4, kept: 0).note, "Updated 4 rates")
+        XCTAssertEqual(RefreshOutcome.updated(written: 1, kept: 0).note, "Updated 1 rate")
+        XCTAssertEqual(RefreshOutcome.updated(written: 0, kept: 1).note, "Kept the rate you entered")
+        XCTAssertEqual(RefreshOutcome.updated(written: 3, kept: 1).note, "Updated 3, kept 1 you entered")
+        XCTAssertEqual(RefreshOutcome.partial(written: 2, kept: 0, requested: 4).note, "Updated 2 of 4")
+        XCTAssertEqual(RefreshOutcome.partial(written: 2, kept: 1, requested: 4).note,
+                       "Updated 2 of 4, kept 1 you entered")
+        XCTAssertEqual(RefreshOutcome.skipped.note, "Nothing to update")
+        XCTAssertNil(RefreshOutcome.failed.note)
     }
 
     /// The user's own edit still replaces their rate, and the next fetch keeps the
