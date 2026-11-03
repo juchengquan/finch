@@ -41,10 +41,8 @@ final class ExchangeRateHistoryVC: UIViewController {
     private var inverted = false
     private var moreItem: UIBarButtonItem?
 
-    /// Date-descending, as the SwiftUI screen listed them.
-    private var rows: [ExchangeRate] {
-        store.exchangeRates.filter { $0.currency == currency }.sorted { $0.date > $1.date }
-    }
+    /// Date-descending, as the SwiftUI screen listed them; no `'derived'` copies.
+    private var rows: [ExchangeRate] { fxHistory(store.exchangeRates, currency) }
 
     init(currency: String) {
         self.currency = currency

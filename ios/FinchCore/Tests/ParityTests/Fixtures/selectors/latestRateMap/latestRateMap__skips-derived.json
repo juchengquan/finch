@@ -1,0 +1,50 @@
+{
+  "name": "skips-derived",
+  "selector": "latestRateMap",
+  "input": {
+    "rates": [
+      {
+        "date": "2026-05-13",
+        "currency": "EUR",
+        "rate": 1.08,
+        "source": "ECB"
+      },
+      {
+        "date": "2026-05-20",
+        "currency": "EUR",
+        "rate": 1.09,
+        "source": "ECB"
+      },
+      {
+        "date": "2026-05-10",
+        "currency": "KRW",
+        "rate": 0.00073,
+        "source": "manual"
+      },
+      {
+        "date": "2026-05-20",
+        "currency": "KRW",
+        "rate": 0.0073,
+        "source": "derived"
+      },
+      {
+        "date": "2026-05-14",
+        "currency": "THB",
+        "rate": 1,
+        "source": "derived"
+      },
+      {
+        "date": "2026-05-15",
+        "currency": "JPY",
+        "rate": 0.0064,
+        "source": null
+      }
+    ]
+  },
+  "expected": {
+    "EUR": 1.09,
+    "KRW": 0.00073,
+    "JPY": 0.0064,
+    "USD": 1
+  }
+}

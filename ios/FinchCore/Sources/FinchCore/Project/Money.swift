@@ -10,6 +10,12 @@ public struct ExchangeRate: Equatable, Hashable, Sendable, Codable {
     public init(date: String, currency: String, rate: Double, source: String? = nil) {
         self.date = date; self.currency = currency; self.rate = rate; self.source = source
     }
+
+    /// A copy older versions saved of the rate each conversion used, under the
+    /// conversion's date. The write path's lookup never reads one
+    /// (`Entries.lookupRateToHub`): the newest can copy a rate since corrected, so
+    /// nothing that shows a rate or converts with one should read it either.
+    public var isDerived: Bool { source == "derived" }
 }
 
 /// Currency formatting + conversion, mirroring the web's `lib/fx.ts` +
@@ -74,9 +80,11 @@ public enum Money {
 
     /// Latest USD-per-1-unit rate per currency (USD pinned to 1). Mirrors
     /// `latestRateMap` (fx.ts): for each currency keep the row with the max date.
+    /// `'derived'` rows are skipped, as the lookup skips them (`isDerived`), so a
+    /// currency with only derived rows is absent, like one with no rows.
     public static func latestRateMap(_ rates: [ExchangeRate]) -> [String: Double] {
         var latest: [String: (date: String, rate: Double)] = [:]
-        for r in rates {
+        for r in rates where !r.isDerived {
             if let prev = latest[r.currency], !(r.date > prev.date) { continue }
             latest[r.currency] = (r.date, r.rate)
         }

@@ -377,13 +377,13 @@ final class ActivityFeedVC: UIViewController {
         }
     }
 
-    private func monthHeader(_ key: String, _ txns: [Tx]) -> HeaderContent {
+    private func monthHeader(_ key: String, _ txns: [Tx], pairedOver scope: [Tx]? = nil) -> HeaderContent {
         // Net, in, out on one row under the month name. This screen never showed a net
         // at all — the SwiftUI feed did, in a trailing slot — so it gains one here, and
         // the two feeds finally read the same.
         HeaderContent(title: MonthGrouping.label(key),
-                      figures: store.monthHeaderFigures(txns),
-                      spoken: store.monthHeaderSpoken(txns))
+                      figures: store.monthHeaderFigures(txns, pairedOver: scope),
+                      spoken: store.monthHeaderSpoken(txns, pairedOver: scope))
     }
 
     /// Reads text computed in `applySnapshot`, and deliberately does NOT recompute it
@@ -566,10 +566,12 @@ final class ActivityFeedVC: UIViewController {
                 snap.appendItems([Self.loadingID], toSection: .empty)
             }
         } else if groupByMonth {
+            // Transfers pair over every confirmed row, not just the page: the page
+            // edge can fall between a transfer's two legs (`MonthGrouping.net`).
             for section in MonthGrouping.sections(page) {
                 snap.appendSections([.month(section.id)])
                 snap.appendItems(section.txns.map(\.id), toSection: .month(section.id))
-                headers[.month(section.id)] = monthHeader(section.id, section.txns)
+                headers[.month(section.id)] = monthHeader(section.id, section.txns, pairedOver: confirmed)
             }
         } else {
             snap.appendSections([.all])
