@@ -55,8 +55,15 @@ final class FallbackRatesUITests: XCTestCase {
         app.cells["fallback-rates-remove"].tap()
         XCTAssertTrue(app.buttons["Remove 3 rates"].firstMatch.waitForExistence(timeout: 5),
                       "no confirmation before removing")
+        // "Not used" was on screen before the tap, so waiting for it to exist passed
+        // at once, whatever the dismissal went on to do. Wait for the confirmation to
+        // close, then give a removal time to land: the rates must still be listed.
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
-        XCTAssertTrue(app.staticTexts["Not used"].waitForExistence(timeout: 5), "dismissing removed the rates")
+        XCTAssertTrue(app.buttons["Remove 3 rates"].firstMatch.waitForNonExistence(timeout: 5),
+                      "the confirmation did not close")
+        XCTAssertFalse(app.cells["fallback-rates-remove"].waitForNonExistence(timeout: 3),
+                       "dismissing removed the rates")
+        XCTAssertTrue(app.staticTexts["Not used"].exists, "dismissing removed the rates")
 
         app.cells["fallback-rates-remove"].tap()
         let confirm = app.buttons["Remove 3 rates"].firstMatch
