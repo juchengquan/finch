@@ -51,6 +51,19 @@ final class TransferRowTitleTests: XCTestCase {
         XCTAssertEqual(store.transferTitle(for: arrived), "From \(try name(store, out.account))")
     }
 
+    /// Archiving an account keeps its history, so a transfer to it still has a
+    /// destination to name. The title used to look the peer up among the ACTIVE
+    /// accounts only, and fell back to a bare "Transfer".
+    func test_aTransferToAnArchivedAccountStillNamesIt() async throws {
+        let store = try await loadedStore()
+        let (out, arrived) = try transferLegs(store)
+        let archivedName = try name(store, arrived.account)
+        try store.apply(.archiveAccount, Args(["id": .string(arrived.account)]))
+        XCTAssertFalse(store.accounts.contains { $0.id == arrived.account }, "the account is archived")
+        let leg = try XCTUnwrap(store.txns.first { $0.id == out.id })
+        XCTAssertEqual(store.transferTitle(for: leg), "To \(archivedName)")
+    }
+
     func test_nonTransferRowsHaveNoTransferTitle() async throws {
         let store = try await loadedStore()
         let other = try XCTUnwrap(store.txns.first { $0.kind != "transfer" })

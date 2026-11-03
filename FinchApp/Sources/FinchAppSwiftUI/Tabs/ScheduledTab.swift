@@ -73,6 +73,7 @@ struct ScheduledTab: View {
     @ViewBuilder private func scheduledListRow(_ t: ScheduledTemplate, posted: [String: Bool]) -> some View {
         let skipDate = Selectors.skipTarget(template: t, posted: posted, today: store.wallToday)
         let unskipDate = Selectors.unskipTarget(template: t, posted: posted)
+        let swipeUnskipDate = ScheduledSkipping.swipeUnskipTarget(t, posted: posted, today: store.wallToday)
         Button {
             if let selection { selection.wrappedValue = t.id } else { editing = t }
         } label: { ScheduledRow(template: t, posted: posted).contentShape(Rectangle()) }
@@ -93,8 +94,11 @@ struct ScheduledTab: View {
                 // Skip takes THIS cycle's occurrence (`Selectors.skipTarget`), which
                 // can differ from the backlog-first one Post resolves; the menu names
                 // its date. Declared second, so it sits inside Post and a full swipe
-                // still posts.
-                if let occ = skipDate {
+                // still posts. While the row reads "Skipping …", Unskip takes its
+                // place: Skip again would take the next occurrence too.
+                if let occ = swipeUnskipDate {
+                    Button { unskip(t, occ) } label: { Label("Unskip", systemImage: "arrow.uturn.backward") }.tint(.indigo)
+                } else if let occ = skipDate {
                     Button { skip(t, occ) } label: { Label("Skip", systemImage: "forward.end") }.tint(.orange)
                 }
             }

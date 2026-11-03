@@ -80,6 +80,24 @@ final class DeleteUndoTests: XCTestCase {
         XCTAssertThrowsError(try store.undoDelete()) { XCTAssertEqual(($0 as? I18nError)?.code, "error.undo.stale") }
     }
 
+    /// Except a flag on ANOTHER row. In the review queue the next thing after a
+    /// delete is marking the next row reviewed, and that used to end the offer the
+    /// instant it was made. A reviewed or cleared mark touches nothing the snapshot
+    /// holds — the deleted rows are gone, so the flag cannot land on them.
+    @MainActor
+    func test_flaggingAnotherRow_keepsTheOffer() async throws {
+        let store = try await loaded()
+        let deleted = try plainTx(store), other = try plainTx(store, skip: 1)
+        try store.deleteTransaction(deleted.id)
+        let offer = try XCTUnwrap(store.deleteUndo?.id)
+        try store.apply(.setReviewed, Args(["id": .string(other.id), "reviewed": .bool(true)]))
+        try store.apply(.setCleared, Args(["id": .string(other.id), "cleared": .bool(true)]))
+        XCTAssertEqual(store.deleteUndo?.id, offer, "marking another row reviewed or cleared ended the undo")
+        try store.undoDelete()
+        XCTAssertTrue(store.txns.contains { $0.id == deleted.id })
+        XCTAssertNotNil(store.txns.first { $0.id == other.id }?.reviewedAt, "the other row keeps its flag")
+    }
+
     /// A newer delete replaces the offer; only the latest can be undone.
     @MainActor
     func test_aSecondDelete_replacesTheOffer() async throws {
