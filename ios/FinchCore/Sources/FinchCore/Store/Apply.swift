@@ -94,4 +94,11 @@ public enum Apply {
             }
         }
     }
+
+    /// `autoPostDueScheduled` with its whole result: what it posted, and each
+    /// occurrence it refused and why, for the app to tell the user. Native-only,
+    /// like the action.
+    public static func applyAutoPostDue(dbQueue: DatabaseQueue, args: Args) throws -> AutoPostRun {
+        try dbQueue.write { db in try Scheduled.autoPostDueRun(db, args) }
+    }
 }

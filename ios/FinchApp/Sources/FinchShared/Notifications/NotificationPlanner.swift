@@ -264,6 +264,39 @@ public enum NotificationPlanner {
     /// (`NotificationService.notifyRefused`).
     public static let unplannedPrefix = "refused:"
 
+    /// One alert raised outside the plan: what `NotificationService.notifyRefused`
+    /// shows.
+    public struct RefusalAlert: Equatable {
+        public let id: String
+        public let title: String
+        public let body: String
+    }
+
+    /// What to tell the user about the occurrences an auto-post run could not add —
+    /// without that, the only sign was the item reading "overdue" once someone
+    /// looked. The run moves its mark on regardless, so it never retries them; this
+    /// alert is the one moment the app says so.
+    ///
+    /// One alert per template, however many of its occurrences were refused (a run
+    /// after days away can cover several). Not repeated: a run on its mark's own day
+    /// covers that day again — every foreground does — so a refusal is told only if
+    /// the previous run did not already report it. `told` is what to remember for the
+    /// next run: this run's refusals, so a refusal once fixed and then back is told
+    /// afresh.
+    public static func autoPostRefusalAlerts(_ refused: [AutoPostRefusal], alreadyTold: Set<String>,
+                                             reason: (I18nError) -> String)
+        -> (alerts: [RefusalAlert], told: Set<String>) {
+        func key(_ r: AutoPostRefusal) -> String { "\(r.templateId):\(r.occurrence)" }
+        var seen = Set<String>()
+        let alerts = refused
+            .filter { !alreadyTold.contains(key($0)) && seen.insert($0.templateId).inserted }
+            .map { r in
+                RefusalAlert(id: "autoPost:\(key(r))", title: r.name,
+                             body: String(localized: "Couldn't add it automatically: \(reason(r.error))"))
+            }
+        return (alerts, Set(refused.map(key)))
+    }
+
     /// Which planned notifications should actually be scheduled right now.
     ///
     /// Suppression used to rely solely on the id being in pending ∪ delivered,

@@ -138,82 +138,119 @@ public enum Scheduled {
 
     /// Materialize what `occurrencesUpTo(template, today)` says is due and nothing
     /// has posted yet. `autoPostOnly` limits it to `auto_post = 1` templates; `since`
-    /// drops every occurrence dated before it. Returns how many occurrences it posted.
+    /// drops every occurrence dated before it. Returns how many occurrences it posted,
+    /// and every one it could not.
+    ///
+    /// Each template runs inside its own SAVEPOINT. Nobody is looking at a generator
+    /// run, so a template that throws must not fail the whole sweep: that rolled back
+    /// every OTHER template's rows and the auto-post mark with them, on every launch,
+    /// with nothing said — and once the bad template was fixed, the stalled days all
+    /// arrived at once. Now its own rows roll back, its occurrences come back as
+    /// refused, and the rest post. Only imported or synced data can hold such a
+    /// template (a transfer between one account and itself, say); the sheet cannot
+    /// save one. Mirrors the web's `generateDueScheduled`.
     static func materializeDue(_ db: Database, today: String, explicitTime: String?,
-                               autoPostOnly: Bool, since: String?) throws -> Int {
-        var posted = 0
+                               autoPostOnly: Bool, since: String?) throws -> AutoPostRun {
+        var run = AutoPostRun(posted: 0, refused: [])
         let ts = ISO8601DateFormatter().string(from: Date())
         let filter = autoPostOnly ? " AND auto_post = 1" : ""
         let skips = try ScheduledSkips.load(db)
         for r in try Row.fetchAll(db, sql: "SELECT * FROM scheduled_templates WHERE is_active = 1\(filter)") {
-            let type: String = r["kind"]
-            guard let amount = r["amount"] as Double? else { continue }
-            if (r["splits_enabled"] as Int? ?? 0) != 0 { continue }
-            if type == "transfer" && (r["from_account_id"] as String?) == nil { continue }
-
-            let template = ScheduledTemplate(
-                id: r["id"], name: (r["name"] as String?) ?? "", description: nil, type: type,
-                amount: amount, frequency: r["frequency"], dayOfMonth: (r["day_of_month"] as Int?) ?? 1,
-                weekDay: r["day_of_week"], accountId: r["account_id"], fromAccountId: r["from_account_id"],
-                startDate: r["start_date"], startTime: r["start_time"], endDate: r["end_date"], nextRun: (r["next_run"] as String?) ?? "",
-                maxExecutions: nil, installmentTotal: nil, installmentPaid: nil,
-                skippedDates: skips[r["id"] as String])
-            // Skipped occurrences are already gone from this list, so the caps below
-            // spend nothing on them — a skip is not an execution (`occurrencesUpTo`).
-            var dates = Selectors.occurrencesUpTo(template, today)
-            if let since { dates = dates.filter { $0 >= since } }
-            if dates.isEmpty { continue }
-            // Resolution keys on occurrenceDate ?? date (see Selectors), so
-            // "already posted" must key on the same coalesce — not the raw
-            // posting date — or an occurrence posted under a different
-            // transaction date (e.g. paid late) is not recognised and gets
-            // regenerated as a duplicate.
-            let have = Set(try String.fetchAll(db, sql: "SELECT COALESCE(occurrence_date, date) FROM entries WHERE source_template_id = ?", arguments: [r["id"] as String]))
-            dates = dates.filter { !have.contains($0) }
-            if let maxEx = r["max_executions"] as Int? { dates = Array(dates.prefix(Swift.max(0, maxEx - have.count))) }
-            if let instTotal = r["installment_total"] as Int? { dates = Array(dates.prefix(Swift.max(0, instTotal - have.count))) }
-            if dates.isEmpty { continue }
-
-            let ledgerId: String = r["ledger_id"]
-            let acctId: String = r["account_id"]
-            let description = (r["description"] as String?) ?? (r["name"] as String?) ?? ""
-            if type == "transfer" {
-                let fromAccountId: String = r["from_account_id"]
+            let templateId: String = r["id"]
+            let name = (r["name"] as String?) ?? ""
+            var dates: [String] = []
+            var posted = 0
+            var refused: [AutoPostRefusal] = []
+            let sp = "md_\(Entries.newId(""))".replacingOccurrences(of: "-", with: "")
+            try db.execute(sql: "SAVEPOINT \(sp)")
+            do {
+                dates = try dueOccurrences(db, r, today: today, since: since, skips: skips)
                 for date in dates {
-                    guard try skippingNoRate({
-                        try Entries.postTransfer(db, fromAccountId: fromAccountId, toAccountId: acctId, fromAmount: abs(amount),
-                                                 date: date, time: postingTime(r, explicit: explicitTime), note: description.isEmpty ? nil : description,
-                                                 sourceTemplateId: r["id"], occurrenceDate: date, timestamp: ts)
-                    }) else { continue }
-                    posted += 1
+                    if let refusal = try refusedForNoRate({ try postOccurrence(db, r, date: date, explicitTime: explicitTime, timestamp: ts) }) {
+                        refused.append(AutoPostRefusal(templateId: templateId, name: name, occurrence: date, error: refusal))
+                    } else {
+                        posted += 1
+                    }
                 }
-                continue
+                try db.execute(sql: "RELEASE \(sp)")
+            } catch {
+                try? db.execute(sql: "ROLLBACK TO \(sp)")
+                try? db.execute(sql: "RELEASE \(sp)")
+                let reason = (error as? I18nError) ?? I18nError("error.unknown", [:], "\(error)")
+                posted = 0
+                refused = dates.map { AutoPostRefusal(templateId: templateId, name: name, occurrence: $0, error: reason) }
             }
-            let signed = (type == "income" ? 1.0 : -1.0) * amount
-            let categoryId: String? = r["category_id"]
-            let cpId = try Entries.resolveCounterpartyIdByName(db, description)
-            for date in dates {
-                guard try skippingNoRate({
-                    try Entries.postSimple(db, .init(ledgerId: ledgerId, accountId: acctId, amount: signed, date: date,
-                        description: description, categoryId: categoryId, kind: type == "income" ? .income : .expense,
-                        time: postingTime(r, explicit: explicitTime), status: .pending, counterpartyId: cpId, id: nil,
-                        sourceTemplateId: r["id"], occurrenceDate: date))
-                }) else { continue }
-                posted += 1
-            }
+            run.posted += posted
+            run.refused += refused
         }
-        return posted
+        return run
     }
 
-    /// Run one occurrence's post; false when it was refused for want of an exchange
-    /// rate. Nobody is looking at a generator run, so throwing would fail the whole
-    /// sweep — every other template's rows and the auto-post mark with it, on every
-    /// launch. Skipped instead, the occurrence stays unposted and so still due:
-    /// posting it by hand says why. The refusal comes from the leg conversion, before
-    /// anything is written. Mirrors the web's `generateDueScheduled`.
-    private static func skippingNoRate(_ post: () throws -> Any) throws -> Bool {
-        do { _ = try post(); return true }
-        catch let e as I18nError where e.code == "error.fx.noRate" { return false }
+    /// The occurrences of one template row still owed: due by `today`, on or after
+    /// `since`, not skipped, not already posted, within its caps. Empty for a template
+    /// the generator never posts (no fixed amount, splits, a transfer with no source).
+    private static func dueOccurrences(_ db: Database, _ r: Row, today: String, since: String?,
+                                       skips: [String: [String]]) throws -> [String] {
+        let type: String = r["kind"]
+        guard let amount = r["amount"] as Double? else { return [] }
+        if (r["splits_enabled"] as Int? ?? 0) != 0 { return [] }
+        if type == "transfer" && (r["from_account_id"] as String?) == nil { return [] }
+
+        let template = ScheduledTemplate(
+            id: r["id"], name: (r["name"] as String?) ?? "", description: nil, type: type,
+            amount: amount, frequency: r["frequency"], dayOfMonth: (r["day_of_month"] as Int?) ?? 1,
+            weekDay: r["day_of_week"], accountId: r["account_id"], fromAccountId: r["from_account_id"],
+            startDate: r["start_date"], startTime: r["start_time"], endDate: r["end_date"], nextRun: (r["next_run"] as String?) ?? "",
+            maxExecutions: nil, installmentTotal: nil, installmentPaid: nil,
+            skippedDates: skips[r["id"] as String])
+        // Skipped occurrences are already gone from this list, so the caps below
+        // spend nothing on them — a skip is not an execution (`occurrencesUpTo`).
+        var dates = Selectors.occurrencesUpTo(template, today)
+        if let since { dates = dates.filter { $0 >= since } }
+        if dates.isEmpty { return [] }
+        // Resolution keys on occurrenceDate ?? date (see Selectors), so
+        // "already posted" must key on the same coalesce — not the raw
+        // posting date — or an occurrence posted under a different
+        // transaction date (e.g. paid late) is not recognised and gets
+        // regenerated as a duplicate.
+        let have = Set(try String.fetchAll(db, sql: "SELECT COALESCE(occurrence_date, date) FROM entries WHERE source_template_id = ?", arguments: [r["id"] as String]))
+        dates = dates.filter { !have.contains($0) }
+        if let maxEx = r["max_executions"] as Int? { dates = Array(dates.prefix(Swift.max(0, maxEx - have.count))) }
+        if let instTotal = r["installment_total"] as Int? { dates = Array(dates.prefix(Swift.max(0, instTotal - have.count))) }
+        return dates
+    }
+
+    /// Post one occurrence of a template row: a transfer CONFIRMED, income/expense
+    /// PENDING.
+    private static func postOccurrence(_ db: Database, _ r: Row, date: String, explicitTime: String?,
+                                       timestamp ts: String) throws {
+        let type: String = r["kind"]
+        let amount: Double = r["amount"]
+        let ledgerId: String = r["ledger_id"]
+        let acctId: String = r["account_id"]
+        let description = (r["description"] as String?) ?? (r["name"] as String?) ?? ""
+        if type == "transfer" {
+            _ = try Entries.postTransfer(db, fromAccountId: r["from_account_id"], toAccountId: acctId, fromAmount: abs(amount),
+                                         date: date, time: postingTime(r, explicit: explicitTime), note: description.isEmpty ? nil : description,
+                                         sourceTemplateId: r["id"], occurrenceDate: date, timestamp: ts)
+            return
+        }
+        let signed = (type == "income" ? 1.0 : -1.0) * amount
+        let cpId = try Entries.resolveCounterpartyIdByName(db, description)
+        _ = try Entries.postSimple(db, .init(ledgerId: ledgerId, accountId: acctId, amount: signed, date: date,
+            description: description, categoryId: r["category_id"], kind: type == "income" ? .income : .expense,
+            time: postingTime(r, explicit: explicitTime), status: .pending, counterpartyId: cpId, id: nil,
+            sourceTemplateId: r["id"], occurrenceDate: date))
+    }
+
+    /// Run one occurrence's post; the refusal when it was refused for want of an
+    /// exchange rate, else nil. Skipped, not thrown: rates are per day, so the rest of
+    /// the template may still post, and the occurrence stays unposted and so still
+    /// due — posting it by hand says why. The refusal comes from the leg conversion,
+    /// before anything is written. Mirrors the web's `generateDueScheduled`.
+    private static func refusedForNoRate(_ post: () throws -> Void) throws -> I18nError? {
+        do { try post(); return nil }
+        catch let e as I18nError where e.code == "error.fx.noRate" { return e }
     }
 
     /// The app's generator (native-only): materialize the due occurrences of every
@@ -241,23 +278,34 @@ public enum Scheduled {
     /// overlap harmless. The mark never moves backwards, so a clock set back cannot
     /// re-open old days.
     ///
+    /// A refused occurrence does not hold the mark back. The mark is one day for
+    /// every template, so holding it would re-open those days for all of them, and a
+    /// refusal for want of a rate lasts until someone adds the rate. Instead the run
+    /// returns what it refused and why, and the app tells the user
+    /// (`FinchStore.autoPostDueScheduled`); the occurrence stays unposted, so it reads
+    /// overdue, and posting it by hand books it once the cause is fixed.
+    ///
     /// Returns how many occurrences it posted, so the app can skip the write
     /// side-effects on the usual run that finds nothing.
     static func autoPostDue(_ db: Database, _ args: Args) throws {
-        _ = try autoPostDueReturningCount(db, args)
+        _ = try autoPostDueRun(db, args)
     }
 
     static func autoPostDueReturningCount(_ db: Database, _ args: Args) throws -> Int {
+        try autoPostDueRun(db, args).posted
+    }
+
+    static func autoPostDueRun(_ db: Database, _ args: Args) throws -> AutoPostRun {
         struct A: Decodable { let today: String; let time: String? }
         let a = try args.to(A.self)
         guard isYMD(a.today) else { throw I18nError("error.invalidArgs", [:], "autoPostDueScheduled requires today as YYYY-MM-DD") }
         let mark = try AutoPostMark.load(db)
         let since: String
         if let mark, mark < a.today { since = Selectors.horizonDay(from: mark, addingDays: 1) } else { since = a.today }
-        let posted = try materializeDue(db, today: a.today, explicitTime: a.time, autoPostOnly: true, since: since)
+        let run = try materializeDue(db, today: a.today, explicitTime: a.time, autoPostOnly: true, since: since)
         if mark.map({ $0 < a.today }) ?? true { try AutoPostMark.save(db, a.today) }
         try recordAutoPostSince(db, from: since)
-        return posted
+        return run
     }
 
     /// Keep `AutoPostSince` in step with the templates this run covered: one newly
@@ -486,6 +534,27 @@ public enum Scheduled {
         if n == 0 {
             try db.execute(sql: "UPDATE scheduled_templates SET splits_enabled = 0, updated_at = datetime('now') WHERE id = ?", arguments: [a.templateId])
         }
+    }
+}
+
+/// What one generator run did: how many occurrences it posted, and each one it
+/// could not post, with the reason.
+public struct AutoPostRun: Equatable, Sendable {
+    public var posted: Int
+    public var refused: [AutoPostRefusal]
+}
+
+/// An occurrence the generator could not post. `name` is the template's, so the app
+/// can say which item without looking it up: the run covers every ledger, not only
+/// the one on screen.
+public struct AutoPostRefusal: Equatable, Sendable {
+    public let templateId: String
+    public let name: String
+    public let occurrence: String
+    public let error: I18nError
+
+    public init(templateId: String, name: String, occurrence: String, error: I18nError) {
+        self.templateId = templateId; self.name = name; self.occurrence = occurrence; self.error = error
     }
 }
 

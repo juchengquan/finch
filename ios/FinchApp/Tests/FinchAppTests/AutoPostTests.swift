@@ -22,8 +22,9 @@ final class AutoPostTests: XCTestCase {
     /// A DAILY template that started a year ago, so a back-fill would be ~365 rows
     /// and "only today" is unambiguous whatever day the suite runs.
     @discardableResult
-    private func createDaily(_ store: FinchStore, autoPost: Bool, type: String = "expense") throws -> String {
-        let accounts = store.accounts.map(\.id)
+    private func createDaily(_ store: FinchStore, autoPost: Bool, type: String = "expense",
+                             accountId: String? = nil) throws -> String {
+        let accounts = [accountId].compactMap { $0 } + store.accounts.map(\.id)
         let id = "sch-\(UUID().uuidString.prefix(8))"
         var args: [String: JSONValue] = [
             "id": .string(id), "ledgerId": .string(store.activeLedgerId), "name": .string("Coffee \(id)"),
@@ -195,6 +196,58 @@ final class AutoPostTests: XCTestCase {
             categories: [], today: "2026-05-15", wallToday: "2026-05-15", ledgerId: "l1",
             enabled: Set(NotificationKind.allCases), money: { "\($0)" })
         XCTAssertEqual(planned.filter { $0.kind == .scheduledDue }.compactMap(\.focusId), ["manual", "legacy"])
+    }
+
+    // MARK: - What it could not add
+
+    /// An "Add automatically" item on an account in a currency with no rate: the run
+    /// adds nothing for it and moves on, so it must SAY so — before, the refusal was
+    /// dropped and the only sign was "overdue" whenever someone next looked.
+    func test_aRefusedOccurrence_reachesTheRefusalSink() async throws {
+        let store = try await makeStore()
+        let won = "acct-krw-\(UUID().uuidString.prefix(6))"
+        try store.apply(.createAccount, Args([
+            "id": .string(won), "ledgerId": .string(store.activeLedgerId), "name": .string("Won"),
+            "type": .string("savings"), "currency": .string("KRW"),
+        ]))
+        let id = try createDaily(store, autoPost: true, accountId: won)
+        var reported: [[AutoPostRefusal]] = []
+        store.autoPostRefusalSink = { reported.append($0) }
+        let posted = await store.autoPostDueScheduled()
+        XCTAssertEqual(posted, 0)
+        XCTAssertTrue(rows(store, id).isEmpty)
+        let refusal = try XCTUnwrap(reported.last?.first)
+        XCTAssertEqual(refusal.templateId, id)
+        XCTAssertEqual(refusal.occurrence, store.wallToday)
+        XCTAssertEqual(refusal.error.code, "error.fx.noRate")
+
+        // Every foreground re-covers the day and is refused again; the alert is not.
+        await store.autoPostDueScheduled()
+        let first = NotificationPlanner.autoPostRefusalAlerts(try XCTUnwrap(reported.first), alreadyTold: [],
+                                                             reason: { i18nMessage($0, zh: false) })
+        XCTAssertEqual(first.alerts.map(\.title), [refusal.name])
+        let again = NotificationPlanner.autoPostRefusalAlerts(try XCTUnwrap(reported.last), alreadyTold: first.told,
+                                                             reason: { i18nMessage($0, zh: false) })
+        XCTAssertEqual(again.alerts, [])
+    }
+
+    /// One alert per item however many of its days were refused, each new refusal
+    /// told once, and what is remembered is the latest run's.
+    func test_refusalAlerts_onePerItem_toldOnce() {
+        let noRate = I18nError("error.fx.noRate", ["currency": "KRW"], "No exchange rate for KRW")
+        func r(_ t: String, _ day: String) -> AutoPostRefusal {
+            AutoPostRefusal(templateId: t, name: "Item \(t)", occurrence: day, error: noRate)
+        }
+        let run1 = [r("a", "2026-10-01"), r("a", "2026-10-02"), r("b", "2026-10-02")]
+        let one = NotificationPlanner.autoPostRefusalAlerts(run1, alreadyTold: [], reason: { $0.message })
+        XCTAssertEqual(one.alerts.map(\.title), ["Item a", "Item b"])
+        XCTAssertEqual(one.alerts.first?.body, "Couldn't add it automatically: No exchange rate for KRW")
+        XCTAssertEqual(one.alerts.first?.id, "autoPost:a:2026-10-01")
+
+        let run2 = [r("b", "2026-10-02"), r("a", "2026-10-03")]
+        let two = NotificationPlanner.autoPostRefusalAlerts(run2, alreadyTold: one.told, reason: { $0.message })
+        XCTAssertEqual(two.alerts.map(\.id), ["autoPost:a:2026-10-03"], "b was told; a's new day is news")
+        XCTAssertEqual(two.told, ["b:2026-10-02", "a:2026-10-03"])
     }
 
     // MARK: - "Missed" means missed
