@@ -1,9 +1,9 @@
 import XCTest
 
-/// The 1.0 rates pre-#820 code saved by mistake: Currencies shows a notice only
-/// while there are some, its review lists them with the entries each converted, and
-/// they go only after a counted confirmation. The entries themselves are listed
-/// from the review, and open in the Edit sheet.
+/// The 1.0 rates pre-#820 code saved by mistake: Currencies shows a notice while
+/// there are some, or entries booked with them, its review lists them with the
+/// entries each converted, and they go only after a counted confirmation. The
+/// entries themselves are listed from the review, and open in the Edit sheet.
 ///
 /// `-seedFallbackRates YES` writes them the old way (see
 /// `FinchStore.seedPre820FallbackRatesForTesting`): KRW pinned at two dates with
@@ -63,20 +63,26 @@ final class FallbackRatesUITests: XCTestCase {
         XCTAssertTrue(confirm.waitForExistence(timeout: 5), "the confirmation does not name the count")
         confirm.tap()
 
-        // The rates are gone, but the review stays on the entries booked with them:
-        // once it closes, nothing else leads back to them.
+        // The rates are gone, but the review stays on the entries booked with them.
         XCTAssertTrue(app.cells["fallback-rates-remove"].waitForNonExistence(timeout: 10),
                       "the rates outlived their removal")
         XCTAssertFalse(app.staticTexts["Not used"].exists, "a removed rate is still listed")
         XCTAssertTrue(app.staticTexts["2 entries were booked at 1:1"].exists,
                       "removing the rates lost the entries booked with them")
 
-        // Back on Currencies, with the notice gone.
+        // Back on Currencies the notice now names the entries, and still leads
+        // back to them: they are found from their postings, not from the rates.
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(app.staticTexts["Auto-update exchange rates"].waitForExistence(timeout: 10),
                       "did not return to Currencies after removing")
         XCTAssertFalse(app.staticTexts["3 rates were saved as 1:1 by mistake"].exists,
                        "the notice outlived the rates")
+        let entriesNotice = app.cells["fallback-rates-notice"].staticTexts["2 entries were booked at 1:1"]
+        XCTAssertTrue(entriesNotice.waitForExistence(timeout: 10),
+                      "nothing on Currencies leads back to the entries booked at 1:1")
+        entriesNotice.tap()
+        XCTAssertTrue(app.cells["fallback-rates-entries"].waitForExistence(timeout: 10),
+                      "the notice does not reopen the review on the entries")
     }
 
     /// The review leads to the entries it counts: a rate lists the ones it

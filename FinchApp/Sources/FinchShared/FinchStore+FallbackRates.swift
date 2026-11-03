@@ -2,9 +2,10 @@ import Foundation
 import FinchCore
 import GRDB
 
-/// The 1.0 exchange rates saved by mistake before #820 (`FallbackFxRates` has how
-/// they are recognised). Found on demand and removed only when the user confirms
-/// on the Currencies screen; nothing here runs at launch.
+/// What pre-#820 code left behind (`FallbackFxRates` has how it is recognised):
+/// the 1.0 exchange rates it saved by mistake, and the entries it booked at 1:1.
+/// Found on demand; the rates are removed only when the user confirms on the
+/// review, and nothing here runs at launch.
 ///
 /// Removal is the plain `deleteExchangeRate` chokepoint, batched so N rows cost one
 /// reprojection. It also means another device replays it with an action it
@@ -13,30 +14,38 @@ import GRDB
 /// Entries already booked at 1:1 are left alone. Re-converting them would rewrite
 /// account balances (an amount typed in another currency, and the receiving side
 /// of a cross-currency transfer, were themselves converted 1:1), and cleared or
-/// reconciled legs would silently stop matching their statement.
+/// reconciled legs would silently stop matching their statement. The review lists
+/// them until each is saved again at a real rate.
 extension FinchStore {
 
-    /// Every suspect rate, oldest first. Empty on a read failure — the notice then
-    /// simply doesn't show.
-    public func fallbackRateSuspects() -> [FallbackFxRates.Suspect] {
-        guard let q = dbQueue else { return [] }
-        return (try? q.read { try FallbackFxRates.find($0) }) ?? []
-    }
-
-    /// The entries `rates` converted 1:1, in every ledger (`FallbackFxRates.entryIds`).
-    /// Works for rates already removed: the rule reads only their currency and date.
-    /// Empty on a read failure.
-    public func fallbackRateEntryIds(_ rates: [FallbackFxRates.Suspect]) -> Set<String> {
-        guard let q = dbQueue, !rates.isEmpty else { return [] }
-        return (try? q.read { try FallbackFxRates.entryIds($0, for: rates) }) ?? []
+    /// The rates and the entries, computed once per change to what they are read
+    /// from. Empty on a read failure — the notice then simply doesn't show.
+    ///
+    /// Currencies and the review re-read this on every reprojection, i.e. after
+    /// every write. Most writes cannot change it, so it is recomputed only when
+    /// `FallbackReviewKey` changes: a rate, a ledger's base, or a transaction of the
+    /// active ledger that involves another currency. Other ledgers' transactions
+    /// change only through a ledger switch, which changes the key, or a new
+    /// database, which clears the cache.
+    public func fallbackRateReview() -> FallbackFxRates.Review {
+        guard let q = dbQueue else { return .empty }
+        let key = FallbackReviewKey(self)
+        if let cached = fallbackReviewCache, cached.key == key { return cached.review }
+        fallbackReviewRunCount += 1
+        guard let review = try? q.read({ try FallbackFxRates.review($0) }) else { return .empty }
+        fallbackReviewCache = (key, review)
+        return review
     }
 
     /// Delete the rows in `rates` that are STILL suspect, in one write; returns how
-    /// many went. Re-checked at confirm time, so a row that became a real rate
-    /// while the list was open (a refresh, a rate typed in) is kept.
+    /// many went. Re-checked against the database at confirm time, not the cached
+    /// review, so a row that became a real rate while the list was open (a refresh,
+    /// a rate typed in) is kept.
     @discardableResult
     public func removeFallbackRates(_ rates: [FallbackFxRates.Suspect]) -> Int {
-        let current = Set(fallbackRateSuspects().map { "\($0.currency)|\($0.date)" })
+        guard let q = dbQueue else { return 0 }
+        let fresh = (try? q.read { try FallbackFxRates.find($0) }) ?? []
+        let current = Set(fresh.map { "\($0.currency)|\($0.date)" })
         let ops = rates
             .filter { current.contains("\($0.currency)|\($0.date)") }
             .map { (action: ActionName.deleteExchangeRate,
@@ -85,3 +94,31 @@ extension FinchStore {
     }
     #endif
 }
+
+/// What `fallbackRateReview` is computed from, as the app already holds it — so
+/// telling whether it changed costs no query. Rates and ledger bases in full; of
+/// the active ledger's transactions only those in or converted from another
+/// currency, so an ordinary purchase in the base currency leaves it unchanged.
+struct FallbackReviewKey: Equatable {
+    let rates: [ExchangeRate]
+    let bases: [String]
+    let ledgerId: String
+    let foreign: [Tx]
+
+    @MainActor init(_ store: FinchStore) {
+        rates = store.exchangeRates
+        bases = store.ledgers.map { "\($0.id)|\($0.base)" }
+        ledgerId = store.activeLedgerId
+        let base = store.ledgers.first { $0.id == store.activeLedgerId }?.base
+        let accountCurrency = Dictionary(store.accounts.map { ($0.id, $0.currency) },
+                                         uniquingKeysWith: { first, _ in first })
+        foreign = store.txns.filter { t in
+            // `currency` is what was typed (`orig_currency ?? posting currency`), so an
+            // account in another currency is checked separately.
+            (t.currency.map { $0 != base } ?? false)
+                || ((accountCurrency[t.account] ?? nil).map { $0 != base } ?? false)
+                || (t.splits?.contains { $0.origCurrency != nil } ?? false)
+        }
+    }
+}
+

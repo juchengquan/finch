@@ -77,12 +77,15 @@ final class TxListDetailVC: UIViewController {
                    })
         }
 
-        /// The entries `rates` booked at 1:1 (`FallbackFxRatesReviewVC`), one row per
-        /// ENTRY so the list and the review's count agree (`FallbackFxRates.rows`).
-        /// Every one is listed, upcoming ones too, since each may need correcting.
-        static func bookedAtOneToOne(title: String, rates: [FallbackFxRates.Suspect]) -> Source {
+        /// The entries booked at 1:1 (`FallbackRatesReviewVC`), all of them or the
+        /// ones `rate` stands for, one row per ENTRY so the list and the review's
+        /// count agree (`FallbackFxRates.rows`). Every one is listed, upcoming ones
+        /// too, since each may need correcting. Read live: an entry saved again at a
+        /// real rate leaves the list, and `rate` still answers once it is removed.
+        static func bookedAtOneToOne(title: String, rate: FallbackFxRates.Suspect? = nil) -> Source {
             let rows: @MainActor (FinchStore) -> [Tx] = { st in
-                FallbackFxRates.rows(st.txns, entryIds: st.fallbackRateEntryIds(rates))
+                let review = st.fallbackRateReview()
+                return FallbackFxRates.rows(st.txns, entryIds: rate.map(review.entryIds(for:)) ?? review.entryIds)
             }
             var source = Source(title: title,
                                 confirmed: { st in rows(st).filter { !Selectors.isPendingNow($0, today: st.wallToday) } },
