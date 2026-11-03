@@ -285,4 +285,14 @@ final class SelectorParityTests: XCTestCase {
             XCTAssertEqual(Selectors.unrealizedFx(f.input.account, f.input.txns), f.expected, name)
         }
     }
+
+    /// The display side's latest rate per currency (`Money.latestRateMap`, web
+    /// `lib/fx.ts`). Both skip `'derived'` copies, as the write path's lookup does.
+    func test_latestRateMap() throws {
+        struct F: Decodable { let expected: [String: Double]; let input: I
+            struct I: Decodable { let rates: [ExchangeRate] } }
+        for (name, f) in try load("latestRateMap", F.self) {
+            XCTAssertEqual(Money.latestRateMap(f.input.rates), f.expected, name)
+        }
+    }
 }

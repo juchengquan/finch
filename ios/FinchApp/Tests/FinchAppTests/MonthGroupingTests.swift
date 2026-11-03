@@ -139,6 +139,62 @@ final class MonthGroupingTests: XCTestCase {
         XCTAssertEqual(d["2026-09-10"]?.expense ?? 0, 12, accuracy: 0.001)
     }
 
+    // MARK: - Currency exchanges (a transfer whose legs don't cancel in base)
+
+    /// $100 left Checking and the €90 that arrived is worth $98 at the day's rate.
+    /// The engine books the $2 to the FX leg the rows never show, so with both legs
+    /// dropped the month lost it. It is what the exchange cost — money that left.
+    func test_exchange_countsWhatItCost_asSpent() {
+        let txns = [tx("1", "2026-09-01", amount: 3200),
+                    leg("x-out", "checking", -100, group: "x"), leg("x-in", "euro", 98, group: "x")]
+        XCTAssertEqual(MonthGrouping.net(txns), 3198, accuracy: 0.001)
+        XCTAssertEqual(MonthGrouping.income(txns), 3200, accuracy: 0.001)
+        XCTAssertEqual(MonthGrouping.expense(txns), 2, accuracy: 0.001)
+        XCTAssertEqual(MonthGrouping.income(txns) - MonthGrouping.expense(txns),
+                       MonthGrouping.net(txns), accuracy: 0.001)            // identity still holds
+    }
+
+    /// Arriving worth more than it left is a gain, and counts as money in.
+    func test_exchange_aGainCountsAsIn() {
+        let txns = [leg("x-out", "checking", -100, group: "x"), leg("x-in", "euro", 101.5, group: "x")]
+        XCTAssertEqual(MonthGrouping.income(txns), 1.5, accuracy: 0.001)
+        XCTAssertEqual(MonthGrouping.expense(txns), 0)
+        XCTAssertEqual(MonthGrouping.net(txns), 1.5, accuracy: 0.001)
+    }
+
+    /// The calendar's day cells count the cost on the exchange's day, as the header does.
+    func test_dailyIncomeExpense_countsAnExchangesCost() {
+        let d = MonthGrouping.dailyIncomeExpense([
+            tx("1", "2026-09-10", amount: -12),
+            leg("x-out", "checking", -100, group: "x"), leg("x-in", "euro", 98, group: "x"),
+        ])
+        XCTAssertEqual(d["2026-09-10"]?.income, 0)
+        XCTAssertEqual(d["2026-09-10"]?.expense ?? 0, 14, accuracy: 0.001)
+    }
+
+    // MARK: - A transfer split by the feed's page edge
+
+    /// The feed shows 50 rows at a time. When the edge fell between a transfer's two
+    /// legs, the month header counted the visible leg — $250 spent — and dropped it
+    /// again once "Load more" brought in the other. Paired over every row the feed
+    /// holds, the figures don't move.
+    func test_transferSplitByThePageEdge_isPairedOverTheWholeSet() {
+        let all = [tx("1", "2026-09-10", amount: -12), leg("t-out", "checking", -250), leg("t-in", "savings", 250)]
+        let page = Array(all.prefix(2))
+        XCTAssertEqual(MonthGrouping.expense(page, pairedOver: all), MonthGrouping.expense(all), accuracy: 0.001)
+        XCTAssertEqual(MonthGrouping.income(page, pairedOver: all), MonthGrouping.income(all), accuracy: 0.001)
+        XCTAssertEqual(MonthGrouping.net(page, pairedOver: all), -12, accuracy: 0.001)
+    }
+
+    /// An exchange split by the edge counts its cost once, whichever leg is showing.
+    func test_exchangeSplitByThePageEdge_countsItsCostOnce() {
+        let all = [leg("x-out", "checking", -100, group: "x"), tx("1", "2026-09-10", amount: -12),
+                   leg("x-in", "euro", 98, group: "x")]
+        let page = Array(all.prefix(2))
+        XCTAssertEqual(MonthGrouping.expense(page, pairedOver: all), 14, accuracy: 0.001)
+        XCTAssertEqual(MonthGrouping.expense(all), 14, accuracy: 0.001)
+    }
+
     // MARK: - Transfer peers (the row title's "To Savings" / "From Checking")
 
     func test_transferPeers_eachLegNamesTheOtherAccount() {

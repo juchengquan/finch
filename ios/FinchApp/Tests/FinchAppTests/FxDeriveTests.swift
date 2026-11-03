@@ -32,6 +32,34 @@ final class FxDeriveTests: XCTestCase {
         XCTAssertEqual(fxSeries(rates, "JPY"), [])
     }
 
+    // MARK: 'derived' copies
+
+    /// What older versions saved under each conversion's date: a copy of the rate
+    /// the conversion used. KRW's newest row copies a mistyped rate the user has
+    /// since corrected by hand; the engine's lookup skips it, so the pages must too.
+    private let krw = [
+        ExchangeRate(date: "2026-05-01", currency: "KRW", rate: 0.00072, source: "ECB"),
+        ExchangeRate(date: "2026-05-10", currency: "KRW", rate: 0.00073, source: "manual"),
+        ExchangeRate(date: "2026-05-20", currency: "KRW", rate: 0.0073, source: "derived"),
+    ]
+
+    func test_latest_skipsDerivedCopies() {
+        XCTAssertEqual(fxLatest(krw, "KRW")?.rate, 0.00073)
+    }
+
+    func test_series_andHistory_skipDerivedCopies() {
+        XCTAssertEqual(fxSeries(krw, "KRW"), [0.00072, 0.00073])
+        XCTAssertEqual(fxHistory(krw, "KRW").map(\.date), ["2026-05-10", "2026-05-01"])   // newest first
+    }
+
+    /// A currency whose only rows are copies has no rate, as for the engine.
+    func test_onlyDerivedRows_readAsNoRate() {
+        let thb = [ExchangeRate(date: "2026-05-14", currency: "THB", rate: 1, source: "derived")]
+        XCTAssertNil(fxLatest(thb, "THB"))
+        XCTAssertEqual(fxSeries(thb, "THB"), [])
+        XCTAssertEqual(fxHistory(thb, "THB"), [])
+    }
+
     func test_displayDay_formats_andFallsBack() {
         // en_US-style abbreviated month-day; assert on components to stay locale-tolerant.
         let s = fxDisplayDay("2026-07-17")
@@ -102,6 +130,18 @@ final class FxCurrencyRowsTests: XCTestCase {
         XCTAssertTrue(rows.allSatisfy { !$0.tracked })       // every switch reads OFF
     }
 
+    /// The Currencies list shows the rate the engine converts with, not a newer
+    /// derived copy, and nothing for a currency that has only copies.
+    func test_rows_rateSkipsDerivedCopies() {
+        let rows = fxCurrencyRows(all: ["KRW", "THB"], rates: [
+            ExchangeRate(date: "2026-05-10", currency: "KRW", rate: 0.00073, source: "manual"),
+            ExchangeRate(date: "2026-05-20", currency: "KRW", rate: 0.0073, source: "derived"),
+            ExchangeRate(date: "2026-05-14", currency: "THB", rate: 1, source: "derived"),
+        ], tracked: [], grouping: [])
+        XCTAssertEqual(rows.first { $0.code == "KRW" }?.rate, 0.00073)
+        XCTAssertNil(rows.first { $0.code == "THB" }?.rate)
+    }
+
     func test_filter_byCodeOrName_caseInsensitive_orderPreserved() {
         let rows = fxCurrencyRows(all: ["JPY", "EUR", "USD", "CAD"], rates: rates,
                                   tracked: ["EUR"], grouping: ["EUR"])
@@ -133,5 +173,44 @@ final class FxCurrencyRowsTests: XCTestCase {
     /// distinguishes "user untracked everything" from "no key yet" upstream.
     func test_activating_fromEmptyTrackedSet_writes() {
         XCTAssertEqual(fxTrackedAfterActivating("GBP", tracked: []), ["GBP"])
+    }
+}
+
+/// The store's conversions and its display-currency choices, over a database that
+/// still holds `'derived'` copies older versions saved.
+@MainActor
+final class DerivedRateDisplayTests: XCTestCase {
+    private func loaded() async throws -> FinchStore {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(
+            forResource: "sample", withExtension: "finch", subdirectory: "Fixtures/roundtrip"))
+        let store = FinchStore()
+        try await store.loadPack(from: try Data(contentsOf: url))
+        return store
+    }
+
+    private func setRate(_ store: FinchStore, _ day: String, _ currency: String,
+                         _ rate: Double, _ source: String) throws {
+        try store.apply(.setExchangeRate, Args([
+            "date": .string(day), "currency": .string(currency), "rate": .double(rate), "source": .string(source)]))
+    }
+
+    /// The reported problem: KRW's rate was corrected by hand, but a newer derived
+    /// copy of the mistyped one still converted every KRW balance on screen.
+    func test_conversionsUseTheCorrectedRate_notANewerDerivedCopy() async throws {
+        let store = try await loaded()
+        try setRate(store, "2026-05-10", "KRW", 0.00073, "manual")
+        try setRate(store, "2026-05-20", "KRW", 0.0073, "derived")
+        XCTAssertEqual(store.rateMap["KRW"] ?? 0, 0.00073, accuracy: 1e-12)
+        XCTAssertEqual(Money.convert(50_000, from: "KRW", to: "USD", rates: store.rateMap) ?? 0, 36.5, accuracy: 1e-6)
+    }
+
+    /// A currency with only derived copies has no rate, so it is not offered as a
+    /// display currency: nothing would convert into it.
+    func test_aCurrencyWithOnlyDerivedRows_isNotADisplayChoice() async throws {
+        let store = try await loaded()
+        try setRate(store, "2026-05-14", "THB", 1, "derived")
+        XCTAssertNil(store.rateMap["THB"])
+        XCTAssertFalse(store.availableDisplayCurrencies.contains("THB"))
+        XCTAssertFalse(store.availableDisplayCurrencies(forLedger: store.activeLedgerId).contains("THB"))
     }
 }

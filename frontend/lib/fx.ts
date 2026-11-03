@@ -5,10 +5,18 @@
 import type { ExchangeRate } from '@/lib/db/domain/_app/system.types';
 import { HUB_CURRENCY } from '@/lib/db/domain/_app/system';
 
-/** Latest USD-per-1-unit rate per currency. USD always = 1 (the hub). */
+/**
+ * Latest USD-per-1-unit rate per currency. USD always = 1 (the hub).
+ *
+ * 'derived' rows are skipped, as the write path's lookup skips them
+ * (queries/rates.ts): they are copies older versions saved of the rate each
+ * conversion used, so the newest one can be a copy of a rate since corrected.
+ * A currency with only derived rows is absent, like one with no rows.
+ */
 export function latestRateMap(rates: ExchangeRate[]): Map<string, number> {
   const latest = new Map<string, { date: string; rate: number }>();
   for (const r of rates) {
+    if (r.source === 'derived') continue;
     const prev = latest.get(r.currency);
     if (!prev || r.date > prev.date) latest.set(r.currency, { date: r.date, rate: r.rate });
   }

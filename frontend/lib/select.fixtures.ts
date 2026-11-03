@@ -30,7 +30,9 @@ export type SelectorName =
   | 'monthForecast' | 'accountForecast'
   // Phase 1.5 — batch 4 (holdings / FX)
   | 'holdingsForAccount' | 'holdingValue' | 'holdingGainLoss'
-  | 'holdingsValueForAccount' | 'investmentAccountTotal' | 'unrealizedFx';
+  | 'holdingsValueForAccount' | 'investmentAccountTotal' | 'unrealizedFx'
+  // lib/fx.ts — the display side's latest rate per currency
+  | 'latestRateMap';
 
 /** One parity case. `input` is a NAMED-OBJECT (the selector's named args, per
  *  _CANONICAL_WEB_FACTS.md §E) — NOT a positional array. `expected` is NOT stored
@@ -393,4 +395,18 @@ export const CASES: SelectorCase[] = [
   { name: 'cost-vs-current', selector: 'unrealizedFx',
     input: { account: acctOf({ id: 'a1', ledgerId: 'personal', currency: 'USD', balance: 1000, openingBalanceBase: 200 }),
       txns: [txOf({ id: 't1', account: 'a1', amount: 300 }), txOf({ id: 't2', account: 'a1', amount: 400 })] } },
+
+  // ── latestRateMap(rates) → { currency: USD per unit } ──
+  // 'derived' rows are skipped, as the write path's lookup skips them: KRW reads
+  // its corrected manual rate under a newer copy of the mistyped one, and THB, with
+  // only a derived 1.0 copy, has no rate at all.
+  { name: 'skips-derived', selector: 'latestRateMap',
+    input: { rates: [
+      { date: '2026-05-13', currency: 'EUR', rate: 1.08, source: 'ECB' },
+      { date: '2026-05-20', currency: 'EUR', rate: 1.09, source: 'ECB' },
+      { date: '2026-05-10', currency: 'KRW', rate: 0.00073, source: 'manual' },
+      { date: '2026-05-20', currency: 'KRW', rate: 0.0073, source: 'derived' },
+      { date: '2026-05-14', currency: 'THB', rate: 1, source: 'derived' },
+      { date: '2026-05-15', currency: 'JPY', rate: 0.0064, source: null },
+    ] } },
 ];

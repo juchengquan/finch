@@ -11,17 +11,26 @@ func fxCurrencies(_ rates: [ExchangeRate]) -> [String] {
 }
 
 /// Latest row for `currency` — max date; on equal dates the later row in list
-/// order wins (mirrors upsert-last-wins intuition).
+/// order wins (mirrors upsert-last-wins intuition). `'derived'` copies don't
+/// count (`ExchangeRate.isDerived`), as they don't for the engine's lookup.
 func fxLatest(_ rates: [ExchangeRate], _ currency: String) -> ExchangeRate? {
     rates.enumerated()
-        .filter { $0.element.currency == currency }
+        .filter { $0.element.currency == currency && !$0.element.isDerived }
         .max { ($0.element.date, $0.offset) < ($1.element.date, $1.offset) }?
         .element
 }
 
-/// Date-ascending rate values — the sparkline series.
+/// Date-ascending rate values — the sparkline series. The rows of `fxHistory`.
 func fxSeries(_ rates: [ExchangeRate], _ currency: String) -> [Double] {
-    rates.filter { $0.currency == currency }.sorted { $0.date < $1.date }.map(\.rate)
+    fxHistory(rates, currency).reversed().map(\.rate)
+}
+
+/// One currency's rates, newest first — its history page. `'derived'` copies are
+/// left out: the engine's lookup never reads one, so a listed copy showed a rate
+/// that converts nothing, and could copy one since corrected. The 1.0 copies the
+/// pre-#820 fallback left still surface in the 1:1 review, which removes them.
+func fxHistory(_ rates: [ExchangeRate], _ currency: String) -> [ExchangeRate] {
+    rates.filter { $0.currency == currency && !$0.isDerived }.sorted { $0.date > $1.date }
 }
 
 /// "Jul 17" (or "Jul 17, 2026") for an ISO day; falls back to the raw string.
