@@ -58,10 +58,10 @@ enum ScheduledSkipping {
     /// before tapping. Swipe buttons are too narrow for it and say only "Skip"; the
     /// row's "Skipping …" caption confirms it afterwards.
     static func skipTitle(_ occurrence: String, today: String) -> String {
-        String(localized: "Skip \(ScheduledCaption.shortDay(occurrence, today: today))")
+        String(localized: "Skip \(AppDate.shortDay(occurrence, today: today))")
     }
     static func unskipTitle(_ occurrence: String, today: String) -> String {
-        String(localized: "Unskip \(ScheduledCaption.shortDay(occurrence, today: today))")
+        String(localized: "Unskip \(AppDate.shortDay(occurrence, today: today))")
     }
 }
 
@@ -78,34 +78,37 @@ enum ScheduledCaption {
         Selectors.resumeOccurrence(template: t, posted: posted, today: today).map { ($0, $0 < today) }
     }
 
-    /// "Monthly · next 2026-11-15", plus " · ends 2026-12-31" when an end date is set;
-    /// "Monthly · ended 2026-09-30" once nothing is left before it; "Monthly · overdue
-    /// 2026-08-25" while an occurrence nobody posted is behind today (`overdue` set,
-    /// so the row can colour it).
+    /// "Monthly · next Nov 15", plus " · ends Dec 31" when an end date is set;
+    /// "Monthly · ended Sep 30" once nothing is left before it; "Monthly · overdue
+    /// Aug 25" while an occurrence nobody posted is behind today (`overdue` set,
+    /// so the row can colour it). Days print in `AppDate.shortDay`'s style.
     ///
     /// The date is `due`'s — the one Post opens. So a skipped occurrence is passed
     /// over (skipping this month's visibly moves it to the next), and so is a posted
     /// one, even one posted early.
     static func cadence(_ t: ScheduledTemplate, posted: [String: Bool], today: String) -> (text: String, overdue: Bool) {
-        let freq = t.frequency.capitalized
+        let freq = FrequencyLabel.label(t.frequency)
+        let day: (String) -> String = { AppDate.shortDay($0, today: today) }
         let occ = due(t, posted: posted, today: today)
         // Overdue outranks the end date: it is the thing to act on.
-        if let occ, occ.overdue { return (String(localized: "\(freq) · overdue \(occ.date)"), true) }
+        if let occ, occ.overdue { return (String(localized: "\(freq) · overdue \(day(occ.date))"), true) }
         let next = occ?.date
         if let end = t.endDate.map({ String($0.prefix(10)) }), !end.isEmpty {
-            if let next { return (String(localized: "\(freq) · next \(next) · ends \(end)"), false) }
+            if let next { return (String(localized: "\(freq) · next \(day(next)) · ends \(day(end))"), false) }
             // Nothing left. Past the end date it has ended; before it, the remaining
-            // occurrences were skipped (or fall after the last one), so it simply ends.
-            return (end < today ? String(localized: "\(freq) · ended \(end)")
-                                : String(localized: "\(freq) · ends \(end)"), false)
+            // occurrences were skipped (or fall after the last one). The list files
+            // both under "Ended", so the second says nothing is left rather than
+            // reading as if more were coming.
+            return (end < today ? String(localized: "\(freq) · ended \(day(end))")
+                                : String(localized: "\(freq) · nothing left · ends \(day(end))"), false)
         }
         // No end date: unchanged — the stored next_run is the fallback for a
         // template whose recurrence has run out (a past "once"), else a dash.
         let shown = next ?? (t.nextRun.isEmpty ? "—" : t.nextRun)
-        return (String(localized: "\(freq) · next \(shown)"), false)
+        return (String(localized: "\(freq) · next \(day(shown))"), false)
     }
 
-    /// "Skipping 2026-11-15" while the current occurrence or a later one is skipped;
+    /// "Skipping Nov 15" while the current occurrence or a later one is skipped;
     /// nil otherwise. From the CURRENT occurrence (`Selectors.currentOccurrence`), the
     /// same point a bare Skip starts from — so skipping the one just passed still
     /// shows. Older skips are history, and the calendar still shows those.
@@ -114,16 +117,8 @@ enum ScheduledCaption {
         let upcoming = (t.skippedDates ?? []).filter { $0 >= from }.sorted()
         guard !upcoming.isEmpty else { return nil }
         // Pre-joined, so the localized string has a single argument whatever the count.
-        let list = upcoming.prefix(3).joined(separator: ", ") + (upcoming.count > 3 ? "…" : "")
+        let list = upcoming.prefix(3).map { AppDate.shortDay($0, today: today) }.joined(separator: ", ")
+            + (upcoming.count > 3 ? "…" : "")
         return String(localized: "Skipping \(list)")
-    }
-
-    /// "Nov 15", or "Nov 15, 2025" outside the current year — short enough for a menu
-    /// title, unambiguous for an old missed occurrence.
-    static func shortDay(_ iso: String, today: String) -> String {
-        guard let d = AppDate.isoDay.date(from: iso) else { return iso }
-        let sameYear = iso.prefix(4) == today.prefix(4)
-        return sameYear ? d.formatted(.dateTime.month(.abbreviated).day())
-                        : d.formatted(.dateTime.month(.abbreviated).day().year())
     }
 }

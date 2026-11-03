@@ -108,10 +108,7 @@ struct AccountForecastPanel: Equatable {
 
     // MARK: Dates
 
-    /// "Oct 23" in the user's locale ("10月23日" in Chinese). The ISO day is parsed in
-    /// the device zone (`AppDate.isoDay`), so the label names the same civil day.
-    static func dayLabel(_ iso: String) -> String {
-        guard let d = AppDate.isoDay.date(from: iso) else { return iso }
-        return d.formatted(.dateTime.month(.abbreviated).day())
-    }
+    /// "Oct 23" in the user's locale ("10月23日" in Chinese) — the app's short day
+    /// (`AppDate.shortDay`), with the year once the window runs into the next one.
+    func dayLabel(_ iso: String) -> String { AppDate.shortDay(iso, today: forecast.today) }
 }
