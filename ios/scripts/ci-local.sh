@@ -14,7 +14,8 @@
 # green result from a stale branch is a false signal rather than a pass.
 #
 #   ios/scripts/ci-local.sh                          # the GATE: run before every push
-#   ios/scripts/ci-local.sh --ui                     # + iPhone UI tests (navigation work)
+#   ios/scripts/ci-local.sh --ui                     # + iPhone UI tests, whatever the diff
+#   ios/scripts/ci-local.sh --no-ui                  # never the UI tests, whatever the diff
 #   ios/scripts/ci-local.sh --full                   # cold full rehearsal of post-merge CI
 #   ios/scripts/ci-local.sh --all                    # + the frontend job
 #   ios/scripts/ci-local.sh --sim "iPhone 17 Pro"    # pin the simulator
@@ -24,16 +25,17 @@
 #
 #   GATE (default) is the pre-push run: every check that costs seconds plus
 #   the app build + FinchAppTests, on a WARM per-worktree DerivedData —
-#   minutes, not tens of minutes. It skips the 33 UI tests, the
-#   FinchCoreTests the Xcode scheme duplicates (step 2's swift test already
-#   ran those methods), and the parked platform builds when your diff cannot
-#   touch them. Everything it skips runs post-merge in CI; the summary lists
-#   the skips on every run so deferred coverage stays visible.
+#   minutes, not tens of minutes. It skips the FinchCoreTests the Xcode
+#   scheme duplicates (step 2's swift test already ran those methods), and
+#   the parked platform builds when your diff cannot touch them. Everything
+#   it skips runs post-merge in CI; the summary lists the skips on every run
+#   so deferred coverage stays visible.
 #
-#   --ui adds the iPhone UI-test leg to the gate. Use it when the change is
-#   navigational — drills, sheets, the split shell — i.e. when the skipped
-#   tests are exactly the ones your diff threatens. (The iPad leg runs only
-#   in post-merge CI.)
+#   The iPhone UI tests join the gate ON THEIR OWN when the branch touches
+#   them or the iOS screens (FinchAppUIKit, FinchAppSwiftUI, the UI tests,
+#   project.yml) — see step 4 for why. --ui forces them on for any diff (a
+#   FinchShared change that moves what a screen shows), --no-ui forces them
+#   off. (The iPad leg runs only in post-merge CI.)
 #
 #   --full is the cold rehearsal: everything, on a COLD mktemp DerivedData,
 #   so a stale build product cannot manufacture a pass. Reach for it before
@@ -58,13 +60,14 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BASE="${CI_LOCAL_BASE:-origin/feat/frontend}"
 RUN_ALL=0
 FULL=0
-UI=0
+UI=auto   # decided from the diff in step 4, unless --ui / --no-ui
 SIM=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --all) RUN_ALL=1 ;;
     --full) FULL=1 ;;
     --ui) UI=1 ;;
+    --no-ui) UI=0 ;;
     --sim) SIM="${2:-}"; shift ;;
     # The whole leading comment block, however long it grows — a fixed line
     # range here silently truncated the help once the header changed.
@@ -188,6 +191,8 @@ _record_step() {
 step() { _record_step; _step_name="$1"; _step_t0=$SECONDS; printf '\n\033[1m> %s\033[0m\n' "$1"; }
 pass() { printf '\033[32m  ok  %s\033[0m\n' "$1"; }
 fail() { printf '\033[31m  FAIL  %s\033[0m\n' "$1"; FAILED+=("$1"); KEEP_RUN_DIR=1; }
+WARNED=()
+warn() { printf '\033[33m  warn  %s\033[0m\n' "$1"; WARNED+=("$1"); KEEP_RUN_DIR=1; }
 
 printf '\033[1mmode: %s\033[0m\n' "$MODE_LABEL"
 
@@ -237,6 +242,7 @@ fi
 CHANGED="$( { git -C "$REPO" diff --name-only "$BASE"...HEAD 2>/dev/null
               git -C "$REPO" diff --name-only HEAD 2>/dev/null
             } | grep -v '\.xcstrings$' )"
+touches() { printf '%s\n' "$CHANGED" | grep -qE "$1"; }
 
 cd "$REPO/ios" || exit 1
 
@@ -340,9 +346,10 @@ echo "  simulator: $SIM"
 # The gate narrows the test action to FinchAppTests. The scheme also runs
 # FinchAppUITests and FinchCoreTests:
 #
-#   - the 33 UI tests are simulator automation, the slowest tests here and the
-#     reason the retry flags exist — one flake costs three app launches.
-#     `--ui` adds them back when the change is navigational;
+#   - the UI tests are simulator automation, the slowest tests here and the
+#     reason the retry flags exist — one flake costs three app launches. They
+#     join the gate on their own when the branch touches the iOS screens or the
+#     UI tests (below), and `--ui` adds them for any other diff;
 #   - FinchCoreTests' 434 methods ALREADY ran in step 2 via `swift test`. The
 #     scheme runs the same sources again as an iOS bundle, so the only thing
 #     lost is executing the engine on the simulator rather than on macOS, and
@@ -353,13 +360,36 @@ echo "  simulator: $SIM"
 # bash 3.2, where "${arr[@]}" on an EMPTY array under `set -u` is an "unbound
 # variable" error. Plain "${TEST_SCOPE[@]}" would therefore abort --full, the one
 # mode that must never be the broken one.
+#
+# WHY THE UI TESTS ARE DIFF-GATED rather than opt-in: opt-in meant nothing ran
+# them before merge. The UI-test classes added across #809–#837 all went in
+# through a default run that executed none of them, and post-merge CI's three
+# retries can turn an intermittent failure green there too. A branch that
+# touches the screens or the UI tests is the one whose UI tests can break, so
+# that branch pays for the UI leg; an engine-, store- or script-only branch
+# keeps the fast gate. A FinchShared change can still move what a screen shows
+# without touching a screen file — that is what `--ui` is for.
+#
+# The count is read from the sources every run: the number this comment used to
+# carry said 33 while the suite had grown past 60.
+UI_TEST_COUNT=$(grep -rhE '^[[:space:]]*func test' FinchApp/Tests/FinchAppUITests 2>/dev/null | wc -l | tr -d ' ')
+UI_PATHS='^ios/FinchApp/(Sources/(FinchAppUIKit|FinchAppSwiftUI)|Tests/FinchAppUITests)/|^ios/project\.yml$'
+if [ "$UI" = "auto" ]; then
+  if [ "$FULL" != "1" ] && touches "$UI_PATHS"; then
+    UI=1
+    MODE_LABEL="gate + UI tests (diff touches the screens)"
+    echo "  UI tests: on — the diff touches the iOS screens or the UI tests (--no-ui to skip)"
+  else
+    UI=0
+  fi
+fi
 TEST_SCOPE=()
 if [ "$FULL" != "1" ]; then
   TEST_SCOPE=(-only-testing:FinchAppTests)
   if [ "$UI" = "1" ]; then
     TEST_SCOPE+=(-only-testing:FinchAppUITests)
   else
-    skipped "FinchAppUITests (33 UI tests) — add with --ui"
+    skipped "FinchAppUITests ($UI_TEST_COUNT UI tests) — add with --ui"
   fi
   skipped "FinchCoreTests on iOS (434 methods; swift test already ran them)"
 fi
@@ -372,6 +402,15 @@ if xcodebuild test -project FinchApp.xcodeproj -scheme FinchApp \
      -skipPackagePluginValidation -skipMacroValidation \
      COMPILER_INDEX_STORE_ENABLE=NO >"$RUN_DIR/app.log" 2>&1; then
   pass "$(grep -oE 'Executed [0-9]+ tests' "$RUN_DIR/app.log" | tail -1)"
+  # A test that failed and then passed on a retry is a pass for the gate (CI
+  # retries the same way, so failing here would only disagree with it), but it
+  # is not nothing: it is an intermittent failure, and a green summary hid
+  # every one of them. Name each, so a flake is seen the first time it happens.
+  RETRIED=$(grep -oE "Test Case '-\[[^]]+\]' failed" "$RUN_DIR/app.log" \
+            | sed -E "s/^Test Case '-\[([^]]+)\]' failed$/\1/" | sort -u)
+  if [ -n "$RETRIED" ]; then
+    while IFS= read -r t; do warn "passed only on a retry (intermittent): $t"; done <<<"$RETRIED"
+  fi
 else
   fail "FinchApp build/test"
   grep -E "error:|failed" "$RUN_DIR/app.log" | head -8
@@ -428,8 +467,6 @@ fi
 # a target in FinchApp.xcodeproj, `xcodebuild -exportLocalizations` compiled it on
 # every run whatever scheme/target you gave it, so a macOS break failed the i18n
 # step regardless. See ios/project-mac.yml.
-WARNED=()
-warn() { printf '\033[33m  warn  %s\033[0m\n' "$1"; WARNED+=("$1"); KEEP_RUN_DIR=1; }
 if [ "${FINCH_CI_PLATFORMS:-0}" = "1" ]; then
   nongating() { fail "$1"; }
 else
@@ -447,7 +484,6 @@ fi
 # remembered: FinchMac compiles FinchShared + FinchAppSwiftUI + Shared and depends
 # on FinchCore; FinchWatch compiles FinchWatch + Shared and deliberately carries
 # NO FinchCore (the watch payload is Foundation-only).
-touches() { printf '%s\n' "$CHANGED" | grep -qE "$1"; }
 want_platform() {   # $1 = human name, $2 = path regex
   [ "$FULL" = "1" ] && return 0
   if touches "$2"; then return 0; fi
