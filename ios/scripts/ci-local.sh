@@ -389,7 +389,7 @@ if [ "$FULL" != "1" ]; then
   if [ "$UI" = "1" ]; then
     TEST_SCOPE+=(-only-testing:FinchAppUITests)
   else
-    skipped "FinchAppUITests ($UI_TEST_COUNT UI tests) — add with --ui"
+    skipped "FinchAppUITests ($UI_TEST_COUNT UI test methods, more runs with the subclassed twins) — add with --ui"
   fi
   skipped "FinchCoreTests on iOS (434 methods; swift test already ran them)"
 fi
