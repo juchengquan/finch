@@ -23,6 +23,8 @@ import {
   holdingsForAccount, holdingValue, holdingGainLoss, holdingsValueForAccount,
   investmentAccountTotal, unrealizedFx,
 } from '@/lib/select';
+import { latestRateMap } from '@/lib/fx';
+import type { ExchangeRate } from '@/lib/db/domain/_app/system.types';
 import type { ScheduledTemplate } from '@/lib/store';
 import type { Holding } from '@/lib/db/domain/holdings/types';
 import { openDb, execFor, applyPragmaBootstrap } from '@/lib/db/core/driver';
@@ -97,6 +99,7 @@ function runSelector(c: SelectorCase): unknown {
     case 'holdingsValueForAccount':  return holdingsValueForAccount(i.holdings as Holding[], i.accountId as string);
     case 'investmentAccountTotal':   return investmentAccountTotal(i.account as AccountRow, i.holdings as Holding[]);
     case 'unrealizedFx':             return unrealizedFx(i.account as AccountRow, i.txns as Tx[], (a: number) => a);
+    case 'latestRateMap':            return latestRateMap(i.rates as ExchangeRate[]);
   }
 }
 

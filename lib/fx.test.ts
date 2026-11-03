@@ -33,3 +33,20 @@ test('convertViaRates returns null when a currency is unknown', () => {
   expect(convertViaRates(100, 'USD', 'XYZ', m)).toBeNull();
   expect(convertViaRates(100, 'ABC', 'SGD', m)).toBeNull();
 });
+
+// A 'derived' row is a copy older versions saved of the rate a conversion used.
+// The write path's lookup never reads one (queries/rates.ts), so a copy of a rate
+// since corrected must not show, or convert, here either.
+test('latestRateMap ignores derived copies, even when they are newer', () => {
+  const m = latestRateMap([
+    { date: '2026-05-10', currency: 'KRW', rate: 0.00073, source: 'manual' },   // the corrected rate
+    { date: '2026-05-20', currency: 'KRW', rate: 0.0073, source: 'derived' },   // copy of the mistyped one
+  ]);
+  expect(m.get('KRW')).toBe(0.00073);
+});
+
+test('latestRateMap: a currency with only derived rows has no rate', () => {
+  const m = latestRateMap([{ date: '2026-05-20', currency: 'THB', rate: 1, source: 'derived' }]);
+  expect(m.has('THB')).toBe(false);
+  expect(convertViaRates(100, 'THB', 'USD', m)).toBeNull();
+});
