@@ -15,9 +15,7 @@ struct ExchangeRateHistoryView: View {
     @State private var addingRate = false
     @State private var editingRate: ExchangeRate?   // a hand-entered row being edited
 
-    private var rows: [ExchangeRate] {
-        store.exchangeRates.filter { $0.currency == currency }.sorted { $0.date > $1.date }
-    }
+    private var rows: [ExchangeRate] { fxHistory(store.exchangeRates, currency) }
 
     var body: some View {
         List {

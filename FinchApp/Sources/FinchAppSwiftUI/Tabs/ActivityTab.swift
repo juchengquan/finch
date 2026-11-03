@@ -69,6 +69,9 @@ struct ActivityFeedView: View {
     // change (via .onReceive/.onChange), not on every body render — the search
     // field re-rendered the whole list on each keystroke before.
     @State private var sections: [MonthGrouping.Section] = []
+    /// Every confirmed row, of which `sections` is one page — what the month headers
+    /// pair a transfer's legs over, so a page edge between them moves no figure.
+    @State private var confirmedTxns: [Tx] = []
     @State private var pendingTxns: [Tx] = []   // pinned "To confirm" bucket (filtered)
     /// Pending AND dated after today — shown apart, because a queue called "To confirm"
     /// should not count things that have not happened yet. See `Selectors.pendingSplit`.
@@ -152,7 +155,7 @@ struct ActivityFeedView: View {
                             Section {
                                 ForEach(section.txns) { txn in row(txn) }
                             } header: {
-                                monthHeader(section.id, section.txns)
+                                monthHeader(section.id, section.txns, pairedOver: confirmedTxns)
                             }
                         }
                     } else {
@@ -312,6 +315,7 @@ struct ActivityFeedView: View {
         let confirmed = f.filter { $0.pending != true }
         hasMore = confirmed.count > visibleCount
         sections = MonthGrouping.sections(Array(confirmed.prefix(visibleCount)))
+        confirmedTxns = confirmed
         reviewQueue = inReview ? f : []
     }
 
@@ -554,10 +558,10 @@ struct ActivityFeedView: View {
     /// The month section header — the month name, then net, in and out on one row,
     /// told apart by sign and reinforced by colour. One markup for the list lens and
     /// the calendar's month fallback.
-    private func monthHeader(_ key: String, _ txns: [Tx]) -> some View {
+    private func monthHeader(_ key: String, _ txns: [Tx], pairedOver scope: [Tx]? = nil) -> some View {
         MonthFiguresHeader(label: MonthGrouping.label(key),
-                           figures: store.monthHeaderFigures(txns),
-                           accessibilityText: store.monthHeaderSpoken(txns))
+                           figures: store.monthHeaderFigures(txns, pairedOver: scope),
+                           accessibilityText: store.monthHeaderSpoken(txns, pairedOver: scope))
             .textCase(nil)
     }
 

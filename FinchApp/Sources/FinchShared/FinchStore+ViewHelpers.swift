@@ -29,9 +29,13 @@ extension FinchStore {
     public var displayCurrency: String { displayCurrencyByLedger[activeLedgerId] ?? baseCurrency }
 
     /// Currencies offerable as a display currency: the ledger base + any currency
-    /// with an exchange rate (so the conversion actually resolves).
+    /// with an exchange rate (so the conversion actually resolves). A `'derived'`
+    /// copy is not one — `rateMap` skips it, as the engine's lookup does.
     public var availableDisplayCurrencies: [String] {
-        [baseCurrency] + Set(exchangeRates.map(\.currency)).subtracting([baseCurrency]).sorted()
+        [baseCurrency] + ratedCurrencies.subtracting([baseCurrency]).sorted()
+    }
+    private var ratedCurrencies: Set<String> {
+        Set(exchangeRates.filter { !$0.isDerived }.map(\.currency))
     }
 
     /// Set the active ledger's display currency (per-ledger).
@@ -260,20 +264,22 @@ extension FinchStore {
     /// A month section header's three figures for these rows — net, in, out — signed
     /// and privacy-masked. One helper so every header that shows them (both feeds, in
     /// list and calendar mode, in UIKit and SwiftUI) cannot drift apart.
-    public func monthHeaderFigures(_ txns: [Tx]) -> [MonthHeaderFigures.Figure] {
-        MonthHeaderFigures.make(net: MonthGrouping.net(txns),
-                                income: MonthGrouping.income(txns),
-                                expense: MonthGrouping.expense(txns),
+    /// `pairedOver`: every row the screen holds when `txns` is one page of them
+    /// (`MonthGrouping.net`).
+    public func monthHeaderFigures(_ txns: [Tx], pairedOver scope: [Tx]? = nil) -> [MonthHeaderFigures.Figure] {
+        MonthHeaderFigures.make(net: MonthGrouping.net(txns, pairedOver: scope),
+                                income: MonthGrouping.income(txns, pairedOver: scope),
+                                expense: MonthGrouping.expense(txns, pairedOver: scope),
                                 money: { self.displaySignedBase($0) })
     }
 
     /// What VoiceOver reads in place of those figures. Their meaning is carried by
     /// sign, colour and position — none of which a screen reader conveys — so the words
     /// the header dropped visually have to come back here.
-    public func monthHeaderSpoken(_ txns: [Tx]) -> String {
-        "\(String(localized: "Net")) \(displaySignedBase(MonthGrouping.net(txns))), "
-            + "\(String(localized: "Income")) \(displayMoneyBase(MonthGrouping.income(txns))), "
-            + "\(String(localized: "Spent")) \(displayMoneyBase(MonthGrouping.expense(txns)))"
+    public func monthHeaderSpoken(_ txns: [Tx], pairedOver scope: [Tx]? = nil) -> String {
+        "\(String(localized: "Net")) \(displaySignedBase(MonthGrouping.net(txns, pairedOver: scope))), "
+            + "\(String(localized: "Income")) \(displayMoneyBase(MonthGrouping.income(txns, pairedOver: scope))), "
+            + "\(String(localized: "Spent")) \(displayMoneyBase(MonthGrouping.expense(txns, pairedOver: scope)))"
     }
 
     /// account currency → base → display. Inherits privacy masking via
@@ -611,7 +617,7 @@ extension FinchStore {
     /// Display-currency options for a ledger: its base + every FX rate currency.
     public func availableDisplayCurrencies(forLedger ledgerId: String) -> [String] {
         let base = baseCurrency(forLedger: ledgerId)
-        return [base] + Set(exchangeRates.map(\.currency)).subtracting([base]).sorted()
+        return [base] + ratedCurrencies.subtracting([base]).sorted()
     }
     /// account-currency → a specific ledger's base.
     func toBase(_ amount: Double, from currency: String?, ledgerBase: String) -> Double {
