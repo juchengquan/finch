@@ -314,13 +314,17 @@ public final class FinchStore: ObservableObject {
     /// `wallToday`, not `today`: "has it fallen due" is a calendar question, and the
     /// data-anchored day lags whenever nothing has been recorded lately — which is
     /// exactly when the generator has the most to add.
+    ///
+    /// What it could not add (no exchange rate, or a template that throws) goes to
+    /// `autoPostRefusalSink`: the run moves its mark on regardless, so it will not
+    /// try that occurrence again, and without a word the only sign was "overdue".
     @discardableResult
     public func autoPostDueScheduled() async -> Int {
         await awaitTxnsReady()
         guard let q = dbQueue else { return 0 }
         let args = Args(["today": .string(wallToday)])
-        guard let posted = try? Apply.applyReturningCount(dbQueue: q, action: ActionName.autoPostDueScheduled.rawValue,
-                                                         args: args) else { return 0 }
+        guard let run = try? Apply.applyAutoPostDue(dbQueue: q, args: args) else { return 0 }
+        let posted = run.posted
         if posted > 0 {
             fireWriteSideEffects(q, mutations: [(.autoPostDueScheduled, args)])
         } else if let fresh = try? Projection.scheduledTemplates(dbQueue: q, ledgerId: activeLedgerId), fresh != scheduled {
@@ -329,7 +333,15 @@ public final class FinchStore: ObservableObject {
             // what reads overdue. Republish the templates for that, and only that.
             scheduled = fresh
         }
+        await autoPostRefusalSink(run.refused)
         return posted
+    }
+
+    /// Where each auto-post run's refusals go: a notification per item, told once
+    /// (`NotificationService.notifyAutoPostRefused`). Every run reports, an empty one
+    /// too. Replaced in tests.
+    var autoPostRefusalSink: @MainActor ([AutoPostRefusal]) async -> Void = {
+        await NotificationService.shared.notifyAutoPostRefused($0)
     }
 
     /// Every post-write side effect, fired exactly once per user-visible write

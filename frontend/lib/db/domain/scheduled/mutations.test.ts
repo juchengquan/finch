@@ -414,3 +414,31 @@ test('generateDueScheduled skips an occurrence it has no exchange rate for, and 
   const err = await applyMutation(exec, 'postScheduled', { templateId: 'rt-krw', date: '2026-05-10' }).catch((e) => e);
   expect(err.code).toBe('error.fx.noRate');
 });
+
+// A template that throws — a transfer from an account to itself, which only
+// imported data can hold — is passed over, not allowed to fail the sweep: that
+// rolled back every other template's rows, on every load.
+test('generateDueScheduled carries on past a template that throws', async () => {
+  const exec = await seededAndAudited();
+  await exec(
+    "INSERT INTO scheduled_templates (id,ledger_id,name,kind,amount,account_id,from_account_id,frequency,day_of_month,start_date,auto_post,is_active,created_at,updated_at) VALUES ('rt-loop','personal','Loop','transfer',50,'chk','chk','monthly',1,'2026-04-01',1,1,datetime('now'),datetime('now'))",
+  );
+  await applyMutation(exec, 'generateDueScheduled', { today: '2026-05-30' });
+  expect(await exec("SELECT id FROM entries WHERE source_template_id = 'rt-loop'")).toEqual([]);
+  expect((await exec("SELECT id FROM entries WHERE source_template_id IS NOT NULL")).length).toBe(4);
+});
+
+// The SAVEPOINT is per template: one that fails part-way keeps none of its rows.
+test('generateDueScheduled keeps none of the rows of a template that fails part-way', async () => {
+  const exec = await seededAndAudited();
+  await applyMutation(exec, 'createScheduled', {
+    id: 'rt-daily', ledgerId: 'personal', name: 'Coffee', type: 'expense', amount: 4,
+    frequency: 'daily', accountId: 'chk', startDate: '2026-05-27',
+  });
+  await exec(
+    "CREATE TEMP TRIGGER boom BEFORE INSERT ON entries WHEN NEW.source_template_id = 'rt-daily' AND NEW.occurrence_date = '2026-05-29' BEGIN SELECT RAISE(ABORT, 'boom'); END",
+  );
+  await applyMutation(exec, 'generateDueScheduled', { today: '2026-05-30' });
+  expect(await exec("SELECT id FROM entries WHERE source_template_id = 'rt-daily'")).toEqual([]);
+  expect((await exec("SELECT id FROM entries WHERE source_template_id IS NOT NULL")).length).toBe(4);
+});

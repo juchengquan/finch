@@ -1,4 +1,4 @@
-import type { Exec } from '../../core/repo';
+import type { Exec, Row } from '../../core/repo';
 import type { ActionName, Args } from '../_args';
 import { I18nError } from '@/lib/i18n-error';
 import { newId } from '../_shared/ids';
@@ -37,11 +37,10 @@ function postingTime(explicit?: string): string {
 }
 
 // One generated occurrence's post, skipped when it is refused for want of an
-// exchange rate. Nobody is looking at a generator run, so rethrowing would fail
-// the whole sweep — every other template's rows with it. Skipped, the occurrence
-// stays unposted and so still due; posting it by hand says why. The refusal comes
-// from the leg conversion, before anything is written. Mirrors the native
-// `Scheduled.materializeDue`.
+// exchange rate. Skipped, not thrown: rates are per day, so the template's other
+// occurrences may still post, and this one stays unposted and so still due —
+// posting it by hand says why. The refusal comes from the leg conversion, before
+// anything is written. Mirrors the native `Scheduled.materializeDue`.
 async function skippingNoRate(post: () => Promise<unknown>): Promise<void> {
   try {
     await post();
@@ -184,71 +183,90 @@ export const handlers = {
     const rows = await exec('SELECT * FROM scheduled_templates WHERE is_active = 1');
     const ts = new Date().toISOString();
     for (const r of rows) {
-      const type = String(r.kind);
-      if (r.amount == null) continue;
-      if (Number(r.splits_enabled)) continue;
-      if (type === 'transfer' && r.from_account_id == null) continue;
-
-      const template = {
-        startDate: r.start_date == null ? undefined : String(r.start_date),
-        nextRun: String(r.next_run ?? ''),
-        endDate: r.end_date == null ? null : String(r.end_date),
-        frequency: String(r.frequency),
-        dayOfMonth: Number(r.day_of_month ?? 1),
-        weekDay: r.day_of_week == null ? undefined : Number(r.day_of_week),
-      } as ScheduledTemplate;
-
-      let dates = occurrencesUpTo(template, today);
-      if (!dates.length) continue;
-
-      // Resolution keys on occurrenceDate ?? date (see Resolvers), so "already
-      // posted" must key on the same coalesce — not the raw posting date —
-      // or an occurrence posted under a different transaction date (e.g. paid
-      // late) is not recognised and gets regenerated as a duplicate.
-      const existing = await exec(
-        'SELECT COALESCE(occurrence_date, date) AS date FROM entries WHERE source_template_id = ?',
-        [String(r.id)],
-      );
-      const have = new Set(existing.map((e) => String(e.date)));
-      dates = dates.filter((d) => !have.has(d));
-      const max = r.max_executions == null ? null : Number(r.max_executions);
-      if (max != null) dates = dates.slice(0, Math.max(0, max - have.size));
-      const installmentTotal = r.installment_total == null ? null : Number(r.installment_total);
-      if (installmentTotal != null) dates = dates.slice(0, Math.max(0, installmentTotal - have.size));
-      if (!dates.length) continue;
-
-      const ledgerId = String(r.ledger_id);
-      const acctId = String(r.account_id);
-      const description = String(r.description ?? r.name ?? '');
-
-      if (type === 'transfer') {
-        const fromAccountId = String(r.from_account_id);
-        const fromAmount = Math.abs(Number(r.amount));
-        const sourceTemplateId = String(r.id);
-        for (const date of dates) {
-          await skippingNoRate(() => postTransfer(exec, {
-            fromAccountId, toAccountId: acctId, fromAmount, date, time: genTime,
-            note: description || null, sourceTemplateId, occurrenceDate: date, timestamp: ts,
-          }));
-        }
-        continue;
-      }
-
-      const amount = (type === 'income' ? 1 : -1) * Number(r.amount);
-      const categoryId = r.category_id == null ? null : String(r.category_id);
-      const cpId = await resolveCounterpartyIdByName(exec, description);
-      for (const date of dates) {
-        await skippingNoRate(() => postSimple(exec, {
-          ledgerId, accountId: acctId, date, time: genTime,
-          amount, description, categoryId,
-          kind: type === 'income' ? 'income' : 'expense',
-          status: 'pending',
-          sourceTemplateId: String(r.id),
-          occurrenceDate: date,
-          counterpartyId: cpId,
-          timestamp: ts,
-        }));
+      // Each template in its own SAVEPOINT: one that throws (only imported data can
+      // hold one, e.g. a transfer from an account to itself) rolls back its own rows
+      // and is passed over, instead of failing the sweep — every other template's
+      // rows with it, on every load. Mirrors the native `Scheduled.materializeDue`.
+      const sp = `gd_${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`;
+      await exec(`SAVEPOINT ${sp}`);
+      try {
+        await generateDueForTemplate(exec, r, today, genTime, ts);
+        await exec(`RELEASE ${sp}`);
+      } catch {
+        await exec(`ROLLBACK TO ${sp}`);
+        await exec(`RELEASE ${sp}`);
       }
     }
   },
 } satisfies Partial<{ [K in ActionName]: Handler<K> }>;
+
+// One template row's due occurrences, posted. `generateDueScheduled` runs it.
+async function generateDueForTemplate(
+  exec: Exec, r: Row, today: string, genTime: string, ts: string,
+): Promise<void> {
+  const type = String(r.kind);
+  if (r.amount == null) return;
+  if (Number(r.splits_enabled)) return;
+  if (type === 'transfer' && r.from_account_id == null) return;
+
+  const template = {
+    startDate: r.start_date == null ? undefined : String(r.start_date),
+    nextRun: String(r.next_run ?? ''),
+    endDate: r.end_date == null ? null : String(r.end_date),
+    frequency: String(r.frequency),
+    dayOfMonth: Number(r.day_of_month ?? 1),
+    weekDay: r.day_of_week == null ? undefined : Number(r.day_of_week),
+  } as ScheduledTemplate;
+
+  let dates = occurrencesUpTo(template, today);
+  if (!dates.length) return;
+
+  // Resolution keys on occurrenceDate ?? date (see Resolvers), so "already
+  // posted" must key on the same coalesce — not the raw posting date —
+  // or an occurrence posted under a different transaction date (e.g. paid
+  // late) is not recognised and gets regenerated as a duplicate.
+  const existing = await exec(
+    'SELECT COALESCE(occurrence_date, date) AS date FROM entries WHERE source_template_id = ?',
+    [String(r.id)],
+  );
+  const have = new Set(existing.map((e) => String(e.date)));
+  dates = dates.filter((d) => !have.has(d));
+  const max = r.max_executions == null ? null : Number(r.max_executions);
+  if (max != null) dates = dates.slice(0, Math.max(0, max - have.size));
+  const installmentTotal = r.installment_total == null ? null : Number(r.installment_total);
+  if (installmentTotal != null) dates = dates.slice(0, Math.max(0, installmentTotal - have.size));
+  if (!dates.length) return;
+
+  const ledgerId = String(r.ledger_id);
+  const acctId = String(r.account_id);
+  const description = String(r.description ?? r.name ?? '');
+
+  if (type === 'transfer') {
+    const fromAccountId = String(r.from_account_id);
+    const fromAmount = Math.abs(Number(r.amount));
+    const sourceTemplateId = String(r.id);
+    for (const date of dates) {
+      await skippingNoRate(() => postTransfer(exec, {
+        fromAccountId, toAccountId: acctId, fromAmount, date, time: genTime,
+        note: description || null, sourceTemplateId, occurrenceDate: date, timestamp: ts,
+      }));
+    }
+    return;
+  }
+
+  const amount = (type === 'income' ? 1 : -1) * Number(r.amount);
+  const categoryId = r.category_id == null ? null : String(r.category_id);
+  const cpId = await resolveCounterpartyIdByName(exec, description);
+  for (const date of dates) {
+    await skippingNoRate(() => postSimple(exec, {
+      ledgerId, accountId: acctId, date, time: genTime,
+      amount, description, categoryId,
+      kind: type === 'income' ? 'income' : 'expense',
+      status: 'pending',
+      sourceTemplateId: String(r.id),
+      occurrenceDate: date,
+      counterpartyId: cpId,
+      timestamp: ts,
+    }));
+  }
+}

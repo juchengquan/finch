@@ -40,6 +40,10 @@ final class AutoPostDueTests: XCTestCase {
                                       args: Args(["today": .string(today), "time": .string("09:00")]))
     }
 
+    private func runReporting(_ q: DatabaseQueue, _ today: String) throws -> AutoPostRun {
+        try Apply.applyAutoPostDue(dbQueue: q, args: Args(["today": .string(today), "time": .string("09:00")]))
+    }
+
     private func occurrences(_ q: DatabaseQueue, _ id: String = "s1") throws -> [String] {
         try q.read { db in
             try String.fetchAll(db, sql: "SELECT COALESCE(occurrence_date, date) FROM entries WHERE source_template_id = ? ORDER BY 1",
@@ -361,6 +365,85 @@ final class AutoPostDueTests: XCTestCase {
             "date": .string("2026-10-01"), "currency": .string("KRW"), "rate": .double(0.00072)]))
         try post()
         XCTAssertEqual(try occurrences(q, "s2"), ["2026-10-15"])
+    }
+
+    /// The refusal comes back with the run, named and with its reason, so the app
+    /// can say so: nothing else would, since the mark moves on past it.
+    func test_aRefusedOccurrence_isReportedWithItsReason() throws {
+        let q = try seeded()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('krw','l1','Seoul','cash','KRW',0,0,1,1,datetime('now'),datetime('now'))")
+        }
+        try create(q)
+        try create(q, id: "s2", extra: ["accountId": .string("krw")])
+        try run(q, "2026-10-01")
+        let result = try runReporting(q, "2026-10-20")
+        XCTAssertEqual(result.posted, 1)
+        XCTAssertEqual(result.refused.map(\.templateId), ["s2"])
+        XCTAssertEqual(result.refused.first?.name, "Rent s2")
+        XCTAssertEqual(result.refused.first?.occurrence, "2026-10-15")
+        XCTAssertEqual(result.refused.first?.error.code, "error.fx.noRate")
+    }
+
+    // MARK: - A template that throws
+
+    /// A transfer from an account to itself: the sheet can't save one, an imported
+    /// or synced database can. Its post throws, and that used to fail the whole run
+    /// — no other template's rows, no mark, on every launch, and nothing said.
+    private func insertSelfTransfer(_ q: DatabaseQueue, id: String = "bad") throws {
+        try q.write { db in
+            try db.execute(sql: """
+                INSERT INTO scheduled_templates (id,ledger_id,name,kind,amount,account_id,from_account_id,frequency,day_of_month,start_date,auto_post,is_active,created_at,updated_at)
+                VALUES (?,'l1','Loop','transfer',50,'a1','a1','monthly',15,'2026-01-15',1,1,datetime('now'),datetime('now'))
+                """, arguments: [id])
+        }
+    }
+
+    func test_aTemplateThatThrows_isRefused_andTheRestStillPost() throws {
+        let q = try seeded()
+        try create(q)
+        try insertSelfTransfer(q)
+        try run(q, "2026-10-01")
+        let result = try runReporting(q, "2026-10-20")
+        XCTAssertEqual(result.posted, 1)
+        XCTAssertEqual(try occurrences(q), ["2026-10-15"])
+        XCTAssertEqual(try occurrences(q, "bad"), [])
+        XCTAssertEqual(try mark(q), "2026-10-20", "the mark moves on, so fixing the template later floods nothing in")
+        XCTAssertEqual(result.refused.map(\.occurrence), ["2026-10-15"])
+        XCTAssertEqual(result.refused.first?.error.code, "error.transfer.sameAccount")
+    }
+
+    /// The SAVEPOINT is per template: one that fails part-way keeps none of its rows
+    /// (a half-posted run would read as paid up to the failure), and the others keep
+    /// theirs. The failure here is a trigger refusing the second occurrence.
+    func test_aTemplateThatFailsPartWay_keepsNoneOfItsRows() throws {
+        let q = try seeded()
+        try create(q, id: "other", extra: ["frequency": .string("daily")])
+        try create(q, id: "daily", extra: ["frequency": .string("daily")])
+        try run(q, "2026-10-01")
+        try q.write { db in
+            try db.execute(sql: """
+                CREATE TEMP TRIGGER boom BEFORE INSERT ON entries
+                WHEN NEW.source_template_id = 'daily' AND NEW.occurrence_date = '2026-10-03'
+                BEGIN SELECT RAISE(ABORT, 'boom'); END
+                """)
+        }
+        let result = try runReporting(q, "2026-10-04")
+        XCTAssertEqual(try occurrences(q, "daily"), ["2026-10-01"], "the 2nd rolled back with the 3rd")
+        XCTAssertEqual(result.refused.map(\.occurrence), ["2026-10-02", "2026-10-03", "2026-10-04"])
+        XCTAssertEqual(try occurrences(q, "other"), ["2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04"])
+        XCTAssertEqual(result.posted, 3)
+        XCTAssertEqual(try mark(q), "2026-10-04")
+    }
+
+    /// The parity action (which the web runs on every load) carries on past it too.
+    func test_parityAction_carriesOnPastATemplateThatThrows() throws {
+        let q = try seeded()
+        try create(q, autoPost: false)
+        try insertSelfTransfer(q)
+        try Apply.apply(dbQueue: q, action: "generateDueScheduled", args: Args(["today": .string("2026-02-20")]))
+        XCTAssertEqual(try occurrences(q), ["2026-01-15", "2026-02-15"])
+        XCTAssertEqual(try occurrences(q, "bad"), [])
     }
 
     /// The parity action skips the same way (and so does the web's).

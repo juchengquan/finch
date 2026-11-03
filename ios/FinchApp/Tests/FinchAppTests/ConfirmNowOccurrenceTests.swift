@@ -127,4 +127,35 @@ final class ConfirmNowOccurrenceTests: XCTestCase {
         }
         XCTAssertTrue(rows(store, id).isEmpty)
     }
+
+    /// …and the button's handler turns it into what the alert it raises says: the
+    /// item's name, and why (#832 wired this up; nothing had pinned it).
+    func test_aRefusalBecomesTheAlertText() async throws {
+        let store = try await makeStore()
+        let won = "acct-krw-\(UUID().uuidString.prefix(6))"
+        try store.apply(.createAccount, Args([
+            "id": .string(won), "ledgerId": .string(store.activeLedgerId), "name": .string("Won"),
+            "type": .string("savings"), "currency": .string("KRW"),
+        ]))
+        let id = try createDaily(store, accountId: won)
+        let refusal = try XCTUnwrap(NotificationService.confirmNowRefusal(
+            templateId: id, occurrence: store.wallToday, title: "Scheduled: Coffee", store: store))
+        XCTAssertEqual(refusal.title, "Coffee")
+        var thrown: Error?
+        XCTAssertThrowsError(try NotificationService.confirmNow(templateId: id, occurrence: store.wallToday, store: store)) {
+            thrown = $0
+        }
+        XCTAssertEqual(refusal.body, String(localized: "Couldn't add it: \(i18nMessage(try XCTUnwrap(thrown)))"))
+        XCTAssertTrue(rows(store, id).isEmpty)
+
+        // A template gone since: the reminder's own title names it.
+        XCTAssertEqual(NotificationService.confirmNowRefusal(
+            templateId: "gone", occurrence: store.wallToday, title: "Scheduled: Old", store: store)?.title,
+                       "Scheduled: Old")
+        // Booked: nothing to say.
+        let ok = try createDaily(store)
+        XCTAssertNil(NotificationService.confirmNowRefusal(
+            templateId: ok, occurrence: store.wallToday, title: "Scheduled: Coffee", store: store))
+        XCTAssertEqual(rows(store, ok).count, 1)
+    }
 }
