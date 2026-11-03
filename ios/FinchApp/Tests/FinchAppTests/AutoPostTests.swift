@@ -9,6 +9,11 @@ import SwiftUI
 /// row for an occurrence auto-post already added.
 @MainActor
 final class AutoPostTests: XCTestCase {
+    /// The store and the test both read the wall clock; see `MidnightGuard`.
+    override func setUp() async throws {
+        try await MidnightGuard.waitIfClose()
+    }
+
     /// A real store on the round-trip sample pack, with no auto-post mark yet —
     /// exactly what an existing install looks like on its first launch with this.
     private func makeStore() async throws -> FinchStore {
