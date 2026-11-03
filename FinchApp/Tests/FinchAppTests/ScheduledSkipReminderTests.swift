@@ -86,14 +86,29 @@ final class ScheduledSkipReminderTests: XCTestCase {
     }
     private var paidMap: [String: Bool] { postedMap(paidThroughMarch) }
 
+    /// Dates print in the app's short style (`AppDate.shortDay`), pinned in
+    /// `ShortDayTests`; these pin WHICH date each caption names.
+    private func short(_ iso: String, _ today: String) -> String { AppDate.shortDay(iso, today: today) }
+
     func test_cadenceCaption() {
-        func text(_ t: ScheduledTemplate) -> String { ScheduledCaption.cadence(t, posted: paidMap, today: "2026-04-01").text }
-        XCTAssertEqual(text(gym()), "Monthly · next 2026-04-15")
-        XCTAssertEqual(text(gym(skipped: ["2026-04-15"])), "Monthly · next 2026-05-15", "next passes over a skip")
-        XCTAssertEqual(text(gym(endDate: "2026-12-31")), "Monthly · next 2026-04-15 · ends 2026-12-31")
-        XCTAssertEqual(text(gym(endDate: "2026-03-31")), "Monthly · ended 2026-03-31")
-        XCTAssertEqual(text(gym(skipped: ["2026-04-15"], endDate: "2026-04-30")),
-                       "Monthly · ends 2026-04-30", "nothing left, but the end date is still ahead")
+        let today = "2026-04-01"
+        func text(_ t: ScheduledTemplate) -> String { ScheduledCaption.cadence(t, posted: paidMap, today: today).text }
+        XCTAssertEqual(text(gym()), "Monthly · next \(short("2026-04-15", today))")
+        XCTAssertEqual(text(gym(skipped: ["2026-04-15"])), "Monthly · next \(short("2026-05-15", today))", "next passes over a skip")
+        XCTAssertEqual(text(gym(endDate: "2026-12-31")),
+                       "Monthly · next \(short("2026-04-15", today)) · ends \(short("2026-12-31", today))")
+        XCTAssertEqual(text(gym(endDate: "2026-03-31")), "Monthly · ended \(short("2026-03-31", today))")
+    }
+
+    /// Every occurrence before a future end date is skipped or past: the list files it
+    /// under "Ended", so the caption must not read as if more were coming — a bare
+    /// "ends Apr 30" under that heading contradicted it.
+    func test_nothingLeftBeforeAFutureEndDate_saysSo() {
+        let today = "2026-04-01"
+        let t = gym(skipped: ["2026-04-15"], endDate: "2026-04-30")
+        XCTAssertEqual(ScheduledCaption.cadence(t, posted: paidMap, today: today).text,
+                       "Monthly · nothing left · ends \(short("2026-04-30", today))")
+        XCTAssertEqual(scheduledNextRun(t, posted: paidMap, today: today), "—", "which is why it sits under Ended")
     }
 
     // MARK: overdue — the row says the date Post opens
@@ -105,7 +120,7 @@ final class ScheduledSkipReminderTests: XCTestCase {
     func test_aMissedOccurrenceReadsOverdue_withTheDatePostOpens() {
         let posted = postedMap(["2026-01-15", "2026-02-15"])
         let caption = ScheduledCaption.cadence(gym(), posted: posted, today: "2026-04-01")
-        XCTAssertEqual(caption.text, "Monthly · overdue 2026-03-15")
+        XCTAssertEqual(caption.text, "Monthly · overdue \(short("2026-03-15", "2026-04-01"))")
         XCTAssertTrue(caption.overdue)
         let postOpens = Selectors.resumeOccurrence(template: gym(), posted: posted, today: "2026-04-01")
         XCTAssertEqual(postOpens, "2026-03-15")
@@ -113,14 +128,14 @@ final class ScheduledSkipReminderTests: XCTestCase {
                        "the list sorts and groups on the date the row prints")
         // Several missed: the OLDEST, because that is the one Post fills in.
         XCTAssertEqual(ScheduledCaption.cadence(gym(), posted: [:], today: "2026-04-01").text,
-                       "Monthly · overdue 2026-01-15")
+                       "Monthly · overdue \(short("2026-01-15", "2026-04-01"))")
     }
 
     /// A skipped occurrence was not missed — the user said "not this one".
     func test_aSkippedPastOccurrenceIsNotOverdue() {
         let caption = ScheduledCaption.cadence(gym(skipped: ["2026-03-15"]),
                                                posted: postedMap(["2026-01-15", "2026-02-15"]), today: "2026-04-01")
-        XCTAssertEqual(caption.text, "Monthly · next 2026-04-15")
+        XCTAssertEqual(caption.text, "Monthly · next \(short("2026-04-15", "2026-04-01"))")
         XCTAssertFalse(caption.overdue)
     }
 
@@ -129,7 +144,7 @@ final class ScheduledSkipReminderTests: XCTestCase {
     func test_anOccurrenceWaitingInToConfirmIsNotOverdue() {
         let posted = paidMap.merging(postedMap(["2026-04-15"], pending: true)) { a, _ in a }
         let caption = ScheduledCaption.cadence(gym(), posted: posted, today: "2026-04-20")
-        XCTAssertEqual(caption.text, "Monthly · next 2026-05-15")
+        XCTAssertEqual(caption.text, "Monthly · next \(short("2026-05-15", "2026-04-20"))")
         XCTAssertFalse(caption.overdue)
     }
 
@@ -137,10 +152,10 @@ final class ScheduledSkipReminderTests: XCTestCase {
     /// to the occurrence Post would open now.
     func test_dueTodayIsNext_andAPostedOneIsPassedOver() {
         XCTAssertEqual(ScheduledCaption.cadence(gym(), posted: paidMap, today: "2026-04-15").text,
-                       "Monthly · next 2026-04-15")
+                       "Monthly · next \(short("2026-04-15", "2026-04-15"))")
         let early = paidMap.merging(postedMap(["2026-04-15"])) { a, _ in a }
         XCTAssertEqual(ScheduledCaption.cadence(gym(), posted: early, today: "2026-04-10").text,
-                       "Monthly · next 2026-05-15")
+                       "Monthly · next \(short("2026-05-15", "2026-04-10"))")
     }
 
     /// From the current occurrence on: the one just passed (what a bare Skip can
@@ -148,12 +163,13 @@ final class ScheduledSkipReminderTests: XCTestCase {
     func test_skipsCaption_fromTheCurrentOccurrence() {
         XCTAssertNil(ScheduledCaption.skips(gym(), today: "2026-04-01"))
         XCTAssertNil(ScheduledCaption.skips(gym(skipped: ["2026-02-15"]), today: "2026-04-01"), "an older skip is history")
-        XCTAssertEqual(ScheduledCaption.skips(gym(skipped: ["2026-03-15"]), today: "2026-03-20"), "Skipping 2026-03-15",
+        XCTAssertEqual(ScheduledCaption.skips(gym(skipped: ["2026-03-15"]), today: "2026-03-20"),
+                       "Skipping \(short("2026-03-15", "2026-03-20"))",
                        "five days on, Mar 15th is still the current occurrence")
         XCTAssertNil(ScheduledCaption.skips(gym(skipped: ["2026-03-15"]), today: "2026-04-01"),
                      "by Apr 1st the current occurrence is Apr 15th")
         XCTAssertEqual(ScheduledCaption.skips(gym(skipped: ["2026-05-15", "2026-02-15", "2026-04-15"]), today: "2026-04-01"),
-                       "Skipping 2026-04-15, 2026-05-15")
+                       "Skipping \(short("2026-04-15", "2026-04-01")), \(short("2026-05-15", "2026-04-01"))")
     }
 
     /// The list row's swipe offers Unskip for exactly the skips its caption shows. It
@@ -175,8 +191,10 @@ final class ScheduledSkipReminderTests: XCTestCase {
                      "a skipped occurrence posted since is not skipped any more")
     }
 
-    func test_shortDayNamesTheYearOnlyWhenItDiffers() {
-        XCTAssertFalse(ScheduledCaption.shortDay("2026-04-15", today: "2026-04-01").contains("2026"))
-        XCTAssertTrue(ScheduledCaption.shortDay("2025-12-15", today: "2026-04-01").contains("2025"))
+    /// The menu titles name the occurrence in the same short style as the captions.
+    @MainActor
+    func test_skipTitlesUseTheShortDay() {
+        XCTAssertEqual(ScheduledSkipping.skipTitle("2025-12-15", today: "2026-04-01"),
+                       "Skip \(short("2025-12-15", "2026-04-01"))")
     }
 }

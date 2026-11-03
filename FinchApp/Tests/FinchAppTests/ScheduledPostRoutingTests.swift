@@ -196,7 +196,7 @@ final class ScheduledPostRoutingTests: XCTestCase {
 
         let caption = ScheduledCaption.cadence(t, posted: posted, today: today)
         XCTAssertTrue(caption.overdue)
-        XCTAssertEqual(caption.text, "Weekly · overdue \(start)")
+        XCTAssertEqual(caption.text, "Weekly · overdue \(AppDate.shortDay(start, today: today))")
 
         var prefill: PostPrefill?
         var errorMessage: String?

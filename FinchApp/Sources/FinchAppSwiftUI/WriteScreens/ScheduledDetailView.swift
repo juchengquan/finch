@@ -85,13 +85,13 @@ struct ScheduledDetailView: View {
 
     @ViewBuilder private func scheduleSection(_ t: ScheduledTemplate) -> some View {
         Section("Schedule") {
-            LabeledContent("Frequency", value: t.frequency.capitalized)
+            LabeledContent("Frequency", value: FrequencyLabel.label(t.frequency))
             // The date the toolbar's Post opens — an overdue one says so, as the row does.
             let posted = Selectors.scheduledPostedMap(store.txns)
             if let due = ScheduledCaption.due(t, posted: posted, today: store.wallToday), due.overdue {
-                LabeledContent("Overdue") { Text(due.date).foregroundStyle(.red) }
+                LabeledContent("Overdue") { Text(day(due.date)).foregroundStyle(.red) }
             } else {
-                LabeledContent("Next run", value: scheduledNextRun(t, posted: posted, today: store.wallToday))
+                LabeledContent("Next run", value: day(scheduledNextRun(t, posted: posted, today: store.wallToday)))
             }
             // Quarterly and yearly recur on their start day (shown under "Starts").
             if t.frequency == "monthly" {
@@ -102,10 +102,13 @@ struct ScheduledDetailView: View {
                 // + web all agree) — weekdaySymbols is too, so index directly.
                 LabeledContent("Weekday", value: Calendar.current.weekdaySymbols[((wd % 7) + 7) % 7])
             }
-            if let start = t.startDate { LabeledContent("Starts", value: String(start.prefix(10))) }
-            if let end = t.endDate { LabeledContent("Ends", value: String(end.prefix(10))) }
+            if let start = t.startDate { LabeledContent("Starts", value: day(String(start.prefix(10)))) }
+            if let end = t.endDate { LabeledContent("Ends", value: day(String(end.prefix(10)))) }
         }
     }
+
+    /// The rows' own date style (`AppDate.shortDay`), so this column matches the list.
+    private func day(_ iso: String) -> String { AppDate.shortDay(iso, today: store.wallToday) }
 
     /// Skips still in effect, each with its own Unskip — the one place a skip other
     /// than the latest can be undone without finding its day on the calendar.
@@ -113,11 +116,11 @@ struct ScheduledDetailView: View {
         let skips = Selectors.activeSkips(template: t, posted: Selectors.scheduledPostedMap(store.txns))
         if !skips.isEmpty {
             Section("Skipped") {
-                ForEach(skips, id: \.self) { day in
+                ForEach(skips, id: \.self) { skipped in
                     HStack {
-                        Text(day)
+                        Text(day(skipped))
                         Spacer()
-                        Button("Unskip") { errorMessage = ScheduledSkipping.unskip(t, occurrence: day, store: store) }
+                        Button("Unskip") { errorMessage = ScheduledSkipping.unskip(t, occurrence: skipped, store: store) }
                             .buttonStyle(.borderless)
                     }
                 }

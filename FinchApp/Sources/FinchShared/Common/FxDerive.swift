@@ -33,11 +33,10 @@ func fxHistory(_ rates: [ExchangeRate], _ currency: String) -> [ExchangeRate] {
     rates.filter { $0.currency == currency && !$0.isDerived }.sorted { $0.date > $1.date }
 }
 
-/// "Jul 17" (or "Jul 17, 2026") for an ISO day; falls back to the raw string.
+/// "Jul 17" (or "Jul 17, 2026") for an ISO day — the app's short day
+/// (`AppDate.shortDay`); falls back to the raw string.
 func fxDisplayDay(_ isoDay: String, withYear: Bool = false) -> String {
-    guard let d = AppDate.isoDay.date(from: isoDay) else { return isoDay }
-    return withYear ? d.formatted(.dateTime.month(.abbreviated).day().year())
-                    : d.formatted(.dateTime.month(.abbreviated).day())
+    AppDate.shortDay(isoDay, withYear: withYear)
 }
 
 /// The FX auto-update fetch list: the user's explicit tracked set when the

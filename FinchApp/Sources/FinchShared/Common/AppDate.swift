@@ -44,6 +44,25 @@ enum AppDate {
     /// Today as `yyyy-MM-dd`.
     static func today() -> String { isoDay.string(from: Date()) }
 
+    /// The app's short style for SHOWING a `yyyy-MM-dd` day: "Nov 15", or "Nov 15, 2025"
+    /// outside `today`'s year ("11月15日" / "2025年11月15日" in Chinese). Display only —
+    /// what is stored, compared or passed to the engine stays ISO. A string that isn't
+    /// a day (a "—" placeholder) comes back as is.
+    ///
+    /// Always Gregorian, like the stored days: a region set to the Buddhist or Japanese
+    /// calendar would otherwise print 2568 or Reiwa 7 for a year compared as 2025.
+    static func shortDay(_ iso: String, today: String, locale: Locale = .autoupdatingCurrent) -> String {
+        shortDay(iso, withYear: iso.prefix(4) != today.prefix(4), locale: locale)
+    }
+
+    static func shortDay(_ iso: String, withYear: Bool, locale: Locale = .autoupdatingCurrent) -> String {
+        guard let d = isoDay.date(from: iso) else { return iso }
+        let cal = civil
+        let style = Date.FormatStyle(locale: locale, calendar: cal, timeZone: cal.timeZone)
+            .month(.abbreviated).day()
+        return d.formatted(withYear ? style.year() : style)
+    }
+
     /// The calendar for civil-date math on `yyyy-MM-dd` strings — Gregorian in the
     /// **device's** timezone, matching the formatters above (which set no `timeZone`
     /// and so parse/format locally).

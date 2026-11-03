@@ -37,7 +37,7 @@ final class QuarterlyStartDayCaptionTests: XCTestCase {
                 "templateId": .string("ins"), "date": .string(d), "occurrenceDate": .string(d), "time": .string("09:00"),
             ]))
         }
-        XCTAssertEqual(try caption(q).text, "Quarterly · overdue 2026-09-15")
+        XCTAssertEqual(try caption(q).text, "Quarterly · overdue \(AppDate.shortDay("2026-09-15", today: today))")
 
         // A database from before the repair shipped: its bookkeeping lacks the row.
         try q.write { db in
@@ -46,7 +46,7 @@ final class QuarterlyStartDayCaptionTests: XCTestCase {
         try Migrations.runAll(on: q)
 
         let after = try caption(q)
-        XCTAssertEqual(after.text, "Quarterly · next 2026-12-01")
+        XCTAssertEqual(after.text, "Quarterly · next \(AppDate.shortDay("2026-12-01", today: today))")
         XCTAssertFalse(after.overdue)
     }
 }

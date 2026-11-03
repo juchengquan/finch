@@ -139,13 +139,13 @@ public enum NotificationPlanner {
                       let crossing = panel.crossesBelowZeroOn, let key = panel.crossingKey else { continue }
                 let name = a.name ?? String(localized: "Account")
                 let notifyDay = Selectors.horizonDay(from: crossing, addingDays: -lowBalanceLeadDays)
-                let crossingLabel = AccountForecastPanel.dayLabel(crossing)
+                let crossingLabel = panel.dayLabel(crossing)
                 let lowAmount = format(panel.low.balance, a.currency)
                 // One date when the low point IS the crossing — "below zero on the 23rd,
                 // down to −120 by the 23rd" says the day twice.
                 let body = panel.low.date == crossing
                     ? String(localized: "Scheduled items take it below zero on \(crossingLabel), to \(lowAmount).")
-                    : String(localized: "Scheduled items take it below zero on \(crossingLabel), down to \(lowAmount) by \(AccountForecastPanel.dayLabel(panel.low.date)).")
+                    : String(localized: "Scheduled items take it below zero on \(crossingLabel), down to \(lowAmount) by \(panel.dayLabel(panel.low.date)).")
                 out.append(PlannedNotification(
                     id: "lowBalance:\(a.id):\(key)", kind: .lowBalance,
                     title: String(localized: "Low balance ahead: \(name)"),
