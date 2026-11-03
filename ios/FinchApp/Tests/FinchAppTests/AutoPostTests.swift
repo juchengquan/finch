@@ -9,6 +9,11 @@ import SwiftUI
 /// row for an occurrence auto-post already added.
 @MainActor
 final class AutoPostTests: XCTestCase {
+    /// The store and the test both read the wall clock; see `MidnightGuard`.
+    override func setUp() async throws {
+        try await MidnightGuard.waitIfClose()
+    }
+
     /// A real store on the round-trip sample pack, with no auto-post mark yet —
     /// exactly what an existing install looks like on its first launch with this.
     private func makeStore() async throws -> FinchStore {
@@ -152,13 +157,17 @@ final class AutoPostTests: XCTestCase {
         let id = try createDaily(store, autoPost: true)
         await store.autoPostDueScheduled()
         let t = try XCTUnwrap(store.scheduled.first { $0.id == id })
+        let day = try XCTUnwrap(rows(store, id).first?.occurrenceDate)
         var prefill: PostPrefill?
         var error: String?
-        ScheduledPoster.postNow(t, occurrence: store.wallToday, store: store,
+        ScheduledPoster.postNow(t, occurrence: day, store: store,
                                 prefill: Binding(get: { prefill }, set: { prefill = $0 }),
                                 errorMessage: Binding(get: { error }, set: { error = $0 }))
         XCTAssertNil(prefill, "no sheet for a duplicate")
-        XCTAssertNotNil(error)
+        // The refusal that names the waiting row. Any message at all used to pass,
+        // including "already posted" and "nothing left to post".
+        XCTAssertEqual(error, i18nMessage(I18nError("error.scheduled.awaitingConfirm", ["name": t.name, "date": day],
+                                                     "\"\(t.name)\" for \(day) is already waiting in To confirm")))
         XCTAssertEqual(rows(store, id).count, 1)
     }
 

@@ -10,6 +10,11 @@ import FinchCore
 /// Scheduled with the item still due and no word of why.
 @MainActor
 final class ConfirmNowOccurrenceTests: XCTestCase {
+    /// The store and the test both read the wall clock; see `MidnightGuard`.
+    override func setUp() async throws {
+        try await MidnightGuard.waitIfClose()
+    }
+
     private func makeStore() async throws -> FinchStore {
         let packURL = try XCTUnwrap(Bundle(for: Self.self).url(
             forResource: "sample", withExtension: "finch", subdirectory: "Fixtures/roundtrip"))

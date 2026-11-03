@@ -141,7 +141,9 @@ final class LowBalanceAlertTests: XCTestCase {
                             txns: [posted(day: 25, pending: true)]).map(\.id)
         let later = plan([account("a1", 500)], [bill(900, day: 25)], wallToday: "2026-05-27",
                          txns: [posted(day: 25, pending: true)]).map(\.id)
-        XCTAssertEqual(onTheDay, later)
+        // Pinned, not just equal: with no alert on either day, [] == [] passed.
+        XCTAssertEqual(onTheDay, ["lowBalance:a1:2026-05-25"])
+        XCTAssertEqual(later, onTheDay)
     }
 
     func testAMissedBillAlertsToday() throws {
