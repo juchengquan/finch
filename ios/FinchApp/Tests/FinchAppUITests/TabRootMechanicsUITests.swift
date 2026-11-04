@@ -469,7 +469,11 @@ final class SplitMechanicsUITests: TabMechanicsBase {
         // ROW, found nothing, and — because the tap was behind an `if` — skipped the
         // activation without a word. The test then failed further down claiming the
         // ledger never switched, which was true but said nothing about why.
-        let more = app.buttons["More"].firstMatch
+        //
+        // By identifier, not by "More": since the list gained its own ⋯ (Reorder), the
+        // split shows two, and `firstMatch` is the LIST's — whose menu has no "Make
+        // active ledger". That kept this red on every post-merge run from 2026-08-15.
+        let more = app.buttons["ledgerDetail.more"].firstMatch
         XCTAssertTrue(more.waitForExistence(timeout: 15),
                       "the ledger detail has no ⋯ menu — its actions moved again")
         more.tap()
