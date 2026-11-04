@@ -13,6 +13,7 @@ import {
 } from '../core/entries';
 import { I18nError } from '@/lib/i18n-error';
 import { TRANSACTION_ERROR_CODES } from '@/lib/db/domain/transactions/errors';
+import { newId } from '@/lib/db/domain/_shared/ids';
 import type {
   ListOptions,
   AddInput,
@@ -715,7 +716,7 @@ export async function confirmPendingWithMerchant(
     }
   } else if (resolution.newCounterpartyName && resolution.newCounterpartyName.trim()) {
     const name = resolution.newCounterpartyName.trim();
-    const newCpId = `cp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const newCpId = newId('cp');
     await exec(
       "INSERT INTO counterparties (id,name,is_verified,created_at,updated_at) VALUES (?,?,0,datetime('now'),datetime('now'))",
       [newCpId, name],
