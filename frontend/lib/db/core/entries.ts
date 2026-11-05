@@ -11,9 +11,7 @@ import { convertToBase, hasRateOnOrBefore } from '../queries/rates';
 import { resolveCounterpartyIdByName } from '../queries/counterparties';
 import { listActiveRules } from '../queries/rules';
 import { applyRules } from '@/lib/rules/engine';
-
-const newId = (prefix: string) =>
-  `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+import { newId } from '../domain/_shared/ids';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
