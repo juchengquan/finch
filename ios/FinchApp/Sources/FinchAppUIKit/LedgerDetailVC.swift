@@ -256,6 +256,10 @@ final class LedgerDetailVC: UIViewController {
         ])
         let more = UIBarButtonItem(image: UIImage(systemName: "ellipsis"), menu: menu)
         more.accessibilityLabel = String(localized: "More")
+        // The list has a ⋯ of its own (Reorder), and on the iPad both are on screen at
+        // once, list first — so "More" alone names the wrong menu. `account.more` is
+        // the same fix on the account detail.
+        more.accessibilityIdentifier = "ledgerDetail.more"
         navigationItem.rightBarButtonItem = more
     }
 

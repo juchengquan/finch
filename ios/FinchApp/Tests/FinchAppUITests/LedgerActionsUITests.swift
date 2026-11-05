@@ -49,7 +49,9 @@ final class LedgerActionsUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["View all activity"].exists,
                        "View all activity is still on the UIKit detail screen")
 
-        let more = app.buttons["More"].firstMatch
+        // The detail's own ⋯: the list's (Reorder) can still be in the hierarchy
+        // while the detail pushes in, and "More" alone matches it first.
+        let more = app.buttons["ledgerDetail.more"].firstMatch
         XCTAssertTrue(more.waitForExistence(timeout: 5), "no ⋯ item on ledger detail")
         more.tap()
         XCTAssertTrue(app.buttons["Edit"].waitForExistence(timeout: 5),
@@ -65,7 +67,7 @@ final class LedgerActionsUITests: XCTestCase {
         try XCTUnwrap(ledgerRow("Business")).tap()
         XCTAssertTrue(app.staticTexts["Base currency"].waitForExistence(timeout: 10),
                       "ledger detail did not load")
-        app.buttons["More"].firstMatch.tap()
+        app.buttons["ledgerDetail.more"].firstMatch.tap()
         let edit = app.buttons["Edit"].firstMatch
         XCTAssertTrue(edit.waitForExistence(timeout: 5), "the menu has no Edit")
         edit.tap()
