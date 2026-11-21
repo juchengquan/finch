@@ -875,7 +875,11 @@ async function ensureMetadataRow(exec: ExecFn, schemaVersion: string): Promise<v
  * files replay any MIGRATIONS newer than their recorded schema_version, then
  * re-stamp. (No legacy/bootstrap handling — see the Versioning note above.)
  */
-export async function migrate(exec: ExecFn, opts: { fresh: boolean }): Promise<void> {
+export async function migrate(
+  exec: ExecFn,
+  opts: { fresh: boolean },
+  migrations: typeof MIGRATIONS = MIGRATIONS,
+): Promise<void> {
   if (opts.fresh) {
     await ensureMetadataRow(exec, SCHEMA_VERSION);
     return;
@@ -883,11 +887,50 @@ export async function migrate(exec: ExecFn, opts: { fresh: boolean }): Promise<v
   const cur = String(
     (await exec('SELECT schema_version FROM db_metadata WHERE id = 1'))[0]?.schema_version ?? '',
   );
-  for (const version of Object.keys(MIGRATIONS).sort()) {
+  for (const version of Object.keys(migrations).sort()) {
     if (version <= cur) continue;
-    const entry = MIGRATIONS[version];
-    if (typeof entry === 'function') await entry(exec);
-    else for (const sql of entry ?? []) await runMigrationStmt(exec, sql);
+    await applyMigration(exec, version, migrations[version]);
   }
   await ensureMetadataRow(exec, SCHEMA_VERSION);
+}
+
+// A table rebuild (create new, copy, drop old, rename) needs foreign keys OFF,
+// or dropping the old table fires its ON DELETE actions. The pragma is a no-op
+// inside a transaction, so it is switched here, before the savepoint.
+const turnsForeignKeysOff = (entry: (typeof MIGRATIONS)[string]) =>
+  /PRAGMA foreign_keys\s*=\s*OFF/i.test(typeof entry === 'function' ? entry.toString() : (entry ?? []).join('\n'));
+
+/** One version, all or nothing. It used to run statement by statement with no
+ *  transaction and stamp the version only after the last one, so a failure
+ *  half-way left a half-migrated file that claimed the old version. Now each
+ *  version runs in a savepoint and records itself inside it: a failure rolls
+ *  back that version alone and the file stays at the last complete one.
+ *  (SQLite's documented procedure for a schema change that needs foreign keys
+ *  off: off, begin, change, foreign_key_check, commit, on.) */
+async function applyMigration(exec: ExecFn, version: string, entry: (typeof MIGRATIONS)[string]): Promise<void> {
+  const fkOff = turnsForeignKeysOff(entry);
+  if (fkOff) await exec('PRAGMA foreign_keys = OFF');
+  // Breakage already in the file is not this step's doing and must not stop the
+  // file from opening; only new breakage fails the step.
+  const brokenBefore = fkOff ? (await exec('PRAGMA foreign_key_check')).length : 0;
+  const sp = 'migrate_step';
+  await exec(`SAVEPOINT ${sp}`);
+  try {
+    if (typeof entry === 'function') await entry(exec);
+    else for (const sql of entry ?? []) await runMigrationStmt(exec, sql);
+    if (fkOff) {
+      const broken = await exec('PRAGMA foreign_key_check');
+      if (broken.length > brokenBefore) {
+        throw new Error(`Migration ${version} broke ${broken.length - brokenBefore} foreign key reference(s)`);
+      }
+    }
+    await exec('UPDATE db_metadata SET schema_version = ? WHERE id = 1', [version]);
+    await exec(`RELEASE ${sp}`);
+  } catch (err) {
+    await exec(`ROLLBACK TO ${sp}`);
+    await exec(`RELEASE ${sp}`);
+    throw err;
+  } finally {
+    if (fkOff) await exec('PRAGMA foreign_keys = ON');
+  }
 }
