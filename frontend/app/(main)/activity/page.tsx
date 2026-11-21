@@ -459,7 +459,7 @@ export default function ActivityPage() {
                           {tx.kind === 'refund' && <RefundBadge />}
                           {(() => {
                             const a = anomalyScore(tx, stats);
-                            return a?.isAnomaly ? <AnomalyBadge zScore={a.zScore} mean={a.mean} /> : null;
+                            return a?.isAnomaly ? <AnomalyBadge zScore={a.zScore} mean={a.mean} currency={tx.nativeAmount != null ? tx.currency : undefined} /> : null;
                           })()}
                         </div>
                         <div className="text-muted-foreground mt-0.5 truncate text-[11px]">
@@ -531,7 +531,7 @@ export default function ActivityPage() {
                           {tx.kind === 'refund' && <RefundBadge />}
                           {(() => {
                             const a = anomalyScore(tx, stats);
-                            return a?.isAnomaly ? <AnomalyBadge zScore={a.zScore} mean={a.mean} /> : null;
+                            return a?.isAnomaly ? <AnomalyBadge zScore={a.zScore} mean={a.mean} currency={tx.nativeAmount != null ? tx.currency : undefined} /> : null;
                           })()}
                         </div>
                       </td>

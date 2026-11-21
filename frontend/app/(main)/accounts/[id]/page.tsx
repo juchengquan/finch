@@ -183,7 +183,7 @@ export default function AccountDetailPage() {
     });
     toast.success(
       postAdjustment ? t('reconcileCard.reconciledWithAdjustmentToast') : t('reconcileCard.reconciledToast'),
-      { description: `${name} → ${targetNumber.toLocaleString()}` },
+      { description: `${name} → ${native(targetNumber, currency)}` },
     );
     exitReconcile();
   };
@@ -235,7 +235,7 @@ export default function AccountDetailPage() {
       return;
     }
     adjustAccountBalance(accountId, target, adjustNote.trim() || undefined);
-    toast.success(t('adjustDialog.adjustedToast'), { description: `${name} → ${target.toLocaleString()}` });
+    toast.success(t('adjustDialog.adjustedToast'), { description: `${name} → ${native(target, currency)}` });
     setAdjustOpen(false);
   };
 
@@ -772,7 +772,7 @@ export default function AccountDetailPage() {
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
               <Label>{t('adjustDialog.currentBalance')}</Label>
-              <div className="text-muted-foreground text-sm">{balance.toLocaleString()}</div>
+              <div className="text-muted-foreground text-sm">{native(balance, currency)}</div>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="adjust-target">{t('adjustDialog.targetBalance')}</Label>

@@ -490,7 +490,7 @@ export default function InsightsPage() {
               <span className="text-muted-foreground text-[11px]">{t('heatmap.last12Weeks')}</span>
             </div>
             <div className="overflow-x-auto">
-              <CalendarHeatmap values={heatmap} />
+              <CalendarHeatmap values={heatmap} format={fmt} />
             </div>
           </div>
         )}

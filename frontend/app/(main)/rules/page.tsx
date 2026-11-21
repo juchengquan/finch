@@ -18,6 +18,7 @@ import { applyRules } from '@/lib/rules/engine';
 import { RuleBuilderDialog } from '@/components/rule-builder-dialog';
 import { cn } from '@/lib/utils';
 import type { Rule } from '@/lib/rules/types';
+import { useMoney } from '@/components/use-money';
 
 function useRelativeDays(): (iso: string | null) => string | null {
   const t = useTranslations('rules.relative');
@@ -35,6 +36,10 @@ function useRelativeDays(): (iso: string | null) => string | null {
 }
 
 export default function RulesPage() {
+  // A sample's amount in its own currency (it always printed "$"), masked in privacy mode.
+  const { native, fmt } = useMoney();
+  const txAmount = (tx: { amount: number; nativeAmount?: number; currency?: string }) =>
+    tx.nativeAmount != null && tx.currency ? native(Math.abs(tx.nativeAmount), tx.currency) : fmt(Math.abs(tx.amount));
   const { activeId, active } = useLedger();
   const t = useTranslations('rules');
   const tCommon = useTranslations('common');
@@ -222,7 +227,7 @@ export default function RulesPage() {
                   <ul className="bg-secondary text-muted-foreground space-y-0.5 rounded-md p-2 font-mono text-[11px]">
                     {samples.map((tx) => (
                       <li key={tx.id} className="truncate">
-                        {tx.date} · {tx.merchant} · ${Math.abs(tx.nativeAmount ?? tx.amount).toFixed(2)}
+                        {tx.date} · {tx.merchant} · {txAmount(tx)}
                       </li>
                     ))}
                     {matched.length > samples.length && (

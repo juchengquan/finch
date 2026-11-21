@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { categoryPath } from '@/lib/db/domain/categories/queries';
 import type { Action, Condition, Leaf, Rule, TxKind } from '@/lib/rules/types';
 import type { Tx } from '@/lib/store';
+import { useMoney } from '@/components/use-money';
 
 // ---------------------------------------------------------------------------
 // Draft model — UI-friendly flat shape. The builder doesn't expose nested
@@ -162,6 +163,10 @@ export function RuleBuilderDialog({
   /** Initial draft seed when creating a new rule; ignored for edits. */
   prefill?: RulePrefill;
 }) {
+  // A sample's amount in its own currency (it always printed "$"), masked in privacy mode.
+  const { native, fmt } = useMoney();
+  const sampleAmount = (tx: { amount: number; nativeAmount?: number; currency?: string }) =>
+    tx.nativeAmount != null && tx.currency ? native(Math.abs(tx.nativeAmount), tx.currency) : fmt(Math.abs(tx.amount));
   const { activeId } = useLedger();
   const t = useTranslations('ruleBuilder');
   const tCommon = useTranslations('common');
@@ -410,7 +415,7 @@ export function RuleBuilderDialog({
               <ul className="text-muted-foreground space-y-0.5 font-mono text-[10px]">
                 {preview.samples.map((sample) => (
                   <li key={sample.id} className="truncate">
-                    {sample.date} · {sample.merchant} · ${Math.abs(sample.nativeAmount ?? sample.amount).toFixed(2)}
+                    {sample.date} · {sample.merchant} · {sampleAmount(sample)}
                   </li>
                 ))}
                 {preview.matchCount > preview.samples.length && (
