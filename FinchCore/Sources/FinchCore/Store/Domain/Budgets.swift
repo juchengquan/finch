@@ -17,13 +17,27 @@ public enum Budgets {
         for b in try Row.fetchAll(db, sql: "SELECT id, frequency, start_date, last_rolled_period, account_ids, category_ids FROM budgets WHERE last_rolled_period IS NOT NULL") {
             let lastRolled: String = b["last_rolled_period"]
             let bCats = parseIds(b["category_ids"]), bAccts = parseIds(b["account_ids"])
-            let catOverlap = bCats.isEmpty || categoryIds.contains(where: bCats.contains)
+            // A budget on a category covers its subcategories too (as progress does).
+            let covered = try withDescendants(db, bCats)
+            let catOverlap = bCats.isEmpty || categoryIds.contains(where: covered.contains)
             let acctOverlap = bAccts.isEmpty || accountIds.contains(where: bAccts.contains)
             guard catOverlap, acctOverlap else { continue }
             let affectedPeriod = Selectors.cycleWindow(b["frequency"], b["start_date"], earliestDate).from   // periodOf
             if affectedPeriod > lastRolled { continue }
             try db.execute(sql: "UPDATE budgets SET last_rolled_period = NULL, carry_forward = 0, updated_at = datetime('now') WHERE id = ?", arguments: [b["id"] as String])
         }
+    }
+
+    /// `ids` plus every category below them. Mirrors the web's `withDescendants`.
+    static func withDescendants(_ db: Database, _ ids: [String]) throws -> Set<String> {
+        if ids.isEmpty { return [] }
+        let marks = Array(repeating: "?", count: ids.count).joined(separator: ",")
+        return Set(try String.fetchAll(db, sql: """
+            WITH RECURSIVE sub(id) AS (
+              SELECT id FROM categories WHERE id IN (\(marks))
+              UNION SELECT c.id FROM categories c JOIN sub ON c.parent_id = sub.id
+            ) SELECT id FROM sub
+            """, arguments: StatementArguments(ids)))
     }
 
     /// Compute an entry's touches (web txTouches) → feed invalidateRollover.

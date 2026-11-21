@@ -80,6 +80,26 @@ final class BackfillRuleTests: XCTestCase {
         }
     }
 
+    /// A budget on a parent category covers its subcategories, so an edit in a
+    /// subcategory resets the parent budget's cached rollover too.
+    func test_invalidateRollover_coversSubcategories() throws {
+        let q = try seeded()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('c1-kid','l1','c1','Kid','expense',0,datetime('now'),datetime('now'))")
+            try db.execute(sql: """
+                INSERT INTO budgets (id,ledger_id,name,kind,amount,saved,carry_forward,frequency,start_date,
+                    is_recurring,rollover,last_rolled_period,category_ids,account_ids,warning_pct,created_at,updated_at)
+                VALUES ('b1','l1','Food','expense',100,0,40,'monthly','2026-01-01',1,1,'2026-05-01','["c1"]',NULL,80,datetime('now'),datetime('now'))
+                """)
+        }
+        try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "accountId": .string("a1"), "amount": .double(-10),
+            "merchant": .string("X"), "categoryId": .string("c1-kid"), "date": .string("2026-05-10"), "skipRules": .bool(true)]))
+        try q.read { db in
+            XCTAssertNil(try String.fetchOne(db, sql: "SELECT last_rolled_period FROM budgets WHERE id='b1'") ?? nil)
+        }
+    }
+
     /// The Phase 4 rules projection lists name/priority/active.
     func test_rulesProjection() throws {
         let q = try seeded()

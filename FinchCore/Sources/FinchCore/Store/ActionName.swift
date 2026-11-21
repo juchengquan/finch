@@ -25,7 +25,7 @@ public enum ActionName: String, Codable, Sendable, CaseIterable {
     case bulkRecategorize
     case deleteTransaction
     case restoreTransactions  // native-only — undo of a delete (TransactionUndo); the web has no undo
-    case deleteTransactionSkippingOccurrence // native-only — the app's delete: also skips the scheduled occurrence the row fulfilled (Scheduled.deleteSkippingOccurrence)
+    case deleteTransactionSkippingOccurrence // the app's delete: also skips the scheduled occurrence the row fulfilled (Scheduled.deleteSkippingOccurrence; the web's cancel uses it too)
     case removeAttachment
     case setEntryAttachment   // Phase 6.5 — the 75th action (native-only; the web uses POST /api/attachments)
     case confirmTransaction
@@ -102,7 +102,7 @@ public enum ActionName: String, Codable, Sendable, CaseIterable {
     case postScheduled
     case generateDueScheduled
     case autoPostDueScheduled // native-only (generateDue for auto_post templates, from a high-water mark in app_state — see Scheduled.autoPostDue)
-    case skipScheduledOccurrence   // native-first (one occurrence skipped, app_state — the web ignores the key)
+    case skipScheduledOccurrence   // native-first (one occurrence skipped, app_state — the web's generator honours the key)
     case unskipScheduledOccurrence // native-first (undoes it)
 
     // --- transfers (3) ---

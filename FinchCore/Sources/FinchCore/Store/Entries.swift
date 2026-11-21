@@ -40,6 +40,7 @@ public enum Entries {
         let rand = UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(12).lowercased()
         return "\(prefix)-\(ts)-\(rand)"
     }
+    /// Half away from zero, the same as the web's `r2` (lib/round.ts) and SQLite ROUND.
     static func r2(_ n: Double) -> Double { (n * 100).rounded() / 100 }
 
     // MARK: system (equity) categories
