@@ -324,7 +324,10 @@ export function CalendarHeatmap({
             fill={t === 0 ? emptyColor : color}
             opacity={t === 0 ? 1 : 0.25 + 0.75 * t}
           >
-            <title>{v.date}: {format ? format(v.value) : v.value.toFixed(2)}</title>
+            {/* One string child: React 19 treats <title> specially and renders
+                several text children differently on the server and the client,
+                which failed hydration on Insights. */}
+            <title>{`${v.date}: ${format ? format(v.value) : v.value.toFixed(2)}`}</title>
           </rect>
         );
       })}
