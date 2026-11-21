@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { readState } from '@/lib/db/core/server';
+import { errorMessage } from '@/lib/api-error';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,6 +12,6 @@ export async function GET() {
     return NextResponse.json(state);
   } catch (err) {
     console.error('GET /api/state failed', err);
-    return NextResponse.json({ error: 'Could not read state' }, { status: 500 });
+    return errorMessage('Could not read state', 500);
   }
 }
