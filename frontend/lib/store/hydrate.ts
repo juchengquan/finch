@@ -10,6 +10,16 @@
 
 import { useFinanceStore } from './index';
 
+/** Fired on `window` when the server rejects a mutation. The optimistic
+ *  local change is then wrong: StoreHydration listens, reloads the server's
+ *  state (dropping that change) and tells the user. */
+export const SYNC_FAILED_EVENT = 'finch:sync-failed';
+
+export interface SyncFailedDetail {
+  action: string;
+  error: unknown;
+}
+
 export function syncMutation(action: string, args?: Record<string, unknown>): void {
   if (typeof window === 'undefined') return;
   void import('@/lib/api-client')
@@ -17,6 +27,10 @@ export function syncMutation(action: string, args?: Record<string, unknown>): vo
     .then((state) => {
       useFinanceStore.setState(state);
     })
-    .catch((err) => console.error(`Sync failed (${action})`, err));
+    .catch((err) => {
+      console.error(`Sync failed (${action})`, err);
+      window.dispatchEvent(
+        new CustomEvent<SyncFailedDetail>(SYNC_FAILED_EVENT, { detail: { action, error: err } }),
+      );
+    });
 }
-
