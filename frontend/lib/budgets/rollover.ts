@@ -54,6 +54,21 @@ async function loadBudgets(exec: Exec): Promise<BudgetRow[]> {
   }));
 }
 
+// A budget on a category also covers its subcategories, as budgetProgress
+// counts them (expandDescendants in lib/select.ts). Rollover used to count the
+// listed categories only, so 90 spent in a child left a carry-forward of 100.
+const DESCENDANTS_SQL = (n: number) => `WITH RECURSIVE sub(id) AS (
+    SELECT id FROM categories WHERE id IN (${Array(n).fill('?').join(',')})
+    UNION SELECT c.id FROM categories c JOIN sub ON c.parent_id = sub.id
+  ) SELECT id FROM sub`;
+
+/** `ids` plus every category below them. Mirrored in FinchCore
+ *  `Budgets.withDescendants`. */
+export async function withDescendants(exec: Exec, ids: string[]): Promise<Set<string>> {
+  if (!ids.length) return new Set();
+  return new Set((await exec(DESCENDANTS_SQL(ids.length), ids)).map((r) => String(r.id)));
+}
+
 async function spentInRange(
   exec: Exec,
   budget: BudgetRow,
@@ -74,8 +89,7 @@ async function spentInRange(
 
   // category_ids = [] is treated as "matches every category".
   if (budget.category_ids.length) {
-    const placeholders = budget.category_ids.map(() => '?').join(',');
-    where.push(`p.category_id IN (${placeholders})`);
+    where.push(`p.category_id IN (${DESCENDANTS_SQL(budget.category_ids.length)})`);
     bind.push(...budget.category_ids);
   }
   if (budget.account_ids.length) {
@@ -196,8 +210,11 @@ export async function invalidateRollover(
   for (const b of budgets) {
     if (b.last_rolled_period == null) continue;
 
-    const catOverlap = b.category_ids.length === 0
-      || affected.categoryIds.some((c) => b.category_ids.includes(c));
+    let catOverlap = b.category_ids.length === 0;
+    if (!catOverlap) {
+      const covered = await withDescendants(exec, b.category_ids);
+      catOverlap = affected.categoryIds.some((c) => covered.has(c));
+    }
     const acctOverlap = b.account_ids.length === 0
       || affected.accountIds.some((a) => b.account_ids.includes(a));
     if (!catOverlap || !acctOverlap) continue;

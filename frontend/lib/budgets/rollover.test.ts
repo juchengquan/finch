@@ -251,3 +251,25 @@ test('invalidateRollover only touches budgets whose filters overlap the edit', a
   expect(food.lastRolledPeriod).toBeNull();
   expect(trans.lastRolledPeriod).toBe('2026-04-01'); // untouched
 });
+
+test('rollover counts spending in subcategories, as budget progress does', async () => {
+  const exec = await seeded();
+  const [child] = await exec("SELECT id FROM categories WHERE parent_id = 'food' LIMIT 1");
+  const childId = String(child.id);
+  await insertBudget(exec, 'b-tree', { amount: 100, rollover: 1, categoryIds: ['food'] });
+  for (const c of (await exec("SELECT id FROM categories WHERE id = 'food' OR parent_id = 'food'")).map((r) => String(r.id))) {
+    await deleteEntriesForCategory(exec, c, '2026-04-01', '2026-04-30');
+  }
+  await insertTxRow(exec, {
+    ledgerId: 'personal', accountId: 'chk', date: '2026-04-10',
+    amount: -90, description: 'Groceries', kind: 'expense', categoryId: childId, skipRules: true,
+  });
+  await rollBudgetsIfDue(exec, '2026-05-15');
+  // 100 budgeted, 90 spent in a subcategory → 10 carries forward (was 100).
+  expect((await readBudget(exec, 'b-tree')).carryForward).toBeCloseTo(10, 2);
+
+  // An edit in the subcategory invalidates the parent's rolled state.
+  const { invalidated } = await invalidateRollover(exec, { categoryIds: [childId], accountIds: ['chk'] }, '2026-04-10');
+  expect(invalidated).toBeGreaterThan(0);
+  expect((await readBudget(exec, 'b-tree')).lastRolledPeriod).toBeNull();
+});
