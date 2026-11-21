@@ -90,6 +90,13 @@ tailscale serve --bg --set-path /finch http://127.0.0.1:3000
 - `proxy.ts` (Next.js proxy, formerly middleware) prepends `/finch` to requests where Tailscale stripped it, so routing works.
 - Both are disabled in dev mode (`NODE_ENV === 'development'`) — dev runs bare at `localhost:3000`.
 
+### Who can reach the API
+
+There is no login, and `next start` listens on every network interface, so anyone who can reach the port on your network can use the API directly. What `proxy.ts` does stop is web pages using your browser to reach it: it refuses `/api` requests that other web pages could make through your browser (`lib/api-guard.ts`), in dev and production:
+
+- **Writes need the `x-finch-request: 1` header.** The app's own fetches add it (`apiFetch` in `lib/api-client.ts`). Another site can't add a custom header without a CORS preflight, which the server never approves. Scripts that POST to the API (curl, etc.) must send it.
+- **The `Host` must be one an outsider can't point at your machine** (DNS rebinding): an IP address, `localhost`, a single-label machine name, `*.local`, or `*.ts.net`. Reaching the app through any other name answers `403 Host not allowed` until you add it: `FINCH_ALLOWED_HOSTS=finch.example.com,.home.arpa` (a leading dot allows subdomains).
+
 ### Changing the path prefix
 
 Set `NEXT_PUBLIC_BASE_PATH` and rebuild:
@@ -99,14 +106,14 @@ NEXT_PUBLIC_BASE_PATH=/myapp bun run build && bun run start
 tailscale serve --bg --set-path /myapp http://127.0.0.1:3000
 ```
 
-The default is `/finch`. Change `next.config.ts`, `proxy.ts`, `lib/api-client.ts`, and `components/sqlite-backup-provider.tsx` only if you change the default itself.
+The default is `/finch`, defined once in `lib/base-path.ts`.
 
 ### Dev vs production
 
 | Mode | Command | URL | basePath | Proxy |
 |---|---|---|---|---|
-| Dev | `bun dev` | `localhost:3000` | `''` | no-op |
-| Prod | `build && start` | `host.ts.net/finch` | `/finch` | active |
+| Dev | `bun dev` | `localhost:3000` | `''` | API checks only |
+| Prod | `build && start` | `host.ts.net/finch` | `/finch` | API checks + prefix rewrite |
 
 Run them on different ports to keep both available:
 
