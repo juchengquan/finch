@@ -11,7 +11,7 @@
 import type { Exec } from '../core/repo';
 import { r2 } from '@/lib/round';
 import { convertToBase } from './rates';
-import { rebuildEntry, auditLedger, ensureSystemCategories } from '../core/entries';
+import { rebuildEntry, auditLedger, ensureSystemCategories, recomputeAccountFromPostings } from '../core/entries';
 import { I18nError } from '@/lib/i18n-error';
 import { LEDGER_ERROR_CODES } from '@/lib/db/domain/ledgers/errors';
 import type { LedgerRow, NewLedgerInput, LedgerPatch } from '@/lib/db/domain/ledgers/types';
@@ -229,6 +229,16 @@ export async function recomputeAmountBases(
     );
 
     const touchedAccountIds = new Set<string>();
+    // Balances are recomputed once per account after the loop, not per entry.
+    const deferred = new Set<string>();
+
+    // The fx-system category (its residue legs are dropped; rebuildEntry
+    // re-derives them). Read once, not once per entry.
+    const fxRows = await exec(
+      "SELECT id FROM categories WHERE ledger_id = ? AND system = 'fx'",
+      [ledgerId],
+    );
+    const fxCatId = fxRows[0] ? String(fxRows[0].id) : null;
 
     for (const entry of entryRows) {
       const entryId = String(entry.id);
@@ -239,13 +249,6 @@ export async function recomputeAmountBases(
         'SELECT id, account_id, category_id, amount, currency, amount_base, exchange_rate, orig_amount, orig_currency, cleared_at, memo FROM postings WHERE entry_id = ? ORDER BY sort_order',
         [entryId],
       );
-
-      // Identify the fx-system category for this ledger (to drop residue legs).
-      const fxRows = await exec(
-        "SELECT id FROM categories WHERE ledger_id = ? AND system = 'fx'",
-        [ledgerId],
-      );
-      const fxCatId = fxRows[0] ? String(fxRows[0].id) : null;
 
       // Build LegInput[] — see design §5.3.
       const legs: import('../core/entries').LegInput[] = [];
@@ -277,8 +280,9 @@ export async function recomputeAmountBases(
         }
       }
 
-      await rebuildEntry(exec, entryId, { legs });
+      await rebuildEntry(exec, entryId, { legs }, { deferRecompute: deferred });
     }
+    for (const id of deferred) await recomputeAccountFromPostings(exec, id);
 
     // 3b. Budgets hold base-currency figures too. They used to keep their
     // numbers, so a 10,000 USD budget became 10,000 JPY. A budget is a standing
