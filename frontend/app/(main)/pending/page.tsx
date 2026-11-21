@@ -49,7 +49,7 @@ export default function PendingPage() {
               <button
                 type="button"
                 onClick={() => {
-                  confirmAllPending();
+                  confirmAllPending(activeId);
                   toast.success(t('confirmedAllToast'));
                 }}
                 className="bg-foreground text-background flex h-[38px] flex-1 items-center justify-center gap-1.5 rounded-[19px] text-xs font-medium"

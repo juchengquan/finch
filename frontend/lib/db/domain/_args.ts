@@ -68,7 +68,7 @@ export type Args = {
   };
 
   // --- counterparties (5) ---
-  confirmAllPending: Record<string, never>;
+  confirmAllPending: { ledgerId?: string };
   createCounterparty: NewCounterparty;
   updateCounterparty: { id: string; patch: CounterpartyPatch };
   deleteCounterparty: { id: string };

@@ -223,7 +223,8 @@ public enum Transactions {
             counterpartyId = newCpId
             description = newName
         }
-        try db.execute(sql: "UPDATE entries SET status = 'confirmed', confirmed_at = ?, counterparty_id = ?, description = ?, updated_at = datetime('now') WHERE id = ? AND status = 'pending'",
+        // COALESCE: with no merchant chosen the row keeps the link it has, as on the web.
+        try db.execute(sql: "UPDATE entries SET status = 'confirmed', confirmed_at = ?, counterparty_id = COALESCE(?, counterparty_id), description = ?, updated_at = datetime('now') WHERE id = ? AND status = 'pending'",
                        arguments: [ISO8601DateFormatter().string(from: Date()), counterpartyId, description, ref.entryId])
         try recomputeEntryAccounts(db, ref.entryId)
     }
@@ -642,13 +643,17 @@ public enum Transactions {
 
     // MARK: confirmAllPending
 
+    /// One ledger's pending rows (`ledgerId`, default "personal"), as on the web.
+    /// It used to confirm every ledger's at once.
     static func confirmAllPending(_ db: Database, _ args: Args) throws {
+        struct A: Decodable { let ledgerId: String? }
+        let ledgerId = (try? args.to(A.self))?.ledgerId ?? "personal"
         let accts = try String.fetchAll(db, sql: """
             SELECT DISTINCT p.account_id FROM postings p JOIN entries e ON e.id = p.entry_id
-             WHERE e.status = 'pending' AND p.account_id IS NOT NULL
-            """)
-        try db.execute(sql: "UPDATE entries SET status = 'confirmed', confirmed_at = ?, updated_at = datetime('now') WHERE status = 'pending'",
-                       arguments: [ISO8601DateFormatter().string(from: Date())])
+             WHERE e.status = 'pending' AND e.ledger_id = ? AND p.account_id IS NOT NULL
+            """, arguments: [ledgerId])
+        try db.execute(sql: "UPDATE entries SET status = 'confirmed', confirmed_at = ?, updated_at = datetime('now') WHERE status = 'pending' AND ledger_id = ?",
+                       arguments: [ISO8601DateFormatter().string(from: Date()), ledgerId])
         // Pending postings weren't in the cached balance (the trigger only fires
         // on confirmed inserts) — recompute each touched account.
         for acct in accts { try Entries.recomputeAccountFromPostings(db, acct) }

@@ -725,8 +725,10 @@ export async function confirmPendingWithMerchant(
     description = name;
   }
 
+  // COALESCE: with no merchant chosen, the row keeps the link it already has
+  // (the doc comment above). Writing the null used to erase it.
   await exec(
-    "UPDATE entries SET status = 'confirmed', confirmed_at = ?, counterparty_id = ?, description = ?, updated_at = datetime('now') WHERE id = ? AND status = 'pending'",
+    "UPDATE entries SET status = 'confirmed', confirmed_at = ?, counterparty_id = COALESCE(?, counterparty_id), description = ?, updated_at = datetime('now') WHERE id = ? AND status = 'pending'",
     [new Date().toISOString(), counterpartyId, description, ref.entryId],
   );
 

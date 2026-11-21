@@ -197,9 +197,12 @@ export const transactionActions = (set: SetState, get: GetState) => ({
     syncMutation('deleteTransaction', { id });
   },
 
-  confirmAllPending: (): void => {
-    set((s) => ({ transactions: s.transactions.map((t) => (t.pending ? { ...t, pending: false } : t)) }));
-    syncMutation('confirmAllPending');
+  confirmAllPending: (ledgerId: string): void => {
+    set((s) => ({
+      transactions: s.transactions.map((t) =>
+        t.pending && (t.ledgerId ?? 'personal') === ledgerId ? { ...t, pending: false } : t),
+    }));
+    syncMutation('confirmAllPending', { ledgerId });
   },
 
   setTransactionTags: (transactionId: string, tagIds: string[]): void => {

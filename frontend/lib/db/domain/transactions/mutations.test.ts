@@ -1248,3 +1248,38 @@ async function applyMutationReturningEntryId(exec: Exec, args: Record<string, un
   );
   return String(row.entry_id);
 }
+
+test('confirmAllPending confirms only the given ledger\'s pending rows', async () => {
+  const exec = await seededAndAudited();
+  const mine = await addTransaction(exec, {
+    ledgerId: 'personal', accountId: 'chk', amount: -10, merchant: 'Mine', date: '2026-05-25', status: 'pending',
+  });
+  const theirs = await addTransaction(exec, {
+    ledgerId: 'family', accountId: 'f-dbs', amount: -10, merchant: 'Theirs', date: '2026-05-25', status: 'pending',
+  });
+  const familyBefore = await balanceOf(exec, 'f-dbs');
+
+  await applyMutation(exec, 'confirmAllPending', { ledgerId: 'personal' });
+
+  const status = async (id: string) =>
+    String((await exec('SELECT e.status FROM entries e JOIN postings p ON p.entry_id = e.id WHERE p.id = ? OR e.id = ? LIMIT 1', [id, id]))[0].status);
+  expect(await status(mine)).toBe('confirmed');
+  expect(await status(theirs)).toBe('pending');
+  expect(await balanceOf(exec, 'f-dbs')).toBeCloseTo(familyBefore, 2);
+});
+
+test('confirmPendingWithMerchant with no merchant chosen keeps the link the row already has', async () => {
+  const exec = await seededAndAudited();
+  const id = await addTransaction(exec, {
+    ledgerId: 'personal', accountId: 'chk', amount: -10, merchant: 'Grab', date: '2026-05-25', status: 'pending',
+  });
+  const linked = async () =>
+    (await exec('SELECT e.counterparty_id AS cp, e.status FROM entries e JOIN postings p ON p.entry_id = e.id WHERE p.id = ? OR e.id = ? LIMIT 1', [id, id]))[0];
+  expect(String((await linked()).cp)).toBe('cp-02');
+
+  await confirmPendingWithMerchant(exec, id, {});
+
+  const after = await linked();
+  expect(String(after.status)).toBe('confirmed');
+  expect(String(after.cp)).toBe('cp-02');
+});

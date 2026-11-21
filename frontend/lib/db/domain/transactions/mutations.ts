@@ -291,15 +291,20 @@ export const handlers = {
     });
     return;
   },
-  confirmAllPending: async (exec, _args: Args['confirmAllPending']) => {
+  // One ledger's pending rows — the ones the Pending screen lists. It used to
+  // confirm every ledger's at once, so "Confirm all" in one ledger moved money in
+  // ledgers the user wasn't looking at.
+  confirmAllPending: async (exec, args: Args['confirmAllPending']) => {
+    const ledgerId = str(args.ledgerId || 'personal');
     const pendingAccts = await exec(
       `SELECT DISTINCT p.account_id
          FROM postings p JOIN entries e ON e.id = p.entry_id
-        WHERE e.status = 'pending' AND p.account_id IS NOT NULL`,
+        WHERE e.status = 'pending' AND e.ledger_id = ? AND p.account_id IS NOT NULL`,
+      [ledgerId],
     );
     await exec(
-      "UPDATE entries SET status = 'confirmed', confirmed_at = ?, updated_at = datetime('now') WHERE status = 'pending'",
-      [new Date().toISOString()],
+      "UPDATE entries SET status = 'confirmed', confirmed_at = ?, updated_at = datetime('now') WHERE status = 'pending' AND ledger_id = ?",
+      [new Date().toISOString(), ledgerId],
     );
     for (const r of pendingAccts) await recomputeAccountFromPostings(exec, String(r.account_id));
     return;
