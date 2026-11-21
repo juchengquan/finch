@@ -10,6 +10,8 @@ import {
   listBackups,
   _resetServerDbForTests,
   getServerDb,
+  withDb,
+  withWrite,
 } from './core/server';
 import { seededDb } from './core/test-utils';
 import { buildPack } from './core/pack';
@@ -67,6 +69,67 @@ test('round-trip: export then import on a fresh process restores identical state
   const db = await getServerDb();
   const [{ n }] = await db.exec('SELECT COUNT(*) AS n FROM entries');
   expect(Number(n)).toBe(result.metadata.rowCounts?.entries ?? -1);
+});
+
+test('a read that arrives mid-import never reopens the old file', async () => {
+  // Regression: the import closes the live connection, then awaits the sidecar
+  // removal + write + rename. A getServerDb() in that gap used to reopen the
+  // OLD file and cache it; the rename then swapped the file out from under that
+  // connection, so every later write went to a deleted inode (and its WAL got
+  // paired with the new file → corruption).
+  await getServerDb();
+  const { bytes } = await exportDbBytes();
+
+  let stop = false;
+  const hammer = (async () => {
+    while (!stop) {
+      await withDb(async () => {}).catch(() => {});
+      await getServerDb().catch(() => {}); // unlocked caller — must wait out the swap too
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  })();
+  await importDbBytes(bytes);
+  stop = true;
+  await hammer;
+
+  // A write after the import must land in the file that's actually on disk.
+  const db = await getServerDb();
+  await db.exec('CREATE TABLE import_race_probe (v TEXT)');
+  await db.exec(`INSERT INTO import_race_probe (v) VALUES ('after-import')`);
+
+  const { openDb, execFor } = await import('./core/driver');
+  const fresh = await openDb(path.join(tmpDir, 'finch.sqlite3'));
+  try {
+    const exec = execFor(fresh);
+    const rows = await exec('SELECT v FROM import_race_probe');
+    expect(rows.map((r) => r.v)).toEqual(['after-import']);
+    const [check] = await exec('PRAGMA integrity_check');
+    expect(Object.values(check)[0]).toBe('ok');
+  } finally {
+    fresh.close();
+  }
+});
+
+test('an export requested during an open write waits for it instead of failing', async () => {
+  // Regression: reads and exports shared the one connection without the lock,
+  // so an export that landed inside another request's BEGIN failed with
+  // "cannot VACUUM from within a transaction".
+  await getServerDb();
+  let begun!: () => void;
+  const inTransaction = new Promise<void>((r) => (begun = r));
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const write = withWrite(async () => {
+    begun();
+    await gate;
+  });
+  await inTransaction;
+  const exp = exportDbBytes();
+  await new Promise((r) => setTimeout(r, 10));
+  release();
+  await write;
+  const { bytes } = await exp;
+  expect(Buffer.from(bytes.subarray(0, 15)).toString('latin1')).toBe('SQLite format 3');
 });
 
 test('importDbBytes rejects a tampered file (checksum mismatch)', async () => {

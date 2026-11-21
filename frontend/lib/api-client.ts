@@ -4,21 +4,30 @@
 import type { ProjectedState } from './db/core/repo';
 import { fromWireError } from '@/lib/i18n-error';
 import type { DbInfoResponse } from '@/app/api/db-info/route';
-
-const base = process.env.NODE_ENV === 'development' ? '' : (process.env.NEXT_PUBLIC_BASE_PATH || '/finch');
+import { BASE_PATH } from '@/lib/base-path';
+import { API_REQUEST_HEADER } from '@/lib/api-guard';
 
 function api(path: string) {
-  return `${base}/api/${path}`;
+  return `${BASE_PATH}/api/${path}`;
+}
+
+/** fetch() for `/api/<path>`: adds the base path and the header proxy.ts
+ *  requires on state-changing requests (lib/api-guard.ts). Every client call
+ *  to the API goes through here. */
+export function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set(API_REQUEST_HEADER, '1');
+  return fetch(api(path), { ...init, headers });
 }
 
 export async function fetchState(): Promise<ProjectedState> {
-  const res = await fetch(api('state'), { cache: 'no-store' });
+  const res = await apiFetch('state', { cache: 'no-store' });
   if (!res.ok) throw new Error(`GET /api/state ${res.status}`);
   return (await res.json()) as ProjectedState;
 }
 
 export async function mutate(action: string, args?: Record<string, unknown>): Promise<ProjectedState> {
-  const res = await fetch(api('mutate'), {
+  const res = await apiFetch('mutate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action, args }),
@@ -42,7 +51,7 @@ export async function mutate(action: string, args?: Record<string, unknown>): Pr
 }
 
 export async function fetchDbInfo(): Promise<DbInfoResponse> {
-  const res = await fetch(api('db-info'), { cache: 'no-store' });
+  const res = await apiFetch('db-info', { cache: 'no-store' });
   if (!res.ok) throw new Error(`GET /api/db-info ${res.status}`);
   return (await res.json()) as DbInfoResponse;
 }
@@ -60,7 +69,7 @@ export async function uploadAttachment(
   const form = new FormData();
   form.append('transactionId', transactionId);
   form.append('file', file, file.name);
-  const res = await fetch(api('attachments'), { method: 'POST', body: form });
+  const res = await apiFetch('attachments', { method: 'POST', body: form });
   if (!res.ok) {
     let message = `${res.status}`;
     try {

@@ -1,10 +1,8 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { fetchDbInfo } from '@/lib/api-client';
+import { apiFetch, fetchDbInfo } from '@/lib/api-client';
 import type { DbAudit } from '../lib/db/core/entries';
-
-const base = process.env.NODE_ENV === 'development' ? '' : (process.env.NEXT_PUBLIC_BASE_PATH || '/finch');
 
 // The server owns the authoritative SQLite file (see lib/db/server.ts), synced
 // on every change. This provider surfaces where that file lives, downloads a
@@ -78,7 +76,7 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
 
   const refreshMetadata = useCallback(async () => {
     try {
-      const res = await fetch(`${base}/api/export/metadata`);
+      const res = await apiFetch(`export/metadata`);
       if (!res.ok) return;
       const data = (await res.json()) as DbMetadataView;
       setMetadata(data);
@@ -89,7 +87,7 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
 
   const refreshBackups = useCallback(async () => {
     try {
-      const res = await fetch(`${base}/api/backups`);
+      const res = await apiFetch(`backups`);
       if (!res.ok) return;
       const data = (await res.json()) as { backups: BackupEntry[] };
       setBackups(data.backups);
@@ -108,13 +106,13 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
         }
       })
       .catch((err) => console.error('Could not read db info', err));
-    void fetch(`${base}/api/export/metadata`)
+    void apiFetch(`export/metadata`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!cancelled && data) setMetadata(data as DbMetadataView);
       })
       .catch((err) => console.error('Could not read export metadata', err));
-    void fetch(`${base}/api/backups`)
+    void apiFetch(`backups`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!cancelled && data) setBackups((data as { backups: BackupEntry[] }).backups);
@@ -129,7 +127,7 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
   // the bare-DB path via the `withAttachments=0` query for any external
   // tooling, but the in-app download is standardised on `.finch`.
   const download = useCallback(async () => {
-    const res = await fetch(`${base}/api/export?withAttachments=1`);
+    const res = await apiFetch(`export?withAttachments=1`);
     if (!res.ok) throw new Error(`Export failed (${res.status})`);
     const bytes = new Uint8Array(await res.arrayBuffer());
     const { downloadBytes } = await import('../lib/db/core/storage');
@@ -144,7 +142,7 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
     if (scope?.ledgerId) params.set('ledger', scope.ledgerId);
     if (scope?.month) params.set('month', scope.month);
     const qs = params.toString();
-    const res = await fetch(`${base}/api/export/transactions${qs ? `?${qs}` : ''}`);
+    const res = await apiFetch(`export/transactions${qs ? `?${qs}` : ''}`);
     if (!res.ok) throw new Error(`CSV export failed (${res.status})`);
     const bytes = new Uint8Array(await res.arrayBuffer());
     const { downloadBytes } = await import('../lib/db/core/storage');
@@ -156,7 +154,7 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
     async (file: File): Promise<ImportResult> => {
       const form = new FormData();
       form.append('file', file);
-      const res = await fetch(`${base}/api/import`, { method: 'POST', body: form });
+      const res = await apiFetch(`import`, { method: 'POST', body: form });
       const data = (await res.json()) as ImportResult | { error: string };
       if (!res.ok || 'error' in data) {
         throw new Error('error' in data ? data.error : `Import failed (${res.status})`);
@@ -168,7 +166,7 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
   );
 
   const backupNow = useCallback(async (): Promise<{ path: string }> => {
-    const res = await fetch(`${base}/api/backups`, {
+    const res = await apiFetch(`backups`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ force: true }),
@@ -181,7 +179,7 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
 
   const restore = useCallback(
     async (name: string): Promise<ImportResult> => {
-      const res = await fetch(`${base}/api/restore-backup`, {
+      const res = await apiFetch(`restore-backup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
