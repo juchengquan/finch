@@ -20,6 +20,7 @@ import {
   Tags,
   Wallet,
 } from '@/components/icons';
+import { useMoney } from '@/components/use-money';
 
 // r.icon is a string short-name (defined inline above and in the
 // transaction results). Resolve to the typed lucide component so the
@@ -172,6 +173,7 @@ function CommandPaletteDialog({
 }
 
 function PaletteBody({ close }: { close: () => void }) {
+  const { fmt } = useMoney();
   const router = useRouter();
   const { activeId } = useLedger();
   const { openTransaction } = useTransactionDialog();
@@ -227,7 +229,7 @@ function PaletteBody({ close }: { close: () => void }) {
           key: `tx:${t.id}`,
           group: tGroups('transactions'),
           label: t.merchant,
-          hint: `${t.date} · ${t.amount < 0 ? '−' : '+'}${Math.abs(t.amount).toFixed(2)}`,
+          hint: `${t.date} · ${fmt(t.amount, { signed: true })}`,
           icon: 'doc',
           run: () => {
             openTransaction(t.id);
@@ -310,7 +312,7 @@ function PaletteBody({ close }: { close: () => void }) {
     }
 
     return out;
-  }, [query, transactions, counterparties, categories, accounts, tags, activeId, router, openTransaction, openAddExpense, togglePrivacy, close, tNav, tGroups]);
+  }, [query, transactions, counterparties, categories, accounts, tags, activeId, router, openTransaction, openAddExpense, togglePrivacy, close, tNav, tGroups, fmt]);
 
   // Group results in source order so the headings appear in the natural order
   // each kind was appended above. A Map preserves insertion order.

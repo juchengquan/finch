@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAddExpense } from '@/components/add-expense-dialog';
 import { SearchButton } from '@/components/command-palette';
-import { acctById } from '@/lib/data';
+import { MOCK } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 import type { PageShellProps, Tab } from './shell-types';
@@ -30,7 +30,8 @@ import type { PageShellProps, Tab } from './shell-types';
 // header. The label is looked up from `nav.<section>`; `name` resolves the
 // detail row's display string (live store row when available).
 const BREADCRUMB_SECTIONS: Record<string, { navKey: string; name: (id: string) => string }> = {
-  accounts: { navKey: 'accounts', name: (id) => acctById(id).name || id },
+  // The live store row is tried first (below); the seed only covers first paint.
+  accounts: { navKey: 'accounts', name: (id) => MOCK.accounts.find((a) => a.id === id)?.name || id },
   budgets: { navKey: 'budgets', name: (id) => id },
   transfers: { navKey: 'transfers', name: (id) => id },
   scheduled: { navKey: 'scheduled', name: (id) => id },

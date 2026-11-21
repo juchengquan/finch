@@ -6,6 +6,7 @@ import { useFinanceStore } from '@/lib/store';
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { netWorthExplained, currentMonth } from '@/lib/select';
+import { useToday } from '@/components/use-today';
 
 const MONTHS = 6;
 const PAD = 8;
@@ -39,9 +40,12 @@ export function NetWorthExplainedCard() {
   const { activeId } = useLedger();
   const { fmt, toBase } = useMoney();
 
+  // Ends at this month (local today), or at the latest month with data until
+  // today is known (server render, hydration).
+  const today = useToday();
   const series = useMemo(
-    () => netWorthExplained(txns, accounts, activeId, currentMonth(txns, activeId), MONTHS, toBase),
-    [txns, accounts, activeId, toBase],
+    () => netWorthExplained(txns, accounts, activeId, today ? today.slice(0, 7) : currentMonth(txns, activeId), MONTHS, toBase),
+    [txns, accounts, activeId, toBase, today],
   );
 
   if (

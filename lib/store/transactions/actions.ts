@@ -17,9 +17,13 @@ import type { SetState, GetState } from '../_shared/types';
 import type { Tx, TxSplit, TxSplitInput } from './state';
 
 export const transactionActions = (set: SetState, get: GetState) => ({
-  addTransaction: (tx: Omit<Tx, 'id'> & { counterpartyId?: string | null }): string => {
+  /** `opts.cleared` books it already cleared (reconcile's "add missing"). It
+   *  must ride on the add itself: the returned id is the client's own, and the
+   *  server mints a different one, so a follow-up setCleared(id) matched nothing. */
+  addTransaction: (tx: Omit<Tx, 'id'> & { counterpartyId?: string | null }, opts?: { cleared?: boolean }): string => {
     const id = newId('t', { long: false });
-    set((s) => ({ transactions: [{ ...tx, id }, ...s.transactions] }));
+    const clearedAt = opts?.cleared ? new Date().toISOString() : undefined;
+    set((s) => ({ transactions: [{ ...tx, id, ...(clearedAt ? { clearedAt } : {}) }, ...s.transactions] }));
     syncMutation('addTransaction', {
       ledgerId: tx.ledgerId ?? 'personal',
       accountId: tx.account,
@@ -39,6 +43,7 @@ export const transactionActions = (set: SetState, get: GetState) => ({
       // is a thin wrapper around insertTxRow which resolves the link
       // (auto-resolve by name, or accepts an explicit counterpartyId).
       counterpartyId: tx.counterpartyId ?? null,
+      cleared: opts?.cleared === true,
     });
     return id;
   },

@@ -27,6 +27,7 @@ import { periodLabel, nextPeriod, periodOf, type Frequency } from '@/lib/budgets
 import { MOCK } from '@/lib/data';
 import { categoryPath } from '@/lib/db/domain/categories/queries';
 import { cn } from '@/lib/utils';
+import { localToday } from '@/lib/local-today';
 
 const FREQUENCIES = ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'] as const;
 
@@ -108,7 +109,8 @@ export function BudgetFormDialog({ open, onOpenChange, budget, defaultType = 'ex
   const [groupId, setGroupId] = useState<string>(budget?.groupId ?? 'none');
   const [amount, setAmount] = useState(budget ? String(budget.amount) : '');
   const [frequency, setFrequency] = useState(budget?.frequency ?? 'monthly');
-  const [startDate, setStartDate] = useState(budget?.startDate ?? '2026-05-01');
+  // A new budget starts on the first of this month (it was pinned to the demo data's May 2026).
+  const [startDate, setStartDate] = useState(() => budget?.startDate ?? `${localToday().slice(0, 7)}-01`);
   const [recurring, setRecurring] = useState(budget ? budget.isRecurring === 1 : defaultType === 'expense');
   const [rollover, setRollover] = useState(budget ? budget.rollover === 1 : false);
   const [accountIds, setAccountIds] = useState<Set<string>>(new Set(budget?.accountIds ?? []));
@@ -171,7 +173,7 @@ export function BudgetFormDialog({ open, onOpenChange, budget, defaultType = 'ex
   const nextPeriodLabel = editing && budget != null && recurringNow
     ? (() => {
         try {
-          const today = new Date().toISOString().slice(0, 10);
+          const today = localToday();
           const current = periodOf(today, budget.frequency as Frequency, budget.startDate);
           const np = nextPeriod(current, budget.frequency as Frequency, budget.startDate);
           return periodLabel(np, budget.frequency as Frequency, budget.startDate, locale);

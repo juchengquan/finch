@@ -34,6 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { localToday } from '@/lib/local-today';
 
 type Option = { id: string; name: string };
 
@@ -57,7 +58,7 @@ export default function TransfersPage() {
   const [to, setTo] = useState('');
   const [amount, setAmount] = useState('');
   const [received, setReceived] = useState('');
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => localToday());
   const [time, setTime] = useState(() => new Date().toTimeString().slice(0, 5));
   const [editing, setEditing] = useState<{
     id: string;

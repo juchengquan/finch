@@ -477,6 +477,8 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown>; expectErr
   // gap) byte-for-byte against the oracle.
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a2', amount: -30, merchant: 'ClearMe', categoryId: 'food', date: '2026-05-09', skipRules: true } },
   { action: 'setCleared', args: { id: '$lastAccountPosting', cleared: true } },
+  // Reconcile's "add missing": booked cleared in the same write (cleared: true).
+  { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a2', amount: -12, merchant: 'OnStatement', categoryId: 'food', date: '2026-05-10', skipRules: true, cleared: true } },
   { action: 'reconcileAccount', args: { accountId: 'a2', statementBalance: 500, statementDate: '2026-05-31', statementTime: '09:15', postAdjustment: true } },
 
   // Holdings on an investment account — exercises create/setPrice/update (these

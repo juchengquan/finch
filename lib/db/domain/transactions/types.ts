@@ -25,6 +25,9 @@ export interface ListOptions {
 
 export interface AddInput {
   ledgerId: string;
+  /** Mark the new row's account leg(s) cleared — reconcile's "add a missing
+   *  transaction": it is on the statement, which is why it is being added. */
+  cleared?: boolean;
   /** Single-account form. Optional only because `accounts` may carry the
    *  payment sources instead; exactly one of the two must be present. */
   accountId?: string;

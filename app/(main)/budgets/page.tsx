@@ -34,6 +34,7 @@ import { useFinanceStore } from '@/lib/store';
 import type { BudgetRow, BudgetType } from '@/lib/db/domain/budgets/queries';
 import { budgetProgress } from '@/lib/select';
 import { cn } from '@/lib/utils';
+import { useToday } from '@/components/use-today';
 
 function BudgetCard({
   budget,
@@ -129,9 +130,10 @@ export default function BudgetsPage() {
   const [confirmDelGroup, setConfirmDelGroup] = useState<string | null>(null);
 
   const ledgerTxns = allTxns.filter((t) => (t.ledgerId ?? 'personal') === activeId);
-  // Use the latest transaction date as "today" so cycle windows line up with the
-  // seed/demo data deterministically (no Date() → no hydration mismatch).
-  const today = ledgerTxns.reduce((m, t) => (t.date > m ? t.date : m), '') || '2026-05-30';
+  // The user's local today. Until it is known (server render, hydration), the
+  // latest transaction date stands in, so both renders agree. It used to be the
+  // stand-in for good: a future-dated rent payment moved the page to next month.
+  const today = useToday() ?? (ledgerTxns.reduce((m, t) => (t.date > m ? t.date : m), '') || '2026-05-30');
 
   const ledgerGroups = budgetGroups.filter((g) => g.ledgerId === activeId);
   const typed = budgets.filter((b) => b.ledgerId === activeId && b.type === tab);

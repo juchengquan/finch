@@ -4,3 +4,10 @@ export function localToday(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
+/** Now as a local `datetime-local` value (YYYY-MM-DDTHH:mm). */
+export function localDateTime(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${localToday()}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}

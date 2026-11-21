@@ -26,6 +26,7 @@ import {
 } from '@/lib/select';
 import type { Holding } from '@/lib/db/domain/holdings/types';
 import { cn } from '@/lib/utils';
+import { localToday } from '@/lib/local-today';
 
 interface Props {
   accountId: string;
@@ -34,7 +35,7 @@ interface Props {
   accountCurrency: string;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localToday();
 
 /** Investment-account holdings panel: lists positions with live valuation +
  *  gain/loss, and offers add / edit (shares + cost basis) / price-update /
