@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerDb, getCachedAudit } from '@/lib/db/core/server';
+import { withDb, getCachedAudit } from '@/lib/db/core/server';
 import type { DbAudit } from '@/lib/db/core/entries';
 import { readMetadata } from '@/lib/db/domain/_app/metadata';
 
@@ -14,12 +14,11 @@ export interface DbInfoResponse {
 
 export async function GET() {
   try {
-    const { file, exec } = await getServerDb();
-    const meta = await readMetadata(exec);
+    const { file, meta } = await withDb(async ({ file, exec }) => ({ file, meta: await readMetadata(exec) }));
     const body: DbInfoResponse = {
       path: file,
       schemaVersion: meta?.schemaVersion ?? 'unknown',
-      audit: await getCachedAudit(),
+      audit: await getCachedAudit(), // takes the lock itself — keep outside withDb
     };
     return NextResponse.json(body);
   } catch (err) {

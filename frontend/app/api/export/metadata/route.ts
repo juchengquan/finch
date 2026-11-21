@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerDb } from '@/lib/db/core/server';
+import { withDb } from '@/lib/db/core/server';
 import { readMetadata, rowCounts } from '@/lib/db/domain/_app/metadata';
 
 // Returns the db_metadata row (provenance + version + row counts) so the UI can
@@ -10,8 +10,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const { exec } = await getServerDb();
-    const [meta, counts] = await Promise.all([readMetadata(exec), rowCounts(exec)]);
+    const [meta, counts] = await withDb(({ exec }) => Promise.all([readMetadata(exec), rowCounts(exec)]));
     if (!meta) {
       return NextResponse.json({ error: 'No metadata row' }, { status: 500 });
     }
