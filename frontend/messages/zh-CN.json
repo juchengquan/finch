@@ -1660,7 +1660,8 @@
     "category": {
       "depthCap": "类别最多嵌套三层",
       "selfParent": "类别不能成为自己的父级",
-      "underDescendant": "类别不能移动到自己的后代之下"
+      "underDescendant": "类别不能移动到自己的后代之下",
+      "system": "「{name}」是账本记账所需的系统类别，无法删除或更改"
     },
     "transfer": {
       "amountGt0": "转账金额必须大于 0",
