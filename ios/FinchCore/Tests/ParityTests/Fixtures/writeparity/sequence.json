@@ -275,6 +275,19 @@
       }
     },
     {
+      "action": "addTransaction",
+      "args": {
+        "ledgerId": "personal",
+        "accountId": "a2",
+        "amount": -12,
+        "merchant": "OnStatement",
+        "categoryId": "food",
+        "date": "2026-05-10",
+        "skipRules": true,
+        "cleared": true
+      }
+    },
+    {
       "action": "reconcileAccount",
       "args": {
         "accountId": "a2",
@@ -1344,6 +1357,50 @@
       },
       {
         "ledger_id": "personal",
+        "date": "2026-05-10",
+        "time": null,
+        "description": "OnStatement",
+        "kind": "expense",
+        "status": "confirmed",
+        "counterparty_id": null,
+        "refunded_entry_id": null,
+        "source_template_id": null,
+        "occurrence_date": null,
+        "notes": null,
+        "applied_rule_ids": null,
+        "reviewed": false,
+        "sealed": 1,
+        "postings": [
+          {
+            "account_id": "a2",
+            "category_id": null,
+            "amount": "-12.000000",
+            "currency": "USD",
+            "amount_base": "-10.910000",
+            "exchange_rate": "0.909091",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": true,
+            "sort_order": 0
+          },
+          {
+            "account_id": null,
+            "category_id": "food",
+            "amount": "10.910000",
+            "currency": "EUR",
+            "amount_base": "10.910000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 1
+          }
+        ]
+      },
+      {
+        "ledger_id": "personal",
         "date": "2026-05-11",
         "time": "10:00",
         "description": "Recat",
@@ -1897,9 +1954,9 @@
           {
             "account_id": "a2",
             "category_id": null,
-            "amount": "530.000000",
+            "amount": "542.000000",
             "currency": "USD",
-            "amount_base": "481.820000",
+            "amount_base": "492.730000",
             "exchange_rate": "0.909091",
             "orig_amount": null,
             "orig_currency": null,
@@ -1910,9 +1967,9 @@
           {
             "account_id": null,
             "category_id": "sys-adj",
-            "amount": "-481.820000",
+            "amount": "-492.730000",
             "currency": "EUR",
-            "amount_base": "-481.820000",
+            "amount_base": "-492.730000",
             "exchange_rate": "1.000000",
             "orig_amount": null,
             "orig_currency": null,

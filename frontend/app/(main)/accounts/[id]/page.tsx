@@ -200,7 +200,8 @@ export default function AccountDetailPage() {
     const signed = addExpense ? -Math.abs(value) : Math.abs(value);
     const baseAmount = currency === base ? signed : Math.round(convertAmount(signed, currency, base) * 100) / 100;
     const fallbackCat = storeCategories.find((c) => c.ledgerId === ledgerId)?.id ?? null;
-    const id = addTransaction({
+    // Booked cleared in the same write: it's on the statement, that's why we're adding it.
+    addTransaction({
       merchant: addMerchant.trim(),
       category: fallbackCat,
       amount: baseAmount,
@@ -212,8 +213,7 @@ export default function AccountDetailPage() {
       note: '',
       pending: false,
       ledgerId,
-    });
-    setCleared(id, true); // auto-clear: it's on the statement, that's why we're adding it
+    }, { cleared: true });
     toast.success(t('reconcileCard.addedClearedToast'), { description: `${addMerchant.trim()} · ${native(Math.abs(value), currency)}` });
     setAddMerchant('');
     setAddAmount('');

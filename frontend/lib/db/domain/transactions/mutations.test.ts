@@ -1347,3 +1347,20 @@ test('scaleSplitLegs keeps proportions and puts the cent remainder on the larges
   expect(thirds.filter((v) => v === 3.33).length).toBe(2);
   expect(scaleSplitLegs([0, 0], 5)).toEqual([5, 0]);
 });
+
+test('addTransaction with cleared: true books the row already cleared (reconcile\'s "add missing")', async () => {
+  const exec = await seededAndAudited();
+  await applyMutation(exec, 'addTransaction', {
+    ledgerId: 'personal', accountId: 'chk', amount: -12, merchant: 'On the statement', date: '2026-05-25', cleared: true,
+  });
+  await applyMutation(exec, 'addTransaction', {
+    ledgerId: 'personal', accountId: 'chk', amount: -13, merchant: 'Not cleared', date: '2026-05-25',
+  });
+  const clearedOf = async (merchant: string) =>
+    (await exec(
+      'SELECT p.cleared_at AS c FROM postings p JOIN entries e ON e.id = p.entry_id WHERE e.description = ? AND p.account_id IS NOT NULL',
+      [merchant],
+    ))[0].c;
+  expect(await clearedOf('On the statement')).not.toBeNull();
+  expect(await clearedOf('Not cleared')).toBeNull();
+});
