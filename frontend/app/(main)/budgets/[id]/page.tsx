@@ -12,7 +12,7 @@ import { Chev, Clock, Edit, X } from '@/components/icons';
 import { RefundBadge } from '@/components/ui/refund-badge';
 import { MobilePage } from '@/components/mobile-page';
 import { ScreenHeader } from '@/components/ui/screen-header';
-import { acctById, catById } from '@/lib/data';
+import { useLookups } from '@/components/use-lookups';
 import { useFinanceStore } from '@/lib/store';
 import { useMoney } from '@/components/use-money';
 import { budgetProgress, kindOf } from '@/lib/select';
@@ -31,8 +31,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { useToday } from '@/components/use-today';
 
 function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
+  const { catById, acctById } = useLookups();
   const { fmt } = useMoney();
   const t = useTranslations('budgets.detail');
   const tNav = useTranslations('nav');
@@ -46,7 +48,8 @@ function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const ledgerTxns = allTxns.filter((tx) => (tx.ledgerId ?? 'personal') === budget.ledgerId);
-  const today = ledgerTxns.reduce((m, tx) => (tx.date > m ? tx.date : m), '') || '2026-05-30';
+  // Local today; the latest transaction date stands in until it is known (see budgets/page.tsx).
+  const today = useToday() ?? (ledgerTxns.reduce((m, tx) => (tx.date > m ? tx.date : m), '') || '2026-05-30');
   const p = budgetProgress(budget, ledgerTxns, today, allCategories);
   const isIncome = budget.type === 'income';
   // Ported from iOS: 3-color banding for expense budgets (matches the budgets

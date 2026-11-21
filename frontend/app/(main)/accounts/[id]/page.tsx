@@ -36,7 +36,8 @@ import {
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useTransactionDialog } from '@/components/transaction-dialog';
-import { MOCK, catById, convertAmount } from '@/lib/data';
+import { MOCK, convertAmount } from '@/lib/data';
+import { useLookups } from '@/components/use-lookups';
 import { useFinanceStore } from '@/lib/store';
 import { ACCOUNT_TYPE_OPTIONS, accountTypeLabel, toDbType } from '@/lib/account-types';
 import { selectTransactions, accountBalance, balanceSeries, unrealizedFx, holdingsValueForAccount } from '@/lib/select';
@@ -45,8 +46,10 @@ import { AccountHoldings } from '@/components/account-holdings';
 import { AccountForecast } from '@/components/account-forecast';
 import { ReconcileStatus } from '@/components/reconcile-status';
 import { cn } from '@/lib/utils';
+import { localToday } from '@/lib/local-today';
 
 export default function AccountDetailPage() {
+  const { catById } = useLookups();
   const { active } = useLedger();
   const { display, fmtFrom, toBase, fmt, base, native } = useMoney();
   const params = useParams();
@@ -114,7 +117,7 @@ export default function AccountDetailPage() {
   // list for a full ticking surface (see RECONCILE_PLAN §5.2).
   const [reconcileMode, setReconcileMode] = useState(false);
   const [statementBalance, setStatementBalance] = useState('');
-  const [statementDate, setStatementDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [statementDate, setStatementDate] = useState(() => localToday());
   // Quick-add-missing-transaction state (RECONCILE_PLAN §10.2): an inline form
   // inside reconcile mode that creates the row and auto-clears it so the
   // difference closes immediately. Income vs expense follows the sign toggle.
@@ -159,7 +162,7 @@ export default function AccountDetailPage() {
     // common case: a recently-arrived statement matches reality and the user
     // just confirms by ticking rows). The user overwrites it if it doesn't.
     setStatementBalance(String(balance));
-    setStatementDate(new Date().toISOString().slice(0, 10));
+    setStatementDate(localToday());
     setReconcileMode(true);
   };
   const exitReconcile = () => setReconcileMode(false);
@@ -180,7 +183,7 @@ export default function AccountDetailPage() {
     });
     toast.success(
       postAdjustment ? t('reconcileCard.reconciledWithAdjustmentToast') : t('reconcileCard.reconciledToast'),
-      { description: `${name} → ${targetNumber.toLocaleString()}` },
+      { description: `${name} → ${native(targetNumber, currency)}` },
     );
     exitReconcile();
   };
@@ -197,7 +200,8 @@ export default function AccountDetailPage() {
     const signed = addExpense ? -Math.abs(value) : Math.abs(value);
     const baseAmount = currency === base ? signed : Math.round(convertAmount(signed, currency, base) * 100) / 100;
     const fallbackCat = storeCategories.find((c) => c.ledgerId === ledgerId)?.id ?? null;
-    const id = addTransaction({
+    // Booked cleared in the same write: it's on the statement, that's why we're adding it.
+    addTransaction({
       merchant: addMerchant.trim(),
       category: fallbackCat,
       amount: baseAmount,
@@ -209,8 +213,7 @@ export default function AccountDetailPage() {
       note: '',
       pending: false,
       ledgerId,
-    });
-    setCleared(id, true); // auto-clear: it's on the statement, that's why we're adding it
+    }, { cleared: true });
     toast.success(t('reconcileCard.addedClearedToast'), { description: `${addMerchant.trim()} · ${native(Math.abs(value), currency)}` });
     setAddMerchant('');
     setAddAmount('');
@@ -232,7 +235,7 @@ export default function AccountDetailPage() {
       return;
     }
     adjustAccountBalance(accountId, target, adjustNote.trim() || undefined);
-    toast.success(t('adjustDialog.adjustedToast'), { description: `${name} → ${target.toLocaleString()}` });
+    toast.success(t('adjustDialog.adjustedToast'), { description: `${name} → ${native(target, currency)}` });
     setAdjustOpen(false);
   };
 
@@ -769,7 +772,7 @@ export default function AccountDetailPage() {
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
               <Label>{t('adjustDialog.currentBalance')}</Label>
-              <div className="text-muted-foreground text-sm">{balance.toLocaleString()}</div>
+              <div className="text-muted-foreground text-sm">{native(balance, currency)}</div>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="adjust-target">{t('adjustDialog.targetBalance')}</Label>

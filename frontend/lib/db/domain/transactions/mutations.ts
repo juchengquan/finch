@@ -34,6 +34,17 @@ const str = (v: unknown) => String(v);
 export const handlers = {
   addTransaction: async (exec, args: Args['addTransaction']) => {
     const id = await withDedupMessage(() => qAddTransaction(exec, args as unknown as AddInput));
+    // In the same write, so it doesn't depend on the client knowing the new id
+    // (it doesn't: it mints its own, and a follow-up setCleared matched nothing).
+    if (args.cleared === true) {
+      const ref = await resolveEntryRef(exec, id);
+      if (ref) {
+        await exec(
+          "UPDATE postings SET cleared_at = datetime('now') WHERE entry_id = ? AND account_id IS NOT NULL",
+          [ref.entryId],
+        );
+      }
+    }
     const touches = await txTouches(exec, id);
     if (touches) {
       await invalidateRollover(

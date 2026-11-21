@@ -64,6 +64,20 @@ final class LegMetadataTests: XCTestCase {
         }
     }
 
+    /// `cleared: true` on addTransaction books the account leg cleared in the
+    /// same write (the web's reconcile "add missing" sends it).
+    func test_addTransaction_clearedFlag() throws {
+        let q = try seeded()
+        try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "accountId": .string("a1"), "amount": .double(-12),
+            "merchant": .string("On statement"), "categoryId": .string("c1"), "date": .string("2026-05-01"),
+            "skipRules": .bool(true), "cleared": .bool(true),
+        ]))
+        try q.read { db in
+            XCTAssertNotNil(try String.fetchOne(db, sql: "SELECT cleared_at FROM postings WHERE account_id = 'a1'"))
+        }
+    }
+
     func test_dateOnlyEdit_preservesClearedAt() throws {
         let q = try seeded()
         let pid = try addClearedExpense(q)

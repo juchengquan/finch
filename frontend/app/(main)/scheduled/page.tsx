@@ -24,6 +24,8 @@ import { parseInstallmentTotal } from '@/lib/installment';
 import { occurrenceDaysInMonth } from '@/lib/recurrence';
 import { categoryPath } from '@/lib/db/domain/categories/queries';
 import { cn } from '@/lib/utils';
+import { localDateTime } from '@/lib/local-today';
+import { useToday } from '@/components/use-today';
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const WEEKDAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -63,8 +65,10 @@ interface DraftForm {
 const EMPTY_DRAFT: DraftForm = {
   id: '', name: '', description: '', amount: '', type: 'expense', frequency: 'monthly',
   dayOfMonth: '1', weekDay: '', accountId: '', account: '', fromAccountId: '', from: '', autoPost: false, color: '#c96442',
-  category: '', startDate: new Date().toISOString().slice(0, 16), endDate: '', maxExecutions: '', installmentTotal: '', isRecurring: true,
+  category: '', startDate: '', endDate: '', maxExecutions: '', installmentTotal: '', isRecurring: true,
 };
+// A new item starts now, read when the form opens (not when the page module loaded).
+const newDraft = (): DraftForm => ({ ...EMPTY_DRAFT, startDate: localDateTime() });
 
 function templateToDraft(t: ScheduledTemplate): DraftForm {
   return {
@@ -83,7 +87,7 @@ function templateToDraft(t: ScheduledTemplate): DraftForm {
     autoPost: !!t.autoPost,
     color: t.color ?? '#c96442',
     category: t.category ?? '',
-    startDate: t.startDate ?? new Date().toISOString().slice(0, 16),
+    startDate: t.startDate ?? localDateTime(),
     endDate: t.endDate ?? '',
     maxExecutions: t.maxExecutions != null ? String(t.maxExecutions) : '',
     installmentTotal: t.installmentTotal != null ? String(t.installmentTotal) : '',
@@ -92,7 +96,12 @@ function templateToDraft(t: ScheduledTemplate): DraftForm {
 }
 
 export default function ScheduledPage() {
-  const [view, setView] = useState({ y: 2026, m: 5 });
+  // The calendar opens on this month (it was pinned to June 2026, the demo
+  // data's month). Until today is known (server render, hydration) that month
+  // stands in; once the user navigates, their pick holds.
+  const today = useToday();
+  const [picked, setView] = useState<{ y: number; m: number } | null>(null);
+  const view = picked ?? (today ? { y: Number(today.slice(0, 4)), m: Number(today.slice(5, 7)) - 1 } : { y: 2026, m: 5 });
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const t = useTranslations('scheduled');
   const tCommon = useTranslations('common');
@@ -112,7 +121,7 @@ export default function ScheduledPage() {
   // in its account's currency (derived from the FK, not stored).
   const draftCurrency = accounts.find((a) => a.id === draft.accountId)?.currency ?? '';
 
-  const openCreate = () => { setIsNew(true); setDraft(EMPTY_DRAFT); setOpen(true); };
+  const openCreate = () => { setIsNew(true); setDraft(newDraft()); setOpen(true); };
 
   const openEdit = (t: ScheduledTemplate) => {
     setIsNew(false);
@@ -199,11 +208,11 @@ export default function ScheduledPage() {
   const firstDow = new Date(view.y, view.m, 1).getDay();
   const daysInMonth = new Date(view.y, view.m + 1, 0).getDate();
 
-  const dotsByDay = buildDotsByDay(scheduled, view.y, view.m, daysInMonth);
+  const dotsByDay = buildDotsByDay(scheduled, view.y, view.m);
 
   const shift = (delta: number) =>
-    setView((v) => {
-      const d = new Date(v.y, v.m + delta, 1);
+    setView(() => {
+      const d = new Date(view.y, view.m + delta, 1);
       setSelectedDay(null);
       return { y: d.getFullYear(), m: d.getMonth() };
     });
@@ -234,12 +243,12 @@ export default function ScheduledPage() {
     const v = occPending.get(`${templateId}|${isoOf(day)}`);
     return v === undefined ? 'upcoming' : v ? 'pending' : 'done';
   };
-  // The day an undated list row speaks for: dayOfMonth, except a quarterly or yearly
-  // item's occurrence this month (else its start day) — what the engine posts on.
+  // The day an undated list row speaks for: its first occurrence this month (what
+  // the engine posts on: a day-31 item lands on the 30th in a 30-day month), else
+  // its start day (quarterly/yearly) or day of month.
   const listDay = (it: ScheduledTemplate) =>
-    recursOnStartDay(it.frequency)
-      ? (occurrenceDaysInMonth(it, view.y, view.m)[0] ?? startDayOf(it.startDate))
-      : it.dayOfMonth || 0;
+    occurrenceDaysInMonth(it, view.y, view.m)[0]
+      ?? (recursOnStartDay(it.frequency) ? startDayOf(it.startDate) : it.dayOfMonth || 0);
 
   return (
     <MobilePage
@@ -596,9 +605,13 @@ interface CalendarItem {
   installmentPaid?: number;
 }
 
+// Each item's days in the viewed month come from the engine's recurrence
+// (`occurrenceDaysInMonth` → `occurrencesUpTo`), so a dot lands where the
+// occurrence will actually post. The page used to work them out itself: it
+// ignored start and end dates, dropped a day-31 item from shorter months, and
+// put biweekly items on the wrong weeks.
 function daysForMonth(items: ScheduledTemplate[], viewYear: number, viewMonth: number): CalendarItem[] {
   const result: CalendarItem[] = [];
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
   for (const it of items) {
     const base = {
       id: it.id,
@@ -616,95 +629,19 @@ function daysForMonth(items: ScheduledTemplate[], viewYear: number, viewMonth: n
       installmentTotal: it.installmentTotal ?? null,
       installmentPaid: it.installmentPaid ?? 0,
     };
-    if (it.frequency === 'once') {
-      if (it.startDate) {
-        const d = new Date(it.startDate + 'T00:00');
-        if (d.getFullYear() === viewYear && d.getMonth() === viewMonth) {
-          result.push({ ...base, day: d.getDate() });
-        }
-      }
-    } else if (it.frequency === 'daily') {
-      for (let d = 1; d <= daysInMonth; d++) {
-        result.push({ ...base, day: d });
-      }
-    } else if (it.frequency === 'weekly' && it.weekDay != null) {
-      const d = new Date(viewYear, viewMonth, 1);
-      while (d.getDay() !== it.weekDay) d.setDate(d.getDate() + 1);
-      while (d.getMonth() === viewMonth) {
-        result.push({ ...base, day: d.getDate() });
-        d.setDate(d.getDate() + 7);
-      }
-    } else if (it.frequency === 'biweekly' && it.weekDay != null) {
-      const d = new Date(viewYear, viewMonth, 1);
-      while (d.getDay() !== it.weekDay) d.setDate(d.getDate() + 1);
-      const targetWeeks = [it.dayOfMonth || 1, (it.dayOfMonth || 1) + 2];
-      while (d.getMonth() === viewMonth) {
-        const currentWeek = Math.ceil(d.getDate() / 7);
-        if (targetWeeks.includes(currentWeek)) {
-          result.push({ ...base, day: d.getDate() });
-        }
-        d.setDate(d.getDate() + 14);
-      }
-    } else if (recursOnStartDay(it.frequency)) {
-      for (const day of occurrenceDaysInMonth(it, viewYear, viewMonth)) result.push({ ...base, day });
-    } else if (it.dayOfMonth >= 1 && it.dayOfMonth <= daysInMonth) {
-      result.push({ ...base, day: it.dayOfMonth });
-    }
+    for (const day of occurrenceDaysInMonth(it, viewYear, viewMonth)) result.push({ ...base, day });
   }
   return result;
 }
 
-function buildDotsByDay(items: ScheduledTemplate[], viewYear: number, viewMonth: number, daysInMonth: number) {
+function buildDotsByDay(items: ScheduledTemplate[], viewYear: number, viewMonth: number) {
   const map = new Map<number, { color: string }[]>();
   for (const it of items) {
     const color = it.color ?? 'var(--primary)';
-    if (it.frequency === 'once') {
-      if (it.startDate) {
-        const d = new Date(it.startDate + 'T00:00');
-        if (d.getFullYear() === viewYear && d.getMonth() === viewMonth) {
-          const arr = map.get(d.getDate()) ?? [];
-          arr.push({ color });
-          map.set(d.getDate(), arr);
-        }
-      }
-    } else if (it.frequency === 'daily') {
-      for (let d = 1; d <= daysInMonth; d++) {
-        const arr = map.get(d) ?? [];
-        arr.push({ color });
-        map.set(d, arr);
-      }
-    } else if (it.frequency === 'weekly' && it.weekDay != null) {
-      const d = new Date(viewYear, viewMonth, 1);
-      while (d.getDay() !== it.weekDay) d.setDate(d.getDate() + 1);
-      while (d.getMonth() === viewMonth) {
-        const arr = map.get(d.getDate()) ?? [];
-        arr.push({ color });
-        map.set(d.getDate(), arr);
-        d.setDate(d.getDate() + 7);
-      }
-    } else if (it.frequency === 'biweekly' && it.weekDay != null) {
-      const d = new Date(viewYear, viewMonth, 1);
-      while (d.getDay() !== it.weekDay) d.setDate(d.getDate() + 1);
-      const targetWeeks = [it.dayOfMonth || 1, (it.dayOfMonth || 1) + 2];
-      while (d.getMonth() === viewMonth) {
-        const currentWeek = Math.ceil(d.getDate() / 7);
-        if (targetWeeks.includes(currentWeek)) {
-          const arr = map.get(d.getDate()) ?? [];
-          arr.push({ color });
-          map.set(d.getDate(), arr);
-        }
-        d.setDate(d.getDate() + 14);
-      }
-    } else if (recursOnStartDay(it.frequency)) {
-      for (const day of occurrenceDaysInMonth(it, viewYear, viewMonth)) {
-        const arr = map.get(day) ?? [];
-        arr.push({ color });
-        map.set(day, arr);
-      }
-    } else if (it.dayOfMonth >= 1 && it.dayOfMonth <= daysInMonth) {
-      const arr = map.get(it.dayOfMonth) ?? [];
+    for (const day of occurrenceDaysInMonth(it, viewYear, viewMonth)) {
+      const arr = map.get(day) ?? [];
       arr.push({ color });
-      map.set(it.dayOfMonth, arr);
+      map.set(day, arr);
     }
   }
   return map;

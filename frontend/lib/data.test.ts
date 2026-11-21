@@ -1,5 +1,6 @@
 import { test, expect } from 'bun:test';
-import { fmtNative, fmtNativeShort, convertAmount, catById, acctById } from '@/lib/data';
+import { fmtNative, fmtNativeShort, convertAmount } from '@/lib/data';
+import { makeLookups } from '@/components/use-lookups';
 
 test('fmtNative formats a negative SGD amount with the SGD symbol', () => {
   expect(fmtNative(-84.32, 'SGD')).toBe('−S$84.32');
@@ -23,11 +24,21 @@ test('convertAmount converts via the USD pivot', () => {
   expect(convertAmount(100, 'USD', 'USD')).toBe(100);
 });
 
-test('catById resolves ids and falls back to Uncategorized', () => {
+test('lookups fall back to the seed only before the store has loaded', () => {
+  const { catById, acctById } = makeLookups([], []);
   expect(catById('food').name).toBe('Food & Dining');
   expect(catById(null).name).toBe('Uncategorized');
+  expect(acctById('cc').name).toBe('Amex Gold');
 });
 
-test('acctById resolves an account id', () => {
-  expect(acctById('cc').name).toBe('Amex Gold');
+test('lookups resolve the user\'s own categories and accounts once the store has them', () => {
+  const { catById, acctById } = makeLookups(
+    [{ id: 'cat-mine', name: 'Climbing', color: '#123456' }],
+    [{ id: 'acc-mine', name: 'Credit union', color: null }],
+  );
+  // Used to read the seed: a created category showed "Uncategorized", a new account no name.
+  expect(catById('cat-mine')).toEqual({ name: 'Climbing', color: '#123456' });
+  expect(acctById('acc-mine').name).toBe('Credit union');
+  // And the seed no longer leaks in once the store is loaded.
+  expect(catById('food').name).toBe('Uncategorized');
 });

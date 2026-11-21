@@ -44,8 +44,8 @@ export function convertAmount(amount: number, from: string, to: string) {
   return usd * (RATE[to] ?? 1);
 }
 
-export const catById = (id: string | null) => MOCK.categories.find((c) => c.id === id) || { name: 'Uncategorized', color: null };
-export const acctById = (id: string) => MOCK.accounts.find((a) => a.id === id) || { name: '' };
+// Id → name lookups live in components/use-lookups.ts (they read the store;
+// these seed lists are only their pre-hydration fallback).
 
 // Formats an amount that is already denominated in `currency` (no FX
 // conversion). Use for ledger data where amounts are stored natively.

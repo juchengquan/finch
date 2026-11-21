@@ -229,6 +229,9 @@ interface CalendarHeatmapProps {
   emptyColor?: string;
   color?: string;
   className?: string;
+  /** Formats a day's value for its tooltip (pass useMoney's `fmt` for money, so
+   *  it carries the currency and privacy mode hides it). */
+  format?: (value: number) => string;
 }
 
 interface SankeyNode {
@@ -369,6 +372,7 @@ export function CalendarHeatmap({
   emptyColor = 'var(--secondary)',
   color = 'var(--primary)',
   className,
+  format,
 }: CalendarHeatmapProps) {
   if (!values.length) return null;
   const max = Math.max(...values.map((v) => v.value), 0);
@@ -394,7 +398,7 @@ export function CalendarHeatmap({
             fill={t === 0 ? emptyColor : color}
             opacity={t === 0 ? 1 : 0.25 + 0.75 * t}
           >
-            <title>{v.date}: {v.value.toFixed(2)}</title>
+            <title>{v.date}: {format ? format(v.value) : v.value.toFixed(2)}</title>
           </rect>
         );
       })}

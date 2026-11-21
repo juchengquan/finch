@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { catById } from '@/lib/data';
+import { useLookups } from '@/components/use-lookups';
 import { Calendar } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { useMoney } from '@/components/use-money';
@@ -21,6 +21,7 @@ function weekLabel(start: string, end: string): string {
  *  top categories, and the biggest single hit. Renders nothing when there's no
  *  digest to show (handed a null by the parent). */
 export function WeeklyDigestCard({ digest }: { digest: WeeklyDigest | null }) {
+  const { catById } = useLookups();
   const { fmt, short } = useMoney();
   const t = useTranslations('weeklyDigest');
   if (!digest) return null;

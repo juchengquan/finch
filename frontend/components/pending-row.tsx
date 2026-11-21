@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import { Chev, Check, Search, Sparkle, X } from '@/components/icons';
-import { acctById, catById } from '@/lib/data';
+import { useLookups } from '@/components/use-lookups';
 import { useFinanceStore } from '@/lib/store';
 import { useMoney } from '@/components/use-money';
 import { useMerchantPicker, type MerchantResolution } from '@/components/merchant-picker-dialog';
@@ -33,6 +33,7 @@ interface PendingRowProps {
  *                                        disabled until the name is non-empty.
  */
 export function PendingRow({ tx, readOnly = false }: PendingRowProps) {
+  const { catById, acctById } = useLookups();
   const { fmt } = useMoney();
   const counterparties = useFinanceStore((s) => s.counterparties);
   const confirmPendingWithMatch = useFinanceStore((s) => s.confirmPendingWithMatch);

@@ -30,6 +30,7 @@ import {
 import { suggestCategory, recentExpenses, findDuplicate } from '@/lib/select';
 import { categoryPath } from '@/lib/db/domain/categories/queries';
 import { cn } from '@/lib/utils';
+import { localDateTime } from '@/lib/local-today';
 
 type Option = { id: string; name: string };
 
@@ -52,13 +53,6 @@ function mockOptions(list: { id: string; name: string; ledger?: string }[], ledg
     .map((x) => ({ id: x.id, name: x.name }));
 }
 
-/** Current date+time as a local `datetime-local` value (YYYY-MM-DDTHH:mm).
- *  `toISOString()` alone would be UTC and show a wall-clock several hours off. */
-function localDateTimeNow(): string {
-  const d = new Date();
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 16);
-}
 
 function Field({ icon, label, children }: { icon: string; label: string; children: React.ReactNode }) {
   const Glyph = FIELD_ICON[icon] ?? Wallet;
@@ -109,7 +103,7 @@ export function AddExpenseForm({
   const [fromAccount, setFromAccount] = useState('');
   const [toAccount, setToAccount] = useState('');
   const [received, setReceived] = useState('');
-  const [date, setDate] = useState(localDateTimeNow);
+  const [date, setDate] = useState(localDateTime);
   const [note, setNote] = useState('');
 
   // Category/account options come from the projected store, scoped to the active
@@ -208,7 +202,7 @@ export function AddExpenseForm({
       if (!recv || recv <= 0) return void toast.error(t('errors.recvAmount', { currency: toCurrency }));
     }
     // A cleared date field falls back to "now" (local).
-    const when = date || localDateTimeNow();
+    const when = date || localDateTime();
     createTransfer({
       fromAccountId: fromAccount,
       toAccountId: toAccount,
@@ -244,7 +238,7 @@ export function AddExpenseForm({
       accountCurrency === base ? signed : Math.round(convertAmount(signed, accountCurrency, base) * 100) / 100;
     // Split the datetime-local value into the stored date + time columns,
     // honouring what the user picked; a cleared field falls back to "now".
-    const when = date || localDateTimeNow();
+    const when = date || localDateTime();
     const fallbackName = type === 'income' ? t('fallback.income') : t('fallback.untitled');
     const id = addTransaction({
       merchant: merchant.trim() || fallbackName,
