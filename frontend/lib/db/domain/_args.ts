@@ -183,6 +183,7 @@ export type Args = {
   updateScheduledSplit: { templateId: string; index: number; pct: number };
   postScheduled: { templateId: string; date?: string; time?: string; occurrenceDate?: string };
   generateDueScheduled: { today?: string; time?: string };
+  deleteTransactionSkippingOccurrence: { id: string; today: string };
 
   // --- transfers (3) ---
   createTransfer: {

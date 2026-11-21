@@ -10,7 +10,7 @@ import type { ActionName } from './_args';
 // union so a future PR that adds/removes an action fails typecheck
 // rather than silently drifting.
 
-test('Args map has all 73 action names as keys', () => {
+test('Args map has all 74 action names as keys', () => {
   const keys = [
     'addScheduledSplit',
     'addTransaction',
@@ -47,6 +47,7 @@ test('Args map has all 73 action names as keys', () => {
     'deleteScheduled',
     'deleteTag',
     'deleteTransaction',
+    'deleteTransactionSkippingOccurrence',
     'deleteTransfer',
     'generateDueScheduled',
     'markAllReviewed',
@@ -87,6 +88,6 @@ test('Args map has all 73 action names as keys', () => {
     'verifyCounterparty',
   ] as const;
 
-  expect(keys.length).toBe(73);
+  expect(keys.length).toBe(74);
   expectTypeOf<ActionName>().toEqualTypeOf<(typeof keys)[number]>();
 });

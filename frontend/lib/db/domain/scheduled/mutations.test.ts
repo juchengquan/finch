@@ -442,3 +442,42 @@ test('generateDueScheduled keeps none of the rows of a template that fails part-
   expect(await exec("SELECT id FROM entries WHERE source_template_id = 'rt-daily'")).toEqual([]);
   expect((await exec("SELECT id FROM entries WHERE source_template_id IS NOT NULL")).length).toBe(4);
 });
+
+test('a cancelled generated occurrence stays cancelled: the next sweep does not post it again', async () => {
+  const exec = await seededAndAudited();
+  await applyMutation(exec, 'generateDueScheduled', { today: '2026-05-30' });
+  const spotifyRows = async () =>
+    exec("SELECT id, COALESCE(occurrence_date, date) AS d FROM entries WHERE source_template_id = 'rt-spotify'");
+  const [row] = await spotifyRows();
+  expect(row).toBeTruthy();
+
+  await applyMutation(exec, 'deleteTransactionSkippingOccurrence', { id: String(row.id), today: '2026-05-30' });
+  expect(await spotifyRows()).toEqual([]);
+  const [skips] = await exec("SELECT value FROM app_state WHERE key = 'scheduledSkips'");
+  expect(JSON.parse(String(skips.value))).toEqual({ 'rt-spotify': [String(row.d)] });
+
+  await applyMutation(exec, 'generateDueScheduled', { today: '2026-05-30' });
+  expect(await spotifyRows()).toEqual([]);
+  // The other templates are untouched, and the next month's occurrence still comes.
+  await applyMutation(exec, 'generateDueScheduled', { today: '2026-06-30' });
+  expect((await spotifyRows()).map((r) => String(r.d))).toEqual(['2026-06-22']);
+});
+
+test('deleting an occurrence posted early does not skip it', async () => {
+  const exec = await seededAndAudited();
+  await applyMutation(exec, 'generateDueScheduled', { today: '2026-05-30' });
+  const [row] = await exec("SELECT id FROM entries WHERE source_template_id = 'rt-spotify'");
+  // "today" before the occurrence date: it goes back to upcoming, not skipped.
+  await applyMutation(exec, 'deleteTransactionSkippingOccurrence', { id: String(row.id), today: '2026-05-01' });
+  expect(await exec("SELECT value FROM app_state WHERE key = 'scheduledSkips'")).toEqual([]);
+});
+
+test('generateDueScheduled honours skips the native app recorded', async () => {
+  const exec = await seededAndAudited();
+  await exec(
+    "INSERT INTO app_state (key,value,created_at,updated_at) VALUES ('scheduledSkips', ?, 'x', 'x')",
+    [JSON.stringify({ 'rt-rent': ['2026-05-01'] })],
+  );
+  await applyMutation(exec, 'generateDueScheduled', { today: '2026-05-30' });
+  expect(await exec("SELECT id FROM entries WHERE source_template_id = 'rt-rent'")).toEqual([]);
+});

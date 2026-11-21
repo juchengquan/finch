@@ -1294,7 +1294,7 @@ test('bulkRecategorize skips an opening-balance or adjustment row instead of fai
   );
   expect(opening).toBeTruthy();
   const openingCat = async () =>
-    (await exec("SELECT p.category_id AS c FROM postings p WHERE p.entry_id = (SELECT entry_id FROM postings WHERE id = ?) AND p.account_id IS NULL", [opening.id]))[0].c;
+    (await exec("SELECT p.category_id AS c FROM postings p WHERE p.entry_id = (SELECT entry_id FROM postings WHERE id = ?) AND p.account_id IS NULL", [String(opening.id)]))[0].c;
   const before = await openingCat();
 
   await applyMutation(exec, 'bulkRecategorize', { ids: [String(opening.id), spend], categoryId: 'food' });

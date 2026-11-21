@@ -474,8 +474,8 @@ public enum Scheduled {
     /// occurrence back to upcoming rather than skipping it: it is not missed, and
     /// Skip is right there if that is what the user meant.
     ///
-    /// Native-only and never in WRITE_SEQUENCE: the web's `deleteTransaction` stays
-    /// exactly the web's, and the skip list is native-first app_state.
+    /// The web has the same action (its Pending screen's cancel), and its
+    /// generator honours the skip list; the plain `deleteTransaction` stays as it was.
     static func deleteSkippingOccurrence(_ db: Database, _ args: Args) throws {
         struct A: Decodable { let id: String; let today: String }
         let a = try args.to(A.self)

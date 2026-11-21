@@ -47,7 +47,7 @@ One folder per first-class domain. Each folder is self-contained. There are 14 f
 | `counterparties/` | Counterparty rows + verify/unverify |
 | `tags/` | Tag rows |
 | `rules/` | Conditional rules + backfill |
-| `scheduled/` | Scheduled templates + postScheduled + generateDueScheduled (helpers in `_helpers.ts`) |
+| `scheduled/` | Scheduled templates + postScheduled + generateDueScheduled (honours app_state `scheduledSkips`) + deleteTransactionSkippingOccurrence (helpers in `_helpers.ts`) |
 | `transfers/` | Transfer rows; I18nError codes |
 | `holdings/` | Holding rows + price updates |
 | `attachments/` | Attachment rows + file resolution; I18nError codes |

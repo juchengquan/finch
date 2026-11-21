@@ -11,6 +11,7 @@
 
 import { newId } from '../_shared/ids';
 import { syncMutation } from '../hydrate';
+import { localToday } from '@/lib/local-today';
 import type { SetState, GetState } from '../_shared/types';
 import type { Tx, TxSplit, TxSplitInput } from './state';
 
@@ -192,9 +193,11 @@ export const transactionActions = (set: SetState, get: GetState) => ({
     });
   },
 
+  // Also skips the scheduled occurrence the row fulfilled, so the next load
+  // doesn't generate it again.
   cancelPending: (id: string): void => {
     set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id) }));
-    syncMutation('deleteTransaction', { id });
+    syncMutation('deleteTransactionSkippingOccurrence', { id, today: localToday() });
   },
 
   confirmAllPending: (ledgerId: string): void => {
