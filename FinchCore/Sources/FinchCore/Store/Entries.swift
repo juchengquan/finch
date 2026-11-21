@@ -908,8 +908,13 @@ public enum Entries {
 
     /// Unseal → patch header → (maybe) rewrite legs → reseal → recompute touched
     /// accounts. Mirrors the web `rebuildEntry`. Returns the touched account ids.
+    ///
+    /// `recompute: false` skips the per-account balance recompute and leaves it to
+    /// the caller, who gets the touched accounts back. A bulk caller (the base
+    /// change) recomputes each account once at the end: per entry, it summed the
+    /// account's every posting each time, which made a base change quadratic.
     @discardableResult
-    public static func rebuildEntry(_ db: Database, _ entryId: String, _ patch: EntryPatch) throws -> [String] {
+    public static func rebuildEntry(_ db: Database, _ entryId: String, _ patch: EntryPatch, recompute: Bool = true) throws -> [String] {
         guard let cur = try Row.fetchOne(db, sql: "SELECT * FROM entries WHERE id = ?", arguments: [entryId]) else { return [] }
         let oldLegRows = try Row.fetchAll(db, sql: "SELECT * FROM postings WHERE entry_id = ? ORDER BY sort_order", arguments: [entryId])
         var touched = Set(oldLegRows.compactMap { (r: Row) -> String? in r["account_id"] })
@@ -1026,7 +1031,7 @@ public enum Entries {
             throw error
         }
 
-        for id in touched.sorted() { try recomputeAccountFromPostings(db, id) }
+        if recompute { for id in touched.sorted() { try recomputeAccountFromPostings(db, id) } }
         return touched.sorted()
     }
 

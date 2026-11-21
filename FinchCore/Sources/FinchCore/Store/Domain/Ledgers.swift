@@ -34,6 +34,7 @@ public enum Ledgers {
         try Entries.ensureSystemCategories(db, ledgerId)
         try db.execute(sql: "UPDATE ledgers SET base_currency = ?, updated_at = datetime('now') WHERE id = ?", arguments: [newBase, ledgerId])
         let fxCatId = try String.fetchOne(db, sql: "SELECT id FROM categories WHERE ledger_id = ? AND system = 'fx'", arguments: [ledgerId])
+        var touched = Set<String>()   // balances recomputed once per account, after the loop
         for e in try Row.fetchAll(db, sql: "SELECT id, date FROM entries WHERE ledger_id = ? ORDER BY date, id", arguments: [ledgerId]) {
             let entryId: String = e["id"], entryDate: String = e["date"]
             var legs: [Entries.Leg] = []
@@ -52,8 +53,9 @@ public enum Ledgers {
             }
             var ep = Entries.EntryPatch()
             ep.legs = .set(legs)
-            try Entries.rebuildEntry(db, entryId, ep)
+            touched.formUnion(try Entries.rebuildEntry(db, entryId, ep, recompute: false))
         }
+        for id in touched.sorted() { try Entries.recomputeAccountFromPostings(db, id) }
 
         try convertBudgets(db, ledgerId, oldBase, newBase)
 
