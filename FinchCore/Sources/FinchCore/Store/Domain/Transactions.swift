@@ -285,10 +285,25 @@ public enum Transactions {
         _ = try addTransactionReturningId(db, args)
     }
 
+    /// `cleared: true` marks the new row's account leg(s) cleared in the same
+    /// write (the web's reconcile "add a missing transaction"). Mirrors the web.
+    private struct ClearedFlag: Decodable { let cleared: Bool? }
+    private static func markClearedIfAsked(_ db: Database, _ args: Args, entryId: String) throws {
+        guard (try? args.to(ClearedFlag.self))?.cleared == true else { return }
+        try db.execute(sql: "UPDATE postings SET cleared_at = datetime('now') WHERE entry_id = ? AND account_id IS NOT NULL",
+                       arguments: [entryId])
+    }
+
     /// Like `addTransaction` but returns the new entry id (so callers can attach
     /// a receipt). Tags in `tagIds` are written in the same transaction.
     @discardableResult
     static func addTransactionReturningId(_ db: Database, _ args: Args) throws -> String {
+        let entryId = try addTransactionUnmarked(db, args)
+        try markClearedIfAsked(db, args, entryId: entryId)
+        return entryId
+    }
+
+    private static func addTransactionUnmarked(_ db: Database, _ args: Args) throws -> String {
       try Dedup.wrap {
         let a = try args.to(AddInput.self)
         let refundedEntryId = try a.refundedTransactionId.flatMap { try Entries.resolveEntryRef(db, $0)?.entryId }
