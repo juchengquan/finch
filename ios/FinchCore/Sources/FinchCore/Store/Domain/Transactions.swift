@@ -614,6 +614,11 @@ public enum Transactions {
         for id in a.ids {
             guard let ref = try Entries.resolveEntryRef(db, id) else { continue }
             let entryId = ref.entryId
+            // An opening balance or adjustment books against the ledger's own equity
+            // category and has no spending category to change. Skip it, like a split:
+            // the rebuild below would refuse the shape and abort the whole batch.
+            let kind = try String.fetchOne(db, sql: "SELECT kind FROM entries WHERE id = ?", arguments: [entryId])
+            if kind == "opening" || kind == "adjustment" { continue }
             let catCount = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM postings WHERE entry_id = ? AND category_id IS NOT NULL", arguments: [entryId]) ?? 0
             if catCount >= 2 { continue }
             // A purchase paid from several accounts carries exactly one category leg by

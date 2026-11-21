@@ -204,8 +204,12 @@ export const handlers = {
       if (!ref) continue;
       const { entryId } = ref;
 
-      const [entry] = await exec('SELECT date FROM entries WHERE id = ?', [entryId]);
+      const [entry] = await exec('SELECT date, kind FROM entries WHERE id = ?', [entryId]);
       if (!entry) continue;
+      // An opening balance or adjustment books against the ledger's own equity
+      // category; it has no spending category to change. Skip it, like a split:
+      // the rebuild below would refuse the shape and abort the whole batch.
+      if (entry.kind === 'opening' || entry.kind === 'adjustment') continue;
       const d = String(entry.date ?? '');
       if (d && (!earliest || d < earliest)) earliest = d;
 

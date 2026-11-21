@@ -1283,3 +1283,27 @@ test('confirmPendingWithMerchant with no merchant chosen keeps the link the row 
   expect(String(after.status)).toBe('confirmed');
   expect(String(after.cp)).toBe('cp-02');
 });
+
+test('bulkRecategorize skips an opening-balance or adjustment row instead of failing the batch', async () => {
+  const exec = await seededAndAudited();
+  const spend = await addTransaction(exec, {
+    ledgerId: 'personal', accountId: 'chk', amount: -12, merchant: 'Lunch', date: '2026-05-25',
+  });
+  const [opening] = await exec(
+    "SELECT p.id FROM postings p JOIN entries e ON e.id = p.entry_id WHERE e.ledger_id = 'personal' AND e.kind = 'opening' AND p.account_id IS NOT NULL LIMIT 1",
+  );
+  expect(opening).toBeTruthy();
+  const openingCat = async () =>
+    (await exec("SELECT p.category_id AS c FROM postings p WHERE p.entry_id = (SELECT entry_id FROM postings WHERE id = ?) AND p.account_id IS NULL", [opening.id]))[0].c;
+  const before = await openingCat();
+
+  await applyMutation(exec, 'bulkRecategorize', { ids: [String(opening.id), spend], categoryId: 'food' });
+
+  const [moved] = await exec(
+    'SELECT p.category_id AS c FROM postings p WHERE p.entry_id = COALESCE((SELECT entry_id FROM postings WHERE id = ?), ?) AND p.account_id IS NULL',
+    [spend, spend],
+  );
+  expect(String(moved.c)).toBe('food');
+  expect(await openingCat()).toBe(before);
+  expect(await auditLedger(exec, 'personal')).toEqual([]);
+});

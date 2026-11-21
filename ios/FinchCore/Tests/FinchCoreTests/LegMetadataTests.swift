@@ -47,6 +47,23 @@ final class LegMetadataTests: XCTestCase {
         XCTAssertNotNil(try clearedAt(q, pid), "bulkRecategorize must not un-clear the account leg")
     }
 
+    /// An opening-balance row in the selection is skipped; the rest still move.
+    /// It used to abort the whole batch (the rebuild refuses the equity shape).
+    func test_bulkRecategorize_skipsOpeningBalance() throws {
+        let q = try seeded()
+        let spend = try addClearedExpense(q)   // first: its helper reads the account's only posting
+        try Apply.apply(dbQueue: q, action: "setOpeningBalance", args: Args(["id": .string("a1"), "amount": .double(100)]))
+        let opening = try q.read { db in
+            try String.fetchOne(db, sql: "SELECT p.id FROM postings p JOIN entries e ON e.id = p.entry_id WHERE e.kind = 'opening' AND p.account_id IS NOT NULL")
+        }!
+        try Apply.apply(dbQueue: q, action: "bulkRecategorize",
+                        args: Args(["ids": .array([.string(opening), .string(spend)]), "categoryId": .string("c2")]))
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT p.category_id FROM postings p JOIN entries e ON e.id = p.entry_id WHERE e.kind = 'expense' AND p.account_id IS NULL"), "c2")
+            XCTAssertNotEqual(try String.fetchOne(db, sql: "SELECT p.category_id FROM postings p JOIN entries e ON e.id = p.entry_id WHERE e.kind = 'opening' AND p.account_id IS NULL"), "c2")
+        }
+    }
+
     func test_dateOnlyEdit_preservesClearedAt() throws {
         let q = try seeded()
         let pid = try addClearedExpense(q)
