@@ -18,6 +18,9 @@ import {
   type ScheduledPatch,
 } from './queries';
 import { resolveTemplateLedger } from './_helpers';
+import { getAppState, setAppState } from '../../queries/appState';
+import { handlers as transactionHandlers } from '../transactions/mutations';
+import { resolveEntryRef } from '../../core/entries';
 
 type Handler<A extends ActionName> = (exec: Exec, args: Args[A]) => Promise<void>;
 
@@ -49,7 +52,83 @@ async function skippingNoRate(post: () => Promise<unknown>): Promise<void> {
   }
 }
 
+// Skipped occurrences: app_state 'scheduledSkips', { templateId: [date, …] },
+// keys and dates sorted. The native app wrote it first (FinchCore
+// `ScheduledSkips`); the web now honours and records it too, so a cancelled
+// occurrence stays cancelled instead of being generated again on the next load.
+const SKIPS_KEY = 'scheduledSkips';
+
+async function loadSkips(exec: Exec): Promise<Record<string, string[]>> {
+  const raw = await getAppState(exec, SKIPS_KEY);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, string[]>) : {};
+  } catch {
+    return {}; // a malformed blob must not stop generation
+  }
+}
+
+async function saveSkips(exec: Exec, map: Record<string, string[]>): Promise<void> {
+  const sorted: Record<string, string[]> = {};
+  for (const k of Object.keys(map).sort()) sorted[k] = [...map[k]].sort();
+  await setAppState(exec, SKIPS_KEY, JSON.stringify(sorted));
+}
+
+function templateOf(r: Row): ScheduledTemplate {
+  return {
+    startDate: r.start_date == null ? undefined : String(r.start_date),
+    nextRun: String(r.next_run ?? ''),
+    endDate: r.end_date == null ? null : String(r.end_date),
+    frequency: String(r.frequency),
+    dayOfMonth: Number(r.day_of_month ?? 1),
+    weekDay: r.day_of_week == null ? undefined : Number(r.day_of_week),
+  } as ScheduledTemplate;
+}
+
+// Record a skip for one occurrence, when there is one to record: the template
+// exists, the date is one of its occurrences, and no row fulfils it.
+// FinchCore `Scheduled.skip` with its "nothing to skip" refusals as no-ops.
+async function skipIfOccurrence(exec: Exec, templateId: string, date: string): Promise<void> {
+  const [t] = await exec('SELECT * FROM scheduled_templates WHERE id = ?', [templateId]);
+  if (!t) return;
+  if (occurrencesUpTo(templateOf(t), date).at(-1) !== date) return;
+  const [{ n }] = await exec(
+    'SELECT COUNT(*) AS n FROM entries WHERE source_template_id = ? AND COALESCE(occurrence_date, date) = ?',
+    [templateId, date],
+  );
+  if (Number(n) > 0) return;
+  const skips = await loadSkips(exec);
+  const dates = new Set(skips[templateId] ?? []);
+  if (dates.has(date)) return;
+  dates.add(date);
+  skips[templateId] = [...dates];
+  await saveSkips(exec, skips);
+}
+
 export const handlers = {
+  // Delete a transaction and count the scheduled occurrence it fulfilled as
+  // skipped, so the generator doesn't post it again on the next load (it used
+  // to: cancel deleted the pending row, the next load re-created it). Only an
+  // occurrence dated on or before `today`; one posted early and deleted goes
+  // back to upcoming. Same as FinchCore `Scheduled.deleteSkippingOccurrence`.
+  deleteTransactionSkippingOccurrence: async (exec, args: Args['deleteTransactionSkippingOccurrence']) => {
+    const today = str(args.today ?? '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(today)) {
+      throw new I18nError('error.invalidArgs', {}, 'deleteTransactionSkippingOccurrence requires today as YYYY-MM-DD');
+    }
+    const ref = await resolveEntryRef(exec, str(args.id));
+    if (!ref) return;
+    const fulfilled = await exec(
+      `SELECT DISTINCT source_template_id AS t, COALESCE(occurrence_date, date) AS d
+         FROM entries WHERE id = ? AND source_template_id IS NOT NULL`,
+      [ref.entryId],
+    );
+    await transactionHandlers.deleteTransaction(exec, { id: str(args.id) });
+    for (const o of fulfilled) {
+      if (String(o.d) <= today) await skipIfOccurrence(exec, String(o.t), String(o.d));
+    }
+  },
   createScheduled: async (exec, args: Args['createScheduled']) => {
     const name = str(args.name).trim();
     if (!name) throw new I18nError('error.required.templateName', {}, 'Template name is required');
@@ -181,6 +260,7 @@ export const handlers = {
     const today = args.today ? str(args.today) : new Date().toISOString().slice(0, 10);
     const genTime = postingTime(args.time ? str(args.time) : undefined);
     const rows = await exec('SELECT * FROM scheduled_templates WHERE is_active = 1');
+    const skips = await loadSkips(exec);
     const ts = new Date().toISOString();
     for (const r of rows) {
       // Each template in its own SAVEPOINT: one that throws (only imported data can
@@ -190,7 +270,7 @@ export const handlers = {
       const sp = `gd_${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`;
       await exec(`SAVEPOINT ${sp}`);
       try {
-        await generateDueForTemplate(exec, r, today, genTime, ts);
+        await generateDueForTemplate(exec, r, today, genTime, ts, skips[String(r.id)] ?? []);
         await exec(`RELEASE ${sp}`);
       } catch {
         await exec(`ROLLBACK TO ${sp}`);
@@ -202,23 +282,17 @@ export const handlers = {
 
 // One template row's due occurrences, posted. `generateDueScheduled` runs it.
 async function generateDueForTemplate(
-  exec: Exec, r: Row, today: string, genTime: string, ts: string,
+  exec: Exec, r: Row, today: string, genTime: string, ts: string, skipped: string[],
 ): Promise<void> {
   const type = String(r.kind);
   if (r.amount == null) return;
   if (Number(r.splits_enabled)) return;
   if (type === 'transfer' && r.from_account_id == null) return;
 
-  const template = {
-    startDate: r.start_date == null ? undefined : String(r.start_date),
-    nextRun: String(r.next_run ?? ''),
-    endDate: r.end_date == null ? null : String(r.end_date),
-    frequency: String(r.frequency),
-    dayOfMonth: Number(r.day_of_month ?? 1),
-    weekDay: r.day_of_week == null ? undefined : Number(r.day_of_week),
-  } as ScheduledTemplate;
-
-  let dates = occurrencesUpTo(template, today);
+  // Skipped occurrences leave the list before the caps below, so they spend
+  // none of them: a skip is not an execution (FinchCore `dueOccurrences`).
+  const skippedSet = new Set(skipped);
+  let dates = occurrencesUpTo(templateOf(r), today).filter((d) => !skippedSet.has(d));
   if (!dates.length) return;
 
   // Resolution keys on occurrenceDate ?? date (see Resolvers), so "already

@@ -6,13 +6,8 @@ import { toast } from 'sonner';
 import { useFinanceStore } from '@/lib/store';
 import { SYNC_FAILED_EVENT, type SyncFailedDetail } from '@/lib/store/hydrate';
 import { fetchState, mutate } from '@/lib/api-client';
+import { localToday } from '@/lib/local-today';
 import type { ErrorWithI18n } from '@/lib/i18n-error';
-
-// Today as a local 'YYYY-MM-DD' so "due" matches the user's calendar day.
-function localToday(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 // The store starts from seed data so server and first-client render match.
 // After mount we load the authoritative state from the server database and

@@ -12,8 +12,8 @@ import { resolveCounterpartyIdByName } from '../queries/counterparties';
 import { listActiveRules } from '../queries/rules';
 import { applyRules } from '@/lib/rules/engine';
 import { newId } from '../domain/_shared/ids';
+import { r2 } from '@/lib/round';
 
-const r2 = (n: number) => Math.round(n * 100) / 100;
 
 export type EntryKind = 'opening' | 'income' | 'expense' | 'transfer' | 'adjustment' | 'refund';
 export type EntryStatus = 'pending' | 'confirmed';

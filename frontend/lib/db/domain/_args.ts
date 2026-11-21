@@ -68,7 +68,7 @@ export type Args = {
   };
 
   // --- counterparties (5) ---
-  confirmAllPending: Record<string, never>;
+  confirmAllPending: { ledgerId?: string };
   createCounterparty: NewCounterparty;
   updateCounterparty: { id: string; patch: CounterpartyPatch };
   deleteCounterparty: { id: string };
@@ -183,6 +183,7 @@ export type Args = {
   updateScheduledSplit: { templateId: string; index: number; pct: number };
   postScheduled: { templateId: string; date?: string; time?: string; occurrenceDate?: string };
   generateDueScheduled: { today?: string; time?: string };
+  deleteTransactionSkippingOccurrence: { id: string; today: string };
 
   // --- transfers (3) ---
   createTransfer: {

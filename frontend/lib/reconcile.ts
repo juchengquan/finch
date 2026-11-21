@@ -6,6 +6,7 @@
 
 import type { Tx } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/domain/accounts/types';
+import { r2 } from '@/lib/round';
 
 export interface ReconcileState {
   /** Cleared (opening + ticked-confirmed) balance in account currency. */
@@ -22,7 +23,6 @@ export interface ReconcileState {
   balanced: boolean;
 }
 
-const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
  * Compute the live reconcile state for an account against a statement target.

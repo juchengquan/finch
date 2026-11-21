@@ -223,7 +223,8 @@ public enum Transactions {
             counterpartyId = newCpId
             description = newName
         }
-        try db.execute(sql: "UPDATE entries SET status = 'confirmed', confirmed_at = ?, counterparty_id = ?, description = ?, updated_at = datetime('now') WHERE id = ? AND status = 'pending'",
+        // COALESCE: with no merchant chosen the row keeps the link it has, as on the web.
+        try db.execute(sql: "UPDATE entries SET status = 'confirmed', confirmed_at = ?, counterparty_id = COALESCE(?, counterparty_id), description = ?, updated_at = datetime('now') WHERE id = ? AND status = 'pending'",
                        arguments: [ISO8601DateFormatter().string(from: Date()), counterpartyId, description, ref.entryId])
         try recomputeEntryAccounts(db, ref.entryId)
     }
@@ -537,19 +538,49 @@ public enum Transactions {
         }
 
         let plainCatLegs = oldLegs.filter { ($0["account_id"] as String?) == nil }
-        // Category patch on a split entry (≥2 category legs) is a header-only no-op.
-        if plainCatLegs.count >= 2 && has("category") { try Entries.rebuildEntry(db, entryId, ep); return }
+        let acctLeg = Entries.AccountLeg(accountId: newAccountId, amount: nativeAmount, amountBase: amountBase,
+            exchangeRate: rate, memo: oldAcct["memo"], id: oldAcct["id"],
+            origAmount: origAmount, origCurrency: origCurrency, clearedAt: oldAcct["cleared_at"])
+
+        // A split (≥2 category legs) keeps its categories through any money patch:
+        // a category patch is ignored, as before, and a new amount, currency,
+        // account or date re-scales every category leg in proportion. An
+        // amount-only patch used to rebuild it as ONE category leg (food 60 + rent
+        // 40, edited to 120, became food 120). Mirrors the web's updateTransaction.
+        if plainCatLegs.count >= 2 {
+            let fxCat = try String.fetchOne(db, sql: "SELECT id FROM categories WHERE ledger_id = ? AND system = 'fx'", arguments: [ledgerId])
+            let catLegs = plainCatLegs.filter { fxCat == nil || ($0["category_id"] as String?) != fxCat }
+            let scaled = scaleSplitLegs(catLegs.map { $0["amount_base"] as Double }, Entries.r2(-amountBase))
+            ep.legs = .set([.account(acctLeg)] + zip(catLegs, scaled).map { leg, value in
+                .category(Entries.CategoryLeg(categoryId: leg["category_id"], amountBase: value, memo: leg["memo"], id: leg["id"]))
+            })
+            try Entries.rebuildEntry(db, entryId, ep)
+            return
+        }
         let existingCat = plainCatLegs.first
         let newCategoryId: String? = has("category") ? strOrNil(patch["category"]) : (existingCat?["category_id"] as String?)
 
         ep.legs = .set([
-            .account(Entries.AccountLeg(accountId: newAccountId, amount: nativeAmount, amountBase: amountBase,
-                exchangeRate: rate, memo: oldAcct["memo"], id: oldAcct["id"],
-                origAmount: origAmount, origCurrency: origCurrency, clearedAt: oldAcct["cleared_at"])),
+            .account(acctLeg),
             .category(Entries.CategoryLeg(categoryId: newCategoryId, amountBase: Entries.r2(-amountBase),
                 memo: existingCat?["memo"], id: existingCat?["id"])),
         ])
         try Entries.rebuildEntry(db, entryId, ep)
+    }
+
+    /// Scale split leg amounts so they sum to `target`, keeping their proportions.
+    /// Each leg is rounded to cents and the remainder goes to the largest leg, so
+    /// the sum is exact; with no proportions (legs sum to 0) the first leg takes
+    /// it all. Mirrors the web's `scaleSplitLegs`.
+    static func scaleSplitLegs(_ legs: [Double], _ target: Double) -> [Double] {
+        guard !legs.isEmpty else { return [] }
+        let sum = legs.reduce(0, +)
+        if abs(sum) < 0.005 { return legs.indices.map { $0 == 0 ? target : 0 } }
+        var out = legs.map { Entries.r2($0 * target / sum) }
+        var largest = 0
+        for i in out.indices.dropFirst() where abs(out[i]) > abs(out[largest]) { largest = i }
+        out[largest] = Entries.r2(out[largest] + target - out.reduce(0, +))
+        return out
     }
 
     // MARK: setCleared / setReviewed / markAllReviewed
@@ -613,6 +644,11 @@ public enum Transactions {
         for id in a.ids {
             guard let ref = try Entries.resolveEntryRef(db, id) else { continue }
             let entryId = ref.entryId
+            // An opening balance or adjustment books against the ledger's own equity
+            // category and has no spending category to change. Skip it, like a split:
+            // the rebuild below would refuse the shape and abort the whole batch.
+            let kind = try String.fetchOne(db, sql: "SELECT kind FROM entries WHERE id = ?", arguments: [entryId])
+            if kind == "opening" || kind == "adjustment" { continue }
             let catCount = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM postings WHERE entry_id = ? AND category_id IS NOT NULL", arguments: [entryId]) ?? 0
             if catCount >= 2 { continue }
             // A purchase paid from several accounts carries exactly one category leg by
@@ -642,13 +678,17 @@ public enum Transactions {
 
     // MARK: confirmAllPending
 
+    /// One ledger's pending rows (`ledgerId`, default "personal"), as on the web.
+    /// It used to confirm every ledger's at once.
     static func confirmAllPending(_ db: Database, _ args: Args) throws {
+        struct A: Decodable { let ledgerId: String? }
+        let ledgerId = (try? args.to(A.self))?.ledgerId ?? "personal"
         let accts = try String.fetchAll(db, sql: """
             SELECT DISTINCT p.account_id FROM postings p JOIN entries e ON e.id = p.entry_id
-             WHERE e.status = 'pending' AND p.account_id IS NOT NULL
-            """)
-        try db.execute(sql: "UPDATE entries SET status = 'confirmed', confirmed_at = ?, updated_at = datetime('now') WHERE status = 'pending'",
-                       arguments: [ISO8601DateFormatter().string(from: Date())])
+             WHERE e.status = 'pending' AND e.ledger_id = ? AND p.account_id IS NOT NULL
+            """, arguments: [ledgerId])
+        try db.execute(sql: "UPDATE entries SET status = 'confirmed', confirmed_at = ?, updated_at = datetime('now') WHERE status = 'pending' AND ledger_id = ?",
+                       arguments: [ISO8601DateFormatter().string(from: Date()), ledgerId])
         // Pending postings weren't in the cached balance (the trigger only fires
         // on confirmed inserts) — recompute each touched account.
         for acct in accts { try Entries.recomputeAccountFromPostings(db, acct) }

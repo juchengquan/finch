@@ -23,7 +23,8 @@ public enum Selectors {
         return name.isEmpty ? nil : "m:\(name)"
     }
 
-    /// Math.round(n * 100) / 100 — 2-decimal rounding matching the web's `r2`.
+    /// 2-decimal rounding, half away from zero (`.rounded()`), matching the web's
+    /// `r2` in lib/round.ts and SQLite ROUND: -10.125 → -10.13 on all three.
     static func r2(_ n: Double) -> Double { (n * 100).rounded() / 100 }
 
     // MARK: accountBalance

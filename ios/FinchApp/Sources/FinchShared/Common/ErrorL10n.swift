@@ -21,6 +21,7 @@ enum ErrorL10n {
         "error.category.depthCap": "类别无法再向下嵌套",
         "error.category.selfParent": "类别不能成为自己的父级",
         "error.category.underDescendant": "类别不能移动到自己的后代之下",
+        "error.category.system": "「{name}」是账本记账所需的系统类别，无法删除或更改",
         "error.fx.dateFormat": "日期必须为 YYYY-MM-DD 格式",
         "error.fx.noRate": "还没有 {from} → {to} 的汇率。请在「设置 › 货币」中手动输入 {currency} 的汇率，或在那里打开 {currency} 后点按「立即刷新」。",
         "error.fx.rateGt0": "汇率必须大于 0",

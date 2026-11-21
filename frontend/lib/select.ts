@@ -11,6 +11,7 @@ import type { Holding } from '@/lib/db/domain/holdings/types';
 import type { AccountType } from '@/lib/account-types';
 import { occurrencesUpTo } from '@/lib/recurrence';
 import { expandDescendants } from '@/lib/db/domain/categories/queries';
+import { r2 } from '@/lib/round';
 
 const ledgerOf = (t: Tx) => t.ledgerId ?? 'personal';
 
@@ -166,7 +167,6 @@ export function prevMonth(month: string): string {
 }
 
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /** YYYY-MM keys for the N months ending at (and including) `endMonth`, oldest first. */
 function monthsBack(endMonth: string, n: number): string[] {
@@ -1447,7 +1447,7 @@ export function selectTransfers(txns: Tx[], accounts: AccountRow[], ledgerId: st
 // Named budgets — cycle windows and progress (spent vs limit / earned vs target)
 // ---------------------------------------------------------------------------
 
-const round2 = (n: number) => Math.round(n * 100) / 100;
+const round2 = r2;
 const pad2 = (n: number) => String(n).padStart(2, '0');
 const toYmd = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 const fromYmd = (s: string) => {

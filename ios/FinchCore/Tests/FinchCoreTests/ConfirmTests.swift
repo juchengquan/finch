@@ -47,4 +47,44 @@ final class ConfirmTests: XCTestCase {
             XCTAssertNotNil(cpId ?? nil)
         }
     }
+
+    /// "Confirm all" confirms one ledger's pending rows, not every ledger's.
+    func test_confirmAllPending_staysInItsLedger() throws {
+        let q = try seeded()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO ledgers (id,name,base_currency,is_default,created_at,updated_at) VALUES ('l2','Other','USD',0,datetime('now'),datetime('now'))")
+            try db.execute(sql: "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a2','l2','Cash 2','cash','USD',0,0,1,1,datetime('now'),datetime('now'))")
+        }
+        for (ledger, acct, name) in [("l1", "a1", "Mine"), ("l2", "a2", "Theirs")] {
+            try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
+                "ledgerId": .string(ledger), "accountId": .string(acct), "amount": .double(-10), "merchant": .string(name),
+                "date": .string("2026-05-01"), "status": .string("pending"), "skipRules": .bool(true),
+            ]))
+        }
+        try Apply.apply(dbQueue: q, action: "confirmAllPending", args: Args(["ledgerId": .string("l1")]))
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT status FROM entries WHERE ledger_id='l1'"), "confirmed")
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT status FROM entries WHERE ledger_id='l2'"), "pending")
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id='a2'") ?? -1, 0, accuracy: 0.001)
+        }
+    }
+
+    /// Confirming with no merchant chosen keeps the link the row already has.
+    func test_confirmPendingWithMerchant_keepsExistingLink() throws {
+        let q = try seeded()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO counterparties (id,name,is_verified,created_at,updated_at) VALUES ('cp1','Blue Bottle',1,datetime('now'),datetime('now'))")
+        }
+        try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "accountId": .string("a1"), "amount": .double(-25), "merchant": .string("Blue Bottle"),
+            "categoryId": .string("c1"), "date": .string("2026-05-01"), "status": .string("pending"), "skipRules": .bool(true),
+        ]))
+        XCTAssertEqual(try q.read { db in try String.fetchOne(db, sql: "SELECT counterparty_id FROM entries") }, "cp1")
+        let txId = try q.read { db in try String.fetchOne(db, sql: "SELECT id FROM postings WHERE account_id='a1'")! }
+        try Apply.apply(dbQueue: q, action: "confirmPendingWithMerchant", args: Args(["id": .string(txId)]))
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT status FROM entries"), "confirmed")
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT counterparty_id FROM entries"), "cp1")
+        }
+    }
 }

@@ -55,12 +55,33 @@ public enum Ledgers {
             try Entries.rebuildEntry(db, entryId, ep)
         }
 
+        try convertBudgets(db, ledgerId, oldBase, newBase)
+
         // Safety sweep after the recompute (web parity): any audit problem means
         // the rebuild produced an inconsistent ledger — throw to roll it back.
         let problems = try Audit.run(on: db, ledgerId: ledgerId, checkBalances: true)
         if let first = problems.first {
             throw I18nError("error.ledger.recomputeFailed", ["count": String(problems.count)],
                 "recomputeAmountBases audit failed: \(first.code.rawValue) \(first.detail)")
+        }
+    }
+
+    /// Budgets hold base-currency figures too; they used to keep their numbers, so
+    /// a 10,000 USD budget became 10,000 JPY. A budget is a standing limit, not a
+    /// dated record, so it converts at the newest rate on file (the far-future
+    /// date makes the lookup take it) — deterministic for a given database.
+    /// Mirrors the web's `convertBudgetsToBase`.
+    static func convertBudgets(_ db: Database, _ ledgerId: String, _ oldBase: String, _ newBase: String) throws {
+        if oldBase == newBase { return }
+        // Per value, not one rounded rate: convertToBase applies the unrounded rate.
+        func conv(_ v: Double?) throws -> Double? { try v.map { try Entries.convertToBase(db, $0, oldBase, newBase, "9999-12-31").amountBase } }
+        for b in try Row.fetchAll(db, sql: "SELECT id, amount, saved, carry_forward, rollover_limit, pending_amount FROM budgets WHERE ledger_id = ?",
+                                  arguments: [ledgerId]) {
+            try db.execute(sql: """
+                UPDATE budgets SET amount = ?, saved = ?, carry_forward = ?, rollover_limit = ?, pending_amount = ?,
+                       updated_at = datetime('now') WHERE id = ?
+                """, arguments: [try conv(b["amount"]), try conv(b["saved"]), try conv(b["carry_forward"]),
+                                 try conv(b["rollover_limit"]), try conv(b["pending_amount"]), b["id"] as String])
         }
     }
 

@@ -47,11 +47,60 @@ final class LegMetadataTests: XCTestCase {
         XCTAssertNotNil(try clearedAt(q, pid), "bulkRecategorize must not un-clear the account leg")
     }
 
+    /// An opening-balance row in the selection is skipped; the rest still move.
+    /// It used to abort the whole batch (the rebuild refuses the equity shape).
+    func test_bulkRecategorize_skipsOpeningBalance() throws {
+        let q = try seeded()
+        let spend = try addClearedExpense(q)   // first: its helper reads the account's only posting
+        try Apply.apply(dbQueue: q, action: "setOpeningBalance", args: Args(["id": .string("a1"), "amount": .double(100)]))
+        let opening = try q.read { db in
+            try String.fetchOne(db, sql: "SELECT p.id FROM postings p JOIN entries e ON e.id = p.entry_id WHERE e.kind = 'opening' AND p.account_id IS NOT NULL")
+        }!
+        try Apply.apply(dbQueue: q, action: "bulkRecategorize",
+                        args: Args(["ids": .array([.string(opening), .string(spend)]), "categoryId": .string("c2")]))
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT p.category_id FROM postings p JOIN entries e ON e.id = p.entry_id WHERE e.kind = 'expense' AND p.account_id IS NULL"), "c2")
+            XCTAssertNotEqual(try String.fetchOne(db, sql: "SELECT p.category_id FROM postings p JOIN entries e ON e.id = p.entry_id WHERE e.kind = 'opening' AND p.account_id IS NULL"), "c2")
+        }
+    }
+
     func test_dateOnlyEdit_preservesClearedAt() throws {
         let q = try seeded()
         let pid = try addClearedExpense(q)
         try Apply.apply(dbQueue: q, action: "updateTransaction", args: Args(["id": .string(pid), "patch": .object(["date": .string("2026-06-15")])]))
         XCTAssertNotNil(try clearedAt(q, pid), "a date-only edit must not un-clear the account leg")
+    }
+
+    /// Editing a split's amount keeps every category and re-scales them in
+    /// proportion; a category patch alongside is ignored, the amount still applies.
+    func test_splitAmountEdit_keepsCategoriesInProportion() throws {
+        let q = try seeded()
+        let pid = try addClearedExpense(q, amount: -100)
+        try Apply.apply(dbQueue: q, action: "setTransactionSplits", args: Args(["id": .string(pid), "splits": .array([
+            .object(["categoryId": .string("c1"), "amount": .double(60)]),
+            .object(["categoryId": .string("c2"), "amount": .double(40)]),
+        ])]))
+        func legs() throws -> [String] {
+            try q.read { db in
+                try Row.fetchAll(db, sql: "SELECT category_id, amount_base FROM postings WHERE account_id IS NULL ORDER BY sort_order")
+                    .map { "\($0["category_id"] as String):\(Entries.r2($0["amount_base"] as Double))" }
+            }
+        }
+        XCTAssertEqual(try legs(), ["c1:60.0", "c2:40.0"])
+        try Apply.apply(dbQueue: q, action: "updateTransaction", args: Args(["id": .string(pid), "patch": .object(["amount": .double(-120)])]))
+        XCTAssertEqual(try legs(), ["c1:72.0", "c2:48.0"])
+        try Apply.apply(dbQueue: q, action: "updateTransaction",
+                        args: Args(["id": .string(pid), "patch": .object(["amount": .double(-10), "category": .string("c1")])]))
+        XCTAssertEqual(try legs(), ["c1:6.0", "c2:4.0"])
+        XCTAssertNotNil(try clearedAt(q, pid))
+    }
+
+    func test_scaleSplitLegs() {
+        XCTAssertEqual(Transactions.scaleSplitLegs([60, 40], 120), [72, 48])
+        let thirds = Transactions.scaleSplitLegs([1, 1, 1], 10)
+        XCTAssertEqual(thirds.reduce(0, +), 10, accuracy: 1e-9)
+        XCTAssertEqual(thirds.filter { $0 == 3.33 }.count, 2)
+        XCTAssertEqual(Transactions.scaleSplitLegs([0, 0], 5), [5, 0])
     }
 
     func test_setTransactionSplits_preservesClearedAt() throws {

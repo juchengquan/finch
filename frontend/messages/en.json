@@ -1659,7 +1659,8 @@
     "category": {
       "depthCap": "Categories nest at most three levels deep",
       "selfParent": "A category cannot be its own parent",
-      "underDescendant": "A category cannot be moved under its own descendant"
+      "underDescendant": "A category cannot be moved under its own descendant",
+      "system": "\"{name}\" is one of the ledger's own bookkeeping categories and can't be deleted or changed"
     },
     "transfer": {
       "amountGt0": "Transfer amount must be greater than 0",

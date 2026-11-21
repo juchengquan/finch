@@ -13,6 +13,19 @@ type Handler<A extends ActionName> = (exec: Exec, args: Args[A]) => Promise<void
 
 const str = (v: unknown) => String(v);
 
+// The opening-balance, adjustment and fx categories carry the ledger's own
+// equity legs. Deleting one left those legs with no category, the audit then
+// failed, and every backup taken afterwards was refused on restore. Renaming,
+// recolouring and reordering stay allowed; deleting, re-typing and re-parenting
+// do not. Mirrored in FinchCore `Categories.assertNotSystem`.
+async function assertNotSystem(exec: Exec, id: string): Promise<void> {
+  const [row] = await exec('SELECT name, system FROM categories WHERE id = ?', [id]);
+  if (row && row.system != null) {
+    const name = String(row.name);
+    throw new I18nError('error.category.system', { name }, `"${name}" is one of the ledger's own bookkeeping categories and can't be deleted or changed`);
+  }
+}
+
 export const handlers = {
   createCategory: async (exec, args: Args['createCategory']) => {
     const ledgerId = str(args.ledgerId || 'personal');
@@ -40,9 +53,13 @@ export const handlers = {
       }
       await assertSubtreeFitsUnder(exec, id, patch.parentId);
     }
+    if (patch.type !== undefined || patch.parentId !== undefined) await assertNotSystem(exec, id);
     await qUpdateCategory(exec, id, patch);
     return;
   },
-  deleteCategory: (exec, args: Args['deleteCategory']) =>
-    qDeleteCategory(exec, str(args.id)),
+  deleteCategory: async (exec, args: Args['deleteCategory']) => {
+    const id = str(args.id);
+    await assertNotSystem(exec, id);
+    await qDeleteCategory(exec, id);
+  },
 } satisfies Partial<{ [K in ActionName]: Handler<K> }>;

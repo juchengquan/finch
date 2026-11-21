@@ -158,6 +158,15 @@
       }
     },
     {
+      "action": "bulkRecategorize",
+      "args": {
+        "ids": [
+          "$lastAccountPosting"
+        ],
+        "categoryId": "fun"
+      }
+    },
+    {
       "action": "addTransaction",
       "args": {
         "ledgerId": "personal",
@@ -183,6 +192,15 @@
             "amount": -40
           }
         ]
+      }
+    },
+    {
+      "action": "updateTransaction",
+      "args": {
+        "id": "$lastAccountPosting",
+        "patch": {
+          "amount": -150
+        }
       }
     },
     {
@@ -585,6 +603,20 @@
       }
     },
     {
+      "action": "deleteTransactionSkippingOccurrence",
+      "args": {
+        "id": "$lastAccountPosting",
+        "today": "2026-04-15"
+      }
+    },
+    {
+      "action": "generateDueScheduled",
+      "args": {
+        "today": "2026-04-15",
+        "time": "09:00"
+      }
+    },
+    {
       "action": "postScheduled",
       "args": {
         "templateId": "s2",
@@ -741,6 +773,12 @@
       }
     },
     {
+      "action": "confirmAllPending",
+      "args": {
+        "ledgerId": "personal"
+      }
+    },
+    {
       "action": "changeLedgerBase",
       "args": {
         "ledgerId": "personal",
@@ -756,7 +794,7 @@
         "time": "09:00",
         "description": "Gym",
         "kind": "expense",
-        "status": "pending",
+        "status": "confirmed",
         "counterparty_id": null,
         "refunded_entry_id": null,
         "source_template_id": "s2",
@@ -800,7 +838,7 @@
         "time": "09:00",
         "description": "Gym",
         "kind": "expense",
-        "status": "pending",
+        "status": "confirmed",
         "counterparty_id": null,
         "refunded_entry_id": null,
         "source_template_id": "s2",
@@ -844,55 +882,11 @@
         "time": "09:00",
         "description": "Gym",
         "kind": "expense",
-        "status": "pending",
+        "status": "confirmed",
         "counterparty_id": null,
         "refunded_entry_id": null,
         "source_template_id": "s2",
         "occurrence_date": "2026-03-15",
-        "notes": null,
-        "applied_rule_ids": null,
-        "reviewed": false,
-        "sealed": 1,
-        "postings": [
-          {
-            "account_id": "a2",
-            "category_id": null,
-            "amount": "-45.000000",
-            "currency": "USD",
-            "amount_base": "-41.670000",
-            "exchange_rate": "0.925926",
-            "orig_amount": null,
-            "orig_currency": null,
-            "memo": null,
-            "cleared": false,
-            "sort_order": 0
-          },
-          {
-            "account_id": null,
-            "category_id": null,
-            "amount": "41.670000",
-            "currency": "EUR",
-            "amount_base": "41.670000",
-            "exchange_rate": "1.000000",
-            "orig_amount": null,
-            "orig_currency": null,
-            "memo": null,
-            "cleared": false,
-            "sort_order": 1
-          }
-        ]
-      },
-      {
-        "ledger_id": "personal",
-        "date": "2026-04-15",
-        "time": "09:00",
-        "description": "Gym",
-        "kind": "expense",
-        "status": "pending",
-        "counterparty_id": null,
-        "refunded_entry_id": null,
-        "source_template_id": "s2",
-        "occurrence_date": "2026-04-15",
         "notes": null,
         "applied_rule_ids": null,
         "reviewed": false,
@@ -1121,9 +1115,9 @@
           {
             "account_id": "a1",
             "category_id": null,
-            "amount": "-100.000000",
+            "amount": "-150.000000",
             "currency": "USD",
-            "amount_base": "-90.910000",
+            "amount_base": "-136.360000",
             "exchange_rate": "0.909091",
             "orig_amount": null,
             "orig_currency": null,
@@ -1134,9 +1128,9 @@
           {
             "account_id": null,
             "category_id": "food",
-            "amount": "54.550000",
+            "amount": "81.820000",
             "currency": "EUR",
-            "amount_base": "54.550000",
+            "amount_base": "81.820000",
             "exchange_rate": "1.000000",
             "orig_amount": null,
             "orig_currency": null,
@@ -1147,15 +1141,28 @@
           {
             "account_id": null,
             "category_id": "pay",
-            "amount": "36.360000",
+            "amount": "54.550000",
             "currency": "EUR",
-            "amount_base": "36.360000",
+            "amount_base": "54.550000",
             "exchange_rate": "1.000000",
             "orig_amount": null,
             "orig_currency": null,
             "memo": null,
             "cleared": false,
             "sort_order": 2
+          },
+          {
+            "account_id": null,
+            "category_id": "sys-fx",
+            "amount": "-0.010000",
+            "currency": "EUR",
+            "amount_base": "-0.010000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 3
           }
         ]
       },
@@ -1165,7 +1172,7 @@
         "time": null,
         "description": "Pending",
         "kind": "expense",
-        "status": "pending",
+        "status": "confirmed",
         "counterparty_id": null,
         "refunded_entry_id": null,
         "source_template_id": null,
@@ -1986,7 +1993,7 @@
         "name": "Checking",
         "type": "cash",
         "currency": "USD",
-        "current_balance": "-5437.830000",
+        "current_balance": "-5494.830000",
         "sort_order": 3,
         "include_in_net_worth": 1,
         "is_active": 1,
@@ -2000,7 +2007,7 @@
         "name": "Savings",
         "type": "savings",
         "currency": "USD",
-        "current_balance": "4185.000000",
+        "current_balance": "4050.000000",
         "sort_order": 1,
         "include_in_net_worth": 1,
         "is_active": 1,
@@ -2128,7 +2135,7 @@
         "group_id": null,
         "name": "Food",
         "kind": "expense",
-        "amount": "300.000000",
+        "amount": "272.730000",
         "saved": "0.000000",
         "frequency": "monthly",
         "start_date": "2026-01-01",
@@ -2148,7 +2155,7 @@
         "group_id": null,
         "name": "Lunch",
         "kind": "expense",
-        "amount": "120.000000",
+        "amount": "109.090000",
         "saved": "0.000000",
         "frequency": "monthly",
         "start_date": "2026-01-01",
@@ -2307,6 +2314,10 @@
       {
         "key": "displayCurrencyByLedger",
         "value": "{\"personal\":\"USD\"}"
+      },
+      {
+        "key": "scheduledSkips",
+        "value": "{\"s2\":[\"2026-04-15\"]}"
       }
     ]
   }

@@ -76,6 +76,7 @@ public enum Categories {
         if let nameV = patch["name"], !nameV.isNonEmptyTrimmedString {
             throw I18nError("error.required.categoryName", [:], "Category name is required")
         }
+        if patch.keys.contains("type") || patch.keys.contains("parentId") { try assertNotSystem(db, id) }
         if case .string(let pid)? = patch["parentId"] {
             if pid == id { throw I18nError("error.category.selfParent", [:], "A category cannot be its own parent") }
             if try isInSubtreeOf(db, pid, id) {
@@ -97,7 +98,22 @@ public enum Categories {
 
     static func delete(_ db: Database, _ args: Args) throws {
         struct A: Decodable { let id: String }
-        try db.execute(sql: "DELETE FROM categories WHERE id = ?", arguments: [try args.to(A.self).id])
+        let id = try args.to(A.self).id
+        try assertNotSystem(db, id)
+        try db.execute(sql: "DELETE FROM categories WHERE id = ?", arguments: [id])
+    }
+
+    /// The opening-balance, adjustment, fx and interledger categories carry the
+    /// ledger's own equity legs. Deleting one left those legs with no category and
+    /// the audit failing, so every backup taken afterwards was refused on restore.
+    /// Renaming, recolouring and reordering stay allowed; deleting, merging,
+    /// re-typing and re-parenting do not. Mirrors the web's `assertNotSystem`.
+    static func assertNotSystem(_ db: Database, _ id: String) throws {
+        guard let row = try Row.fetchOne(db, sql: "SELECT name, system FROM categories WHERE id = ?", arguments: [id]),
+              (row["system"] as String?) != nil else { return }
+        let name: String = row["name"]
+        throw I18nError("error.category.system", ["name": name],
+                        "\"\(name)\" is one of the ledger's own bookkeeping categories and can't be deleted or changed")
     }
 
     /// Combine `sourceId` into `targetId`: repoint every reference source holds
@@ -134,6 +150,8 @@ public enum Categories {
         if source == target {
             throw I18nError("error.category.mergeSelf", [:], "Cannot merge a category into itself")
         }
+        try assertNotSystem(db, source)
+        try assertNotSystem(db, target)
         guard let sKind = try String.fetchOne(db, sql: "SELECT kind FROM categories WHERE id = ?", arguments: [source]),
               let tKind = try String.fetchOne(db, sql: "SELECT kind FROM categories WHERE id = ?", arguments: [target]) else {
             throw I18nError("error.notFound.category", [:], "Category does not exist")

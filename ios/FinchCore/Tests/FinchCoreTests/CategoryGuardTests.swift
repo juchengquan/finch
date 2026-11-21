@@ -123,4 +123,27 @@ final class CategoryGuardTests: XCTestCase {
             XCTAssertEqual(try String.fetchOne(db, sql: "SELECT parent_id FROM categories WHERE id = 'b'"), "a")
         }
     }
+
+    /// The ledger's own bookkeeping categories can be renamed but not deleted,
+    /// merged, re-typed or re-parented: their equity legs would lose their category.
+    func test_systemCategory_cannotBeDeletedMergedRetypedOrReparented() throws {
+        let q = try seeded()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,system,created_at,updated_at) VALUES ('sys','l1',NULL,'Opening balance','equity',0,'opening',datetime('now'),datetime('now'))")
+            try db.execute(sql: "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,system,created_at,updated_at) VALUES ('sys2','l1',NULL,'Adjustment','equity',1,'adjustment',datetime('now'),datetime('now'))")
+        }
+        try mkCat(q, "food")
+        assertI18n("error.category.system") { try Apply.apply(dbQueue: q, action: "deleteCategory", args: Args(["id": .string("sys")])) }
+        assertI18n("error.category.system") {
+            try Apply.apply(dbQueue: q, action: "updateCategory", args: Args(["id": .string("sys"), "patch": .object(["type": .string("expense")])]))
+        }
+        assertI18n("error.category.system") {
+            try Apply.apply(dbQueue: q, action: "updateCategory", args: Args(["id": .string("sys"), "patch": .object(["parentId": .string("food")])]))
+        }
+        assertI18n("error.category.system") {
+            try Apply.apply(dbQueue: q, action: "mergeCategories", args: Args(["sourceIds": .array([.string("sys")]), "targetId": .string("sys2")]))
+        }
+        XCTAssertEqual(try q.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM categories WHERE system IS NOT NULL") }, 2)
+        try Apply.apply(dbQueue: q, action: "updateCategory", args: Args(["id": .string("sys"), "patch": .object(["name": .string("Starting balances")])]))
+    }
 }
