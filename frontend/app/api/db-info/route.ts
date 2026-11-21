@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { withDb, getCachedAudit } from '@/lib/db/core/server';
 import type { DbAudit } from '@/lib/db/core/entries';
 import { readMetadata } from '@/lib/db/domain/_app/metadata';
+import { errorMessage } from '@/lib/api-error';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -23,6 +24,6 @@ export async function GET() {
     return NextResponse.json(body);
   } catch (err) {
     console.error('GET /api/db-info failed', err);
-    return NextResponse.json({ error: 'Could not read db info' }, { status: 500 });
+    return errorMessage('Could not read db info', 500);
   }
 }

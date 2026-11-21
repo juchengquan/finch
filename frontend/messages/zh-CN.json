@@ -152,7 +152,7 @@
       "is": "等于",
       "isNull": "为空",
       "contains": "包含",
-      "startsWith": "以...开头",
+      "startsWith": "以…开头",
       "between": "介于"
     },
     "fieldLabels": {
@@ -544,6 +544,7 @@
     }
   },
   "activity": {
+    "showMore": "显示更多（还剩 {total} 条）",
     "title": "动态",
     "searchAria": "搜索交易",
     "searchPlaceholder": "搜索交易",
@@ -678,7 +679,7 @@
       "categories": "类别",
       "accounts": "账户",
       "tags": "标签",
-      "merchants": "商家",
+      "merchants": "商户",
       "savedSoFar": "已存金额",
       "savedSoFarHelp": "开始跟踪之前你已经存下的金额。匹配的交易会在此基础上累加。",
       "chip": {
@@ -696,7 +697,7 @@
         "name": "请输入预算名称",
         "targetGt0": "请输入大于 0 的目标",
         "limitGt0": "请输入大于 0 的上限",
-        "needDimension": "请至少选择一个类别、账户、标签或商家来跟踪。"
+        "needDimension": "请至少选择一个类别、账户、标签或商户来跟踪。"
       },
       "toasts": {
         "created": "预算已创建",
@@ -1151,8 +1152,8 @@
       "errors": {
         "symbol": "请输入代号",
         "sharesGt0": "股数必须大于 0",
-        "costGte0": "成本必须大于等于 0",
-        "priceGte0": "价格必须大于等于 0"
+        "costGte0": "成本基础必须不小于 0",
+        "priceGte0": "价格必须不小于 0"
       }
     },
     "editDialog": {
@@ -1167,7 +1168,7 @@
       "price": "价格",
       "asOf": "截至",
       "errors": {
-        "priceGte0": "价格必须大于等于 0",
+        "priceGte0": "价格必须不小于 0",
         "validDate": "请选择有效日期"
       },
       "updatedToast": "价格已更新"

@@ -32,22 +32,22 @@ export async function mutate(action: string, args?: Record<string, unknown>): Pr
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action, args }),
   });
-  if (!res.ok) {
-    // Errors may arrive as { error: string } (legacy throws / route layer
-    // problems) or { error: { code, params, message } } (I18nError from a
-    // migrated mutation site). I18N_PLAN §4.4 — fromWireError keeps
-    // existing `toast.error(err.message)` callers working AND attaches
-    // .code/.params for callers that opt into client-side localisation.
-    let wire: unknown = `${res.status}`;
-    try {
-      const body = (await res.json()) as { error?: unknown };
-      if (body?.error != null) wire = body.error;
-    } catch {
-      // non-JSON error body
-    }
-    throw fromWireError(wire);
-  }
+  if (!res.ok) throw await responseError(res, `${res.status}`);
   return (await res.json()) as ProjectedState;
+}
+
+/** The Error a failed API response carries: `{ error: { message, code?, params? } }`
+ *  (lib/api-error.ts), decoded by fromWireError so `toast.error(err.message)`
+ *  works and `.code`/`.params` are there for callers that translate. A body
+ *  that isn't JSON gives `fallback`. */
+export async function responseError(res: Response, fallback: string): Promise<Error> {
+  try {
+    const body = (await res.json()) as { error?: unknown };
+    if (body?.error != null) return fromWireError(body.error);
+  } catch {
+    // not JSON
+  }
+  return new Error(fallback);
 }
 
 export async function fetchDbInfo(): Promise<DbInfoResponse> {
@@ -70,16 +70,7 @@ export async function uploadAttachment(
   form.append('transactionId', transactionId);
   form.append('file', file, file.name);
   const res = await apiFetch('attachments', { method: 'POST', body: form });
-  if (!res.ok) {
-    let message = `${res.status}`;
-    try {
-      const body = (await res.json()) as { error?: string };
-      if (body?.error) message = body.error;
-    } catch {
-      // non-JSON error body
-    }
-    throw new Error(message);
-  }
+  if (!res.ok) throw await responseError(res, `${res.status}`);
   return (await res.json()) as ProjectedState;
 }
 

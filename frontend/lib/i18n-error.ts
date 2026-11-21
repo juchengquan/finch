@@ -63,14 +63,21 @@ export function isI18nWireError(v: unknown): v is I18nWireError {
   );
 }
 
-/** Serialise an arbitrary thrown value to the route's `error` field.
- *  I18nError -> structured wire shape; plain Error -> message string;
- *  anything else -> "Unknown error". */
-export function toWireError(err: unknown): I18nWireError | string {
+/** Every API error body is `{ error: WireError }`: a message always, and the
+ *  code + params when the error is translatable. (Routes used to send a bare
+ *  string for some errors and this object for others.) */
+export interface WireError {
+  message: string;
+  code?: string;
+  params?: I18nErrorParams;
+}
+
+/** Serialise a thrown value to the route's `error` field. */
+export function toWireError(err: unknown): WireError {
   if (err instanceof I18nError) {
     return { code: err.code, params: err.params, message: err.message };
   }
-  return err instanceof Error ? err.message : 'Unknown error';
+  return { message: err instanceof Error ? err.message : 'Unknown error' };
 }
 
 /** Decode the wire shape into a client `Error` carrying the i18n metadata.
@@ -83,5 +90,9 @@ export function fromWireError(wire: unknown): Error {
     e.params = wire.params ?? {};
     return e;
   }
+  if (wire && typeof wire === 'object' && typeof (wire as WireError).message === 'string') {
+    return new Error((wire as WireError).message);
+  }
+  // A bare string: an older server, or a body that isn't JSON.
   return new Error(typeof wire === 'string' ? wire : 'Server error');
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { autoBackup, listBackups } from '@/lib/db/core/server';
+import { errorMessage } from '@/lib/api-error';
 
 // GET  /api/backups  — list existing on-disk backups (path + name + size +
 //                      createdAt), newest first.
@@ -15,7 +16,7 @@ export async function GET() {
     return NextResponse.json({ backups });
   } catch (err) {
     console.error('GET /api/backups failed', err);
-    return NextResponse.json({ error: 'Could not list backups' }, { status: 500 });
+    return errorMessage('Could not list backups', 500);
   }
 }
 
@@ -34,6 +35,6 @@ export async function POST(req: Request) {
     return NextResponse.json(result);
   } catch (err) {
     console.error('POST /api/backups failed', err);
-    return NextResponse.json({ error: 'Backup failed' }, { status: 500 });
+    return errorMessage('Backup failed', 500);
   }
 }

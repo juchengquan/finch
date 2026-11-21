@@ -1364,3 +1364,14 @@ test('addTransaction with cleared: true books the row already cleared (reconcile
   expect(await clearedOf('On the statement')).not.toBeNull();
   expect(await clearedOf('Not cleared')).toBeNull();
 });
+
+test('the projected state carries pendingKind (it was never selected, so always null)', async () => {
+  const exec = await seededAndAudited();
+  const { projectState } = await import('@/lib/db/state');
+  await addTransaction(exec, { ledgerId: 'personal', accountId: 'chk', amount: -5, merchant: 'Later', date: '2099-01-01', status: 'pending' });
+  await addTransaction(exec, { ledgerId: 'personal', accountId: 'chk', amount: -5, merchant: 'Now', date: '2000-01-01', status: 'pending' });
+  const state = await projectState(exec);
+  const kindOf = (m: string) => state.transactions.find((t) => t.merchant === m)?.pendingKind;
+  expect(kindOf('Later')).toBe('upcoming');
+  expect(kindOf('Now')).toBe('due');
+});

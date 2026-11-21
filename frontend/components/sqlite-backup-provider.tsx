@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { apiFetch, fetchDbInfo } from '@/lib/api-client';
+import { apiFetch, fetchDbInfo, responseError } from '@/lib/api-client';
 import type { DbAudit } from '../lib/db/core/entries';
 
 // The server owns the authoritative SQLite file (see lib/db/server.ts), synced
@@ -155,10 +155,8 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
       const form = new FormData();
       form.append('file', file);
       const res = await apiFetch(`import`, { method: 'POST', body: form });
-      const data = (await res.json()) as ImportResult | { error: string };
-      if (!res.ok || 'error' in data) {
-        throw new Error('error' in data ? data.error : `Import failed (${res.status})`);
-      }
+      if (!res.ok) throw await responseError(res, `Import failed (${res.status})`);
+      const data = (await res.json()) as ImportResult;
       await Promise.all([refreshMetadata(), refreshBackups()]);
       return data;
     },
@@ -171,8 +169,8 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ force: true }),
     });
-    const data = (await res.json()) as { path?: string; error?: string };
-    if (!res.ok || data.error) throw new Error(data.error ?? `Backup failed (${res.status})`);
+    if (!res.ok) throw await responseError(res, `Backup failed (${res.status})`);
+    const data = (await res.json()) as { path?: string };
     await refreshBackups();
     return { path: data.path! };
   }, [refreshBackups]);
@@ -184,10 +182,8 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
       });
-      const data = (await res.json()) as ImportResult | { error: string };
-      if (!res.ok || 'error' in data) {
-        throw new Error('error' in data ? data.error : `Restore failed (${res.status})`);
-      }
+      if (!res.ok) throw await responseError(res, `Restore failed (${res.status})`);
+      const data = (await res.json()) as ImportResult;
       await Promise.all([refreshMetadata(), refreshBackups()]);
       return data;
     },

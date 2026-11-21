@@ -25,7 +25,7 @@ export function proxy(request: NextRequest) {
     basePath: isDev ? '' : CONFIGURED_BASE_PATH,
     allowedHosts,
   });
-  if (rejected) return NextResponse.json({ error: rejected.error }, { status: rejected.status });
+  if (rejected) return NextResponse.json({ error: { message: rejected.error } }, { status: rejected.status });
 
   if (isDev) return NextResponse.next();
   if (pathname.startsWith(CONFIGURED_BASE_PATH)) return NextResponse.next();

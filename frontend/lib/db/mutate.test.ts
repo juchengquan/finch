@@ -720,3 +720,11 @@ test('applyMutation dispatches all 73 actions (smoke)', async () => {
 });
 
 
+
+test('an action name that is only on Object.prototype is unknown, not dispatched', async () => {
+  const exec = await seededAndAudited();
+  for (const action of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+    const err = await applyMutation(exec, action, {}).then(() => null, (e) => e);
+    expect(err?.code).toBe('error.unknownAction');
+  }
+});
