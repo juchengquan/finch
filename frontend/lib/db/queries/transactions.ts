@@ -21,6 +21,7 @@ import type {
   TransactionPatch,
 } from '@/lib/db/domain/transactions/types';
 import { r2 } from '@/lib/round';
+import { selectInChunks } from '../core/in-chunks';
 
 /** Translate a user-typed search string into an FTS5 MATCH expression.
  *  Each run of unicode letters/numbers becomes a case-folded prefix term
@@ -106,11 +107,12 @@ const BASE_SELECT = `
 export async function enrichLegTxs(exec: Exec, rows: Tx[], entryIds: string[]): Promise<Tx[]> {
   if (entryIds.length === 0) return rows;
 
-  const ph = entryIds.map(() => '?').join(',');
+  // Distinct ids: one entry can appear once per account leg.
+  const uniq = [...new Set(entryIds)];
 
   // 1. Category legs per entry (plain only — exclude equity). Select p.id for
   //    split-id fidelity (DOUBLE_ENTRY_PLAN §8.3: posting id = stable anchor).
-  const catRows = await exec(
+  const catRows = await selectInChunks(exec, uniq, (ph) =>
     `SELECT p.id, p.entry_id, p.category_id, p.amount_base, p.sort_order
        FROM postings p
       WHERE p.entry_id IN (${ph}) AND p.account_id IS NULL
@@ -118,22 +120,19 @@ export async function enrichLegTxs(exec: Exec, rows: Tx[], entryIds: string[]): 
           SELECT c.kind FROM categories c WHERE c.id = p.category_id
         ) != 'equity')
       ORDER BY p.entry_id, p.sort_order`,
-    entryIds,
   );
 
   // 2. Account-leg count per entry (detects transfers: ≥2 account legs).
-  const acctCountRows = await exec(
+  const acctCountRows = await selectInChunks(exec, uniq, (ph) =>
     `SELECT p.entry_id, COUNT(*) AS n
        FROM postings p
       WHERE p.entry_id IN (${ph}) AND p.account_id IS NOT NULL
       GROUP BY p.entry_id`,
-    entryIds,
   );
 
   // 3. Tags per entry.
-  const tagRows = await exec(
+  const tagRows = await selectInChunks(exec, uniq, (ph) =>
     `SELECT et.entry_id, et.tag_id FROM entry_tags et WHERE et.entry_id IN (${ph})`,
-    entryIds,
   );
 
   // Build category map: entryId → plain category legs (sorted by sort_order).
@@ -170,14 +169,13 @@ export async function enrichLegTxs(exec: Exec, rows: Tx[], entryIds: string[]): 
 
   const refPostingMap = new Map<string, string>();
   if (refEntryIds.length > 0) {
-    const refPh = refEntryIds.map(() => '?').join(',');
-    const refRows = await exec(
+    // No LIMIT: it cut rows off when an entry had more than one account leg.
+    // First account leg per entry is picked below, by sort_order.
+    const refRows = await selectInChunks(exec, [...new Set(refEntryIds)], (ph) =>
       `SELECT p.entry_id, p.id AS pid
          FROM postings p
-        WHERE p.entry_id IN (${refPh}) AND p.account_id IS NOT NULL
-        ORDER BY p.sort_order
-        LIMIT ${refEntryIds.length}`,
-      refEntryIds,
+        WHERE p.entry_id IN (${ph}) AND p.account_id IS NOT NULL
+        ORDER BY p.entry_id, p.sort_order`,
     );
     // Use first account leg per entry.
     for (const rr of refRows) {
