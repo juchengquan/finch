@@ -54,6 +54,28 @@ final class TransfersLedgersTests: XCTestCase {
         }
     }
 
+    /// A budget's figures are base-currency too: they convert with the ledger, at
+    /// the newest rate on file, instead of keeping their numbers.
+    func test_changeLedgerBase_convertsBudgets() throws {
+        let q = try seeded()
+        try q.write { db in
+            try db.execute(sql: "UPDATE accounts SET current_balance = 0")   // no postings back the seed's balances; the audit would refuse
+            try db.execute(sql: "INSERT INTO exchange_rates (date,currency,rate) VALUES ('2026-01-01','EUR',0.5)")
+            try db.execute(sql: "INSERT INTO exchange_rates (date,currency,rate) VALUES ('2026-05-01','EUR',0.9)")
+            try db.execute(sql: """
+                INSERT INTO budgets (id,ledger_id,kind,amount,saved,carry_forward,frequency,start_date,rollover_limit,created_at,updated_at)
+                VALUES ('b1','l1','expense',1000,0,90,'monthly','2026-01-01',NULL,datetime('now'),datetime('now'))
+                """)
+        }
+        try Apply.apply(dbQueue: q, action: "changeLedgerBase", args: Args(["ledgerId": .string("l1"), "newBase": .string("EUR")]))
+        try q.read { db in
+            let b = try Row.fetchOne(db, sql: "SELECT amount, carry_forward, rollover_limit FROM budgets WHERE id='b1'")!
+            XCTAssertEqual(b["amount"] as Double, 1111.11, accuracy: 0.001)   // newest rate (0.9), not the January one
+            XCTAssertEqual(b["carry_forward"] as Double, 100, accuracy: 0.001)
+            XCTAssertNil(b["rollover_limit"] as Double?)
+        }
+    }
+
     func test_ledgerCrud() throws {
         let q = try seeded()
         try Apply.apply(dbQueue: q, action: "createLedger", args: Args(["id": .string("biz"), "name": .string("Business"), "base": .string("eur")]))

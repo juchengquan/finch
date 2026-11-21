@@ -160,6 +160,30 @@ export async function deleteLedger(exec: Exec, id: string): Promise<{ relPaths: 
   }
 }
 
+/** The rate date that means "the newest rate on file" (see recomputeAmountBases). */
+export const LATEST_RATE_DATE = '9999-12-31';
+
+/** Convert every base-currency figure on `ledgerId`'s budgets from `oldBase` to
+ *  `newBase`. Mirrored in FinchCore `Ledgers.convertBudgets`. */
+async function convertBudgetsToBase(exec: Exec, ledgerId: string, oldBase: string, newBase: string): Promise<void> {
+  if (oldBase === newBase) return;
+  // Per value, not one rounded rate: convertToBase applies the unrounded rate.
+  const conv = async (v: unknown) =>
+    (v == null ? null : (await convertToBase(exec, Number(v), oldBase, newBase, LATEST_RATE_DATE)).amountBase);
+  const rows = await exec(
+    'SELECT id, amount, saved, carry_forward, rollover_limit, pending_amount FROM budgets WHERE ledger_id = ?',
+    [ledgerId],
+  );
+  for (const b of rows) {
+    await exec(
+      `UPDATE budgets SET amount = ?, saved = ?, carry_forward = ?, rollover_limit = ?, pending_amount = ?,
+              updated_at = datetime('now') WHERE id = ?`,
+      [await conv(b.amount), await conv(b.saved), await conv(b.carry_forward), await conv(b.rollover_limit),
+        await conv(b.pending_amount), String(b.id)],
+    );
+  }
+}
+
 /**
  * Rewrite every locked `amount_base` in `ledgerId` against `newBase` using each
  * entry's date + native currency to look up rates (DOUBLE_ENTRY_PLAN §5.3).
@@ -254,6 +278,13 @@ export async function recomputeAmountBases(
 
       await rebuildEntry(exec, entryId, { legs });
     }
+
+    // 3b. Budgets hold base-currency figures too. They used to keep their
+    // numbers, so a 10,000 USD budget became 10,000 JPY. A budget is a standing
+    // limit, not a dated record, so it converts at the latest rate on file (the
+    // far-future date makes the lookup take the newest one) — deterministic for a
+    // given database, unlike "today".
+    await convertBudgetsToBase(exec, ledgerId, oldBase, newBase);
 
     // 4. Audit after the loop.
     const problems = await auditLedger(exec, ledgerId, { checkBalances: true });

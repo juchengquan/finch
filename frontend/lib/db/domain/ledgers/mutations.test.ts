@@ -38,6 +38,30 @@ test('changeLedgerBase: rewrites amount_base under the new base using each txn d
   }
 });
 
+test('changeLedgerBase converts the ledger\'s budgets at the newest rate', async () => {
+  const exec = await seededAndAudited();
+  const { LATEST_RATE_DATE } = await import('@/lib/db/queries/ledgers');
+  await exec("UPDATE budgets SET saved = 250, rollover_limit = 40 WHERE ledger_id = 'personal'");
+  const before = await exec(
+    "SELECT id, amount, saved, rollover_limit FROM budgets WHERE ledger_id = 'personal' ORDER BY id",
+  );
+  expect(before.length).toBeGreaterThan(0);
+  const otherBefore = await exec("SELECT id, amount FROM budgets WHERE ledger_id != 'personal' ORDER BY id");
+
+  await applyMutation(exec, 'changeLedgerBase', { ledgerId: 'personal', newBase: 'SGD' });
+
+  const after = await exec("SELECT id, amount, saved, rollover_limit FROM budgets WHERE ledger_id = 'personal' ORDER BY id");
+  const sgd = async (v: unknown) => (await convertToBase(exec, Number(v), 'USD', 'SGD', LATEST_RATE_DATE)).amountBase;
+  for (const [i, b] of before.entries()) {
+    expect(Number(after[i].amount)).toBe(await sgd(b.amount));
+    expect(Number(after[i].saved)).toBe(await sgd(b.saved));
+    expect(Number(after[i].rollover_limit)).toBe(await sgd(b.rollover_limit));
+  }
+  expect(Number(after[0].amount)).not.toBe(Number(before[0].amount));
+  // Other ledgers' budgets are untouched.
+  expect(await exec("SELECT id, amount FROM budgets WHERE ledger_id != 'personal' ORDER BY id")).toEqual(otherBefore);
+});
+
 test('changeLedgerBase: same-base call is a no-op', async () => {
   const exec = await seededAndAudited();
   // §2: check postings (which carry amount_base, exchange_rate) instead of transactions.
