@@ -544,6 +544,7 @@
     }
   },
   "activity": {
+    "showMore": "显示更多（还剩 {total} 条）",
     "title": "动态",
     "searchAria": "搜索交易",
     "searchPlaceholder": "搜索交易",

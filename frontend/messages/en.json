@@ -543,6 +543,7 @@
     }
   },
   "activity": {
+    "showMore": "Show more ({total} left)",
     "title": "Activity",
     "searchAria": "Search transactions",
     "searchPlaceholder": "Search transactions",
