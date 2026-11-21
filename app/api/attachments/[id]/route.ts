@@ -1,7 +1,7 @@
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { Readable } from 'node:stream';
-import { getServerDb } from '@/lib/db/core/server';
+import { withDb } from '@/lib/db/core/server';
 import { getAttachmentFile } from '@/lib/db/domain/attachments/queries';
 import { resolveAttachmentPath } from '@/lib/db/core/paths';
 
@@ -9,9 +9,9 @@ import { resolveAttachmentPath } from '@/lib/db/core/paths';
 //
 // Looks up the pointer row by id, applies the path-traversal guard, stats
 // the on-disk file, then streams the bytes back with the stored mime type
-// and the original filename in Content-Disposition. WAL-mode reads are
-// snapshot-consistent without a mutex, so this bypasses the serialize() the
-// mutation path needs.
+// and the original filename in Content-Disposition. The row lookup takes the
+// process lock (withDb) like every DB read — there is one shared connection,
+// so WAL gives no isolation between requests. Streaming happens outside it.
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -34,8 +34,7 @@ export async function GET(
     const { id } = await params;
     if (!id) return new Response('Missing id', { status: 400 });
 
-    const db = await getServerDb();
-    const row = await getAttachmentFile(db.exec, id);
+    const row = await withDb(({ exec }) => getAttachmentFile(exec, id));
     if (!row) return new Response('Not found', { status: 404 });
 
     // Defense-in-depth: even though rel_path is composed server-side at

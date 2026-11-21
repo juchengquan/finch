@@ -1629,6 +1629,7 @@
     }
   },
   "error": {
+    "syncFailed": "Couldn't save that change",
     "required": {
       "id": "id is required",
       "name": "Name is required",

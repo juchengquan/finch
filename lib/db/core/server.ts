@@ -100,10 +100,49 @@ async function open(): Promise<ServerDb> {
   return { exec, driver, file: full };
 }
 
-/** The shared server database, opened once per process. */
+// Set while an import/restore has closed the live connection and is replacing
+// the file on disk. A getServerDb() call in that window must not reopen the
+// OLD file: the rename would then swap the file out from under that
+// connection, every later write would land in a deleted inode, and its WAL
+// would be paired with the new file on the next open (corruption, observed).
+let _swap: Promise<void> | null = null;
+
+/** The shared server database, opened once per process.
+ *
+ *  App code should not call this directly — use `withDb` / `withWrite` /
+ *  `readState`, which hold the process lock. There is ONE connection, so an
+ *  unlocked read can run inside another request's open transaction (seeing
+ *  uncommitted rows, or failing `VACUUM INTO`). */
 export function getServerDb(): Promise<ServerDb> {
-  if (!_db) _db = open();
+  if (_swap) return _swap.then(getServerDb, getServerDb);
+  if (!_db) {
+    const opening = open();
+    _db = opening;
+    // Don't cache a failed open for the life of the process — let the next
+    // call retry (e.g. after the user restores a good backup).
+    opening.catch(() => {
+      if (_db === opening) _db = null;
+    });
+  }
   return _db;
+}
+
+/** Close the live connection, run `fn` (which replaces the file on disk), and
+ *  hold every getServerDb() caller until it finishes. Caller must already hold
+ *  the write-chain lock. */
+async function swapLiveFile<T>(fn: () => Promise<T>): Promise<T> {
+  let release!: () => void;
+  _swap = new Promise<void>((resolve) => (release = resolve));
+  try {
+    // Close the live connection so the OS file lock + WAL sidecars are
+    // released BEFORE we touch the file. Otherwise the rename could leave the
+    // old WAL paired with the new main file → corrupted next-open.
+    await closeLiveDb();
+    return await fn();
+  } finally {
+    _swap = null;
+    release();
+  }
 }
 
 /** Test-only: drop the cached connection so the next getServerDb() reopens
@@ -136,15 +175,17 @@ const AUDIT_MAX_PROBLEMS = 50;
  *  call and returning the cached value on subsequent calls. */
 export async function getCachedAudit(): Promise<import('./entries').DbAudit> {
   if (_auditCache) return _auditCache;
-  const { exec } = await getServerDb();
-  const { auditLedger } = await import('./entries');
-  const problems = await auditLedger(exec);
-  _auditCache = {
-    problems: problems.slice(0, AUDIT_MAX_PROBLEMS),
-    problemCount: problems.length,
-    checkedAt: new Date(_auditClock()).toISOString(),
-  };
-  return _auditCache;
+  return withDb(async ({ exec }) => {
+    if (_auditCache) return _auditCache;
+    const { auditLedger } = await import('./entries');
+    const problems = await auditLedger(exec);
+    _auditCache = {
+      problems: problems.slice(0, AUDIT_MAX_PROBLEMS),
+      problemCount: problems.length,
+      checkedAt: new Date(_auditClock()).toISOString(),
+    };
+    return _auditCache;
+  });
 }
 
 /** Test-only: drop the cached audit so the next getCachedAudit() re-runs
@@ -200,13 +241,24 @@ async function closeLiveDb(): Promise<void> {
   }
 }
 
-// Process-local mutex around writes + imports so a mutation can't interleave
-// with a file swap. Single-process by design; multi-worker is out of scope.
+// Process-local mutex around EVERY use of the shared connection — writes,
+// imports, and reads alike. Reads need it too: with a single connection, WAL
+// gives no isolation between requests, so an unlocked read can see another
+// request's uncommitted rows, fail with "cannot VACUUM from within a
+// transaction", or reopen the file mid-import. Single-process by design;
+// multi-worker is out of scope. Never call serialize() from inside a
+// serialized function — it would wait on itself.
 let _writeChain: Promise<unknown> = Promise.resolve();
 function serialize<T>(fn: () => Promise<T>): Promise<T> {
   const next = _writeChain.then(fn, fn);
   _writeChain = next.catch(() => {});
   return next;
+}
+
+/** Run a read against the server database under the process lock (see
+ *  `serialize`). Use this rather than `getServerDb()` in routes. */
+export function withDb<T>(fn: (db: ServerDb) => Promise<T>): Promise<T> {
+  return serialize(async () => fn(await getServerDb()));
 }
 
 export interface ImportValidation {
@@ -351,24 +403,21 @@ async function importDbBytesLocked(bytes: Uint8Array): Promise<ImportResult> {
   // run auditLedger, abort on any problem so the live DB stays untouched.
   await assertImportAuditClean(bytes);
 
-  const backup = await autoBackup({ force: true }); // always snapshot — even if auto-backup is off
+  const backup = await autoBackupLocked({ force: true }); // always snapshot — even if auto-backup is off
   const { full } = dbFile();
 
-  // Close the live connection so the OS file lock + WAL sidecars are released
-  // BEFORE we touch the file. Otherwise the rename could leave the old WAL
-  // paired with the new main file → corrupted next-open.
-  await closeLiveDb();
-  await removeSidecars(full);
-
-  const incoming = `${full}.incoming`;
-  try {
-    await fs.writeFile(incoming, Buffer.from(bytes));
-    await fs.rename(incoming, full);
-  } catch (err) {
-    await fs.unlink(incoming).catch(() => {});
-    throw err;
-  }
-  // _db is already null from closeLiveDb; the next getServerDb() reopens.
+  await swapLiveFile(async () => {
+    await removeSidecars(full);
+    const incoming = `${full}.incoming`;
+    try {
+      await fs.writeFile(incoming, Buffer.from(bytes));
+      await fs.rename(incoming, full);
+    } catch (err) {
+      await fs.unlink(incoming).catch(() => {});
+      throw err;
+    }
+  });
+  // _db is null after the swap; the next getServerDb() reopens the new file.
   return { ok: true, metadata: v.metadata!, backupPath: backup.path };
 }
 
@@ -432,45 +481,45 @@ async function importPackBytesLocked(bytes: Uint8Array): Promise<ImportResult> {
 
   // Snapshot the live DB so the swap is recoverable. (Attachments aren't
   // backed up here — see the rotation below.)
-  const backup = await autoBackup({ force: true });
+  const backup = await autoBackupLocked({ force: true });
 
   const { dir, full } = dbFile();
   const liveAttachments = path.join(dir, 'attachments');
-
-  // Close the live connection so the OS file lock + WAL sidecars are
-  // released BEFORE we touch the file (same reason as importDbBytesLocked).
-  await closeLiveDb();
-  await removeSidecars(full);
 
   const ts = fsSafeTimestamp();
   const oldAttach = `${liveAttachments}.old-${ts}`;
   let attachRotated = false;
   const incoming = `${full}.incoming`;
 
-  try {
-    // 1) Stage the new DB bytes next to the live path, then rename in.
-    await fs.writeFile(incoming, Buffer.from(dbBytes));
-    await fs.rename(incoming, full);
+  // swapLiveFile closes the live connection first (same reason as
+  // importDbBytesLocked) and holds getServerDb() callers until we're done.
+  await swapLiveFile(async () => {
+    await removeSidecars(full);
+    try {
+      // 1) Stage the new DB bytes next to the live path, then rename in.
+      await fs.writeFile(incoming, Buffer.from(dbBytes));
+      await fs.rename(incoming, full);
 
-    // 2) Rotate the live attachments folder aside (if any), then move the
-    //    extracted one into place. extractPack always creates the
-    //    attachments dir even when empty, so the rename is uniform.
-    if (existsSync(liveAttachments)) {
-      await fs.rename(liveAttachments, oldAttach);
-      attachRotated = true;
+      // 2) Rotate the live attachments folder aside (if any), then move the
+      //    extracted one into place. extractPack always creates the
+      //    attachments dir even when empty, so the rename is uniform.
+      if (existsSync(liveAttachments)) {
+        await fs.rename(liveAttachments, oldAttach);
+        attachRotated = true;
+      }
+      await fs.rename(extracted.attachmentsDir, liveAttachments);
+    } catch (err) {
+      // Best-effort rollback. The DB is also recoverable via the autoBackup
+      // we took at the top of the function.
+      await fs.unlink(incoming).catch(() => {});
+      if (attachRotated) {
+        await fs.rm(liveAttachments, { recursive: true, force: true }).catch(() => {});
+        await fs.rename(oldAttach, liveAttachments).catch(() => {});
+      }
+      await fs.rm(stagingDir, { recursive: true, force: true }).catch(() => {});
+      throw err;
     }
-    await fs.rename(extracted.attachmentsDir, liveAttachments);
-  } catch (err) {
-    // Best-effort rollback. The DB is also recoverable via the autoBackup
-    // we took at the top of the function.
-    await fs.unlink(incoming).catch(() => {});
-    if (attachRotated) {
-      await fs.rm(liveAttachments, { recursive: true, force: true }).catch(() => {});
-      await fs.rename(oldAttach, liveAttachments).catch(() => {});
-    }
-    await fs.rm(stagingDir, { recursive: true, force: true }).catch(() => {});
-    throw err;
-  }
+  });
 
   // Successful swap — drop the rotated attachments folder. (Plan §5
   // open question #3: "Keep N rotations or one? — one rotation only
@@ -626,7 +675,12 @@ async function pruneBackups(keep: number): Promise<void> {
  * backup," whether we wrote it just now or not. result.created is true
  * iff a new file was just written.
  */
-export async function autoBackup(opts?: { force?: boolean }): Promise<{ path: string; created: boolean }> {
+export function autoBackup(opts?: { force?: boolean }): Promise<{ path: string; created: boolean }> {
+  return serialize(() => autoBackupLocked(opts));
+}
+
+// Inner backup — assumes the caller already holds the write-chain lock.
+async function autoBackupLocked(opts?: { force?: boolean }): Promise<{ path: string; created: boolean }> {
   const db = await getServerDb();
   const cfg = await readBackupConfig(db.exec);
   const forced = opts?.force === true;
@@ -653,7 +707,7 @@ export async function autoBackup(opts?: { force?: boolean }): Promise<{ path: st
   // Build a .finch pack carrying the DB + every attachment + a manifest.
   // exportPackBytes() handles VACUUM INTO + the metadata stamp + the
   // attachment scan from the cloned DB (consistent snapshot).
-  const { bytes } = await exportPackBytes();
+  const { bytes } = await exportPackBytesLocked();
   await fs.writeFile(target, Buffer.from(bytes));
 
   await pruneBackups(cfg.retention);
@@ -672,7 +726,11 @@ function includeHostname(): boolean {
  * mutated — VACUUM INTO writes a clean snapshot to a tmp file, we stamp
  * metadata on it, then read its bytes back.
  */
-export async function exportDbBytes(): Promise<{ bytes: Uint8Array; filename: string }> {
+export function exportDbBytes(): Promise<{ bytes: Uint8Array; filename: string }> {
+  return serialize(exportDbBytesLocked);
+}
+
+async function exportDbBytesLocked(): Promise<{ bytes: Uint8Array; filename: string }> {
   const db = await getServerDb();
   const tmp = path.join(os.tmpdir(), `finch-export-${Date.now()}-${Math.random().toString(36).slice(2)}.sqlite3`);
   db.driver.prepare('VACUUM INTO ?').run(tmp);
@@ -711,7 +769,12 @@ export async function exportDbBytes(): Promise<{ bytes: Uint8Array; filename: st
  * the pack is internally consistent (no row references a file we didn't
  * include, no included file lacks a row).
  */
-export async function exportPackBytes(): Promise<{ bytes: Uint8Array; filename: string }> {
+export function exportPackBytes(): Promise<{ bytes: Uint8Array; filename: string }> {
+  return serialize(exportPackBytesLocked);
+}
+
+// Inner pack export — assumes the caller already holds the write-chain lock.
+async function exportPackBytesLocked(): Promise<{ bytes: Uint8Array; filename: string }> {
   const { listAttachmentFiles } = await import('../queries/attachments');
   const { resolveAttachmentPath } = await import('./paths');
   const { buildPack } = await import('./pack');

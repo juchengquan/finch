@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerDb } from '@/lib/db/core/server';
+import { withDb } from '@/lib/db/core/server';
 import { listArchivedAccounts } from '@/lib/db/domain/accounts/queries';
 
 export const runtime = 'nodejs';
@@ -7,10 +7,9 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
-    const { exec } = await getServerDb();
     const url = new URL(req.url);
     const ledgerId = url.searchParams.get('ledgerId') ?? undefined;
-    const rows = await listArchivedAccounts(exec, ledgerId ?? undefined);
+    const rows = await withDb(({ exec }) => listArchivedAccounts(exec, ledgerId));
     return NextResponse.json(rows);
   } catch (err) {
     console.error('GET /api/accounts/archived failed', err);

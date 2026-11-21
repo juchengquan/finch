@@ -70,6 +70,11 @@ export async function POST(req: Request) {
       throw new HttpError(400, 'Unsupported file type — images and PDFs only');
     }
 
+    // Process bytes (image → JPEG with EXIF stripped + orientation applied;
+    // PDF passthrough) BEFORE taking the DB lock: it's CPU work that needs no
+    // DB, and every other request — reads included — waits on that lock.
+    const processed = await processBytes(rawBuf, detected.kind);
+
     // Validation ladder #3: the rest needs DB access (does the txn exist?
     // are we under the per-tx cap?). Bundle with the insert in withWrite so
     // a failure here triggers ROLLBACK and the file write below never runs.
@@ -87,11 +92,6 @@ export async function POST(req: Request) {
       if (existingCount >= maxPerTx()) {
         throw new HttpError(400, `Maximum ${maxPerTx()} attachments per transaction`);
       }
-
-      // Process bytes (image → JPEG with EXIF stripped + orientation applied;
-      // PDF passthrough). Outside-of-DB CPU work, but still inside the
-      // serialized write — receipts uploads aren't a high-concurrency path.
-      const processed = await processBytes(rawBuf, detected.kind);
 
       // Compose paths + integrity hash.
       const id = randomUUID();

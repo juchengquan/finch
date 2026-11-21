@@ -26,6 +26,7 @@ import { useFinanceStore } from '@/lib/store';
 import { MOCK, catById, CURRENCIES } from '@/lib/data';
 import { ACCOUNT_TYPE_OPTIONS } from '@/lib/account-types';
 import { cn } from '@/lib/utils';
+import { apiFetch } from '@/lib/api-client';
 import type { AccountRow } from '@/lib/db/domain/accounts/queries';
 
 const DEFAULT_OPEN_GROUPS = ['cash', 'credit', 'invest'];
@@ -219,7 +220,7 @@ export default function AccountsPage() {
     // ledger.
     let cancelled = false;
     (async () => {
-      const res = await fetch(`/api/accounts/archived?ledgerId=${encodeURIComponent(activeId)}`);
+      const res = await apiFetch(`accounts/archived?ledgerId=${encodeURIComponent(activeId)}`);
       if (!res.ok) throw new Error(`listArchivedAccounts HTTP ${res.status}`);
       const rows = (await res.json()) as AccountRow[];
       if (!cancelled) {

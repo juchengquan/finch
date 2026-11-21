@@ -1630,6 +1630,7 @@
     }
   },
   "error": {
+    "syncFailed": "无法保存此更改",
     "required": {
       "id": "id 必填",
       "name": "名称必填",
