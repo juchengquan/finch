@@ -32,14 +32,19 @@ test('toWireError(I18nError) → structured wire shape', () => {
   });
 });
 
-test('toWireError(plain Error) → message string (back-compat)', () => {
-  const err = new Error('Something bad');
-  expect(toWireError(err)).toBe('Something bad');
+test('toWireError(plain Error) → { message }, the same shape as a translatable error', () => {
+  expect(toWireError(new Error('Something bad'))).toEqual({ message: 'Something bad' });
 });
 
-test('toWireError(unknown) → "Unknown error"', () => {
-  expect(toWireError('a string')).toBe('Unknown error');
-  expect(toWireError(null)).toBe('Unknown error');
+test('toWireError(unknown) → { message: "Unknown error" }', () => {
+  expect(toWireError('a string')).toEqual({ message: 'Unknown error' });
+  expect(toWireError(null)).toEqual({ message: 'Unknown error' });
+});
+
+test('fromWireError: { message } without a code → plain Error with that message', () => {
+  const decoded = fromWireError({ message: 'Host not allowed' }) as ErrorWithI18n;
+  expect(decoded.message).toBe('Host not allowed');
+  expect(decoded.code).toBeUndefined();
 });
 
 test('isI18nWireError discriminates wire vs string vs garbage', () => {

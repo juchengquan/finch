@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { importDbBytes, importPackBytes } from '@/lib/db/core/server';
 import { detectFileKind } from '@/lib/db/core/pack';
+import { errorMessage, errorResponse } from '@/lib/api-error';
 
 // Accepts a multipart upload with field name "file" — either:
 //   - a bare .sqlite3 backup file, or
@@ -20,10 +21,10 @@ export async function POST(req: Request) {
     const form = await req.formData();
     const file = form.get('file');
     if (!(file instanceof File)) {
-      return NextResponse.json({ error: 'Missing "file" field' }, { status: 400 });
+      return errorMessage('Missing "file" field', 400);
     }
     if (file.size === 0) {
-      return NextResponse.json({ error: 'Uploaded file is empty' }, { status: 400 });
+      return errorMessage('Uploaded file is empty', 400);
     }
 
     const bytes = new Uint8Array(await file.arrayBuffer());
@@ -34,15 +35,12 @@ export async function POST(req: Request) {
     } else if (kind === 'sqlite') {
       result = await importDbBytes(bytes);
     } else {
-      return NextResponse.json(
-        { error: 'Unrecognised file — expected a Finch .sqlite3 backup or a .finch pack' },
-        { status: 400 },
-      );
+      return errorMessage('Unrecognised file — expected a Finch .sqlite3 backup or a .finch pack', 400);
     }
     return NextResponse.json(result);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Import failed';
     console.error('POST /api/import failed', err);
-    return NextResponse.json({ error: message }, { status: 400 });
+    // 400 either way: a file the importer refuses. Keeps an I18nError's code.
+    return errorResponse(err instanceof Error ? err : new Error('Import failed'), 400);
   }
 }

@@ -10,6 +10,7 @@ import {
 } from '@/lib/db/domain/attachments/queries';
 import { resolveAttachmentPath } from '@/lib/db/core/paths';
 import { detectFile, processBytes } from '@/lib/attachments/process';
+import { errorMessage } from '@/lib/api-error';
 
 // Multipart upload route for receipt photos / PDFs. RECEIPT_PHOTOS_PLAN §5.1.
 // Body: multipart/form-data with parts:
@@ -141,10 +142,10 @@ export async function POST(req: Request) {
     return NextResponse.json(state);
   } catch (err) {
     if (err instanceof HttpError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      return errorMessage(err.message, err.status);
     }
     const message = err instanceof Error ? err.message : 'Upload failed';
     console.error('POST /api/attachments failed', err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return errorMessage(message, 500);
   }
 }

@@ -131,11 +131,11 @@ POST /api/mutate
 Response (success):
   { ...projectedState... }
 
-Response (I18nError):
+Response (I18nError — the engine refusing the request), status 400:
   { error: { code: "error.account.hasTransactions", params: {...}, message: "..." } }
 
-Response (plain Error — internal bug):
-  { error: "Budget not found" }  // (only the string; the message is the error message itself)
+Response (plain Error — an internal fault), status 500:
+  { error: { message: "Budget not found" } }  // same shape, no code (lib/api-error.ts)
 ```
 
 ## Worked example: adding a new action to the `tags` domain

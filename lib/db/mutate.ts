@@ -45,7 +45,9 @@ export async function applyMutation(
   action: string,
   args: Record<string, unknown>,
 ): Promise<void> {
-  const handler = ALL[action as ActionName];
+  // Own keys only: `{"action":"constructor"}` used to find Object.prototype's
+  // constructor and "succeed".
+  const handler = Object.hasOwn(ALL, action) ? ALL[action as ActionName] : undefined;
   if (!handler) {
     throw new I18nError('error.unknownAction', { action }, `Unknown action "${action}"`);
   }

@@ -656,7 +656,16 @@ export interface EntryPatch {
 /** The single edit path: unseal → patch header → (maybe) rewrite legs →
  *  reseal → recompute every touched account. Supersedes updateTransaction +
  *  updateTransfer + setTransactionSplits in PR B. */
-export async function rebuildEntry(exec: Exec, entryId: string, patch: EntryPatch): Promise<{ touchedAccountIds: string[] }> {
+/** `opts.deferRecompute`: collect the touched accounts there instead of
+ *  recomputing their balances now. A bulk caller (recomputeAmountBases) then
+ *  recomputes each account once at the end; recomputing per entry summed the
+ *  account's every posting each time, which made a base change quadratic. */
+export async function rebuildEntry(
+  exec: Exec,
+  entryId: string,
+  patch: EntryPatch,
+  opts: { deferRecompute?: Set<string> } = {},
+): Promise<{ touchedAccountIds: string[] }> {
   const [cur] = await exec('SELECT * FROM entries WHERE id = ?', [entryId]);
   if (!cur) return { touchedAccountIds: [] };
   const oldLegs = await exec('SELECT * FROM postings WHERE entry_id = ? ORDER BY sort_order', [entryId]);
@@ -785,7 +794,8 @@ export async function rebuildEntry(exec: Exec, entryId: string, patch: EntryPatc
     throw err;
   }
 
-  for (const id of touched) await recomputeAccountFromPostings(exec, id);
+  if (opts.deferRecompute) for (const id of touched) opts.deferRecompute.add(id);
+  else for (const id of touched) await recomputeAccountFromPostings(exec, id);
   return { touchedAccountIds: [...touched] };
 }
 

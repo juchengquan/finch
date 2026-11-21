@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useDeferredValue, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import { CatBar } from '@/components/ui/cat-bar';
@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useLookups } from '@/components/use-lookups';
+import { useMediaQuery } from '@/components/use-media-query';
 import { useFinanceStore } from '@/lib/store';
 import { useSavedSearches, type SavedSearch } from '@/lib/use-saved-searches';
 import { useLedger } from '@/components/ledger-provider';
@@ -110,19 +111,46 @@ export default function ActivityPage() {
   const activeRangeCount =
     (fromDate ? 1 : 0) + (toDate ? 1 : 0) + (minA != null && Number.isFinite(minA) ? 1 : 0) + (maxA != null && Number.isFinite(maxA) ? 1 : 0);
 
-  const txns = allTxns.filter((t) => {
-    if ((t.ledgerId ?? 'personal') !== activeId) return false;
-    if (filter === 'in' && t.amount <= 0) return false;
-    if (filter === 'out' && t.amount >= 0) return false;
-    if (query && !txMatchesQuery(t, query, searchNames)) return false;
-    if (tagFilter && !(t.tags ?? []).includes(tagFilter)) return false;
-    if (fromDate && t.date < fromDate) return false;
-    if (toDate && t.date > toDate) return false;
-    if (minA != null && Number.isFinite(minA) && Math.abs(t.amount) < minA) return false;
-    if (maxA != null && Number.isFinite(maxA) && Math.abs(t.amount) > maxA) return false;
-    if (reviewOnly && (t.pending || t.reviewedAt)) return false;
-    return true;
-  });
+  // The list follows a deferred copy of the search text, so typing stays
+  // responsive however many transactions there are; it catches up a beat later.
+  const deferredQuery = useDeferredValue(query);
+  // Filtered, then sorted newest-first (date, then time). Sorting before
+  // grouping matters: the consecutive-run grouping assumes same-date rows are
+  // adjacent, but the store's order isn't guaranteed date-contiguous
+  // (pre-hydration seed order, optimistic prepends), and one date in several
+  // groups gives duplicate `key={group.date}` warnings. Memoised: it used to run
+  // on every render, including every keystroke.
+  const txns = useMemo(() => allTxns
+    .filter((t) => {
+      if ((t.ledgerId ?? 'personal') !== activeId) return false;
+      if (filter === 'in' && t.amount <= 0) return false;
+      if (filter === 'out' && t.amount >= 0) return false;
+      if (deferredQuery && !txMatchesQuery(t, deferredQuery, searchNames)) return false;
+      if (tagFilter && !(t.tags ?? []).includes(tagFilter)) return false;
+      if (fromDate && t.date < fromDate) return false;
+      if (toDate && t.date > toDate) return false;
+      if (minA != null && Number.isFinite(minA) && Math.abs(t.amount) < minA) return false;
+      if (maxA != null && Number.isFinite(maxA) && Math.abs(t.amount) > maxA) return false;
+      if (reviewOnly && (t.pending || t.reviewedAt)) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      const at = a.time ?? '';
+      const bt = b.time ?? '';
+      return at < bt ? 1 : at > bt ? -1 : 0;
+    }), [allTxns, activeId, filter, deferredQuery, searchNames, tagFilter, fromDate, toDate, minA, maxA, reviewOnly]);
+
+  // Paging: the first PAGE rows, more on request. Rendering every row (twice,
+  // once per layout) is what made a long history slow. A new filter starts
+  // again from the first page.
+  const PAGE = 200;
+  const filterKey = [activeId, filter, deferredQuery, tagFilter, fromDate, toDate, minAmt, maxAmt, reviewOnly].join('|');
+  const [paging, setPaging] = useState({ key: filterKey, limit: PAGE });
+  const limit = paging.key === filterKey ? paging.limit : PAGE;
+  const shown = txns.slice(0, limit);
+  // Render the layout that applies (both, CSS-switched, until the viewport is known).
+  const isDesktop = useMediaQuery('(min-width: 768px)');
 
   // Count of unreviewed confirmed rows in the active ledger — drives the
   // "Needs review" toggle badge + the empty-queue celebration.
@@ -174,19 +202,8 @@ export default function ActivityPage() {
     setSaveOpen(false);
   };
 
-  // Sort newest-first (date, then time) before grouping: the consecutive-run
-  // grouping below assumes same-date rows are adjacent, but the store's order
-  // isn't guaranteed date-contiguous (pre-hydration seed order, optimistic
-  // prepends). Without this, one date can land in several groups → duplicate
-  // `key={group.date}` React warnings.
-  const sorted = [...txns].sort((a, b) => {
-    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
-    const at = a.time ?? '';
-    const bt = b.time ?? '';
-    return at < bt ? 1 : at > bt ? -1 : 0;
-  });
   const groups: { date: string; items: typeof txns }[] = [];
-  for (const t of sorted) {
+  for (const t of shown) {
     const last = groups[groups.length - 1];
     if (last && last.date === t.date) last.items.push(t);
     else groups.push({ date: t.date, items: [t] });
@@ -410,7 +427,7 @@ export default function ActivityPage() {
         )}
 
         {/* Mobile: grouped feed */}
-        <div className="md:hidden">
+        {isDesktop !== true && <div className="md:hidden">
           {groups.map((group) => (
             <div key={group.date} className="mb-4">
               <div className="text-muted-foreground mb-1 px-1 font-mono text-[10px] tracking-wider uppercase">
@@ -478,10 +495,10 @@ export default function ActivityPage() {
               </div>
             </div>
           ))}
-        </div>
+        </div>}
 
         {/* Desktop: table */}
-        {txns.length > 0 && (
+        {isDesktop !== false && txns.length > 0 && (
           <div className="bg-card border-border hidden overflow-hidden rounded-xl border md:block">
             <table className="w-full text-sm">
               <thead>
@@ -495,7 +512,7 @@ export default function ActivityPage() {
                 </tr>
               </thead>
               <tbody>
-                {txns.map((tx) => {
+                {shown.map((tx) => {
                   const cat = catById(tx.category);
                   const inc = tx.amount > 0;
                   const selected = selectedIds.has(tx.id);
@@ -553,6 +570,16 @@ export default function ActivityPage() {
               </tbody>
             </table>
           </div>
+        )}
+
+        {txns.length > shown.length && (
+          <button
+            type="button"
+            onClick={() => setPaging({ key: filterKey, limit: limit + PAGE })}
+            className="bg-secondary text-foreground mt-3 h-10 w-full rounded-xl text-sm font-medium"
+          >
+            {t('showMore', { total: txns.length - shown.length })}
+          </button>
         )}
       </div>
 
