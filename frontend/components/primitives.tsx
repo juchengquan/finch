@@ -120,56 +120,6 @@ export function AreaChart({ series, labels, width = 310, height = 120, className
   );
 }
 
-interface DonutProps {
-  slices: { value: number; color: string }[];
-  size?: number;
-  stroke?: number;
-  gap?: number;
-}
-
-export function Donut({ slices, size = 140, stroke = 22, gap = 2 }: DonutProps) {
-  const total = slices.reduce((s, x) => s + x.value, 0) || 1;
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const arcs = slices.map((s, i) => {
-    const len = (s.value / total) * c;
-    const offset = -slices.slice(0, i).reduce((sum, p) => sum + (p.value / total) * c, 0);
-    return { len, offset, color: s.color };
-  });
-
-  return (
-    <svg aria-hidden width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
-      {arcs.map((a, i) => (
-        <circle key={i} cx={size / 2} cy={size / 2} r={r} fill="none"
-          style={{ stroke: a.color }} strokeWidth={stroke}
-          strokeDasharray={`${Math.max(a.len - gap, 0.1)} ${c}`}
-          strokeDashoffset={a.offset} />
-      ))}
-    </svg>
-  );
-}
-
-interface StackedBarProps {
-  slices: { value: number; color: string }[];
-  width?: number;
-  height?: number;
-  radius?: number;
-}
-
-export function StackedBar({ slices, width = 280, height = 8, radius = 4 }: StackedBarProps) {
-  const total = slices.reduce((s, x) => s + x.value, 0) || 1;
-  const widths = slices.map((s, i) => Math.max((s.value / total) * width - (i < slices.length - 1 ? 2 : 0), 0));
-
-  return (
-    <svg aria-hidden width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-      {widths.map((w, i) => {
-        const x = widths.slice(0, i).reduce((sum, ww) => sum + ww + 2, 0);
-        return <rect key={i} x={x} y={0} width={w} height={height} style={{ fill: slices[i].color }} rx={radius} />;
-      })}
-    </svg>
-  );
-}
-
 interface RingProps {
   value: number;
   max?: number;
@@ -193,30 +143,6 @@ export function Ring({ value, max = 100, size = 48, stroke = 5, color = 'var(--p
           strokeLinecap="round" strokeDasharray={`${pct * c} ${c}`} />
       </svg>
       {children && <div className="absolute inset-0 flex items-center justify-center">{children}</div>}
-    </div>
-  );
-}
-
-interface MerchantGlyphProps {
-  name: string;
-  size?: number;
-  /** Background colour. Hex (`#xxxxxx`), CSS colour string, or omitted for a
-   *  deterministic per-name fallback. */
-  color?: string | null;
-  fg?: string;
-}
-
-export function MerchantGlyph({ name, size = 36, color, fg = 'var(--foreground)' }: MerchantGlyphProps) {
-  const letter = (name || '?').trim().charAt(0).toUpperCase();
-  const fallbackHue = name ? (name.charCodeAt(0) * 7) % 360 : 30;
-  const bg = color || `oklch(0.9 0.05 ${fallbackHue})`;
-
-  return (
-    <div
-      className="flex shrink-0 items-center justify-center rounded-full font-medium"
-      style={{ width: size, height: size, background: bg, color: fg, fontSize: size * 0.42 }}
-    >
-      {letter}
     </div>
   );
 }

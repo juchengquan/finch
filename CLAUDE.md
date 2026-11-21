@@ -48,10 +48,9 @@ bun run build            # production build
 bun run lint             # eslint (flat config, eslint.config.mjs)
 bun run typecheck        # tsc --noEmit
 bun test lib             # unit tests (bun test runner, lib/**/*.test.ts)
-bun run test:e2e         # Playwright e2e (e2e/), needs a build/dev server
 ```
 
-Single test file: `bun test lib/derive.test.ts`. CI mirrors these in
+Single test file: `bun test lib/select.test.ts`. CI mirrors these in
 `.github/workflows/ci.yml`.
 
 ## Critical: Next.js 16 ≠ your training data
@@ -63,7 +62,7 @@ guide in `frontend/node_modules/next/dist/docs/` and heed deprecations (also in
 ## Architecture
 
 **Stack:** Tailwind v4 + **shadcn/ui** (`components/ui/*`), **zustand**, **lucide-react**
-(via the typed barrel `components/icons.tsx`, ~50 re-exports), **next-themes**, **sonner**.
+(via the typed barrel `components/icons.tsx`, ~45 re-exports), **next-themes**, **sonner**.
 Fonts via `next/font` in `app/layout.tsx`.
 
 **Routing & shell:** one route group `(main)/`; its layout renders
@@ -78,7 +77,9 @@ mark their in-content breadcrumb `md:hidden`. Pages are mostly `'use client'`.
 
 **Data & state — three layers:**
 1. **Static reference data** — `lib/data.ts` exports `MOCK` and `LEDGER` from
-   `data/*.json`, plus lookups (`acctById`, `catById`) and formatters. Read-only seed.
+   `data/*.json`, plus formatters. Read-only seed: only a fallback before the store
+   loads. Id → name lookups are `useLookups()` (`components/use-lookups.ts`), which
+   read the store.
 2. **Live state** — `lib/store/`: 14 per-domain zustand slices
    (`lib/store/<domain>/{state,actions}.ts`, wired in `lib/store/index.ts`), seeded from
    `data/*.json` and hydrated on load from the server (`components/store-hydration.tsx`). Read via
@@ -92,8 +93,8 @@ mark their in-content breadcrumb `md:hidden`. Pages are mostly `'use client'`.
    **the file IS the live DB**. Export = `VACUUM INTO` tmp; import = close → swap file →
    reopen.
 
-`lib/derive.ts` holds pure selectors (`accountBalance`, `categorySpent`, `netWorth`,
-`monthSpent`, `monthIncome`) — compute figures, don't store them.
+`lib/select.ts` holds the pure selectors (`categorySpend`, `accountBalance`,
+`netWorthByMonth`, `budgetProgress`, …) — compute figures, don't store them.
 
 **Money & currencies (easy to get wrong):** amounts are stored in the **active ledger's
 base currency** — never print raw amounts.
@@ -109,7 +110,7 @@ base currency** — never print raw amounts.
 "noir"), toggled by `next-themes`. No `lib/theme.ts` / `styles/tokens.css`. Use semantic
 Tailwind classes (`bg-card`, `text-muted-foreground`, `border-border`, `text-success`,
 `text-warning`). `components/primitives.tsx` holds `Money` + the SVG chart primitives (Sparkline,
-BarChart, AreaChart, Donut, StackedBar, Ring, Sankey, CalendarHeatmap, MerchantGlyph),
+BarChart, AreaChart, Ring, Sankey, CalendarHeatmap),
 all reading the token variables.
 
 **Provider order** (`app/layout.tsx`): `ThemeProvider` → `LedgerProvider` →

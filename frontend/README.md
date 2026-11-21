@@ -34,7 +34,6 @@ bun dev                    # http://localhost:3000
 | `bun run lint` | ESLint (flat config) |
 | `bun run typecheck` | `tsc --noEmit` |
 | `bun test lib` | Unit tests (Bun test runner) |
-| `bun run test:e2e` | Playwright end-to-end tests |
 
 ## Architecture
 
@@ -52,7 +51,6 @@ components/
 lib/
 ├── store/            # per-domain zustand slices
 ├── select.ts         # Pure selectors over transactions (balance, spend, forecast)
-├── derive.ts         # Derived computations from store
 ├── data.ts           # Static reference data + money formatters
 ├── api-client.ts     # Client ↔ server state sync (fetch / mutate)
 └── db/               # SQLite layer — schema, seed, queries, mutations, state projection
