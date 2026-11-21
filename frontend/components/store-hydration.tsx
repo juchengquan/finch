@@ -3,8 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { useFinanceStore } from '@/lib/store';
-import { SYNC_FAILED_EVENT, type SyncFailedDetail } from '@/lib/store/hydrate';
+import { SYNC_FAILED_EVENT, applyServerState, type SyncFailedDetail } from '@/lib/store/hydrate';
 import { fetchState, mutate } from '@/lib/api-client';
 import { localToday } from '@/lib/local-today';
 import type { ErrorWithI18n } from '@/lib/i18n-error';
@@ -34,7 +33,7 @@ export function StoreHydration() {
       inFlight = true;
       void fetchState()
         .then((state) => {
-          if (!cancelled) useFinanceStore.setState(state);
+          if (!cancelled) applyServerState(state);
         })
         .catch((err) => console.error('Could not load state from server', err))
         .finally(() => {
@@ -47,7 +46,7 @@ export function StoreHydration() {
     inFlight = true;
     void mutate('generateDueScheduled', { today: localToday() })
       .then((state) => {
-        if (!cancelled) useFinanceStore.setState(state);
+        if (!cancelled) applyServerState(state);
       })
       .catch((err) => {
         console.error('Could not generate scheduled items', err);
