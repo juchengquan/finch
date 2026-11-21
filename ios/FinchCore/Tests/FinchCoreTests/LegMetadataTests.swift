@@ -71,6 +71,38 @@ final class LegMetadataTests: XCTestCase {
         XCTAssertNotNil(try clearedAt(q, pid), "a date-only edit must not un-clear the account leg")
     }
 
+    /// Editing a split's amount keeps every category and re-scales them in
+    /// proportion; a category patch alongside is ignored, the amount still applies.
+    func test_splitAmountEdit_keepsCategoriesInProportion() throws {
+        let q = try seeded()
+        let pid = try addClearedExpense(q, amount: -100)
+        try Apply.apply(dbQueue: q, action: "setTransactionSplits", args: Args(["id": .string(pid), "splits": .array([
+            .object(["categoryId": .string("c1"), "amount": .double(60)]),
+            .object(["categoryId": .string("c2"), "amount": .double(40)]),
+        ])]))
+        func legs() throws -> [String] {
+            try q.read { db in
+                try Row.fetchAll(db, sql: "SELECT category_id, amount_base FROM postings WHERE account_id IS NULL ORDER BY sort_order")
+                    .map { "\($0["category_id"] as String):\(Entries.r2($0["amount_base"] as Double))" }
+            }
+        }
+        XCTAssertEqual(try legs(), ["c1:60.0", "c2:40.0"])
+        try Apply.apply(dbQueue: q, action: "updateTransaction", args: Args(["id": .string(pid), "patch": .object(["amount": .double(-120)])]))
+        XCTAssertEqual(try legs(), ["c1:72.0", "c2:48.0"])
+        try Apply.apply(dbQueue: q, action: "updateTransaction",
+                        args: Args(["id": .string(pid), "patch": .object(["amount": .double(-10), "category": .string("c1")])]))
+        XCTAssertEqual(try legs(), ["c1:6.0", "c2:4.0"])
+        XCTAssertNotNil(try clearedAt(q, pid))
+    }
+
+    func test_scaleSplitLegs() {
+        XCTAssertEqual(Transactions.scaleSplitLegs([60, 40], 120), [72, 48])
+        let thirds = Transactions.scaleSplitLegs([1, 1, 1], 10)
+        XCTAssertEqual(thirds.reduce(0, +), 10, accuracy: 1e-9)
+        XCTAssertEqual(thirds.filter { $0 == 3.33 }.count, 2)
+        XCTAssertEqual(Transactions.scaleSplitLegs([0, 0], 5), [5, 0])
+    }
+
     func test_setTransactionSplits_preservesClearedAt() throws {
         let q = try seeded()
         let pid = try addClearedExpense(q, amount: -100)

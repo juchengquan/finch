@@ -538,19 +538,49 @@ public enum Transactions {
         }
 
         let plainCatLegs = oldLegs.filter { ($0["account_id"] as String?) == nil }
-        // Category patch on a split entry (≥2 category legs) is a header-only no-op.
-        if plainCatLegs.count >= 2 && has("category") { try Entries.rebuildEntry(db, entryId, ep); return }
+        let acctLeg = Entries.AccountLeg(accountId: newAccountId, amount: nativeAmount, amountBase: amountBase,
+            exchangeRate: rate, memo: oldAcct["memo"], id: oldAcct["id"],
+            origAmount: origAmount, origCurrency: origCurrency, clearedAt: oldAcct["cleared_at"])
+
+        // A split (≥2 category legs) keeps its categories through any money patch:
+        // a category patch is ignored, as before, and a new amount, currency,
+        // account or date re-scales every category leg in proportion. An
+        // amount-only patch used to rebuild it as ONE category leg (food 60 + rent
+        // 40, edited to 120, became food 120). Mirrors the web's updateTransaction.
+        if plainCatLegs.count >= 2 {
+            let fxCat = try String.fetchOne(db, sql: "SELECT id FROM categories WHERE ledger_id = ? AND system = 'fx'", arguments: [ledgerId])
+            let catLegs = plainCatLegs.filter { fxCat == nil || ($0["category_id"] as String?) != fxCat }
+            let scaled = scaleSplitLegs(catLegs.map { $0["amount_base"] as Double }, Entries.r2(-amountBase))
+            ep.legs = .set([.account(acctLeg)] + zip(catLegs, scaled).map { leg, value in
+                .category(Entries.CategoryLeg(categoryId: leg["category_id"], amountBase: value, memo: leg["memo"], id: leg["id"]))
+            })
+            try Entries.rebuildEntry(db, entryId, ep)
+            return
+        }
         let existingCat = plainCatLegs.first
         let newCategoryId: String? = has("category") ? strOrNil(patch["category"]) : (existingCat?["category_id"] as String?)
 
         ep.legs = .set([
-            .account(Entries.AccountLeg(accountId: newAccountId, amount: nativeAmount, amountBase: amountBase,
-                exchangeRate: rate, memo: oldAcct["memo"], id: oldAcct["id"],
-                origAmount: origAmount, origCurrency: origCurrency, clearedAt: oldAcct["cleared_at"])),
+            .account(acctLeg),
             .category(Entries.CategoryLeg(categoryId: newCategoryId, amountBase: Entries.r2(-amountBase),
                 memo: existingCat?["memo"], id: existingCat?["id"])),
         ])
         try Entries.rebuildEntry(db, entryId, ep)
+    }
+
+    /// Scale split leg amounts so they sum to `target`, keeping their proportions.
+    /// Each leg is rounded to cents and the remainder goes to the largest leg, so
+    /// the sum is exact; with no proportions (legs sum to 0) the first leg takes
+    /// it all. Mirrors the web's `scaleSplitLegs`.
+    static func scaleSplitLegs(_ legs: [Double], _ target: Double) -> [Double] {
+        guard !legs.isEmpty else { return [] }
+        let sum = legs.reduce(0, +)
+        if abs(sum) < 0.005 { return legs.indices.map { $0 == 0 ? target : 0 } }
+        var out = legs.map { Entries.r2($0 * target / sum) }
+        var largest = 0
+        for i in out.indices.dropFirst() where abs(out[i]) > abs(out[largest]) { largest = i }
+        out[largest] = Entries.r2(out[largest] + target - out.reduce(0, +))
+        return out
     }
 
     // MARK: setCleared / setReviewed / markAllReviewed

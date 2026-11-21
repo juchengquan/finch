@@ -1307,3 +1307,43 @@ test('bulkRecategorize skips an opening-balance or adjustment row instead of fai
   expect(await openingCat()).toBe(before);
   expect(await auditLedger(exec, 'personal')).toEqual([]);
 });
+
+test('editing the amount of a split keeps its categories and their proportions', async () => {
+  const exec = await seededAndAudited();
+  const id = await addTransaction(exec, {
+    ledgerId: 'personal', accountId: 'chk', amount: -100, merchant: 'Split shop', date: '2026-05-25', status: 'confirmed',
+  });
+  await applyMutation(exec, 'setTransactionSplits', {
+    id,
+    splits: [
+      { categoryId: 'food', amount: 60, description: null },
+      { categoryId: 'food-groceries', amount: 40, description: null },
+    ],
+  });
+  const legs = async () =>
+    (await exec(
+      `SELECT category_id AS c, amount_base AS b FROM postings
+        WHERE entry_id = COALESCE((SELECT entry_id FROM postings WHERE id = ?), ?) AND account_id IS NULL
+        ORDER BY sort_order`,
+      [id, id],
+    )).map((r) => [String(r.c), Number(r.b)]);
+  expect(await legs()).toEqual([['food', 60], ['food-groceries', 40]]);
+
+  await applyMutation(exec, 'updateTransaction', { id, patch: { amount: -120 } });
+  expect(await legs()).toEqual([['food', 72], ['food-groceries', 48]]);
+
+  // A category patch alongside is still ignored on a split, but the amount applies.
+  await applyMutation(exec, 'updateTransaction', { id, patch: { amount: -10, category: 'food' } });
+  expect(await legs()).toEqual([['food', 6], ['food-groceries', 4]]);
+  expect(await balanceOf(exec, 'chk')).toBeDefined();
+  expect(await auditLedger(exec, 'personal')).toEqual([]);
+});
+
+test('scaleSplitLegs keeps proportions and puts the cent remainder on the largest leg', async () => {
+  const { scaleSplitLegs } = await import('@/lib/db/queries/transactions');
+  expect(scaleSplitLegs([60, 40], 120)).toEqual([72, 48]);
+  const thirds = scaleSplitLegs([1, 1, 1], 10);
+  expect(thirds.reduce((a, b) => a + b, 0)).toBeCloseTo(10, 10);
+  expect(thirds.filter((v) => v === 3.33).length).toBe(2);
+  expect(scaleSplitLegs([0, 0], 5)).toEqual([5, 0]);
+});

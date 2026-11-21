@@ -623,11 +623,37 @@ export async function updateTransaction(
     origCurrency = oldAcctLeg.orig_currency == null ? null : String(oldAcctLeg.orig_currency);
   }
 
-  // Splits: if ≥2 plain category legs and patch.category is set, no-op on
-  // legs (legacy parity — sets the ignored parent default).
   const plainCatLegs = oldLegs.filter((l) => l.account_id == null);
-  if (plainCatLegs.length >= 2 && patch.category !== undefined) {
-    // Legacy parity: category patch on a split entry is a no-op on legs.
+
+  // A split (≥2 category legs) keeps its categories through any money patch.
+  // A category patch is ignored, as it always was (legacy parity: it sets the
+  // ignored parent default). A new amount, currency, account or date re-scales
+  // every category leg in proportion instead. This path used to apply only
+  // without a category patch, and then rebuilt the entry as ONE category leg:
+  // food 60 + rent 40, edited to 120, became food 120.
+  if (plainCatLegs.length >= 2) {
+    const fxCatId = await fxSystemCategoryId(exec, String(cur.ledger_id));
+    const catLegs = plainCatLegs.filter((l) => fxCatId == null || String(l.category_id) !== fxCatId);
+    const scaled = scaleSplitLegs(catLegs.map((l) => Number(l.amount_base)), r2(-resolvedAmountBase));
+    entryPatch.legs = [
+      {
+        id: String(oldAcctLeg.id),
+        accountId: newAccountId,
+        amount: nativeAmount,
+        amountBase: resolvedAmountBase,
+        exchangeRate: resolvedRate,
+        origAmount,
+        origCurrency,
+        clearedAt: oldAcctLeg.cleared_at == null ? null : String(oldAcctLeg.cleared_at),
+        memo: oldAcctLeg.memo == null ? null : String(oldAcctLeg.memo),
+      },
+      ...catLegs.map((l, i) => ({
+        id: String(l.id),
+        categoryId: l.category_id == null ? null : String(l.category_id),
+        amountBase: scaled[i],
+        memo: l.memo == null ? null : String(l.memo),
+      })),
+    ];
     await rebuildEntry(exec, entryId, entryPatch);
     return { oldAccountId: newAccountId !== (oldAccountId ?? '') ? (oldAccountId ?? null) : null };
   }
@@ -663,6 +689,27 @@ export async function updateTransaction(
 
   const movedAccount = newAccountId !== (oldAccountId ?? '') ? (oldAccountId ?? null) : null;
   return { oldAccountId: movedAccount };
+}
+
+async function fxSystemCategoryId(exec: Exec, ledgerId: string): Promise<string | null> {
+  const [row] = await exec("SELECT id FROM categories WHERE ledger_id = ? AND system = 'fx'", [ledgerId]);
+  return row ? String(row.id) : null;
+}
+
+/** Scale split leg amounts so they sum to `target`, keeping their proportions.
+ *  Each leg is rounded to cents; the rounding remainder goes to the largest
+ *  leg, so the sum is exact. With no proportions to keep (the legs sum to 0),
+ *  the first leg takes the whole amount. Mirrored in FinchCore
+ *  `Transactions.scaleSplitLegs`. */
+export function scaleSplitLegs(legs: number[], target: number): number[] {
+  const sum = legs.reduce((a, b) => a + b, 0);
+  if (!legs.length) return [];
+  if (Math.abs(sum) < 0.005) return legs.map((_, i) => (i === 0 ? target : 0));
+  const out = legs.map((v) => r2((v * target) / sum));
+  let largest = 0;
+  for (let i = 1; i < out.length; i++) if (Math.abs(out[i]) > Math.abs(out[largest])) largest = i;
+  out[largest] = r2(out[largest] + target - out.reduce((a, b) => a + b, 0));
+  return out;
 }
 
 /** Hard-delete an entry (postings cascade). Returns the first touched account
