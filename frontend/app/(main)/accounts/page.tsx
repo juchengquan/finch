@@ -23,7 +23,8 @@ import { useMoney } from '@/components/use-money';
 import { useTransactionDialog } from '@/components/transaction-dialog';
 import { EmptyState } from '@/components/empty-state';
 import { useFinanceStore } from '@/lib/store';
-import { MOCK, catById, CURRENCIES } from '@/lib/data';
+import { MOCK, CURRENCIES } from '@/lib/data';
+import { useLookups } from '@/components/use-lookups';
 import { ACCOUNT_TYPE_OPTIONS } from '@/lib/account-types';
 import { cn } from '@/lib/utils';
 import { apiFetch } from '@/lib/api-client';
@@ -185,6 +186,7 @@ interface GroupDraft {
 const EMPTY_GROUP_DRAFT: GroupDraft = { id: null, name: '' };
 
 export default function AccountsPage() {
+  const { catById } = useLookups();
   const { fmt, toBase } = useMoney();
   const { active, activeId } = useLedger();
   const { openTransaction } = useTransactionDialog();

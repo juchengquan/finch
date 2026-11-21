@@ -36,7 +36,8 @@ import {
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useTransactionDialog } from '@/components/transaction-dialog';
-import { MOCK, catById, convertAmount } from '@/lib/data';
+import { MOCK, convertAmount } from '@/lib/data';
+import { useLookups } from '@/components/use-lookups';
 import { useFinanceStore } from '@/lib/store';
 import { ACCOUNT_TYPE_OPTIONS, accountTypeLabel, toDbType } from '@/lib/account-types';
 import { selectTransactions, accountBalance, balanceSeries, unrealizedFx, holdingsValueForAccount } from '@/lib/select';
@@ -45,8 +46,10 @@ import { AccountHoldings } from '@/components/account-holdings';
 import { AccountForecast } from '@/components/account-forecast';
 import { ReconcileStatus } from '@/components/reconcile-status';
 import { cn } from '@/lib/utils';
+import { localToday } from '@/lib/local-today';
 
 export default function AccountDetailPage() {
+  const { catById } = useLookups();
   const { active } = useLedger();
   const { display, fmtFrom, toBase, fmt, base, native } = useMoney();
   const params = useParams();
@@ -114,7 +117,7 @@ export default function AccountDetailPage() {
   // list for a full ticking surface (see RECONCILE_PLAN §5.2).
   const [reconcileMode, setReconcileMode] = useState(false);
   const [statementBalance, setStatementBalance] = useState('');
-  const [statementDate, setStatementDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [statementDate, setStatementDate] = useState(() => localToday());
   // Quick-add-missing-transaction state (RECONCILE_PLAN §10.2): an inline form
   // inside reconcile mode that creates the row and auto-clears it so the
   // difference closes immediately. Income vs expense follows the sign toggle.
@@ -159,7 +162,7 @@ export default function AccountDetailPage() {
     // common case: a recently-arrived statement matches reality and the user
     // just confirms by ticking rows). The user overwrites it if it doesn't.
     setStatementBalance(String(balance));
-    setStatementDate(new Date().toISOString().slice(0, 10));
+    setStatementDate(localToday());
     setReconcileMode(true);
   };
   const exitReconcile = () => setReconcileMode(false);

@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { LEDGER, CURRENCIES } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
+import { localToday } from '@/lib/local-today';
 
 const SOURCE_STYLE: Record<string, string> = {
   ECB: 'bg-success/10 text-success',
@@ -57,7 +58,7 @@ export function ExchangeRates() {
 
   const [expanded, setExpanded] = useState(false);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localToday();
   const EMPTY = { date: today, currency: 'JPY', rate: '', source: 'manual' };
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(EMPTY);

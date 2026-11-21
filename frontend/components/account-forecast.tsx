@@ -10,8 +10,9 @@ import { useMoney } from '@/components/use-money';
 import { accountForecast, type ForecastEvent } from '@/lib/select';
 import type { AccountRow } from '@/lib/db/domain/accounts/types';
 import { cn } from '@/lib/utils';
+import { localToday } from '@/lib/local-today';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localToday();
 const HORIZONS = [30, 60, 90] as const;
 type Horizon = (typeof HORIZONS)[number];
 

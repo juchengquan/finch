@@ -27,6 +27,7 @@ import { periodLabel, nextPeriod, periodOf, type Frequency } from '@/lib/budgets
 import { MOCK } from '@/lib/data';
 import { categoryPath } from '@/lib/db/domain/categories/queries';
 import { cn } from '@/lib/utils';
+import { localToday } from '@/lib/local-today';
 
 const FREQUENCIES = ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'] as const;
 
@@ -171,7 +172,7 @@ export function BudgetFormDialog({ open, onOpenChange, budget, defaultType = 'ex
   const nextPeriodLabel = editing && budget != null && recurringNow
     ? (() => {
         try {
-          const today = new Date().toISOString().slice(0, 10);
+          const today = localToday();
           const current = periodOf(today, budget.frequency as Frequency, budget.startDate);
           const np = nextPeriod(current, budget.frequency as Frequency, budget.startDate);
           return periodLabel(np, budget.frequency as Frequency, budget.startDate, locale);

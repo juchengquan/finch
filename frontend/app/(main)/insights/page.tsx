@@ -23,6 +23,7 @@ import { WhatIfCard } from '@/components/what-if-card';
 import { NetWorthExplainedCard } from '@/components/net-worth-explained-card';
 import { NetWorthByTypeCard } from '@/components/net-worth-by-type-card';
 import { useLedger } from '@/components/ledger-provider';
+import { useToday } from '@/components/use-today';
 import { useMoney } from '@/components/use-money';
 import { useBackup } from '@/components/sqlite-backup-provider';
 import { useFinanceStore } from '@/lib/store';
@@ -80,6 +81,21 @@ export default function InsightsPage() {
   const accounts = useFinanceStore((s) => s.accounts);
   const budgets = useFinanceStore((s) => s.budgets);
   const scheduled = useFinanceStore((s) => s.scheduled);
+  const storeCategories = useFinanceStore((s) => s.categories);
+  const today = useToday();
+
+  // The ledger's own expense categories. They used to come from the demo seed,
+  // so categories the user created were missing from Insights entirely; the seed
+  // now only stands in before the store has loaded.
+  const ledgerExpenseCats = useMemo(() => {
+    const own = storeCategories
+      .filter((c) => c.ledgerId === activeId && c.type === 'expense')
+      .map((c) => ({ id: c.id, name: c.name, color: c.color ?? '#9ca3af' }));
+    if (storeCategories.length) return own;
+    return (MOCK.categories as { id: string; name: string; color?: string; ledger?: string }[])
+      .filter((c) => (c.ledger ?? 'personal') === activeId)
+      .map((c) => ({ id: c.id, name: c.name, color: c.color ?? '#9ca3af' }));
+  }, [storeCategories, activeId]);
 
   // --- Breakdown view (formerly the Reports page): a month picker + the
   // per-category spend list for the chosen month. The picker is restricted to
@@ -96,9 +112,8 @@ export default function InsightsPage() {
   // data prune) fall back to the latest month with data — at render, no effect.
   const breakdownMonth = breakdownMonths.includes(pickedMonth) ? pickedMonth : (breakdownMonths[0] ?? '');
   const breakdownSpentById = categorySpend(transactions, activeId, breakdownMonth);
-  const breakdownCats = (MOCK.categories as { id: string; name: string; color?: string; ledger?: string }[])
-    .filter((c) => (c.ledger ?? 'personal') === activeId)
-    .map((c) => ({ id: c.id, name: c.name, color: c.color ?? '#9ca3af', spent: breakdownSpentById[c.id] ?? 0 }))
+  const breakdownCats = ledgerExpenseCats
+    .map((c) => ({ ...c, spent: breakdownSpentById[c.id] ?? 0 }))
     .sort((a, b) => b.spent - a.spent);
   const breakdownTotal = breakdownCats.reduce((s, c) => s + c.spent, 0);
 
@@ -114,16 +129,24 @@ export default function InsightsPage() {
       .catch((err) => toast.error(t('breakdown.exportFailure'), { description: String((err as Error).message ?? err) }));
   };
 
-  // Category reference (name + static seed budget) for the deltas comparison; the
-  // page derives monthly/cashflow series straight from the projected transactions.
-  const ledgerCategories = (MOCK.categories as { id: string; name: string; budget: number; color?: string; ledger?: string }[])
-    .filter((c) => (c.ledger ?? 'personal') === activeId)
-    .map((c) => ({ id: c.id, name: c.name, budget: c.budget, color: c.color ?? '#9ca3af' }));
-  const month = currentMonth(transactions, activeId);
-  const lastDate = transactions.reduce(
+  // Category reference for the deltas and the over-budget insight. A category's
+  // budget is the user's monthly expense budget on that one category (it used to
+  // be a static number from the demo seed).
+  const ledgerCategories = ledgerExpenseCats.map((c) => ({
+    ...c,
+    budget: budgets
+      .filter((b) => b.ledgerId === activeId && b.type === 'expense' && b.frequency === 'monthly'
+        && b.categoryIds.length === 1 && b.categoryIds[0] === c.id)
+      .reduce((sum, b) => sum + b.amount, 0),
+  }));
+  // "Now" is the user's local today; until it is known (server render,
+  // hydration) the latest transaction date stands in, so both renders agree.
+  const latestTxDate = transactions.reduce(
     (d, t) => ((t.ledgerId ?? 'personal') === activeId && t.date > d ? t.date : d),
     '',
   );
+  const lastDate = today ?? latestTxDate;
+  const month = today ? today.slice(0, 7) : currentMonth(transactions, activeId);
   const monthly = monthlySpending(transactions, activeId, month, range);
   const cashflow = monthlyCashflow(transactions, activeId, month, range);
   const networth = netWorthByMonth(transactions, accounts, activeId, month, range, toBase);
@@ -152,8 +175,7 @@ export default function InsightsPage() {
   const momPct = prevSpend > 0 ? Math.round(((curSpend - prevSpend) / prevSpend) * 100) : null;
 
   // Spending forecast: project the rest of the current month from run-rate +
-  // upcoming scheduled items. `lastDate` is the most-recent transaction
-  // for the ledger, which approximates "today" without a wall-clock dependency.
+  // upcoming scheduled items, as of `lastDate` (today; see above).
   const forecast = month ? monthForecast(transactions, scheduled, activeId, month, lastDate) : null;
   const forecastVsPrev =
     forecast && prevSpend > 0 ? Math.round(((forecast.projected - prevSpend) / prevSpend) * 100) : null;
@@ -161,8 +183,7 @@ export default function InsightsPage() {
   // Income → categories flow for the Sankey card.
   const flow = month ? incomeCategoryFlow(transactions, ledgerCategories, activeId, month, 6) : null;
 
-  // Sunday-night recap card: most recently completed Mon-Sun. `lastDate`
-  // approximates "today" without a wall-clock dependency (mirrors monthForecast).
+  // Sunday-night recap card: most recently completed Mon-Sun before `lastDate`.
   const digest = lastDate ? weeklyDigest(transactions, activeId, lastDate) : null;
 
   // What-if sliders: average monthly spend per top category over the trailing

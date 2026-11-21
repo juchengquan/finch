@@ -7,7 +7,8 @@ import { CatBar } from '@/components/ui/cat-bar';
 import { Check, Doc, Pencil, Plus, Sparkle, Split, Sync, X } from '@/components/icons';
 import { AttachmentsRow } from '@/components/transaction-attachments';
 import { useMoney } from '@/components/use-money';
-import { catById, acctById, MOCK } from '@/lib/data';
+import { MOCK } from '@/lib/data';
+import { useLookups } from '@/components/use-lookups';
 import { useFinanceStore, type Tx, type TxSplitInput } from '@/lib/store';
 import { useLedger } from '@/components/ledger-provider';
 import { RuleBuilderDialog, type RulePrefill } from '@/components/rule-builder-dialog';
@@ -42,6 +43,7 @@ import {
 import { useEditTransaction } from '@/components/edit-transaction-dialog';
 import { categoryPath } from '@/lib/db/domain/categories/queries';
 import { r2 } from '@/lib/round';
+import { localToday } from '@/lib/local-today';
 
 interface SplitRow {
   key: string;
@@ -258,6 +260,7 @@ function SplitEditorDialog({
  * original; the user can adjust the amount (e.g. a partial return).
  */
 function RefundDialog({ tx, onClose }: { tx: Tx; onClose: () => void }) {
+  const { catById, acctById } = useLookups();
   const addTransaction = useFinanceStore((s) => s.addTransaction);
   const { native } = useMoney();
   const t = useTranslations('txnDetail.refundDialog');
@@ -285,7 +288,7 @@ function RefundDialog({ tx, onClose }: { tx: Tx; onClose: () => void }) {
       nativeAmount: value, // native, positive
       currency: tx.currency,
       account: tx.account,
-      date: new Date().toISOString().slice(0, 10),
+      date: localToday(),
       time: new Date().toTimeString().slice(0, 5),
       note: '',
       pending: false,
@@ -355,6 +358,7 @@ function RefundDialog({ tx, onClose }: { tx: Tx; onClose: () => void }) {
  * account balance doesn't move; only the classification changes.
  */
 function ConvertToRefundDialog({ tx, onClose }: { tx: Tx; onClose: () => void }) {
+  const { catById } = useLookups();
   const allTxns = useFinanceStore((s) => s.transactions);
   const updateTransaction = useFinanceStore((s) => s.updateTransaction);
   const { fmt } = useMoney();
@@ -463,6 +467,7 @@ export function TransactionDetail({
    *  or navigate away (the detail body would otherwise show "not found"). */
   onDeleted?: () => void;
 }) {
+  const { catById, acctById } = useLookups();
   const { fmt, base, native } = useMoney();
   const { activeId } = useLedger();
   const t = useTranslations('txnDetail');

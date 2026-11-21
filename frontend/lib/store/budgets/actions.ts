@@ -9,6 +9,7 @@ import { newId } from '../_shared/ids';
 import { syncMutation } from '../hydrate';
 import type { SetState, GetState } from '../_shared/types';
 import type { BudgetRow, BudgetType, BudgetPatch } from '@/lib/db/domain/budgets/types';
+import { localToday } from '@/lib/local-today';
 
 export interface NewBudgetInput {
   name: string;
@@ -46,7 +47,7 @@ export const budgetActions = (set: SetState, get: GetState) => ({
       saved: input.saved ?? 0,
       carryForward: 0,
       frequency: input.frequency ?? 'monthly',
-      startDate: input.startDate ?? new Date().toISOString().slice(0, 10),
+      startDate: input.startDate ?? localToday(),
       endDate: input.endDate ?? null,
       isRecurring,
       rollover: input.rollover ? 1 : 0,

@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { catById, acctById } from '@/lib/data';
+import { useLookups } from '@/components/use-lookups';
 import { useFinanceStore } from '@/lib/store';
 import { useSavedSearches, type SavedSearch } from '@/lib/use-saved-searches';
 import { useLedger } from '@/components/ledger-provider';
@@ -38,6 +38,7 @@ function dayLabel(date: string) {
 }
 
 export default function ActivityPage() {
+  const { catById, acctById } = useLookups();
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
   const [tagFilter, setTagFilter] = useState<string | null>(null);
