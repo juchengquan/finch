@@ -1248,3 +1248,102 @@ async function applyMutationReturningEntryId(exec: Exec, args: Record<string, un
   );
   return String(row.entry_id);
 }
+
+test('confirmAllPending confirms only the given ledger\'s pending rows', async () => {
+  const exec = await seededAndAudited();
+  const mine = await addTransaction(exec, {
+    ledgerId: 'personal', accountId: 'chk', amount: -10, merchant: 'Mine', date: '2026-05-25', status: 'pending',
+  });
+  const theirs = await addTransaction(exec, {
+    ledgerId: 'family', accountId: 'f-dbs', amount: -10, merchant: 'Theirs', date: '2026-05-25', status: 'pending',
+  });
+  const familyBefore = await balanceOf(exec, 'f-dbs');
+
+  await applyMutation(exec, 'confirmAllPending', { ledgerId: 'personal' });
+
+  const status = async (id: string) =>
+    String((await exec('SELECT e.status FROM entries e JOIN postings p ON p.entry_id = e.id WHERE p.id = ? OR e.id = ? LIMIT 1', [id, id]))[0].status);
+  expect(await status(mine)).toBe('confirmed');
+  expect(await status(theirs)).toBe('pending');
+  expect(await balanceOf(exec, 'f-dbs')).toBeCloseTo(familyBefore, 2);
+});
+
+test('confirmPendingWithMerchant with no merchant chosen keeps the link the row already has', async () => {
+  const exec = await seededAndAudited();
+  const id = await addTransaction(exec, {
+    ledgerId: 'personal', accountId: 'chk', amount: -10, merchant: 'Grab', date: '2026-05-25', status: 'pending',
+  });
+  const linked = async () =>
+    (await exec('SELECT e.counterparty_id AS cp, e.status FROM entries e JOIN postings p ON p.entry_id = e.id WHERE p.id = ? OR e.id = ? LIMIT 1', [id, id]))[0];
+  expect(String((await linked()).cp)).toBe('cp-02');
+
+  await confirmPendingWithMerchant(exec, id, {});
+
+  const after = await linked();
+  expect(String(after.status)).toBe('confirmed');
+  expect(String(after.cp)).toBe('cp-02');
+});
+
+test('bulkRecategorize skips an opening-balance or adjustment row instead of failing the batch', async () => {
+  const exec = await seededAndAudited();
+  const spend = await addTransaction(exec, {
+    ledgerId: 'personal', accountId: 'chk', amount: -12, merchant: 'Lunch', date: '2026-05-25',
+  });
+  const [opening] = await exec(
+    "SELECT p.id FROM postings p JOIN entries e ON e.id = p.entry_id WHERE e.ledger_id = 'personal' AND e.kind = 'opening' AND p.account_id IS NOT NULL LIMIT 1",
+  );
+  expect(opening).toBeTruthy();
+  const openingCat = async () =>
+    (await exec("SELECT p.category_id AS c FROM postings p WHERE p.entry_id = (SELECT entry_id FROM postings WHERE id = ?) AND p.account_id IS NULL", [String(opening.id)]))[0].c;
+  const before = await openingCat();
+
+  await applyMutation(exec, 'bulkRecategorize', { ids: [String(opening.id), spend], categoryId: 'food' });
+
+  const [moved] = await exec(
+    'SELECT p.category_id AS c FROM postings p WHERE p.entry_id = COALESCE((SELECT entry_id FROM postings WHERE id = ?), ?) AND p.account_id IS NULL',
+    [spend, spend],
+  );
+  expect(String(moved.c)).toBe('food');
+  expect(await openingCat()).toBe(before);
+  expect(await auditLedger(exec, 'personal')).toEqual([]);
+});
+
+test('editing the amount of a split keeps its categories and their proportions', async () => {
+  const exec = await seededAndAudited();
+  const id = await addTransaction(exec, {
+    ledgerId: 'personal', accountId: 'chk', amount: -100, merchant: 'Split shop', date: '2026-05-25', status: 'confirmed',
+  });
+  await applyMutation(exec, 'setTransactionSplits', {
+    id,
+    splits: [
+      { categoryId: 'food', amount: 60, description: null },
+      { categoryId: 'food-groceries', amount: 40, description: null },
+    ],
+  });
+  const legs = async () =>
+    (await exec(
+      `SELECT category_id AS c, amount_base AS b FROM postings
+        WHERE entry_id = COALESCE((SELECT entry_id FROM postings WHERE id = ?), ?) AND account_id IS NULL
+        ORDER BY sort_order`,
+      [id, id],
+    )).map((r) => [String(r.c), Number(r.b)]);
+  expect(await legs()).toEqual([['food', 60], ['food-groceries', 40]]);
+
+  await applyMutation(exec, 'updateTransaction', { id, patch: { amount: -120 } });
+  expect(await legs()).toEqual([['food', 72], ['food-groceries', 48]]);
+
+  // A category patch alongside is still ignored on a split, but the amount applies.
+  await applyMutation(exec, 'updateTransaction', { id, patch: { amount: -10, category: 'food' } });
+  expect(await legs()).toEqual([['food', 6], ['food-groceries', 4]]);
+  expect(await balanceOf(exec, 'chk')).toBeDefined();
+  expect(await auditLedger(exec, 'personal')).toEqual([]);
+});
+
+test('scaleSplitLegs keeps proportions and puts the cent remainder on the largest leg', async () => {
+  const { scaleSplitLegs } = await import('@/lib/db/queries/transactions');
+  expect(scaleSplitLegs([60, 40], 120)).toEqual([72, 48]);
+  const thirds = scaleSplitLegs([1, 1, 1], 10);
+  expect(thirds.reduce((a, b) => a + b, 0)).toBeCloseTo(10, 10);
+  expect(thirds.filter((v) => v === 3.33).length).toBe(2);
+  expect(scaleSplitLegs([0, 0], 5)).toEqual([5, 0]);
+});

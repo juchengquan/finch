@@ -448,10 +448,16 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown>; expectErr
   { action: 'createScheduled', args: { id: 's1', ledgerId: 'personal', name: 'Rent', type: 'expense', amount: 1500, frequency: 'monthly', dayOfMonth: 1, accountId: 'a1', startDate: '2026-01-01' } },
   { action: 'createRule', args: { id: 'r1', ledgerId: 'personal', name: 'Coffee', condition: { field: 'merchant', op: 'contains', value: 'coffee' }, actions: [{ type: 'set_category', categoryId: 'food' }] } },
   { action: 'adjustAccountBalance', args: { accountId: 'a2', targetBalance: 600, date: '2026-05-04' } },
+  // bulkRecategorize over that adjustment: skipped, not a failed batch (it books
+  // against the ledger's own equity category).
+  { action: 'bulkRecategorize', args: { ids: ['$lastAccountPosting'], categoryId: 'fun' } },
   // Stateful chain: split the just-added tx (id resolved at runtime, identically
   // on both sides) — exercises setTransactionSplits against the oracle.
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: -100, merchant: 'SplitMe', categoryId: 'food', date: '2026-05-05', skipRules: true } },
   { action: 'setTransactionSplits', args: { id: '$lastAccountPosting', splits: [{ categoryId: 'food', amount: -60 }, { categoryId: 'pay', amount: -40 }] } },
+  // An amount-only edit keeps both category legs, re-scaled 60:40 (it used to
+  // collapse the split into its first category).
+  { action: 'updateTransaction', args: { id: '$lastAccountPosting', patch: { amount: -150 } } },
   // Confirm the income tx via its account-posting id (re-uses the same chain pattern).
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: -7, merchant: 'Pending', categoryId: 'food', date: '2026-05-06', status: 'pending', skipRules: true } },
   { action: 'setReviewed', args: { id: '$lastAccountPosting', reviewed: true } },
@@ -565,6 +571,10 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown>; expectErr
   // `time` pinned for the same reason `today` is: postings now always carry one,
   // and an unpinned "now" would make this fixture differ on every regeneration.
   { action: 'generateDueScheduled', args: { today: '2026-04-15', time: '09:00' } },
+  // Cancel the last generated row (s2's April occurrence): the delete records a
+  // skip in app_state, so the same sweep run again does not post it back.
+  { action: 'deleteTransactionSkippingOccurrence', args: { id: '$lastAccountPosting', today: '2026-04-15' } },
+  { action: 'generateDueScheduled', args: { today: '2026-04-15', time: '09:00' } },
   // postScheduled with a PINNED date — reproducible offline now that the action
   // takes an explicit date, so it finally gets a parity gate (it was excluded
   // before: it used to stamp `new Date()`, making it non-reproducible offline).
@@ -604,6 +614,9 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown>; expectErr
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a4', amount: -50000, merchant: 'Seoul', categoryId: 'food', date: '2026-05-15', skipRules: true } },
   { action: 'setExchangeRate', args: { date: '2026-05-12', currency: 'KRW', rate: 0.00075, source: 'manual' } },
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a4', amount: -30000, merchant: 'Seoul market', categoryId: 'food', date: '2026-05-15', skipRules: true } },
+  // Confirm all of the ledger's pending rows (the generated ones included).
+  { action: 'confirmAllPending', args: { ledgerId: 'personal' } },
+  // Budgets b1/b2 convert with the base (they used to keep their USD numbers).
   { action: 'changeLedgerBase', args: { ledgerId: 'personal', newBase: 'EUR' } },
 ];
 

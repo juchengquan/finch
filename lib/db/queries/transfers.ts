@@ -9,6 +9,8 @@ import { hasRateOnOrBefore, ledgerBaseCurrency } from './rates';
 import { I18nError } from '@/lib/i18n-error';
 import { TRANSFER_ERROR_CODES } from '@/lib/db/domain/transfers/errors';
 import type { Transfer, TransferPatch } from '@/lib/db/domain/transfers/types';
+import { r2 } from '@/lib/round';
+import { selectInChunks } from '../core/in-chunks';
 
 export async function listTransfers(exec: Exec, ledgerId: string): Promise<Transfer[]> {
   // Transfer entries: kind='transfer' with ≥2 account legs in the ledger.
@@ -22,15 +24,12 @@ export async function listTransfers(exec: Exec, ledgerId: string): Promise<Trans
   if (entryRows.length === 0) return [];
 
   const entryIds = entryRows.map((e) => String(e.id));
-  const ph = entryIds.map(() => '?').join(',');
-
-  // Load all account legs for these entries.
-  const legRows = await exec(
+  // Load all account legs for these entries (chunked: see in-chunks.ts).
+  const legRows = await selectInChunks(exec, entryIds, (ph) =>
     `SELECT p.entry_id, p.id AS pid, p.account_id, p.amount, p.amount_base, p.currency
        FROM postings p
       WHERE p.entry_id IN (${ph}) AND p.account_id IS NOT NULL
       ORDER BY p.entry_id, p.sort_order`,
-    entryIds,
   );
 
   // Load account names.
@@ -77,7 +76,6 @@ export async function listTransfers(exec: Exec, ledgerId: string): Promise<Trans
   return result;
 }
 
-const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
  * Edit a transfer in place. The two amounts can move independently:

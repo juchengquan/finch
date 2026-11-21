@@ -13,8 +13,8 @@
 
 import type { Exec } from './repo';
 import { dedupHash } from './entries';
+import { r2 } from '@/lib/round';
 
-const r2 = (n: number) => Math.round(n * 100) / 100;
 
 export interface MoveLeg {
   id: string;

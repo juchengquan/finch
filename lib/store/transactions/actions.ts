@@ -11,6 +11,8 @@
 
 import { newId } from '../_shared/ids';
 import { syncMutation } from '../hydrate';
+import { localToday } from '@/lib/local-today';
+import { r2 } from '@/lib/round';
 import type { SetState, GetState } from '../_shared/types';
 import type { Tx, TxSplit, TxSplitInput } from './state';
 
@@ -192,14 +194,19 @@ export const transactionActions = (set: SetState, get: GetState) => ({
     });
   },
 
+  // Also skips the scheduled occurrence the row fulfilled, so the next load
+  // doesn't generate it again.
   cancelPending: (id: string): void => {
     set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id) }));
-    syncMutation('deleteTransaction', { id });
+    syncMutation('deleteTransactionSkippingOccurrence', { id, today: localToday() });
   },
 
-  confirmAllPending: (): void => {
-    set((s) => ({ transactions: s.transactions.map((t) => (t.pending ? { ...t, pending: false } : t)) }));
-    syncMutation('confirmAllPending');
+  confirmAllPending: (ledgerId: string): void => {
+    set((s) => ({
+      transactions: s.transactions.map((t) =>
+        t.pending && (t.ledgerId ?? 'personal') === ledgerId ? { ...t, pending: false } : t),
+    }));
+    syncMutation('confirmAllPending', { ledgerId });
   },
 
   setTransactionTags: (transactionId: string, tagIds: string[]): void => {
@@ -225,7 +232,7 @@ export const transactionActions = (set: SetState, get: GetState) => ({
           id: `${transactionId}-s-${i}`,
           categoryId: sp.categoryId,
           amount: sp.amount,
-          amountBase: Math.round(sp.amount * ratio * 100) / 100,
+          amountBase: r2(sp.amount * ratio),
           description: sp.description ?? null,
         }));
         return { ...t, splits: optimistic };

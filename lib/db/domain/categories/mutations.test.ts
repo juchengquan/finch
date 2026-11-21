@@ -221,3 +221,22 @@ test('expandDescendants returns the configured ids plus every descendant', async
     new Set(['food', 'rest', 'japan', 'thai', 'grocery', 'rent']),
   );
 });
+
+test('a system category (opening balance, adjustment, fx) cannot be deleted, re-typed or re-parented', async () => {
+  const exec = await seededAndAudited();
+  const sys = await exec("SELECT id, system FROM categories WHERE ledger_id = 'personal' AND system IS NOT NULL");
+  expect(sys.length).toBeGreaterThan(0);
+  for (const { id } of sys) {
+    for (const [action, args] of [
+      ['deleteCategory', { id }],
+      ['updateCategory', { id, patch: { type: 'expense' } }],
+      ['updateCategory', { id, patch: { parentId: 'food' } }],
+    ] as const) {
+      const err = await applyMutation(exec, action, args).then(() => null, (e) => e);
+      expect(err?.code).toBe('error.category.system');
+    }
+  }
+  expect((await exec("SELECT id FROM categories WHERE ledger_id = 'personal' AND system IS NOT NULL")).length).toBe(sys.length);
+  // Renaming one is still fine.
+  await applyMutation(exec, 'updateCategory', { id: String(sys[0].id), patch: { name: 'Starting balances' } });
+});

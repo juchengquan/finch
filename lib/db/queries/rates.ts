@@ -27,6 +27,7 @@
 // pinned as a 'derived' row, which converted the currency 1:1 for every date
 // after it until the lookup stopped reading such rows.
 
+import { r2 } from '@/lib/round';
 import type { Exec } from '../core/repo';
 import { I18nError } from '@/lib/i18n-error';
 
@@ -99,7 +100,7 @@ export async function convertToBase(
       `No exchange rate for ${currency} → ${base} yet. Add a ${missing} rate on the FX page.`);
   }
   const rate = rb !== 0 ? rc / rb : 1;
-  return { amountBase: Math.round(native * rate * 100) / 100, rate: Math.round(rate * 1e6) / 1e6 };
+  return { amountBase: r2(native * rate), rate: Math.round(rate * 1e6) / 1e6 };
 }
 
 /** Whether `currency` can be valued in `base` at `date` without reaching
