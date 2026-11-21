@@ -25,11 +25,11 @@ import {
   recomputeAccountFromPostings,
   type LegInput,
 } from '../../core/entries';
+import { r2 } from '@/lib/round';
 
 type Handler<A extends ActionName> = (exec: Exec, args: Args[A]) => Promise<void>;
 
 const str = (v: unknown) => String(v);
-const r2 = (n: number) => Math.round(n * 100) / 100;
 
 export const handlers = {
   addTransaction: async (exec, args: Args['addTransaction']) => {

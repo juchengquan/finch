@@ -7,8 +7,8 @@
 
 import type { Exec } from '../db/core/repo';
 import { periodOf, prevPeriod, nextPeriod, periodRange, type Frequency } from './period';
+import { r2 } from '@/lib/round';
 
-const r2 = (n: number) => Math.round(n * 100) / 100;
 
 interface BudgetRow {
   id: string;

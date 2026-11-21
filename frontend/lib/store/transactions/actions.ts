@@ -12,6 +12,7 @@
 import { newId } from '../_shared/ids';
 import { syncMutation } from '../hydrate';
 import { localToday } from '@/lib/local-today';
+import { r2 } from '@/lib/round';
 import type { SetState, GetState } from '../_shared/types';
 import type { Tx, TxSplit, TxSplitInput } from './state';
 
@@ -231,7 +232,7 @@ export const transactionActions = (set: SetState, get: GetState) => ({
           id: `${transactionId}-s-${i}`,
           categoryId: sp.categoryId,
           amount: sp.amount,
-          amountBase: Math.round(sp.amount * ratio * 100) / 100,
+          amountBase: r2(sp.amount * ratio),
           description: sp.description ?? null,
         }));
         return { ...t, splits: optimistic };

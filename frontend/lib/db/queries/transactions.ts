@@ -20,6 +20,7 @@ import type {
   NewTxRow,
   TransactionPatch,
 } from '@/lib/db/domain/transactions/types';
+import { r2 } from '@/lib/round';
 
 /** Translate a user-typed search string into an FTS5 MATCH expression.
  *  Each run of unicode letters/numbers becomes a case-folded prefix term
@@ -313,7 +314,6 @@ export async function getTransaction(exec: Exec, id: string): Promise<Tx | null>
   return enriched[0] ?? null;
 }
 
-const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /** Insert a transaction via the entries chokepoint. Returns the ENTRY id.
  *  The client's optimistic flow replaces state from the server projection;

@@ -9,6 +9,7 @@ import { hasRateOnOrBefore, ledgerBaseCurrency } from './rates';
 import { I18nError } from '@/lib/i18n-error';
 import { TRANSFER_ERROR_CODES } from '@/lib/db/domain/transfers/errors';
 import type { Transfer, TransferPatch } from '@/lib/db/domain/transfers/types';
+import { r2 } from '@/lib/round';
 
 export async function listTransfers(exec: Exec, ledgerId: string): Promise<Transfer[]> {
   // Transfer entries: kind='transfer' with ≥2 account legs in the ledger.
@@ -77,7 +78,6 @@ export async function listTransfers(exec: Exec, ledgerId: string): Promise<Trans
   return result;
 }
 
-const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
  * Edit a transfer in place. The two amounts can move independently:

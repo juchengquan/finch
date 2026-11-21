@@ -9,6 +9,7 @@
 // LEDGER_CRUD_PLAN — see §3 + §5 for the design.
 
 import type { Exec } from '../core/repo';
+import { r2 } from '@/lib/round';
 import { convertToBase } from './rates';
 import { rebuildEntry, auditLedger, ensureSystemCategories } from '../core/entries';
 import { I18nError } from '@/lib/i18n-error';
@@ -270,7 +271,7 @@ export async function recomputeAmountBases(
           legs.push({
             id: String(p.id),
             categoryId: p.category_id == null ? null : String(p.category_id),
-            amountBase: Math.round(conv.amountBase * 100) / 100,
+            amountBase: r2(conv.amountBase),
             memo: p.memo == null ? null : String(p.memo),
           });
         }

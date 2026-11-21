@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/dialog';
 import { useEditTransaction } from '@/components/edit-transaction-dialog';
 import { categoryPath } from '@/lib/db/domain/categories/queries';
+import { r2 } from '@/lib/round';
 
 interface SplitRow {
   key: string;
@@ -49,7 +50,6 @@ interface SplitRow {
   description: string;
 }
 
-const r2 = (n: number) => Math.round(n * 100) / 100;
 const nextKey = (() => {
   let k = 0;
   return () => `r-${++k}`;

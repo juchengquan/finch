@@ -26,6 +26,7 @@ import tagsData from '@/data/tags.json';
 import transactionsData from '@/data/transactions.json';
 import scheduledData from '@/data/scheduled-templates.json';
 import holdingsData from '@/data/holdings.json';
+import { r2 } from '@/lib/round';
 
 const SEED_TS = '2026-05-26T00:00:00';
 const SEED_DATE = '2026-05-26';
@@ -237,7 +238,6 @@ export async function seedTransactionTags(exec: Exec): Promise<void> {
   }
 }
 
-const r2 = (n: number) => Math.round(n * 100) / 100;
 const r6 = (n: number) => Math.round(n * 1e6) / 1e6;
 
 /**
