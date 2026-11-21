@@ -25,6 +25,7 @@ import { occurrenceDaysInMonth } from '@/lib/recurrence';
 import { categoryPath } from '@/lib/db/domain/categories/queries';
 import { cn } from '@/lib/utils';
 import { localDateTime } from '@/lib/local-today';
+import { useToday } from '@/components/use-today';
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const WEEKDAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -95,7 +96,12 @@ function templateToDraft(t: ScheduledTemplate): DraftForm {
 }
 
 export default function ScheduledPage() {
-  const [view, setView] = useState({ y: 2026, m: 5 });
+  // The calendar opens on this month (it was pinned to June 2026, the demo
+  // data's month). Until today is known (server render, hydration) that month
+  // stands in; once the user navigates, their pick holds.
+  const today = useToday();
+  const [picked, setView] = useState<{ y: number; m: number } | null>(null);
+  const view = picked ?? (today ? { y: Number(today.slice(0, 4)), m: Number(today.slice(5, 7)) - 1 } : { y: 2026, m: 5 });
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const t = useTranslations('scheduled');
   const tCommon = useTranslations('common');
@@ -205,8 +211,8 @@ export default function ScheduledPage() {
   const dotsByDay = buildDotsByDay(scheduled, view.y, view.m);
 
   const shift = (delta: number) =>
-    setView((v) => {
-      const d = new Date(v.y, v.m + delta, 1);
+    setView(() => {
+      const d = new Date(view.y, view.m + delta, 1);
       setSelectedDay(null);
       return { y: d.getFullYear(), m: d.getMonth() };
     });

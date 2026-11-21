@@ -109,7 +109,8 @@ export function BudgetFormDialog({ open, onOpenChange, budget, defaultType = 'ex
   const [groupId, setGroupId] = useState<string>(budget?.groupId ?? 'none');
   const [amount, setAmount] = useState(budget ? String(budget.amount) : '');
   const [frequency, setFrequency] = useState(budget?.frequency ?? 'monthly');
-  const [startDate, setStartDate] = useState(budget?.startDate ?? '2026-05-01');
+  // A new budget starts on the first of this month (it was pinned to the demo data's May 2026).
+  const [startDate, setStartDate] = useState(() => budget?.startDate ?? `${localToday().slice(0, 7)}-01`);
   const [recurring, setRecurring] = useState(budget ? budget.isRecurring === 1 : defaultType === 'expense');
   const [rollover, setRollover] = useState(budget ? budget.rollover === 1 : false);
   const [accountIds, setAccountIds] = useState<Set<string>>(new Set(budget?.accountIds ?? []));
