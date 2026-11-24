@@ -122,7 +122,7 @@ final class AccountDetailVC: UIViewController {
     /// STAGED — nothing is written until Finish (Cancel must truly cancel).
     private var stagedTicks: Set<String> = []
     private var stagedUnticks: Set<String> = []
-    private let reconcileSession = ReconcileSession()
+    let reconcileSession = ReconcileSession()
     private var savedRightItems: [UIBarButtonItem]?
     /// Set by a pusher (Accounts list) that wants the mode active on arrival —
     /// honored at the end of viewDidLoad, once the data source exists.
@@ -927,7 +927,12 @@ final class AccountDetailVC: UIViewController {
         let digits = Currencies.minorUnits(for: accountCurrency)
         reconcileSession.onInputChange = nil   // quiet while seeding
         reconcileSession.onStructureChange = nil
-        reconcileSession.statementBalanceText = String(format: "%.\(digits)f", account.balance)
+        // Pre-filled with the balance, as the likeliest statement figure. Not under
+        // Hide amounts: an editable field showed the exact balance the rest of the
+        // screen masks. Left empty, the statement still defaults to the balance
+        // (`?? account.balance` below), and the difference is masked as usual.
+        reconcileSession.statementBalanceText = store.privacyMode
+            ? "" : String(format: "%.\(digits)f", account.balance)
         reconcileSession.statementDate = AppDate.isoDay.date(from: store.wallToday) ?? Date()
         reconcileSession.showReconciled = false
         reconcileSession.onInputChange = { [weak self] in self?.recomputeReconcileDerived() }
