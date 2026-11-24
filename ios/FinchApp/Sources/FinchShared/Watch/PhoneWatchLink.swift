@@ -37,6 +37,12 @@ final class PhoneWatchLink: NSObject, WCSessionDelegate {
     /// positive magnitudes; an expense posts negative. Wrist entries land as
     /// **pending** (the CP3 spec §3) — the phone's Pending review is the
     /// confirm/edit surface for terse on-wrist captures.
+    ///
+    /// The amount is in `item.currency` — the composer's display currency, or the
+    /// currency a repeated purchase was typed in — so it is passed through for the
+    /// engine to convert. Without it the engine read the amount in the account's
+    /// own currency: "$12" typed on the wrist booked ¥12 on a JPY account, and a
+    /// €50 purchase repeated on a USD card booked $50.
     static func quickAddArgs(_ item: WatchQuickAddItem, date: String) -> [String: JSONValue] {
         var args: [String: JSONValue] = [
             "ledgerId": .string(item.ledgerId),
@@ -47,6 +53,7 @@ final class PhoneWatchLink: NSObject, WCSessionDelegate {
             "status": .string("pending"),
         ]
         if let cat = item.categoryId { args["categoryId"] = .string(cat) }
+        if !item.currency.isEmpty { args["currency"] = .string(item.currency) }
         return args
     }
 
@@ -71,11 +78,11 @@ final class PhoneWatchLink: NSObject, WCSessionDelegate {
 
     /// Booking date: the wrist tap's `createdAt` when present (an overnight-
     /// queued add books on the day it was tapped), else the phone's today.
+    /// `AppDate.isoDay` is Gregorian: a bare `DateFormatter` follows the device's
+    /// calendar and booked a Buddhist-calendar tap on 2569-11-24.
     static func bookingDate(_ req: WatchQuickAddRequest, fallback: String) -> String {
         guard let created = req.createdAt else { return fallback }
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: created)
+        return AppDate.isoDay.string(from: created)
     }
 
     func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
