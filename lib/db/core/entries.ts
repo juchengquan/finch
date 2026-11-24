@@ -11,6 +11,7 @@ import { convertToBase, hasRateOnOrBefore } from '../queries/rates';
 import { resolveCounterpartyIdByName } from '../queries/counterparties';
 import { listActiveRules } from '../queries/rules';
 import { applyRules } from '@/lib/rules/engine';
+import { pruneRulePatch } from './rule-refs';
 import { newId } from '../domain/_shared/ids';
 import { r2 } from '@/lib/round';
 
@@ -407,6 +408,7 @@ export async function postEntry(exec: Exec, e: NewEntry): Promise<{ entryId: str
         // and 60 of another, and budgets alerted at twice the real spend. The
         // rule's other actions still apply.
         const patch = applyRules(synthetic, rules, { allowSplits: acctLegs.length <= 1 });
+        await pruneRulePatch(exec, patch, e.ledgerId);
         if (patch.appliedRuleIds.length > 0) {
           if (patch.merchant !== undefined) description = patch.merchant;
           if (patch.note !== undefined) notes = patch.note;
