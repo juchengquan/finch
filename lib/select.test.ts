@@ -443,13 +443,14 @@ test('monthForecast: in-month projection = MTD + run-rate × days-left + upcomin
     tx({ amount: -15, date: '2026-05-09', kind: 'adjustment' }),
     tx({ amount: 5000, date: '2026-05-01' }),
   ];
+  // Each template needs an anchor (`startDate`): the forecast walks the recurrence.
   const recurring = [
-    rt({ amount: 100, dayOfMonth: 15 }), // upcoming expense
-    rt({ amount: 80, dayOfMonth: 3 }), // already past — excluded
-    rt({ amount: 50, dayOfMonth: 20, frequency: 'yearly' }), // wrong frequency
-    rt({ amount: 30, dayOfMonth: 25, type: 'income' }), // income — excluded
-    rt({ amount: null, dayOfMonth: 25 }), // variable — excluded
-    rt({ amount: 60, dayOfMonth: 22, type: 'expense' }), // second upcoming expense
+    rt({ startDate: '2026-01-01', amount: 100, dayOfMonth: 15 }), // upcoming expense
+    rt({ startDate: '2026-01-01', amount: 80, dayOfMonth: 3 }), // already past — excluded
+    rt({ startDate: '2026-01-01', amount: 50, dayOfMonth: 20, frequency: 'yearly' }), // wrong frequency
+    rt({ startDate: '2026-01-01', amount: 30, dayOfMonth: 25, type: 'income' }), // income — excluded
+    rt({ startDate: '2026-01-01', amount: null, dayOfMonth: 25 }), // variable — excluded
+    rt({ startDate: '2026-01-01', amount: 60, dayOfMonth: 22, type: 'expense' }), // second upcoming expense
   ];
 
   const f = monthForecast(txns, recurring, 'personal', '2026-05', '2026-05-10');
@@ -466,8 +467,8 @@ test('monthForecast: in-month projection = MTD + run-rate × days-left + upcomin
 
 test('monthForecast: an occurrence after the end date is not upcoming (the end date is inclusive)', () => {
   const recurring = [
-    rt({ amount: 100, dayOfMonth: 15, endDate: '2026-05-14' }), // ended before the 15th — excluded
-    rt({ amount: 60, dayOfMonth: 22, endDate: '2026-05-22' }),  // ends on the day — counted
+    rt({ startDate: '2026-01-01', amount: 100, dayOfMonth: 15, endDate: '2026-05-14' }), // ended before the 15th — excluded
+    rt({ startDate: '2026-01-01', amount: 60, dayOfMonth: 22, endDate: '2026-05-22' }),  // ends on the day — counted
   ];
   const f = monthForecast([], recurring, 'personal', '2026-05', '2026-05-10');
   expect(f!.scheduledRest).toBeCloseTo(60, 2);

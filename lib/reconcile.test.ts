@@ -129,3 +129,16 @@ test('reconcileState: adding + clearing a missing row closes the difference (v2 
   expect(after.balanced).toBe(true);
   expect(after.clearedCount).toBe(2);
 });
+
+// ¥3,820 typed on a dollar card moved the card by $24.83 (`accountAmount`). In a
+// ledger whose base is SGD, `amount` is neither figure: the old fallback counted
+// the SGD amount against a USD statement.
+test('reconcileState: a row typed in another currency counts what it moved the account', () => {
+  const s = reconcileState(
+    acct({ openingBalance: 100 }),
+    [tx({ amount: -33.52, currency: 'JPY', nativeAmount: -3820, accountAmount: -24.83, clearedAt: '2026-06-11' })],
+    75.17,
+  );
+  expect(s.clearedBalance).toBe(75.17);
+  expect(s.balanced).toBe(true);
+});

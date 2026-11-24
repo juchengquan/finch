@@ -51,11 +51,12 @@ export function reconcileState(
     if (t.account !== account.id) continue;
     if (t.pending) continue;
     if (t.clearedAt) {
-      // Mirrors recomputeAccount: native amount when the row is already in the
-      // account currency, else the ledger-base figure.
-      const delta = (t.currency ?? account.currency) === account.currency
+      // What the row moved the account by, in the account's currency — what
+      // recomputeAccount sums. Rows from before `accountAmount` fall back to the
+      // typed figure when it is in the account's currency, else the base one.
+      const delta = t.accountAmount ?? ((t.currency ?? account.currency) === account.currency
         ? (t.nativeAmount ?? t.amount)
-        : t.amount;
+        : t.amount);
       running = r2(running + delta);
       clearedCount++;
     } else {

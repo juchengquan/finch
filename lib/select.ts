@@ -43,6 +43,7 @@ export function byPurchase(txns: Tx[]): Tx[] {
     const seen = acc.get(key);
     if (!seen) { order.push(key); acc.set(key, { ...t }); continue; }
     seen.amount = r2(seen.amount + t.amount);
+    seen.accountAmount = undefined; // per leg; a merged row is several
     if (seen.currency === t.currency && seen.nativeAmount != null && t.nativeAmount != null) {
       seen.nativeAmount = r2(seen.nativeAmount + t.nativeAmount);
     } else {
@@ -374,21 +375,33 @@ export function monthForecast(
     mtdSpent += -t.amount;
   }
 
-  // Upcoming scheduled expenses + reminders for the rest of this month.
-  // Count monthly templates/reminders with a known amount and a day_of_month
-  // falling after today. Income and transfer types are excluded.
+  // The scheduled bills still to come this month. Every frequency, through the
+  // recurrence: a day-31 bill falls on the 30th, and none after the end date. One
+  // already posted is not owed again — confirmed, it is in `mtdSpent`; pending,
+  // it is counted as a row below. Mirrors FinchCore's `monthForecast`, whose
+  // `activity` also values a foreign-currency bill in base (the web has no rates
+  // here). This used to count monthly templates by day of month only: a bill paid
+  // early counted twice, one waiting in To confirm not at all, and a day-31 bill
+  // dropped out of 30-day months.
   let scheduledRest = 0;
   if (inMonth) {
+    const posted = scheduledPostedMap(txns);
+    const monthEnd = `${month}-${String(daysInMonth).padStart(2, '0')}`;
     for (const rt of scheduled) {
-      if (rt.type !== 'expense') continue;
-      if (rt.frequency !== 'monthly') continue;
-      if (rt.amount == null) continue;
-      if (rt.dayOfMonth <= dayOfMonth) continue;
-      if (rt.dayOfMonth > daysInMonth) continue;
-      // This month's occurrence falls after the template's end date — it will not
-      // happen. (Mirrored by the native monthForecast, which also drops skips.)
-      if (rt.endDate && rt.endDate.slice(0, 10) < `${month}-${String(rt.dayOfMonth).padStart(2, '0')}`) continue;
-      scheduledRest += Math.abs(rt.amount);
+      if (rt.type !== 'expense' || rt.amount == null) continue;
+      const left = occurrencesUpTo(rt, monthEnd)
+        .filter((d) => d > today && d.startsWith(month) && !posted.has(`${rt.id}|${d}`));
+      const booked = [...posted.keys()].filter((k) => k.startsWith(`${rt.id}|`)).length;
+      let cap = left.length;
+      for (const limit of [rt.installmentTotal, rt.maxExecutions]) {
+        if (limit != null) cap = Math.min(cap, Math.max(0, limit - booked));
+      }
+      scheduledRest += Math.abs(rt.amount) * cap;
+    }
+    for (const t of txns) {
+      if (!t.pending || !t.sourceTemplateId) continue;
+      if (ledgerOf(t) !== ledgerId || !isSpend(t) || !t.date.startsWith(month)) continue;
+      scheduledRest += -t.amount;
     }
   }
 
@@ -1359,7 +1372,7 @@ export function balanceSeries(txns: Tx[], accountId: string, currentBalance: num
   return runningSeries(
     txns.filter((t) => t.account === accountId && !t.pending),
     currentBalance,
-    (t) => t.nativeAmount ?? t.amount,
+    (t) => t.accountAmount ?? t.nativeAmount ?? t.amount,
   );
 }
 

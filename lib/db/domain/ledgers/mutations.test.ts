@@ -336,3 +336,48 @@ test('deleteLedger refuses the last ledger', async () => {
   }
   await expect(applyMutation(exec, 'deleteLedger', { id: 'personal' })).rejects.toThrow(/last ledger/i);
 });
+
+// A base change re-locks each leg on its own; the cents that disagree go on an fx
+// rounding leg. That leg is a residue, not a category: counted as one, a plain
+// purchase read as a split and re-categorising it silently did nothing.
+test('after a base change, a purchase with an fx rounding leg can still be re-categorised', async () => {
+  const exec = await seededAndAudited();
+  await applyMutation(exec, 'createAccount', {
+    id: 'eur-card', ledgerId: 'personal', name: 'Euro card', type: 'cash', currency: 'EUR',
+  });
+  const [food, fun] = (await exec(
+    "SELECT id FROM categories WHERE ledger_id = 'personal' AND kind = 'expense' AND system IS NULL ORDER BY id LIMIT 2",
+  )).map((r) => String(r.id));
+  for (const merchant of ['Market', 'Bakery']) {
+    await applyMutation(exec, 'addTransaction', {
+      ledgerId: 'personal', accountId: 'eur-card', amount: -9.99, currency: 'EUR',
+      merchant, category: food, date: '2026-05-01', skipRules: true,
+    });
+  }
+  await applyMutation(exec, 'changeLedgerBase', { ledgerId: 'personal', newBase: 'JPY' });
+
+  const posting = async (merchant: string) => {
+    const [r] = await exec(
+      "SELECT p.id, p.entry_id FROM postings p JOIN entries e ON e.id = p.entry_id WHERE e.description = ? AND p.account_id = 'eur-card'",
+      [merchant],
+    );
+    return { pid: String(r.id), entryId: String(r.entry_id) };
+  };
+  const legs = async (entryId: string) => (await exec(
+    `SELECT c.id, c.kind, c.system FROM postings p JOIN categories c ON c.id = p.category_id WHERE p.entry_id = ?`,
+    [entryId],
+  ));
+  const spending = async (entryId: string) =>
+    (await legs(entryId)).filter((r) => r.kind !== 'equity').map((r) => String(r.id));
+
+  const market = await posting('Market');
+  const bakery = await posting('Bakery');
+  // The premise: the base change left an fx leg beside the one real category.
+  expect((await legs(market.entryId)).filter((r) => r.system === 'fx').length).toBe(1);
+
+  await applyMutation(exec, 'updateTransaction', { id: market.pid, patch: { category: fun } });
+  expect(await spending(market.entryId)).toEqual([fun]);
+
+  await applyMutation(exec, 'bulkRecategorize', { ids: [bakery.pid], categoryId: fun });
+  expect(await spending(bakery.entryId)).toEqual([fun]);
+});

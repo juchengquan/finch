@@ -621,7 +621,13 @@ export async function updateTransaction(
     origCurrency = oldAcctLeg.orig_currency == null ? null : String(oldAcctLeg.orig_currency);
   }
 
-  const plainCatLegs = oldLegs.filter((l) => l.account_id == null);
+  // The category legs, less the fx rounding leg a base change can leave: that is a
+  // residue, not a category. Counted, it made a plain purchase read as a split, and
+  // a split ignores a category patch — so the edit did nothing.
+  const fxCatId = await fxSystemCategoryId(exec, String(cur.ledger_id));
+  const plainCatLegs = oldLegs.filter(
+    (l) => l.account_id == null && (fxCatId == null || String(l.category_id) !== fxCatId),
+  );
 
   // A split (≥2 category legs) keeps its categories through any money patch.
   // A category patch is ignored, as it always was (legacy parity: it sets the
@@ -630,8 +636,7 @@ export async function updateTransaction(
   // without a category patch, and then rebuilt the entry as ONE category leg:
   // food 60 + rent 40, edited to 120, became food 120.
   if (plainCatLegs.length >= 2) {
-    const fxCatId = await fxSystemCategoryId(exec, String(cur.ledger_id));
-    const catLegs = plainCatLegs.filter((l) => fxCatId == null || String(l.category_id) !== fxCatId);
+    const catLegs = plainCatLegs;
     const scaled = scaleSplitLegs(catLegs.map((l) => Number(l.amount_base)), r2(-resolvedAmountBase));
     entryPatch.legs = [
       {

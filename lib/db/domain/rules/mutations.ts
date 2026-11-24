@@ -2,7 +2,7 @@ import type { Exec } from '../../core/repo';
 import type { ActionName, Args } from '../_args';
 import { I18nError } from '@/lib/i18n-error';
 import { newId } from '../_shared/ids';
-import { rebuildEntry, type LegInput } from '../../core/entries';
+import { rebuildEntry, SPENDING_CATEGORY_LEGS_SQL, type LegInput } from '../../core/entries';
 import { resolveCounterpartyIdByName } from '../counterparties/queries';
 import { applyRules } from '@/lib/rules/engine';
 import { canRekind, pruneRulePatch } from '../../core/rule-refs';
@@ -118,7 +118,7 @@ export const handlers = {
 
       if (patch.categoryId !== undefined) {
         const catLegs = await exec(
-          'SELECT category_id FROM postings WHERE entry_id = ? AND category_id IS NOT NULL',
+          SPENDING_CATEGORY_LEGS_SQL,
           [tx.id],
         );
         // A purchase paid from several accounts carries exactly one category leg by
