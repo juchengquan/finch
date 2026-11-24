@@ -483,7 +483,11 @@ public enum Transactions {
         guard case .object(let patch)? = args.values["patch"] else { return }
         guard let ref = try Entries.resolveEntryRef(db, id) else { return }
         let entryId = ref.entryId
-        defer { try? Budgets.invalidateForEntry(db, entryId) }   // rollover cache, any path
+        // The rollover cache, from what the entry touched BEFORE the edit as well as
+        // after (the web's mergeTouches): moved off a category, or to another date,
+        // it leaves the old budget's carried-forward figure wrong otherwise.
+        try Budgets.invalidateForEntry(db, entryId)
+        defer { try? Budgets.invalidateForEntry(db, entryId) }   // …and after, any path
         func strOrNil(_ v: JSONValue?) -> String? { if case .string(let s)? = v { return s }; return nil }
         func has(_ k: String) -> Bool { patch.keys.contains(k) }
 
@@ -682,6 +686,8 @@ public enum Transactions {
             guard let acct = try Row.fetchOne(db, sql:
                 "SELECT id, account_id, amount, amount_base, exchange_rate, memo, orig_amount, orig_currency, cleared_at FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1",
                 arguments: [entryId]) else { continue }
+            // The category it leaves, as well as the one it joins (after the rebuild).
+            try Budgets.invalidateForEntry(db, entryId)
             let amountBase: Double = acct["amount_base"]
             var ep = Entries.EntryPatch()
             ep.legs = .set([

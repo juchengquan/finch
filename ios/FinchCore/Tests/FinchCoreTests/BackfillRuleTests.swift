@@ -142,4 +142,34 @@ final class BackfillRuleTests: XCTestCase {
             XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM postings WHERE category_id='c1'"), 1)
         }
     }
+
+    /// A May grocery run moved out of Food — by the edit sheet or by a bulk
+    /// re-categorise — takes its spend out of Food's rolled May, so Food's cached
+    /// rollover must go. Only the category it moved TO was invalidated before, which
+    /// left Food carrying forward money that was never under budget.
+    func test_movingAnEntryOffACategoryInvalidatesThatCategorysRollover() throws {
+        for action in ["updateTransaction", "bulkRecategorize"] {
+            let q = try TestSeed.base()
+            try q.write { db in
+                try db.execute(sql: "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('c2','l1',NULL,'Fun','expense',1,datetime('now'),datetime('now'))")
+            }
+            try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
+                "ledgerId": .string("l1"), "accountId": .string("a1"), "amount": .double(-10),
+                "merchant": .string("X"), "categoryId": .string("c1"), "date": .string("2026-05-10"), "skipRules": .bool(true)]))
+            try q.write { db in
+                try db.execute(sql: """
+                    INSERT INTO budgets (id,ledger_id,name,kind,amount,saved,carry_forward,frequency,start_date,
+                        is_recurring,rollover,last_rolled_period,category_ids,account_ids,warning_pct,created_at,updated_at)
+                    VALUES ('b1','l1','Food','expense',100,0,40,'monthly','2026-01-01',1,1,'2026-05-01','["c1"]',NULL,80,datetime('now'),datetime('now'))
+                    """)
+            }
+            let pid = try XCTUnwrap(try q.read { try String.fetchOne($0, sql: "SELECT id FROM postings WHERE account_id = 'a1' AND entry_id IN (SELECT id FROM entries WHERE description = 'X')") })
+            if action == "updateTransaction" {
+                try Apply.apply(dbQueue: q, action: action, args: Args(["id": .string(pid), "patch": .object(["category": .string("c2")])]))
+            } else {
+                try Apply.apply(dbQueue: q, action: action, args: Args(["ids": .array([.string(pid)]), "categoryId": .string("c2")]))
+            }
+            XCTAssertNil(try q.read { try String.fetchOne($0, sql: "SELECT last_rolled_period FROM budgets WHERE id = 'b1'") }, action)
+        }
+    }
 }
