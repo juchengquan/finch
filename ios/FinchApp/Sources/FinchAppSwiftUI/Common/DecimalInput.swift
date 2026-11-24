@@ -1,9 +1,10 @@
 import SwiftUI
 import FinchCore
 
-/// Parse + live input filtering for numeric text fields. Decimal input uses "." as
-/// the only decimal separator ("," is rejected on input); `parse` reads plain "."
-/// decimals.
+/// Parse + live input filtering for numeric text fields. The stored text always uses
+/// "." as its decimal point; the region's own separator ("," in Germany, France,
+/// Brazil…) is accepted on input and rewritten to "." — it is the only decimal key
+/// `.decimalPad` shows there. `parse` reads plain "." decimals.
 enum DecimalInput {
     private static let formatter: NumberFormatter = {
         let f = NumberFormatter()
@@ -24,10 +25,11 @@ enum DecimalInput {
     /// Strip a live text-field string to a valid numeric string. Keeps an optional
     /// leading "-" and ASCII digits; for decimals, keeps the FIRST "." and drops every
     /// later separator (so once a number has a decimal point, another is ignored —
-    /// "5.4." → "5.4", "5.4.4.4" → "5.444"). "," is NOT a decimal separator here — it is
-    /// removed like any other stray character, along with letters, spaces, currency
-    /// symbols, and grouping. Does NOT reformat; intermediate "-"/"." survive so typing
-    /// isn't blocked.
+    /// "5.4." → "5.4", "5.4.4.4" → "5.444"). `decimalSeparator` (the region's, by
+    /// default) counts as "." and is rewritten to it: in a "," region "4,99" → "4.99".
+    /// In a "." region "," is grouping, removed like any other stray character, along
+    /// with letters, spaces and currency symbols. Does NOT reformat; intermediate
+    /// "-"/"." survive so typing isn't blocked.
     /// The amount-field placeholder for a currency with `fractionDigits` minor
     /// units: "0", "0.00", "0.000".
     static func zeroPlaceholder(fractionDigits: Int) -> String {
@@ -71,7 +73,9 @@ enum DecimalInput {
     /// separator — TRIM semantics, distinct from `allowsDecimal: false`'s strip:
     /// "12.34" clamped to 0 digits is "12" (cut at the separator), never "1234".
     /// That difference is what makes mid-entry currency switches honest.
-    static func filter(_ s: String, allowsDecimal: Bool, maxFractionDigits: Int? = nil) -> String {
+    static func filter(_ s: String, allowsDecimal: Bool, maxFractionDigits: Int? = nil,
+                       decimalSeparator: String = Locale.current.decimalSeparator ?? ".") -> String {
+        let regional = decimalSeparator.count == 1 ? decimalSeparator.first : nil
         var out = ""
         var sawSeparator = false
         for (i, ch) in s.enumerated() {
@@ -79,8 +83,8 @@ enum DecimalInput {
                 if i == 0 { out.append(ch) }                 // only a leading minus
             } else if ch.isASCII && ch.isNumber {            // 0–9
                 out.append(ch)
-            } else if allowsDecimal && ch == "." {           // "." only — comma rejected
-                if !sawSeparator { out.append(ch); sawSeparator = true }
+            } else if allowsDecimal && (ch == "." || ch == regional) {
+                if !sawSeparator { out.append("."); sawSeparator = true }
             }
             // else: strip
         }
@@ -96,7 +100,7 @@ extension View {
     /// Live-filter a numeric text field. After each edit, rewrite `text` to a valid
     /// numeric string (`DecimalInput.filter`). Writing back through the field's own
     /// state forces SwiftUI to correct the *displayed* text — so a rejected character
-    /// (a letter, a comma, a 2nd separator) can't linger on screen while the field is
+    /// (a letter, a grouping comma, a 2nd separator) can't linger on screen while the field is
     /// being edited. Works identically on iOS/iPad and macOS, and against paste.
     /// `allowsDecimal: false` restricts to integers (no separator).
     func numericInput(_ text: Binding<String>, allowsDecimal: Bool = true) -> some View {

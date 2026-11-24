@@ -10,11 +10,24 @@ final class DecimalInputTests: XCTestCase {
         XCTAssertEqual(DecimalInput.filter("1a2b.3c", allowsDecimal: true), "12.3")
         XCTAssertEqual(DecimalInput.filter("$1 234", allowsDecimal: true), "1234")
     }
-    func test_comma_is_rejected() {
-        // "," is not a decimal separator — stripped like any stray character.
-        XCTAssertEqual(DecimalInput.filter("1,5", allowsDecimal: true), "15")
-        XCTAssertEqual(DecimalInput.filter("1,234.50", allowsDecimal: true), "1234.50")
-        XCTAssertEqual(DecimalInput.filter("5.4,5.4,5", allowsDecimal: true), "5.4545")
+    func test_comma_is_grouping_in_a_dot_region() {
+        // In a "." region "," is grouping — stripped like any stray character.
+        XCTAssertEqual(DecimalInput.filter("1,5", allowsDecimal: true, decimalSeparator: "."), "15")
+        XCTAssertEqual(DecimalInput.filter("1,234.50", allowsDecimal: true, decimalSeparator: "."), "1234.50")
+        XCTAssertEqual(DecimalInput.filter("5.4,5.4,5", allowsDecimal: true, decimalSeparator: "."), "5.4545")
+    }
+    func test_comma_is_the_decimal_point_in_a_comma_region() {
+        // Germany, France, Brazil…: `.decimalPad` shows "," as its only decimal key.
+        // It used to be stripped, so "4,99" saved as 499 and no fraction could be typed.
+        XCTAssertEqual(DecimalInput.filter("4,99", allowsDecimal: true, decimalSeparator: ","), "4.99")
+        XCTAssertEqual(DecimalInput.filter("4,", allowsDecimal: true, decimalSeparator: ","), "4.")
+        XCTAssertEqual(DecimalInput.filter("4,999", allowsDecimal: true, maxFractionDigits: 2, decimalSeparator: ","), "4.99")
+        XCTAssertEqual(DecimalInput.filter("1,2,3", allowsDecimal: true, decimalSeparator: ","), "1.23")
+        // A pasted "." still works there.
+        XCTAssertEqual(DecimalInput.filter("4.99", allowsDecimal: true, decimalSeparator: ","), "4.99")
+        XCTAssertEqual(DecimalInput.parse(DecimalInput.filter("4,99", allowsDecimal: true, decimalSeparator: ",")), 4.99)
+        // Integers stay integers.
+        XCTAssertEqual(DecimalInput.filter("4,99", allowsDecimal: false, decimalSeparator: ","), "499")
     }
     func test_keeps_first_separator_drops_later() {
         // Once a "." is present, later separators are ignored (their digits stay).
