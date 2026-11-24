@@ -980,7 +980,10 @@ public enum Entries {
                             return .account(AccountLeg(accountId: acctId, amount: r["amount"], memo: r["memo"], id: r["id"],
                                 origAmount: r["orig_amount"], origCurrency: r["orig_currency"], clearedAt: r["cleared_at"]))
                         }
-                        return .category(CategoryLeg(categoryId: catId, amountBase: r["amount_base"], memo: r["memo"], id: r["id"]))
+                        // A split cell keeps what was typed into it: the date moves its
+                        // base value, not the ¥1,200 the user entered.
+                        return .category(CategoryLeg(categoryId: catId, amountBase: r["amount_base"], memo: r["memo"], id: r["id"],
+                                                     origAmount: r["orig_amount"], origCurrency: r["orig_currency"]))
                     }
                 }
                 try db.execute(sql: "DELETE FROM postings WHERE entry_id = ?", arguments: [entryId])
