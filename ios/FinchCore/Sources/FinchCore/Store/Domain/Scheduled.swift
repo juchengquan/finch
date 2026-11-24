@@ -60,7 +60,10 @@ public enum Scheduled {
         let ledgerId: String = t["ledger_id"]
         let name = (t["name"] as String?) ?? ""
         if let total = t["installment_total"] as Int? {
-            let paid = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries WHERE source_template_id = ? AND status = 'confirmed'", arguments: [templateId]) ?? 0
+            // Every occurrence already booked spends the plan, pending ones too: an
+            // auto-posted payment waiting in To confirm is a payment. Counting
+            // confirmed rows only let a plan of 3 with 3 pending rows take a fourth.
+            let paid = try installmentsBooked(db, templateId: templateId)
             if paid >= total { throw I18nError("error.scheduled.installmentDone", ["name": name, "total": String(total)], "\"\(name)\" has finished its \(total)-payment plan") }
         }
         // Explicit date wins; otherwise today (unchanged legacy behaviour). The
@@ -119,6 +122,14 @@ public enum Scheduled {
         try postSingle(db, ledgerId: ledgerId, accountId: accountId, amount: (type == "income" ? 1 : -1) * amount,
                        description: desc, date: date, time: postTime, sourceTemplateId: templateId,
                        categoryId: categoryId, occurrenceDate: occurrenceDate)
+    }
+
+    /// How many rows a template has booked, pending or confirmed — what an
+    /// installment plan has spent. Rows, not distinct occurrences: two posts on the
+    /// same day are two payments. Mirrors the web's `installmentsBooked`.
+    static func installmentsBooked(_ db: Database, templateId: String) throws -> Int {
+        try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries WHERE source_template_id = ?",
+                         arguments: [templateId]) ?? 0
     }
 
     /// Post every due (not-yet-generated) occurrence of each active template as a

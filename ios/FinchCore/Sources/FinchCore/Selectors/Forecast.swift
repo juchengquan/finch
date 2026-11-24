@@ -313,8 +313,7 @@ extension Selectors {
                 dates = unposted.filter { $0 >= today || missed($0) }
                 // Everything posted counts against a cap, pending rows too: they are
                 // counted below as rows, not as occurrences still to come.
-                let prefix = "\(t.id)|"
-                let postedCount = posted.keys.reduce(0) { $0 + ($1.hasPrefix(prefix) ? 1 : 0) }
+                let postedCount = occurrencesBooked(template: t, posted: posted)
                 cap = dates.count
                 if let total = t.installmentTotal { cap = Swift.min(cap, Swift.max(0, total - postedCount)) }
                 if let maxEx = t.maxExecutions { cap = Swift.min(cap, Swift.max(0, maxEx - postedCount)) }
@@ -502,6 +501,9 @@ extension Selectors {
     /// the backlog never reaches back past the template's real history.
     public static func resumeOccurrence(template: ScheduledTemplate, posted: [String: Bool],
                                         today: String) -> String? {
+        // A finished plan has nothing left to post, and its later occurrences are
+        // not overdue: they were never going to be paid.
+        if planComplete(template: template, posted: posted) { return nil }
         let horizon = horizonDay(from: today, addingDays: 400)
         let all = occurrencesUpTo(template, horizon)
         let unposted = { (d: String) in posted["\(template.id)|\(d)"] == nil }
@@ -528,6 +530,7 @@ extension Selectors {
     static func missedPredicate(template: ScheduledTemplate, posted: [String: Bool],
                                 today: String) -> (String) -> Bool {
         var floor: String??    // worked out on first need: most dates fail the cheap checks
+        if planComplete(template: template, posted: posted) { return { _ in false } }
         return { date in
             guard date < today, posted["\(template.id)|\(date)"] == nil, !template.isSkipped(date) else { return false }
             if floor == nil { floor = .some(missedFloor(template: template, posted: posted, today: today)) }
@@ -566,6 +569,24 @@ extension Selectors {
             floor = since
         }
         return floor
+    }
+
+    /// How many occurrences of `template` have a row, pending or confirmed — what an
+    /// installment plan or an execution cap has spent. The engine's cap counts the
+    /// same way (`Scheduled.installmentsBooked`): a payment waiting in To confirm is
+    /// a payment. `installmentPaid` is the confirmed count, for "3 of 12 paid".
+    public static func occurrencesBooked(template: ScheduledTemplate, posted: [String: Bool]) -> Int {
+        let prefix = "\(template.id)|"
+        return posted.keys.reduce(0) { $0 + ($1.hasPrefix(prefix) ? 1 : 0) }
+    }
+
+    /// Whether every occurrence the template's plan allows is booked — its
+    /// `installmentTotal` or `maxExecutions` is used up. Nothing more is owed, so
+    /// nothing is missed, and Post has nothing to post.
+    public static func planComplete(template: ScheduledTemplate, posted: [String: Bool]) -> Bool {
+        let caps = [template.installmentTotal, template.maxExecutions].compactMap { $0 }
+        guard let cap = caps.min() else { return false }
+        return occurrencesBooked(template: template, posted: posted) >= cap
     }
 
     /// "templateId|occurrenceDate" → isPending, for every posted occurrence (txns

@@ -214,8 +214,8 @@ public enum NotificationPlanner {
             // alert scheduled before the switch was turned on.
             let posted = Selectors.scheduledPostedMap(txns)
             for s in scheduled where !s.postsAutomatically {
-                // A paid-off installment plan has no more payments to prompt for.
-                if let total = s.installmentTotal, (s.installmentPaid ?? 0) >= total { continue }
+                // A paid-off installment plan has no more payments to prompt for:
+                // `resumeOccurrence` is nil once its plan is booked (`planComplete`).
                 guard let due = Selectors.resumeOccurrence(template: s, posted: posted, today: wallToday) else { continue }
                 let isFuture = due > wallToday
                 out.append(PlannedNotification(
