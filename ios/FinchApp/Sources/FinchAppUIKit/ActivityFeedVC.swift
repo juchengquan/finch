@@ -832,14 +832,8 @@ final class ActivityFeedVC: UIViewController {
         // Same multi-leg warning as the SwiftUI feed's delete alert (ActivityTab):
         // a split purchase (or a transfer) renders as one row per account leg, and
         // deleting any one row deletes the whole entry.
-        var message = "\(tx.merchant) · \(store.displayMoneyBase(tx.amount))"
-        if tx.transferGroupId != nil {
-            message += " " + ActivityFeedView.transferDeleteHint
-        } else if (tx.accountLegCount ?? 1) > 1 {
-            message += " " + ActivityFeedView.multiLegDeleteHint
-        }
         let alert = UIAlertController(title: String(localized: "Delete transaction?"),
-                                      message: message,
+                                      message: ActivityFeedView.deleteMessage(tx, store: store),
                                       preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: String(localized: "Delete"), style: .destructive) { [weak self] _ in
             guard let self else { return }

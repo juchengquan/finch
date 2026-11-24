@@ -93,6 +93,16 @@ struct ActivityFeedView: View {
     static let multiLegDeleteHint = String(localized: "This also deletes the other payments linked to this purchase.")
     static let transferDeleteHint = String(localized: "This also deletes the other side of the transfer.")
 
+    /// The UIKit delete alerts' message: the row, then what else goes with it. One
+    /// builder, because the merchant, tag and category lists had their own and it
+    /// left the hint out.
+    static func deleteMessage(_ tx: Tx, store: FinchStore) -> String {
+        let row = "\(tx.merchant) · \(store.displayMoneyBase(tx.amount))"
+        if tx.transferGroupId != nil { return row + " " + transferDeleteHint }
+        if (tx.accountLegCount ?? 1) > 1 { return row + " " + multiLegDeleteHint }
+        return row
+    }
+
     // Calendar lens (List is the default): a month grid of ACTUAL daily
     // income/expense over the filtered transactions — tap a day to see its rows.
     // (The Scheduled tab's calendar is the plan-side counterpart.)

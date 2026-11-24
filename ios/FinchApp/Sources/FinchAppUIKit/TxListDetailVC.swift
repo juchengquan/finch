@@ -356,15 +356,22 @@ final class TxListDetailVC: UIViewController {
 
     /// Centered alert, not a row-anchored sheet — row recycling tears a popout down.
     private func confirmDelete(_ tx: Tx) {
+        present(deleteAlert(tx), animated: true)
+    }
+
+    /// Deleting a row deletes its whole entry, so a split purchase or a transfer
+    /// says the other legs go too — as every other delete alert does. These three
+    /// lists said only the row, and deleted the rest unannounced.
+    func deleteAlert(_ tx: Tx) -> UIAlertController {
         let alert = UIAlertController(title: String(localized: "Delete transaction?"),
-                                      message: "\(tx.merchant) · \(store.displayMoneyBase(tx.amount))",
+                                      message: ActivityFeedView.deleteMessage(tx, store: store),
                                       preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: String(localized: "Delete"), style: .destructive) { [weak self] _ in
             guard let self else { return }
             self.run { try self.store.deleteTransaction(tx.id); Haptics.warning() }
         })
         alert.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel))
-        present(alert, animated: true)
+        return alert
     }
 
     private func hosted<V: View>(_ view: V) -> UIViewController {
