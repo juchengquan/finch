@@ -124,7 +124,7 @@ extension WatchSnapshotPayload {
     init(widget snap: WidgetSnapshot) {
         self.init(netWorth: snap.netWorth, currency: snap.currency,
                   budgetUsedPct: snap.budgetUsedPct, weeklySpent: snap.weeklySpent,
-                  generatedAt: Date())
+                  generatedAt: Date(), masked: snap.masked)
     }
 }
 #endif

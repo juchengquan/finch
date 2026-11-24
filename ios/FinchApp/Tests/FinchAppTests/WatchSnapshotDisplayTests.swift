@@ -20,6 +20,15 @@ final class WatchSnapshotDisplayTests: XCTestCase {
         XCTAssertEqual(p.shortMoney(1_200_000), "¥1.2M")
     }
 
+    /// The phone's Hide amounts reaches the watch face; it used to show the figures.
+    func test_maskedSnapshotHidesItsFigures() {
+        var p = payload()
+        p.masked = true
+        XCTAssertEqual(p.shortMoney(12_340), "••••")
+        p.masked = nil   // a payload from an older phone build
+        XCTAssertEqual(p.shortMoney(12_340), "$12.3K")
+    }
+
     func test_isStale_boundary24h() {
         XCTAssertFalse(payload(generatedAt: Date(timeIntervalSinceNow: -23 * 3600)).isStale)
         XCTAssertTrue(payload(generatedAt: Date(timeIntervalSinceNow: -25 * 3600)).isStale)

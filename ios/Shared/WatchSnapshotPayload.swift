@@ -16,6 +16,9 @@ struct WatchSnapshotPayload: Codable, Equatable {
     /// CP3 composer — the entry catalog (default account + top categories) the
     /// watch composer picks from. Optional for the same wire back-compat.
     var quickAdd: WatchQuickAddCatalog? = nil
+    /// Hide amounts is on, on the phone: the watch and its complication mask every
+    /// figure, as the phone does. Optional for the same wire back-compat.
+    var masked: Bool? = nil
 
     func encoded() -> Data? { try? JSONEncoder().encode(self) }
 

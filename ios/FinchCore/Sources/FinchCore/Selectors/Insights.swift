@@ -265,6 +265,23 @@ extension Selectors {
         return CategorySuggestion(categoryId: topId, count: topCount, confidence: confidence)
     }
 
+    // MARK: spentThisWeek
+
+    /// Spending so far in `today`'s week, Monday through `today` — what a glance
+    /// labelled "This week" means. `weeklyDigest` reports the last COMPLETED week,
+    /// right for the Sunday digest and wrong for the widget, which showed last
+    /// week's total all week. Confirmed rows only, in base.
+    public static func spentThisWeek(_ txns: [Tx], _ ledgerId: String, _ today: String) -> Double {
+        if today.isEmpty { return 0 }
+        let start = isoWeekMonday(today)
+        var spent = 0.0
+        for t in txns where ledgerOf(t) == ledgerId && !(t.pending ?? false) && isSpend(t)
+            && t.date >= start && t.date <= today {
+            spent += -t.amount
+        }
+        return r2(spent)
+    }
+
     // MARK: weeklyDigest
 
     public static func weeklyDigest(_ txns: [Tx], _ ledgerId: String, _ anchor: String) -> WeeklyDigest? {
