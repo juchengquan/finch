@@ -6,7 +6,7 @@ import GRDB
 ///
 /// This is the migration that carried the real risk, and these are the tests
 /// that price it: `entries` is the spine — postings and attachments CASCADE from
-/// it, 7 indexes and 4 triggers hang off it, and an FTS shadow mirrors it. A
+/// it, 7 indexes and 6 triggers hang off it, and an FTS shadow mirrors it. A
 /// rebuild that drops it with foreign keys live would take every posting in the
 /// database with it, and one that forgets a trigger would leave search quietly
 /// returning nothing.
@@ -121,7 +121,8 @@ final class WidenEntryKindMigrationTests: XCTestCase {
             let triggers = try String.fetchAll(db, sql:
                 "SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'entries' ORDER BY name")
             XCTAssertEqual(triggers, ["tr_entry_fts_delete", "tr_entry_fts_insert",
-                                      "tr_entry_fts_update", "tr_entry_seal"])
+                                      "tr_entry_fts_update", "tr_entry_pending_kind_insert",
+                                      "tr_entry_pending_kind_update", "tr_entry_seal"])
             let indexes = try Int.fetchOne(db, sql:
                 "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND tbl_name = 'entries' AND name LIKE 'idx_entry%'")
             XCTAssertEqual(indexes, 7, "all seven lookup indexes must be back")
@@ -161,5 +162,43 @@ final class WidenEntryKindMigrationTests: XCTestCase {
         XCTAssertEqual(try q.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM postings") }, 4)
         XCTAssertEqual(try q.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM entries") }, 2)
         XCTAssertEqual(try q.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM entries_fts") }, 2)
+    }
+
+    private func entryTriggers(_ q: DatabaseQueue) throws -> [String] {
+        try q.read { try String.fetchAll($0, sql: "SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'entries' ORDER BY name") }
+    }
+
+    /// The rebuild keeps all six triggers. It used to drop the two that keep
+    /// pending_kind in step with status, leaving four.
+    func test_theRebuildKeepsThePendingKindTriggers() throws {
+        let q = try oldShapeDB()
+        let before = try entryTriggers(q)
+        XCTAssertEqual(before.count, 6)
+        try q.writeWithoutTransaction { db in
+            try db.execute(sql: "PRAGMA foreign_keys = OFF")
+            try db.inTransaction { try Migrations.widenEntryKind(db); return .commit }
+            try db.execute(sql: "PRAGMA foreign_keys = ON")
+        }
+        XCTAssertEqual(try entryTriggers(q), before)
+    }
+
+    /// A database the old rebuild already ran on: the triggers come back, and the
+    /// rows written without them are repaired.
+    func test_theTriggersAreRestoredOnADatabaseThatLostThem() throws {
+        let q = try oldShapeDB()
+        try Migrations.runAll(on: q)
+        try q.write { db in
+            try db.execute(sql: "DROP TRIGGER tr_entry_pending_kind_insert")
+            try db.execute(sql: "DROP TRIGGER tr_entry_pending_kind_update")
+            // What happened while they were gone: a confirmed row kept its old kind,
+            // and a new pending row got none.
+            try db.execute(sql: "UPDATE entries SET pending_kind = 'due' WHERE id = 'e1'")
+            try db.execute(sql: "UPDATE entries SET status = 'pending' WHERE id = 'e2'")
+        }
+        XCTAssertEqual(try entryTriggers(q).count, 4)
+        try q.write { try Migrations.restorePendingKindTriggers($0) }
+        XCTAssertEqual(try entryTriggers(q).count, 6)
+        XCTAssertEqual(try q.read { try String.fetchAll($0, sql: "SELECT COALESCE(pending_kind, '-') FROM entries ORDER BY id") },
+                       ["-", "due"])
     }
 }
