@@ -7384,6 +7384,16 @@
       }
     },
     "The other ledger no longer exists. This side is still correct on its own.": {},
+    "The transaction was saved, but its receipt couldn't be attached. Open the transaction to add it again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "交易已保存，但未能附加收据。请打开该交易重新添加。"
+          }
+        }
+      }
+    },
     "Theme": {
       "localizations": {
         "zh-Hans": {
