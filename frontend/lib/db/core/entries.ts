@@ -84,6 +84,13 @@ export interface CategoryLegInput {
 }
 
 export type LegInput = AccountLegInput | CategoryLegInput;
+/** An entry's spending-category legs: categorised, and not an equity category —
+ *  not the opening, adjustment or fx rounding leg. The projection's rule for a
+ *  split; counting the fx residue made a plain purchase after a base change read
+ *  as one. Mirrors FinchCore `Entries.spendingCategoryLegCountSQL`. */
+export const SPENDING_CATEGORY_LEGS_SQL = `SELECT category_id FROM postings WHERE entry_id = ? AND category_id IS NOT NULL
+   AND category_id NOT IN (SELECT id FROM categories WHERE kind = 'equity')`;
+
 export const isAccountLeg = (l: LegInput): l is AccountLegInput => 'accountId' in l;
 
 export interface NewEntry {

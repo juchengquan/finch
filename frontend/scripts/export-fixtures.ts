@@ -620,6 +620,11 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown>; expectErr
   { action: 'confirmAllPending', args: { ledgerId: 'personal' } },
   // Budgets b1/b2 convert with the base (they used to keep their USD numbers).
   { action: 'changeLedgerBase', args: { ledgerId: 'personal', newBase: 'EUR' } },
+  // The base change left fx rounding legs on the KRW purchases. That residue is
+  // not a category: these re-categorise them (both used to do nothing, because
+  // the fx leg made each one read as a split).
+  { action: 'updateTransaction', args: { id: '$postingOf:Seoul market', patch: { category: 'fun' } } },
+  { action: 'bulkRecategorize', args: { ids: ['$postingOf:Seoul'], categoryId: 'fun' } },
 ];
 
 /** Resolve `$lastAccountPosting` to the most-recent account-leg posting id (the
@@ -633,12 +638,26 @@ async function resolveArgs(x: Exec, args: Record<string, unknown>): Promise<Reco
     }
     return cached;
   };
+  // `$postingOf:<description>` — the account-leg posting of the entry with that
+  // description. For steps after a base change, which rebuilds postings in an
+  // order that follows each engine's random entry ids, so "last" names a
+  // different row on each side.
+  const postingOf = async (description: string) => {
+    const r = await x(
+      'SELECT p.id FROM postings p JOIN entries e ON e.id = p.entry_id WHERE e.description = ? AND p.account_id IS NOT NULL ORDER BY p.sort_order LIMIT 1',
+      [description],
+    );
+    return String(r[0].id);
+  };
+  const one = async (e: unknown) => {
+    if (e === '$lastAccountPosting') return lastPosting();
+    if (typeof e === 'string' && e.startsWith('$postingOf:')) return postingOf(e.slice('$postingOf:'.length));
+    return e;
+  };
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(args)) {
-    if (v === '$lastAccountPosting') out[k] = await lastPosting();
     // Resolve the placeholder inside arrays too (e.g. bulkRecategorize.ids).
-    else if (Array.isArray(v)) out[k] = await Promise.all(v.map(async (e) => (e === '$lastAccountPosting' ? await lastPosting() : e)));
-    else out[k] = v;
+    out[k] = Array.isArray(v) ? await Promise.all(v.map(one)) : await one(v);
   }
   return out;
 }

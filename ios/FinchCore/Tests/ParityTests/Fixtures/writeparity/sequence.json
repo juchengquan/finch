@@ -797,6 +797,24 @@
         "ledgerId": "personal",
         "newBase": "EUR"
       }
+    },
+    {
+      "action": "updateTransaction",
+      "args": {
+        "id": "$postingOf:Seoul market",
+        "patch": {
+          "category": "fun"
+        }
+      }
+    },
+    {
+      "action": "bulkRecategorize",
+      "args": {
+        "ids": [
+          "$postingOf:Seoul"
+        ],
+        "categoryId": "fun"
+      }
     }
   ],
   "expected": {
@@ -1575,7 +1593,7 @@
           },
           {
             "account_id": null,
-            "category_id": "food",
+            "category_id": "fun",
             "amount": "20.450000",
             "currency": "EUR",
             "amount_base": "20.450000",
@@ -1676,29 +1694,16 @@
           },
           {
             "account_id": null,
-            "category_id": "food",
-            "amount": "32.730000",
+            "category_id": "fun",
+            "amount": "34.090000",
             "currency": "EUR",
-            "amount_base": "32.730000",
+            "amount_base": "34.090000",
             "exchange_rate": "1.000000",
             "orig_amount": null,
             "orig_currency": null,
             "memo": null,
             "cleared": false,
             "sort_order": 1
-          },
-          {
-            "account_id": null,
-            "category_id": "sys-fx",
-            "amount": "1.360000",
-            "currency": "EUR",
-            "amount_base": "1.360000",
-            "exchange_rate": "1.000000",
-            "orig_amount": null,
-            "orig_currency": null,
-            "memo": null,
-            "cleared": false,
-            "sort_order": 2
           }
         ]
       },

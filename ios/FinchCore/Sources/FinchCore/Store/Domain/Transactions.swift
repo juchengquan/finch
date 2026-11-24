@@ -552,7 +552,13 @@ public enum Transactions {
             origAmount = oldAcct["orig_amount"]; origCurrency = oldAcct["orig_currency"]
         }
 
-        let plainCatLegs = oldLegs.filter { ($0["account_id"] as String?) == nil }
+        // The category legs, less the fx rounding leg a base change can leave: that is
+        // a residue, not a category. Counted, it made a plain purchase read as a split,
+        // and a split ignores a category patch — so the edit did nothing.
+        let fxCat = try String.fetchOne(db, sql: "SELECT id FROM categories WHERE ledger_id = ? AND system = 'fx'", arguments: [ledgerId])
+        let plainCatLegs = oldLegs.filter {
+            ($0["account_id"] as String?) == nil && (fxCat == nil || ($0["category_id"] as String?) != fxCat)
+        }
         let acctLeg = Entries.AccountLeg(accountId: newAccountId, amount: nativeAmount, amountBase: amountBase,
             exchangeRate: rate, memo: oldAcct["memo"], id: oldAcct["id"],
             origAmount: origAmount, origCurrency: origCurrency, clearedAt: oldAcct["cleared_at"])
@@ -563,8 +569,7 @@ public enum Transactions {
         // amount-only patch used to rebuild it as ONE category leg (food 60 + rent
         // 40, edited to 120, became food 120). Mirrors the web's updateTransaction.
         if plainCatLegs.count >= 2 {
-            let fxCat = try String.fetchOne(db, sql: "SELECT id FROM categories WHERE ledger_id = ? AND system = 'fx'", arguments: [ledgerId])
-            let catLegs = plainCatLegs.filter { fxCat == nil || ($0["category_id"] as String?) != fxCat }
+            let catLegs = plainCatLegs
             let scaled = scaleSplitLegs(catLegs.map { $0["amount_base"] as Double }, Entries.r2(-amountBase))
             ep.legs = .set([.account(acctLeg)] + zip(catLegs, scaled).map { leg, value in
                 .category(Entries.CategoryLeg(categoryId: leg["category_id"], amountBase: value, memo: leg["memo"], id: leg["id"]))
@@ -664,7 +669,7 @@ public enum Transactions {
             // the rebuild below would refuse the shape and abort the whole batch.
             let kind = try String.fetchOne(db, sql: "SELECT kind FROM entries WHERE id = ?", arguments: [entryId])
             if kind == "opening" || kind == "adjustment" { continue }
-            let catCount = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM postings WHERE entry_id = ? AND category_id IS NOT NULL", arguments: [entryId]) ?? 0
+            let catCount = try Int.fetchOne(db, sql: Entries.spendingCategoryLegCountSQL, arguments: [entryId]) ?? 0
             if catCount >= 2 { continue }
             // A purchase paid from several accounts carries exactly one category leg by
             // design, so catCount stays < 2 and the check above does not skip it — but the

@@ -59,8 +59,18 @@ final class WriteParityTests: XCTestCase {
             // Resolve $lastAccountPosting to the most-recent account-leg posting id,
             // including inside arrays (e.g. bulkRecategorize.ids).
             let pid = try q.read { db in try String.fetchOne(db, sql: "SELECT id FROM postings WHERE account_id IS NOT NULL ORDER BY rowid DESC LIMIT 1") }
+            // `$postingOf:<description>`: that entry's account-leg posting (see the
+            // exporter's resolveArgs — "last" is engine-dependent after a base change).
+            func postingOf(_ description: String) -> String? {
+                try? q.read { db in try String.fetchOne(db, sql: """
+                    SELECT p.id FROM postings p JOIN entries e ON e.id = p.entry_id
+                     WHERE e.description = ? AND p.account_id IS NOT NULL ORDER BY p.sort_order LIMIT 1
+                    """, arguments: [description]) }
+            }
             func resolve(_ v: JSONValue) -> JSONValue {
                 if v == .string("$lastAccountPosting"), let pid { return .string(pid) }
+                if case .string(let s) = v, s.hasPrefix("$postingOf:"),
+                   let id = postingOf(String(s.dropFirst("$postingOf:".count))) { return .string(id) }
                 if case .array(let arr) = v { return .array(arr.map(resolve)) }
                 return v
             }
