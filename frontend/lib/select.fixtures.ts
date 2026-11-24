@@ -355,6 +355,19 @@ export const CASES: SelectorCase[] = [
       schedOf({ id: 's1', type: 'expense', frequency: 'monthly', amount: -40, dayOfMonth: 25 }),  // after today
       schedOf({ id: 's2', type: 'expense', frequency: 'monthly', amount: -99, dayOfMonth: 10 }),  // before today — excluded
     ], ledgerId: 'personal', month: '2026-05', today: '2026-05-15' } },
+  // The rest of June from the 10th: rent paid early on the 5th (in "spent", not
+  // owed again), a bill waiting in To confirm (owed), a day-31 bill (the 30th) and
+  // a weekly one (12th, 19th, 26th). 110 still to come; it used to read 900.
+  { name: 'posted-pending-day31-weekly', selector: 'monthForecast',
+    input: { txns: [
+      txOf({ id: 't1', amount: -900, date: '2026-06-05', sourceTemplateId: 's1', occurrenceDate: '2026-06-25' }),
+      txOf({ id: 't2', amount: -50, date: '2026-06-05', pending: true, sourceTemplateId: 's2', occurrenceDate: '2026-06-05' }),
+    ], scheduled: [
+      schedOf({ id: 's1', amount: -900, dayOfMonth: 25, startDate: '2026-01-25' }),
+      schedOf({ id: 's2', amount: -50, dayOfMonth: 5, startDate: '2026-01-05' }),
+      schedOf({ id: 's3', amount: -30, dayOfMonth: 31, startDate: '2026-01-31' }),
+      schedOf({ id: 's4', amount: -10, frequency: 'weekly', weekDay: 5, startDate: '2026-01-02' }),
+    ], ledgerId: 'personal', month: '2026-06', today: '2026-06-10' } },
 
   // ── accountForecast(account, scheduled, today, horizonDays) → AccountForecast ──
   { name: 'one-monthly-expense', selector: 'accountForecast',
