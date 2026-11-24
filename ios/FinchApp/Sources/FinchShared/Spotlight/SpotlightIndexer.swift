@@ -80,7 +80,11 @@ struct SpotlightSnapshot {
         txns = store.txns; accounts = store.accounts
         categories = store.pickableCategories
         merchants = store.merchants; budgets = store.budgets
-        masked = store.privacyMode
+        // A lock hides the app, so the system index must not show what it hides:
+        // Spotlight answers on a locked app (and a locked phone's search) with
+        // whatever was indexed. Clearing it happens only when the app locks on
+        // its next foreground, which left every amount searchable in between.
+        masked = store.privacyMode || BiometricGate.shared.settings.policy != .off
         base = store.baseCurrency; display = store.displayCurrency
         rates = store.rateMap
     }

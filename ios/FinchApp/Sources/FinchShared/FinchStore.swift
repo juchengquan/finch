@@ -45,6 +45,7 @@ public final class FinchStore: ObservableObject {
             guard oldValue != privacyMode else { return }
             UserDefaults.standard.set(privacyMode, forKey: FinchStore.privacyKey)
             refreshWidgetSnapshot()   // the lock screen follows Hide amounts now, not at the next write
+            Task { await SpotlightIndexer.shared.indexAll(store: self) }   // …and so does Spotlight
         }
     }
     @Published public var activeLedgerId: String = "" {
