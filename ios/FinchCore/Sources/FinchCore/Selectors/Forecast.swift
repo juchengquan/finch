@@ -44,12 +44,18 @@ public struct ScheduledTemplate: Identifiable, Equatable, Sendable, Codable {
     /// (`missedFloor`). Native-only and optional, like `skippedDates`.
     public let autoPostSince: String?
 
+    /// Where a split-income template pays, one share per account
+    /// (`scheduled_splits`). Posting books one leg per share and nothing to
+    /// `accountId`. Native-only and optional; nil and empty mean "not split".
+    public let incomeSplits: [ScheduledIncomeSplit]?
+
     public init(id: String, name: String, description: String? = nil, type: String,
                 amount: Double? = nil, frequency: String, dayOfMonth: Int, weekDay: Int? = nil,
                 accountId: String, fromAccountId: String? = nil, categoryId: String? = nil,
                 startDate: String? = nil, startTime: String? = nil, endDate: String? = nil, nextRun: String, maxExecutions: Int? = nil,
                 installmentTotal: Int? = nil, installmentPaid: Int? = nil, color: String? = nil,
-                autoPost: Int? = nil, skippedDates: [String]? = nil, autoPostSince: String? = nil) {
+                autoPost: Int? = nil, skippedDates: [String]? = nil, autoPostSince: String? = nil,
+                incomeSplits: [ScheduledIncomeSplit]? = nil) {
         self.id = id; self.name = name; self.description = description; self.type = type
         self.amount = amount; self.frequency = frequency; self.dayOfMonth = dayOfMonth
         self.weekDay = weekDay; self.accountId = accountId; self.fromAccountId = fromAccountId
@@ -61,14 +67,35 @@ public struct ScheduledTemplate: Identifiable, Equatable, Sendable, Codable {
         self.autoPost = autoPost
         self.skippedDates = skippedDates
         self.autoPostSince = autoPostSince
+        self.incomeSplits = incomeSplits
     }
 
     /// Whether due occurrences are added for the user (`autoPostDueScheduled`)
     /// rather than waiting to be posted by hand.
     public var postsAutomatically: Bool { (autoPost ?? 0) != 0 }
 
+    /// The template's split shares, when it is split income — what posting reads.
+    var splitShares: [ScheduledIncomeSplit]? {
+        guard type == "income", let s = incomeSplits, !s.isEmpty else { return nil }
+        return s
+    }
+
     /// Whether the user skipped the occurrence on `date` (`yyyy-MM-dd`).
     public func isSkipped(_ date: String) -> Bool { skippedDates?.contains(date) ?? false }
+}
+
+/// One account's share of a split-income template: `amountAbs` when set, else
+/// `amountPct` percent of the template's amount — as `Scheduled.post` books it.
+public struct ScheduledIncomeSplit: Equatable, Sendable, Codable {
+    public let accountId: String
+    public let amountPct: Double?
+    public let amountAbs: Double?
+
+    public init(accountId: String, amountPct: Double? = nil, amountAbs: Double? = nil) {
+        self.accountId = accountId; self.amountPct = amountPct; self.amountAbs = amountAbs
+    }
+
+    func portion(of amount: Double) -> Double { amountAbs ?? amount * (amountPct ?? 0) / 100 }
 }
 
 public struct MonthForecast: Equatable, Sendable, Codable {
@@ -106,10 +133,13 @@ public struct ForecastActivity {
     /// `amount` in `from`, as `to`, on the day `date` — the engine's rate lookup
     /// (`FxConvert`). nil when there is no rate, where posting would refuse.
     public let convert: (_ amount: Double, _ from: String, _ to: String, _ date: String) -> Double?
+    /// The ledger's base currency, for `monthForecast`, whose figures are in base.
+    public let baseCurrency: String?
 
-    public init(txns: [Tx], accountCurrencies: [String: String] = [:],
+    public init(txns: [Tx], accountCurrencies: [String: String] = [:], baseCurrency: String? = nil,
                 convert: @escaping (_ amount: Double, _ from: String, _ to: String, _ date: String) -> Double? = { _, _, _, _ in nil }) {
-        self.txns = txns; self.accountCurrencies = accountCurrencies; self.convert = convert
+        self.txns = txns; self.accountCurrencies = accountCurrencies; self.baseCurrency = baseCurrency
+        self.convert = convert
     }
 }
 
@@ -210,8 +240,15 @@ extension Selectors {
 
     // MARK: monthForecast
 
+    /// This month's spending: confirmed so far, the run rate over the days left, and
+    /// the scheduled bills still to come. Every figure is in the ledger's base.
+    ///
+    /// `activity` (the app passes it) values a bill on a foreign-currency account in
+    /// base, at the rate posting would use; one with no rate is left out. Without it
+    /// a ¥15,000 bill on a yen card counted as $15,000.
     public static func monthForecast(_ txns: [Tx], _ scheduled: [ScheduledTemplate],
-                                     _ ledgerId: String, _ month: String, _ today: String) -> MonthForecast? {
+                                     _ ledgerId: String, _ month: String, _ today: String,
+                                     activity: ForecastActivity? = nil) -> MonthForecast? {
         if month.isEmpty { return nil }
         let p = month.split(separator: "-").map { Int($0) ?? 0 }
         let y = p.count > 0 ? p[0] : 0, m = p.count > 1 ? p[1] : 1
@@ -232,18 +269,33 @@ extension Selectors {
 
         var scheduledRest = 0.0
         if inMonth {
+            let posted = scheduledPostedMap(txns)
+            let monthEnd = month + "-" + String(format: "%02d", daysInMo)
             for rt in scheduled {
                 if rt.type != "expense" { continue }
-                if rt.frequency != "monthly" { continue }
                 guard let amt = rt.amount else { continue }
-                if rt.dayOfMonth <= dayOfMonth { continue }
-                if rt.dayOfMonth > daysInMo { continue }
-                // This month's occurrence. A skipped one, or one after the end
-                // date, will not happen, so it is not part of the rest of the month.
-                let occurrence = month + "-" + String(format: "%02d", rt.dayOfMonth)
-                if rt.isSkipped(occurrence) { continue }
-                if let end = rt.endDate, String(end.prefix(10)) < occurrence { continue }
-                scheduledRest += abs(amt)
+                // The rest of this month's occurrences, whatever the frequency: the
+                // recurrence clamps a day-31 bill to the 30th, and leaves out skipped
+                // ones and any after the end date. One already posted is not owed
+                // again: confirmed it is in `mtdSpent`, pending it is counted below.
+                let left = occurrencesUpTo(rt, monthEnd)
+                    .filter { $0 > today && $0.hasPrefix(month) && posted["\(rt.id)|\($0)"] == nil }
+                var cap = left.count
+                for limit in [rt.installmentTotal, rt.maxExecutions].compactMap({ $0 }) {
+                    cap = Swift.min(cap, Swift.max(0, limit - occurrencesBooked(template: rt, posted: posted)))
+                }
+                for d in left.prefix(cap) {
+                    guard let value = baseAmount(abs(amt), accountId: rt.accountId, on: d, activity) else { continue }
+                    scheduledRest += value
+                }
+            }
+            // A scheduled bill already booked but waiting in To confirm: owed, and in
+            // neither figure above (`mtdSpent` counts confirmed rows only). Auto-post
+            // books a bill pending on its day, so without this every one of them
+            // dropped out of the forecast the day it fell due.
+            for t in txns where (t.pending ?? false) && t.sourceTemplateId != nil {
+                if ledgerOf(t) != ledgerId || !isSpend(t) || !t.date.hasPrefix(month) { continue }
+                scheduledRest += -t.amount
             }
         }
 
@@ -254,6 +306,16 @@ extension Selectors {
             mtdSpent: r2(mtdSpent), unscheduledRest: unscheduledRest, scheduledRest: r2(scheduledRest),
             projected: projected, daysElapsed: daysElapsed, daysRemaining: daysRemaining,
             daysInMonth: daysInMo, dailyRunRate: r2(dailyRunRate))
+    }
+
+    /// A template amount, in its account's currency, in the ledger's base on `date`.
+    /// Nominal without activity, or when the account's currency or the base is
+    /// unknown; nil when there is no rate.
+    private static func baseAmount(_ amount: Double, accountId: String, on date: String,
+                                   _ activity: ForecastActivity?) -> Double? {
+        guard let activity, let base = activity.baseCurrency,
+              let ccy = activity.accountCurrencies[accountId], ccy != base else { return amount }
+        return activity.convert(amount, ccy, base, date).map(abs)
     }
 
     // MARK: accountForecast
@@ -276,7 +338,11 @@ extension Selectors {
     ///   so on a bill's due day it was in neither — the card and its warning
     ///   vanished. Pending rows a scheduled item posted, unposted occurrences due
     ///   today and MISSED ones (`isMissed`, the rule the overdue caption and Post
-    ///   use) all leave the balance on day 0. Their events keep their own date,
+    ///   use) all leave the balance on day 0 — missed ones only as far back as the
+    ///   window looks ahead, so a backlog nobody is going to post is not money
+    ///   moving today.
+    /// - **Split income lands in each share's account**, as posting books it, and
+    ///   not in the template's own. Their events keep their own date,
     ///   so an event dated on or before `today` means "owed now".
     /// - **A transfer between currencies is converted** (A4). The template's
     ///   amount is in the SENDING account's currency; the receiving side is
@@ -292,8 +358,15 @@ extension Selectors {
 
         var events: [ForecastEvent] = []
         for t in scheduled {
-            guard let amt = t.amount else { continue }                  // variable — manual only
-            let isToHere = t.accountId == account.id
+            guard var amt = t.amount else { continue }                  // variable — manual only
+            var isToHere = t.accountId == account.id
+            // Split income pays each share's account and not `accountId`, as posting
+            // books it. Without activity this is the web's walk, which has no splits.
+            if activity != nil, let shares = t.splitShares {
+                let here = shares.filter { $0.accountId == account.id }.reduce(0.0) { $0 + $1.portion(of: amt) }
+                isToHere = here != 0
+                amt = here
+            }
             let isFromHere = t.type == "transfer" && t.fromAccountId == account.id
             if !isToHere && !isFromHere { continue }
             var sign = 0
@@ -310,7 +383,13 @@ extension Selectors {
                 // the caps below spend themselves the same way.
                 let unposted = occurrencesUpTo(t, end).filter { posted["\(t.id)|\($0)"] == nil }
                 let missed = missedPredicate(template: t, posted: posted, today: today)
-                dates = unposted.filter { $0 >= today || missed($0) }
+                // Missed ones count only as far back as the window looks ahead. A
+                // template whose occurrences have long gone unposted (a salary the
+                // user records by hand, say) is not money arriving today: its whole
+                // backlog landed on day 0, +$55k from one monthly salary. The row's
+                // "overdue" caption still names the oldest.
+                let owedSince = addDaysIso(today, -horizonDays)
+                dates = unposted.filter { $0 >= today || ($0 >= owedSince && missed($0)) }
                 // Everything posted counts against a cap, pending rows too: they are
                 // counted below as rows, not as occurrences still to come.
                 let postedCount = occurrencesBooked(template: t, posted: posted)

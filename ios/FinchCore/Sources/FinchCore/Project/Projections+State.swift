@@ -294,6 +294,15 @@ extension Projection {
             // honours them without a second slice to keep in step.
             let skips = try ScheduledSkips.load(db)
             let autoPostSince = try AutoPostSince.load(db)
+            var splits: [String: [ScheduledIncomeSplit]] = [:]
+            for r in try Row.fetchAll(db, sql: """
+                SELECT s.template_id, s.account_id, s.amount_pct, s.amount_abs FROM scheduled_splits s
+                  JOIN scheduled_templates t ON t.id = s.template_id
+                 WHERE t.ledger_id = ? AND s.account_id IS NOT NULL ORDER BY s.sort_order
+                """, arguments: [ledgerId]) {
+                splits[r["template_id"] as String, default: []].append(
+                    ScheduledIncomeSplit(accountId: r["account_id"], amountPct: r["amount_pct"], amountAbs: r["amount_abs"]))
+            }
             return try Row.fetchAll(db, sql: """
                 SELECT t.id, t.name, t.description, t.kind, t.amount, t.frequency,
                        t.day_of_month, t.day_of_week, t.account_id, t.from_account_id, t.category_id,
@@ -318,7 +327,8 @@ extension Projection {
                     installmentTotal: r["installment_total"], installmentPaid: r["installment_paid"], color: r["color"],
                     autoPost: r["auto_post"],
                     skippedDates: skips[r["id"] as String],
-                    autoPostSince: autoPostSince[r["id"] as String])
+                    autoPostSince: autoPostSince[r["id"] as String],
+                    incomeSplits: splits[r["id"] as String])
             }
         }
     }
