@@ -50,6 +50,7 @@ public enum NotificationPrefs {
 enum NotificationState {
     private static let firedKey = "finch.notifications.firedIds"
     private static let snoozeKey = "finch.notifications.snoozedUntil"
+    private static let summaryKey = "finch.notifications.summarySentOn"
     private static let autoPostToldKey = "finch.notifications.autoPostRefusalsTold"
 
     /// The auto-post refusals the last run reported, as `templateId:occurrence`
@@ -62,6 +63,12 @@ enum NotificationState {
     static var fired: Set<String> {
         get { Set(UserDefaults.standard.array(forKey: firedKey) as? [String] ?? []) }
         set { UserDefaults.standard.set(Array(newValue).sorted(), forKey: firedKey) }
+    }
+
+    /// The day the "more to review" summary was last sent: once a day at most.
+    static var summarySentOn: String? {
+        get { UserDefaults.standard.string(forKey: summaryKey) }
+        set { UserDefaults.standard.set(newValue, forKey: summaryKey) }
     }
 
     /// id → deadline. Stored as epoch seconds so it survives relaunches.
@@ -88,10 +95,35 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
     /// True when the user denied notification permission — surfaced in Settings
     /// so the otherwise-silently-dropped alerts have an explanation + a fix.
     @Published public private(set) var authorizationDenied = false
+    /// The ledgers not on screen: their plan, rebuilt only when its key moves
+    /// (`LedgerNotificationPlans`).
+    private var otherLedgerPlans: OtherLedgerPlans?
+
+    /// Whether `configure` has wired the store and router, and the responses that
+    /// arrived before it did.
+    private var isConfigured = false
+    private var configuredWaiters: [CheckedContinuation<Void, Never>] = []
+
+    /// Become the notification centre's delegate. Called from the app delegate's
+    /// `didFinishLaunching`: a tap or button that LAUNCHED the app is delivered right
+    /// after it, and `configure` runs much later in the launch sequence — so the
+    /// delegate was not there yet, and the tap opened the app on the wrong screen and
+    /// "Snooze" or "Confirm now" did nothing. Responses that arrive early wait for
+    /// `configure` (`awaitConfigured`).
+    public func installDelegate() { center.delegate = self }
+
+    private func awaitConfigured() async {
+        if isConfigured { return }
+        await withCheckedContinuation { configuredWaiters.append($0) }
+    }
 
     public func configure(store: FinchStore, router: DeepLinkRouter) {
         self.store = store; self.router = router
         center.delegate = self
+        isConfigured = true
+        let waiters = configuredWaiters
+        configuredWaiters = []
+        for w in waiters { w.resume() }
         registerCategories()
         // Clear any badge left by an earlier build. Removing the code that SETS a
         // badge does not unset one already on the springboard icon — without this,
@@ -113,6 +145,21 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
     /// Re-plan from current state and schedule anything not already pending or
     /// delivered (stable ids → no duplicate fires). Called on launch + writes.
     public func refresh() async {
+        // One at a time. Every write starts one, and a refresh suspends at several
+        // awaits: two interleaved read the same pending set and fired record, both
+        // scheduled, and the later one wrote its stale `fired` over the other's.
+        let previous = refreshTask
+        let task = Task { [weak self] in
+            await previous?.value
+            await self?.performRefresh()
+        }
+        refreshTask = task
+        await task.value
+    }
+
+    private var refreshTask: Task<Void, Never>?
+
+    private func performRefresh() async {
         guard let store else { return }
         let status = await center.notificationSettings().authorizationStatus
         authorizationDenied = (status == .denied)
@@ -130,6 +177,7 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
             // masks it in privacy mode like every other alert's amount.
             accounts: store.accounts, accountMoney: { store.displayMoney($0, from: $1) },
             fxConvert: { store.fxConvert($0, from: $1, to: $2, on: $3) })
+            + (await plansForOtherLedgers(store))
 
         let pending = Set(await center.pendingNotificationRequests().map(\.identifier))
         let delivered = Set(await center.deliveredNotifications().map(\.request.identifier))
@@ -137,7 +185,8 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
         let decision = NotificationPlanner.reconcile(
             planned: planned, pending: pending, delivered: delivered,
             fired: NotificationState.fired, snoozedUntil: NotificationState.snoozedUntil, now: now,
-            templateIds: Set(store.scheduled.map(\.id)), wallToday: store.wallToday)
+            templateIds: Set(store.scheduled.map(\.id)).union(otherLedgerPlans?.templateIds ?? []),
+            wallToday: store.wallToday)
 
         if !decision.cancelPending.isEmpty { center.removePendingNotificationRequests(withIdentifiers: decision.cancelPending) }
         if !decision.cancelDelivered.isEmpty { center.removeDeliveredNotifications(withIdentifiers: decision.cancelDelivered) }
@@ -149,9 +198,11 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
         // one write -- anomaly scoring runs over the 50 most recent purchases -- and
         // without this they arrive seconds apart. The overflow is summarised, not
         // dropped, and the summary's id is stable per day so re-planning replaces it.
-        let capped = NotificationPolicy.applyCap(due, cap: Self.burstCap) { more in
+        let summaryId = "summary:\(store.wallToday)"
+        let capped = NotificationPolicy.capImmediate(
+            due, cap: Self.burstCap, summarySentToday: NotificationState.summarySentOn == store.wallToday) { more in
             PlannedNotification(
-                id: "summary:\(store.wallToday)", kind: .anomaly,
+                id: summaryId, kind: .anomaly,
                 title: String(localized: "More to review"),
                 body: String(localized: "\(more) more need your attention."),
                 tab: .activity, focusId: nil)
@@ -184,7 +235,30 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
             // The digest repeats on a calendar trigger — recording it as fired
             // would suppress every future week.
             if p.kind != .weeklyDigest { NotificationState.fired.insert(p.id) }
+            if p.id == summaryId { NotificationState.summarySentOn = store.wallToday }
         }
+    }
+
+    /// Every other ledger's notifications. Without them the reconcile step below
+    /// withdrew those ledgers' reminders and forgot their dismissals on a switch.
+    /// Cached under a key of everything they depend on; a miss reads the ledgers
+    /// off the main actor.
+    private func plansForOtherLedgers(_ store: FinchStore) async -> [PlannedNotification] {
+        guard let q = store.dbQueue else { return [] }
+        let active = store.activeLedgerId
+        let enabled = NotificationPrefs.enabled
+        let hour = NotificationPrefs.deliveryHour
+        let data = await Task.detached { FinchStore.otherLedgerDataSignature(q, active: active) }.value
+        let key = [active, store.wallToday, String(store.privacyMode), String(hour),
+                   enabled.map(\.rawValue).sorted().joined(separator: ","),
+                   store.displayCurrencyByLedger.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ","),
+                   data].joined(separator: "|")
+        if let cached = otherLedgerPlans, cached.key == key { return cached.planned }
+        let slices = await Task.detached { FinchStore.loadOtherLedgers(q, active: active) }.value
+        let planned = store.planNotifications(for: slices, enabled: enabled, deliveryHour: hour)
+        otherLedgerPlans = OtherLedgerPlans(key: key, planned: planned,
+                                            templateIds: Set(slices.flatMap { $0.scheduled.map(\.id) }))
+        return planned
     }
 
     /// Tell the user about a write the engine refused while nobody was looking — a
@@ -317,6 +391,7 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
         let notifId = request.identifier
         let title = request.content.title
         let body = request.content.body
+        await awaitConfigured()   // a response that launched the app arrives before the store is wired
 
         if action == "snooze1h" {
             // A real hour, not a dismissal. The old handler just fell through with

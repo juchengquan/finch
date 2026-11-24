@@ -81,16 +81,24 @@ public final class ICloudSync: ObservableObject {
     /// Mirror a freshly-built pack into the folder (best-effort). Local is always
     /// written by AutoBackupManager first; this only touches the mirror and applies
     /// the failure-episode policy (alert once per episode + persistent banner).
-    public func push(_ data: Data, name: String) {
-        guard let url = resolveFolder() else { return }   // no folder → nothing to mirror
-        let scope = url.startAccessingSecurityScopedResource()
-        defer { if scope { url.stopAccessingSecurityScopedResource() } }
+    /// Write `data` into the designated folder. Returns whether it landed, so the
+    /// caller records the folder backup as done only when it is.
+    @discardableResult
+    public func push(_ data: Data, name: String) -> Bool {
+        // A folder is designated (the caller checked `available`) but its bookmark no
+        // longer resolves: that is a failed mirror, not "nothing to mirror". It used
+        // to return quietly, with no banner, and the caller marked the backup done.
+        let url = resolveFolder()
+        let scope = url?.startAccessingSecurityScopedResource() ?? false
+        defer { if scope { url?.stopAccessingSecurityScopedResource() } }
         var failed = true
-        do {
-            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-            try data.write(to: url.appendingPathComponent(name))
-            failed = false
-        } catch { failed = true }
+        if let url {
+            do {
+                try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+                try data.write(to: url.appendingPathComponent(name))
+                failed = false
+            } catch { failed = true }
+        }
         let d = MirrorAlert.next(wasFailing: mirrorFailing, failed: failed)
         mirrorFailing = d.failing
         // One-shot, non-modal notification on the ok→fail transition (a modal alert
@@ -98,6 +106,7 @@ public final class ICloudSync: ObservableObject {
         // The persistent banner in Backup & Sync carries the ongoing state.
         if d.shouldAlert { ToastCenter.shared.show("Backup folder unavailable — saved on this device only.") }
         if !failed { refresh() }
+        return !failed
     }
 
     /// Enumerate the designated folder for the merged history.

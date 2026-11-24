@@ -63,11 +63,20 @@ extension FinchStore {
     }
 
     /// Shared tail of both import paths: atomic-swap → re-open → project.
-    private func swapInAndProject(stagedDB: URL, stagedAttachments: URL?,
-                                  problems: [Audit.AuditProblem]) throws {
+    func swapInAndProject(stagedDB: URL, stagedAttachments: URL?,
+                          problems: [Audit.AuditProblem]) throws {
         // The undo snapshot describes the database being replaced.
         expireDeleteUndo()
-        try atomicSwap(stagedDB: stagedDB, stagedAttachments: stagedAttachments)
+        do {
+            try atomicSwap(stagedDB: stagedDB, stagedAttachments: stagedAttachments)
+        } catch {
+            // The swap closes the live connection first and rolls the FILE back on
+            // failure, but left the connection closed: the app carried on with no
+            // database, every screen empty and every write refused, until relaunch.
+            // Reopen what is there now — the rolled-back live database.
+            self.dbQueue = try? DatabaseQueue(path: liveDBURL.path)
+            throw error
+        }
         let live = try DatabaseQueue(path: liveDBURL.path)
         self.dbQueue = live
         self.auditProblems = problems

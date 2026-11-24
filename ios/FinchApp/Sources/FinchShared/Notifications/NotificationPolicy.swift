@@ -91,6 +91,25 @@ public enum NotificationPolicy {
     ///
     /// At or under the cap, `summary` is never called and the input is returned
     /// unchanged — a lone alert must not become "1 notification" plus a summary of none.
+    /// The burst cap as `refresh` applies it: only to what arrives NOW.
+    ///
+    /// A reminder dated for later is handed to iOS for its own day and never bursts,
+    /// but it used to count against the cap: four future reminders meant the cap was
+    /// "exceeded" with nothing due, and since the overflow is never scheduled it was
+    /// exceeded again on the next write — a "3 more need your attention" banner on
+    /// every write. Dated reminders and the weekly digest now pass through, and the
+    /// summary is sent at most once a day (`summarySentToday`).
+    public static func capImmediate(_ due: [PlannedNotification], cap: Int, summarySentToday: Bool,
+                                    summary: (Int) -> PlannedNotification) -> [PlannedNotification] {
+        let isLater = { (p: PlannedNotification) in p.deliverOn != nil || p.kind == .weeklyDigest }
+        let later = due.filter(isLater)
+        let now = due.filter { !isLater($0) }
+        let capped = applyCap(now, cap: cap, summary: summary)
+        // Over the cap, the last element is the summary.
+        let withoutRepeat = summarySentToday && cap > 0 && now.count > cap ? Array(capped.dropLast()) : capped
+        return later + withoutRepeat
+    }
+
     public static func applyCap(_ planned: [PlannedNotification],
                                 cap: Int,
                                 summary: (Int) -> PlannedNotification) -> [PlannedNotification] {

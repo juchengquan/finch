@@ -9,8 +9,7 @@ import FinchCore
 public enum PendingAttachmentImporter {
     /// The live attachments directory (next to the DB), where the pack reads from.
     static var attachmentsRoot: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("attachments", isDirectory: true)
+        FinchStore.dataDirectory.appendingPathComponent("attachments", isDirectory: true)
     }
 
     /// Returns the number of receipts imported.
@@ -27,31 +26,29 @@ public enum PendingAttachmentImporter {
             do {
                 // 1. placeholder pending transaction (user fills in the amount later).
                 let merchant = m.originalFilename.map { ($0 as NSString).deletingPathExtension } ?? "Receipt"
-                // Snapshot existing ids so we can identify the new row by set-diff —
-                // matching on merchant name attaches to the wrong tx when two
-                // receipts derive the same name (e.g. two "Receipt.jpg").
-                let before = Set(store.txns.map { $0.id })
-                try store.apply(.addTransaction, Args([
+                // The engine says which entry it made. Finding it by comparing the
+                // list before and after went wrong at launch, where this runs: the
+                // list is still loading, so "before" was empty and the first row of
+                // the reloaded list — any newer transaction — took the receipt.
+                guard let entryId = try store.applyReturningId(.addTransaction, Args([
                     "ledgerId": .string(store.activeLedgerId), "accountId": .string(account.id),
                     "amount": .double(0), "merchant": .string(merchant),
                     "categoryId": .string(store.pickableCategories.first?.id ?? ""),
                     "date": .string(Self.today()), "status": .string("pending"), "skipRules": .bool(true)]))
-                // The new tx id (an account-posting id); setEntryAttachment resolves
-                // it to the entry. Use it for the attachment path too.
-                guard let txId = store.txns.first(where: { !before.contains($0.id) })?.id else { continue }
+                else { continue }
 
-                // 2. move the staged file into attachments/<txId>/<id>.<ext>.
+                // 2. move the staged file into attachments/<entryId>/<id>.<ext> — the folder `AttachmentWriter` uses.
                 let ext = (m.relPath as NSString).pathExtension
-                let destDir = attachmentsRoot.appendingPathComponent(txId, isDirectory: true)
+                let destDir = attachmentsRoot.appendingPathComponent(entryId, isDirectory: true)
                 try? fm.createDirectory(at: destDir, withIntermediateDirectories: true)
-                let rel = "attachments/\(txId)/\(m.id).\(ext)"
+                let rel = "attachments/\(entryId)/\(m.id).\(ext)"
                 let dest = attachmentsRoot.deletingLastPathComponent().appendingPathComponent(rel)
                 try? fm.removeItem(at: dest)
                 try? fm.moveItem(at: AppGroup.containerURL.appendingPathComponent(m.relPath), to: dest)
 
                 // 3. record the attachment row.
                 try store.apply(.setEntryAttachment, Args([
-                    "entryId": .string(txId), "kind": .string(m.kind), "relPath": .string(rel),
+                    "entryId": .string(entryId), "kind": .string(m.kind), "relPath": .string(rel),
                     "mimeType": .string(m.mimeType), "byteSize": .double(Double(m.byteSize)),
                     "sha256": .string(m.sha256),
                     "originalFilename": m.originalFilename.map { JSONValue.string($0) } ?? .null]))

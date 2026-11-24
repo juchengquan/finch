@@ -13,7 +13,14 @@ public final class BiometricGate: ObservableObject {
 
     @Published public private(set) var isLocked: Bool = false
     @Published public var settings: BiometricSettings = .load() {
-        didSet { settings.save(); reevaluate() }
+        didSet {
+            settings.save(); reevaluate()
+            // With a lock set, Spotlight holds no amounts (`SpotlightSnapshot`), so
+            // turning it on or off re-indexes.
+            if (oldValue.policy == .off) != (settings.policy == .off) {
+                Task { await SpotlightIndexer.shared.indexAll(store: FinchStore.shared) }
+            }
+        }
     }
 
     private var hasUnlockedThisSession = false
@@ -37,7 +44,19 @@ public final class BiometricGate: ObservableObject {
 
     public func didEnterBackground() { backgroundedAt = Date() }
 
-    public func didBecomeActive() { reevaluate() }
+    public func didBecomeActive() {
+        reevaluate()
+        backgroundedAt = Self.backgroundMark(backgroundedAt, afterActivationLocked: isLocked)
+    }
+
+    /// The background mark once the app is active again. A return that did NOT
+    /// lock ends that trip away, so the mark goes. Kept, it kept counting: the next
+    /// time the scene became active — Control Center, the Face ID prompt — the time
+    /// since that OLD trip passed the timeout and locked the app in the middle of
+    /// use. A return that locked keeps it until `unlock`, which clears it.
+    nonisolated static func backgroundMark(_ mark: Date?, afterActivationLocked locked: Bool) -> Date? {
+        locked ? mark : nil
+    }
 
     private func reevaluate() {
         guard canAuthenticate else { isLocked = false; return }
