@@ -52,6 +52,10 @@ struct AddTransactionSheet: View {
     @State private var date = Date()
     @State private var note = ""
     @State private var currencyCode = ""
+    /// Set once the currency is chosen deliberately — by hand in the picker, or by a
+    /// prefill whose currency isn't its account's. Until then the currency follows
+    /// the account, so picking a EUR card after opening the sheet from + means euros.
+    @State private var currencyTouched = false
     @State private var errorMessage: String?
     /// The refusal behind `errorMessage` when it was for want of an exchange rate.
     @State private var noRate: FxNoRateRefusal?
@@ -387,6 +391,12 @@ struct AddTransactionSheet: View {
                 RefundSourcePickerView { refundedTxId = $0 }
             }
             .onChange(of: kind) { _, k in if k != .refund { refundedTxId = nil } }
+            // The + button opens with no account, so the currency was seeded from the
+            // display currency; without this, picking a EUR card kept it and 100 saved
+            // as $100 converted to euros.
+            .onChange(of: accountId) { _, id in
+                if !currencyTouched { currencyCode = currency(of: id) }
+            }
         }
     }
 
@@ -590,7 +600,8 @@ struct AddTransactionSheet: View {
 
     private var amountField: some View {
         FieldRow(glyph: .amount, title: "Amount", trailing: {
-            Picker("", selection: $currencyCode) {
+            Picker("", selection: Binding(get: { currencyCode },
+                                          set: { currencyCode = $0; currencyTouched = true })) {
                 ForEach(currencyOptions, id: \.self) { Text($0).tag($0) }
             }
             .pickerStyle(.menu).labelsHidden().fixedSize()
@@ -649,7 +660,10 @@ struct AddTransactionSheet: View {
             }
             if let c = p.category { categoryId = c }
             accountId = p.account
-            if let cur = p.currency { currencyCode = cur }
+            if let cur = p.currency {
+                currencyCode = cur
+                currencyTouched = cur != currency(of: p.account)
+            }
             if let tags = p.tags { selectedTags = Set(tags) }
             switch kind {
             case .transfer:
