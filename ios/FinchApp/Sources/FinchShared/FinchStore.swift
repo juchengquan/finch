@@ -476,6 +476,12 @@ public final class FinchStore: ObservableObject {
         // projects synchronously so the change shows immediately. `isHydrating` is true
         // only during `bootstrap()`'s launch reproject.
         let deferTxns = isHydrating
+        // Every reproject supersedes the ones before it. The launch projection is
+        // published from a background task when it finishes, and a write landing
+        // meanwhile projects synchronously — the late launch result then replaced
+        // those newer rows. It publishes only if nothing newer has been projected.
+        projectionGeneration += 1
+        let generation = projectionGeneration
         // All-or-nothing: compute every slice first, then publish a consistent
         // snapshot. On any query failure, keep the last-good state and surface
         // the error rather than silently publishing stale-or-empty data.
@@ -525,9 +531,9 @@ public final class FinchStore: ObservableObject {
                 Task.detached(priority: .userInitiated) { [q, id] in
                     let txns = (try? Projection.run(dbQueue: q, ledgerId: id)) ?? []
                     await MainActor.run {
-                        // A newer reproject (e.g. a ledger switch) may have superseded
-                        // this one — only publish if we're still on the same ledger.
-                        guard self.activeLedgerId == id else { return }
+                        // A newer reproject (a write, a ledger switch) has published
+                        // newer rows and marked them ready; this one is stale.
+                        guard self.projectionGeneration == generation, self.activeLedgerId == id else { return }
                         self.txns = txns
                         self.runningBalanceCache = nil
                         self.transferPeerCache = nil
@@ -547,6 +553,9 @@ public final class FinchStore: ObservableObject {
             self.dataError = "Couldn't load your data: \(error.localizedDescription)"
         }
     }
+
+    /// Bumped by every `reprojectActiveLedger`; see there.
+    private var projectionGeneration = 0
 
     /// Continuations parked by `awaitTxnsReady()` while the launch txns projection
     /// is in flight; resumed by `markTxnsReady()`. MainActor-only.
