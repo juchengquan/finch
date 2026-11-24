@@ -240,6 +240,7 @@
   "Cost basis",
   "Couldn't add it automatically: %@",
   "Couldn't add it: %@",
+  "Couldn't add it: its ledger no longer exists.",
   "Couldn't complete that",
   "Couldn't create it: %@",
   "Couldn't fetch exchange rates. Check your connection and try again.",

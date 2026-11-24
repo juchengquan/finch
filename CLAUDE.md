@@ -210,8 +210,9 @@ equivalent: a **projection, not the source of truth** — `@Published` slices fo
   widget snapshot + timeline reload, debounced auto-backup, CloudKit outbox. Bulk seeds
   call `FinchCore.Apply.apply` directly to bypass them.
 - **DB:** `Application Support/finch.sqlite3`, one GRDB `DatabaseQueue` (never a
-  `DatabasePool`). **Relocates to a temp dir under XCTest** so import tests can't clobber
-  dev data. App Group = cross-process scratch only (widget snapshot, Share receipts),
+  `DatabasePool`). Every app file (DB, attachments, `Backups/`, sync outbox) lives under
+  `FinchStore.dataDirectory`, which **relocates to a temp dir under XCTest** so tests
+  can't clobber dev data — read paths from it, never name Application Support directly. App Group = cross-process scratch only (widget snapshot, Share receipts),
   never the main DB.
 - **`store.today` is data-anchored** (`max(tx.date)`) for budget windows/forecasts (demo
   determinism). Literal-"today" surfaces (calendar, Today/Yesterday labels, next-run
@@ -355,8 +356,11 @@ currencies. Privacy mode masks every `display*` helper with `"••••"`.
   App Group file → WidgetKit (same device). `WatchSnapshotPayload` (`Shared/`) → WCSession
   `updateApplicationContext` (App Groups don't cross devices). The Watch carries its own
   quick-add catalog; wrist adds land **pending** on the phone.
-- **Spotlight:** full re-index on launch, every write, and import; **cleared while
-  locked**, rebuilt on unlock.
+- **Spotlight:** full re-index on launch, every write, import, and a change to Hide
+  amounts or the lock. With a lock set, items carry **no amounts**; the index is also
+  cleared when the app locks and rebuilt on unlock.
+- **Notifications plan every ledger**, not just the active one (inactive ones from the
+  DB, cached) — a plan missing a ledger cancels its alerts.
 - **Notifications:** 100% **local**. Content computed at plan-time with stable ids so
   re-planning is idempotent; `NotificationPlanner` is the pure/tested core.
 - **`Security/`:** optional biometric lock (`LAPolicy.deviceOwnerAuthentication`,

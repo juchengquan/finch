@@ -45,6 +45,7 @@ public final class FinchStore: ObservableObject {
             guard oldValue != privacyMode else { return }
             UserDefaults.standard.set(privacyMode, forKey: FinchStore.privacyKey)
             refreshWidgetSnapshot()   // the lock screen follows Hide amounts now, not at the next write
+            Task { await SpotlightIndexer.shared.indexAll(store: self) }   // …and so does Spotlight
         }
     }
     @Published public var activeLedgerId: String = "" {
@@ -122,18 +123,24 @@ public final class FinchStore: ObservableObject {
 
     /// True when the process is hosting XCTest (the test bundle injects the
     /// XCTestCase class). Checked once — it can't change mid-process.
-    private static let isRunningTests = NSClassFromString("XCTestCase") != nil
+    nonisolated private static let isRunningTests = NSClassFromString("XCTestCase") != nil
 
     /// The persistent live DB location (survives relaunch). Under XCTest it
     /// moves to a temp directory — the import tests swap packs into the live
     /// DB by design, and attachmentsRoot lives next door, so pointing this at
     /// Application Support would let every test run clobber the app's real
     /// data on a development simulator.
-    public var liveDBURL: URL {
-        let dir = Self.isRunningTests
+    public var liveDBURL: URL { Self.dataDirectory.appendingPathComponent("finch.sqlite3") }
+
+    /// Where the app keeps its files: the database, attachments, backups and the sync
+    /// outbox. Application Support, or under XCTest a temp directory, for the reason
+    /// above. Everything that writes there reads it from here; the backups, the shared
+    /// receipt importer and the outbox each named Application Support themselves, so
+    /// tests wrote into the real backup folder.
+    nonisolated static var dataDirectory: URL {
+        isRunningTests
             ? FileManager.default.temporaryDirectory.appendingPathComponent("finch-tests", isDirectory: true)
             : FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return dir.appendingPathComponent("finch.sqlite3")
     }
 
     // MARK: - Launch bootstrap
@@ -475,6 +482,12 @@ public final class FinchStore: ObservableObject {
         // projects synchronously so the change shows immediately. `isHydrating` is true
         // only during `bootstrap()`'s launch reproject.
         let deferTxns = isHydrating
+        // Every reproject supersedes the ones before it. The launch projection is
+        // published from a background task when it finishes, and a write landing
+        // meanwhile projects synchronously — the late launch result then replaced
+        // those newer rows. It publishes only if nothing newer has been projected.
+        projectionGeneration += 1
+        let generation = projectionGeneration
         // All-or-nothing: compute every slice first, then publish a consistent
         // snapshot. On any query failure, keep the last-good state and surface
         // the error rather than silently publishing stale-or-empty data.
@@ -524,9 +537,9 @@ public final class FinchStore: ObservableObject {
                 Task.detached(priority: .userInitiated) { [q, id] in
                     let txns = (try? Projection.run(dbQueue: q, ledgerId: id)) ?? []
                     await MainActor.run {
-                        // A newer reproject (e.g. a ledger switch) may have superseded
-                        // this one — only publish if we're still on the same ledger.
-                        guard self.activeLedgerId == id else { return }
+                        // A newer reproject (a write, a ledger switch) has published
+                        // newer rows and marked them ready; this one is stale.
+                        guard self.projectionGeneration == generation, self.activeLedgerId == id else { return }
                         self.txns = txns
                         self.runningBalanceCache = nil
                         self.transferPeerCache = nil
@@ -546,6 +559,9 @@ public final class FinchStore: ObservableObject {
             self.dataError = "Couldn't load your data: \(error.localizedDescription)"
         }
     }
+
+    /// Bumped by every `reprojectActiveLedger`; see there.
+    private var projectionGeneration = 0
 
     /// Continuations parked by `awaitTxnsReady()` while the launch txns projection
     /// is in flight; resumed by `markTxnsReady()`. MainActor-only.

@@ -642,11 +642,16 @@ extension FinchStore {
         Money.convert(amount, from: currency ?? ledgerBase, to: ledgerBase, rates: rateMap) ?? amount
     }
     /// Format a ledger-base amount into that ledger's display currency (privacy-masked).
+    ///
+    /// With no rate to convert, it shows the amount in the ledger's base, rather than
+    /// the base figure under the display currency's symbol.
     public func displayMoney(_ baseAmount: Double, forLedger ledgerId: String) -> String {
         if privacyMode { return FinchStore.moneyMask }
         let base = baseCurrency(forLedger: ledgerId)
         let disp = displayCurrency(forLedger: ledgerId)
-        let v = Money.convert(baseAmount, from: base, to: disp, rates: rateMap) ?? baseAmount
+        guard let v = Money.convert(baseAmount, from: base, to: disp, rates: rateMap) else {
+            return Money.format(baseAmount, currency: base)
+        }
         return Money.format(v, currency: disp)
     }
     /// Accounts for a ledger: live state when active, else a fresh read.
@@ -654,6 +659,12 @@ extension FinchStore {
         if ledgerId == activeLedgerId { return accounts }
         guard let q = dbQueue else { return [] }
         return (try? Projection.accounts(dbQueue: q, ledgerId: ledgerId)) ?? []
+    }
+    /// `pickableCategories` for a ledger: live state when active, else a fresh read.
+    func pickableCategories(forLedger ledgerId: String) -> [CategoryRow] {
+        if ledgerId == activeLedgerId { return pickableCategories }
+        guard let q = dbQueue else { return [] }
+        return ((try? Projection.categories(dbQueue: q, ledgerId: ledgerId)) ?? []).filter { ($0.kind ?? "") != "equity" }
     }
     /// Transactions for a ledger: live state when active, else a fresh read.
     func txns(forLedger ledgerId: String) -> [Tx] {

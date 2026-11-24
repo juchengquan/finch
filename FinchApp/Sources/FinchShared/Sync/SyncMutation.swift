@@ -79,9 +79,7 @@ public final class SyncOutbox {
 
     /// Test seam: an isolated outbox at a custom path.
     public init(fileURL: URL? = nil) {
-        self.url = fileURL ?? FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("sync-outbox.json")
+        self.url = fileURL ?? FinchStore.dataDirectory.appendingPathComponent("sync-outbox.json")
         self.state = (try? JSONDecoder().decode(Persisted.self, from: Data(contentsOf: url))) ?? Persisted()
         self.appliedSet = Set(state.appliedRemoteIds)
     }

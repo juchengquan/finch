@@ -21,6 +21,7 @@ struct FinchApp: App {
         // upgrading from it BEFORE the first frame reads the preference.
         AppDate.force24HourClock()
         TextSize.migrateLegacySystemPreference(systemStep: TextSize.currentSystemStep)
+        NotificationService.shared.installDelegate()   // see there
         // The DEBUG launch flags (`-initialTab`, `-openAdd`) used to live here and were
         // therefore macOS-only — this file is excluded from the iOS target. They now sit
         // with the rest of them in `LaunchSequence`, which both entry points call.
