@@ -212,6 +212,7 @@ final class AboutSettingsVC: UIViewController {
             guard let self else { return }
             Task { @MainActor in
                 guard await self.gate.confirmSensitive() else { return }
+                await AutoBackupManager.shared.flush()   // the data being replaced, kept as Latest
                 do { try self.store.forceImportCurrentPack() }
                 catch { self.presentImportError(i18nMessage(error)) }
             }

@@ -20,7 +20,7 @@ struct FinchProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<FinchEntry>) -> Void) {
         let entry = FinchEntry(date: Date(), snapshot: AppGroup.readWidgetSnapshot())
-        // Refresh hourly; the app also rewrites the snapshot after each backup.
+        // Refresh hourly; the app also rewrites the snapshot after every write.
         completion(Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(3600))))
     }
 }
@@ -46,12 +46,12 @@ struct FinchWidgetView: View {
         case .accessoryRectangular:
             VStack(alignment: .leading, spacing: 2) {
                 Text("Net worth").font(.caption2).foregroundStyle(.secondary)
-                Text(nw).font(.headline).minimumScaleFactor(0.6).widgetAccentable()
-                Text("Budget \(pct)% · Wk \(wk)").font(.caption2).foregroundStyle(.secondary)
+                Text(nw).font(.headline).minimumScaleFactor(0.6).widgetAccentable().privacySensitive()
+                Text("Budget \(pct)% · Wk \(wk)").font(.caption2).foregroundStyle(.secondary).privacySensitive()
             }
             .containerBackground(.clear, for: .widget)
         case .accessoryInline:
-            Text("finch · \(nw)")
+            Text("finch · \(nw)").privacySensitive()
                 .containerBackground(.clear, for: .widget)
         default:
             systemLayout
@@ -62,7 +62,7 @@ struct FinchWidgetView: View {
     private var systemLayout: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Net worth").font(.caption2).foregroundStyle(.secondary)
-            Text(nw).font(.title3).fontWeight(.semibold).minimumScaleFactor(0.6)
+            Text(nw).font(.title3).fontWeight(.semibold).minimumScaleFactor(0.6).privacySensitive()
             Spacer(minLength: 2)
             HStack {
                 Gauge(value: Double(pct), in: 0...100) {
@@ -74,15 +74,17 @@ struct FinchWidgetView: View {
                 .scaleEffect(0.8)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("This week").font(.caption2).foregroundStyle(.secondary)
-                    Text(wk).font(.caption).fontWeight(.medium)
+                    Text(wk).font(.caption).fontWeight(.medium).privacySensitive()
                 }
             }
         }
         .padding()
     }
 
+    /// The phone's "Hide amounts" reaches the widget through the snapshot.
     private func money(_ amount: Double?, _ currency: String?) -> String {
         guard let amount else { return "—" }
+        if entry.snapshot?.masked == true { return maskedAmount }
         let f = NumberFormatter(); f.numberStyle = .currency; f.currencyCode = currency ?? "USD"
         f.maximumFractionDigits = 0
         return f.string(from: NSNumber(value: amount)) ?? "\(Int(amount))"
@@ -110,9 +112,13 @@ func addURL(accountId: String?) -> URL? {
     return c.url
 }
 
+/// What a masked amount reads as — the app's `FinchStore.moneyMask`.
+let maskedAmount = "••••"
+
 struct AccountEntry: TimelineEntry {
     let date: Date
     let item: AccountSnapshotItem?
+    var masked = false
 }
 
 struct AccountProvider: AppIntentTimelineProvider {
@@ -124,7 +130,7 @@ struct AccountProvider: AppIntentTimelineProvider {
     private func entry(_ c: SelectAccountIntent) -> AccountEntry {
         let snap = AppGroup.readWidgetSnapshot()
         let item = snap?.accounts?.first { $0.id == c.account?.id } ?? snap?.accounts?.first
-        return AccountEntry(date: Date(), item: item)
+        return AccountEntry(date: Date(), item: item, masked: snap?.masked == true)
     }
 }
 
@@ -133,19 +139,19 @@ struct AccountWidgetView: View {
     let entry: AccountEntry
     var body: some View {
         if let item = entry.item {
-            let amount = Money.format(item.balance, currency: item.currency)
+            let amount = entry.masked ? maskedAmount : Money.format(item.balance, currency: item.currency)
             switch family {
             case .accessoryInline:
-                Text("\(item.name) · \(amount)").containerBackground(.clear, for: .widget)
+                Text("\(item.name) · \(amount)").privacySensitive().containerBackground(.clear, for: .widget)
             case .accessoryRectangular:
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.name).font(.caption2).foregroundStyle(.secondary)
-                    Text(amount).font(.headline).minimumScaleFactor(0.6).widgetAccentable()
+                    Text(amount).font(.headline).minimumScaleFactor(0.6).widgetAccentable().privacySensitive()
                 }.containerBackground(.clear, for: .widget)
             default:
                 VStack(alignment: .leading, spacing: 4) {
                     Text(item.name).font(.caption).foregroundStyle(.secondary)
-                    Text(amount).font(.title3).fontWeight(.semibold).minimumScaleFactor(0.6)
+                    Text(amount).font(.title3).fontWeight(.semibold).minimumScaleFactor(0.6).privacySensitive()
                 }.padding().containerBackground(.fill.tertiary, for: .widget)
             }
         } else {

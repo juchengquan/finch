@@ -19,8 +19,11 @@ struct AdjustBalanceSheet: View {
         NavigationStack {
             Form {
                 Section {
+                    // In the account's own currency, like the "New balance" field below:
+                    // converted to the display currency, a €1,000 account read "$1,080",
+                    // and re-typing that figure posted an €80 adjustment.
                     LabeledContent(account.name ?? "Account",
-                                   value: store.displayMoney(account.balance, from: account.currency ?? store.baseCurrency))
+                                   value: store.displayNative(account.balance, currency: account.currency ?? store.baseCurrency))
                     HStack {
                         Text("New balance"); Spacer()
                         // numbersAndPunctuation allows a leading minus (e.g. a credit-card balance).

@@ -115,7 +115,9 @@ struct NetWorthCard: View {
     var months = 6
     var body: some View {
         let endMonth = String(store.today.prefix(7))
-        let pts = Selectors.netWorthByMonth(store.txns, store.accounts, store.activeLedgerId, endMonth, months)
+        let pts = Selectors.netWorthByMonth(store.txns, store.accounts, store.activeLedgerId, endMonth, months) {
+            store.toBase($0, from: $1)
+        }
         Card(title: "Net worth") {
             LineChart(data: pts.map { LineChart.DataPoint(x: $0.m, y: $0.v) },
                       xLabel: "Month", yLabel: "Net worth", format: store.displayMoneyBase, masked: store.privacyMode)

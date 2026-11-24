@@ -44,6 +44,7 @@ public final class FinchStore: ObservableObject {
         didSet {
             guard oldValue != privacyMode else { return }
             UserDefaults.standard.set(privacyMode, forKey: FinchStore.privacyKey)
+            refreshWidgetSnapshot()   // the lock screen follows Hide amounts now, not at the next write
         }
     }
     @Published public var activeLedgerId: String = "" {
@@ -53,6 +54,9 @@ public final class FinchStore: ObservableObject {
             if !activeLedgerId.isEmpty {                               // remember across launches
                 UserDefaults.standard.set(activeLedgerId, forKey: Self.activeLedgerKey)
             }
+            // A real switch (not launch, whose rows are still loading): the widget and
+            // Watch show the ledger now on screen, not the last one written to.
+            if !oldValue.isEmpty && !isHydrating { refreshWidgetSnapshot() }
         }
     }
     @Published public internal(set) var auditProblems: [Audit.AuditProblem] = []   // set by core + ImportExport
@@ -409,6 +413,14 @@ public final class FinchStore: ObservableObject {
             guard !Task.isCancelled else { return }
             await self?.runAmbientSideEffects()
         }
+    }
+
+    /// Rewrite the widget + Watch snapshot now, outside a write: for changes that
+    /// alter what they show without touching the data (Hide amounts, the ledger).
+    func refreshWidgetSnapshot() {
+        guard dbQueue != nil else { return }
+        WidgetSnapshotWriter.write(from: self)
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     /// Run the pending ambient round NOW, cancelling the debounce.

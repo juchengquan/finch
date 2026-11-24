@@ -660,7 +660,8 @@ public enum Entries {
                 // summed once per payment leg: a $100 purchase reported $140 of one
                 // category and $60 of another, and budgets alerted at twice the
                 // real spend. The rule's other actions still apply.
-                let patch = RulesEngine.applyRules(synthetic, rules, allowSplits: acctLegs.count <= 1)
+                var patch = RulesEngine.applyRules(synthetic, rules, allowSplits: acctLegs.count <= 1)
+                try RuleRefs.prune(db, &patch, ledgerId: e.ledgerId)
                 if !patch.appliedRuleIds.isEmpty {
                     if let m = patch.merchant { description = m }
                     if let n = patch.note { notes = n }

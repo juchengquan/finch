@@ -204,6 +204,33 @@ final class InterledgerWriteTests: XCTestCase {
         XCTAssertTrue(try Audit.run(on: q).isEmpty, "an edited pair must still be well-formed")
     }
 
+    /// The app addresses a row by its `Tx.id`, which is the account leg's POSTING id.
+    /// Edit and delete took only entry ids, so every edit from the Edit sheet failed
+    /// with "Not a cross-ledger transfer" and a delete silently did nothing.
+    func test_editAndDeleteAcceptThePostingIdTheAppSends() throws {
+        let q = try twoLedgers()
+        try create(q)
+        // Re-read after each write, as the app does after reprojecting: a re-amount
+        // rebuilds the legs under new posting ids.
+        func postingId() throws -> String {
+            try q.read { try String.fetchOne($0, sql: """
+                SELECT p.id FROM postings p JOIN entries e ON e.id = p.entry_id
+                 WHERE e.ledger_id = 'personal' AND e.kind = 'interledger' AND p.account_id IS NOT NULL
+                """) }!
+        }
+        try Apply.apply(dbQueue: q, action: "updateInterledgerTransfer", args: Args([
+            "id": .string(try postingId()), "fromAmount": .double(6000), "toAmount": .double(5500),
+        ]))
+        try q.read { db in
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id = 'checking'"), 6000)
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id = 'card'"), 5500)
+        }
+        try Apply.apply(dbQueue: q, action: "deleteInterledgerTransfer", args: Args(["id": .string(try postingId())]))
+        try q.read { db in
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries WHERE kind = 'interledger'"), 0)
+        }
+    }
+
     // MARK: editing a pair whose account is not in its ledger's base currency
 
     /// Personal (USD) pays from an SGD account, so that half's account leg has a

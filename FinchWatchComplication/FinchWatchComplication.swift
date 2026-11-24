@@ -42,14 +42,14 @@ struct ComplicationView: View {
         Group {
             switch family {
             case .accessoryCorner:
-                gauge.widgetLabel { Text(nw) }
+                gauge.widgetLabel { Text(nw).privacySensitive() }
             case .accessoryInline:
-                Text("finch · \(nw)")
+                Text("finch · \(nw)").privacySensitive()
             case .accessoryRectangular:
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Net worth").font(.caption2).foregroundStyle(.secondary)
-                    Text(nw).font(.headline).minimumScaleFactor(0.6).widgetAccentable()
-                    Text("Budget \(pct)% · Wk \(wk)").font(.caption2).foregroundStyle(.secondary)
+                    Text(nw).font(.headline).minimumScaleFactor(0.6).widgetAccentable().privacySensitive()
+                    Text("Budget \(pct)% · Wk \(wk)").font(.caption2).foregroundStyle(.secondary).privacySensitive()
                 }
             default: // .accessoryCircular
                 gauge

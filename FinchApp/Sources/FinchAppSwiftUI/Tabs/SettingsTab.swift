@@ -436,6 +436,7 @@ struct SettingsAboutView: View {
             Button("Replace data", role: .destructive) {
                 Task {
                     guard await gate.confirmSensitive() else { return }
+                    await AutoBackupManager.shared.flush()   // the data being replaced, kept as Latest
                     do { try store.forceImportCurrentPack() }
                     catch { importError = i18nMessage(error) }
                 }

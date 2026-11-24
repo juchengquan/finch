@@ -31,12 +31,16 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
     public var generatedAt: String
     public var accounts: [AccountSnapshotItem]?
     public var budgets: [BudgetSnapshotItem]?
+    /// Hide amounts is on: every surface showing this snapshot — home and lock
+    /// screen widgets, the Watch, its complication — masks its figures. Optional so
+    /// a snapshot written by an older build still decodes.
+    public var masked: Bool?
 
     public init(netWorth: Double, currency: String, budgetUsedPct: Int, weeklySpent: Double, generatedAt: String,
-                accounts: [AccountSnapshotItem]? = nil, budgets: [BudgetSnapshotItem]? = nil) {
+                accounts: [AccountSnapshotItem]? = nil, budgets: [BudgetSnapshotItem]? = nil, masked: Bool? = nil) {
         self.netWorth = netWorth; self.currency = currency
         self.budgetUsedPct = budgetUsedPct; self.weeklySpent = weeklySpent; self.generatedAt = generatedAt
-        self.accounts = accounts; self.budgets = budgets
+        self.accounts = accounts; self.budgets = budgets; self.masked = masked
     }
 
     /// Net worth in base currency — sum of `includeInNetWorth` account balances,
@@ -46,11 +50,13 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
             .reduce(0.0) { $0 + toBase($1.balance, $1.currency) }
     }
 
-    /// Aggregate budget usage % across budgets this period (used / base). Pure.
+    /// Aggregate budget usage % across spending budgets this period (used / base).
+    /// Income goals are left out: "$0 of a $10,000 salary goal" counted as unused
+    /// budget, so $900 of $1,000 spent read 8% instead of 90%. Pure.
     public static func budgetUsedPct(_ budgets: [BudgetRow], _ txns: [Tx], _ today: String,
                                      _ categories: [CategoryNode]) -> Int {
         var used = 0.0, base = 0.0
-        for b in budgets {
+        for b in budgets where b.type == "expense" {
             let p = Selectors.budgetProgress(b, txns, today, categories)
             used += p.used; base += p.base
         }
