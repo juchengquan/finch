@@ -76,6 +76,14 @@ final class PhoneWatchLink: NSObject, WCSessionDelegate {
         return out
     }
 
+    /// `resolvedItem` against the item's own ledger, read from the database when it
+    /// is not the one on screen.
+    @MainActor
+    static func resolvedItem(_ item: WatchQuickAddItem, store: FinchStore) -> WatchQuickAddItem? {
+        resolvedItem(item, accounts: store.accounts(forLedger: item.ledgerId),
+                     categories: store.pickableCategories(forLedger: item.ledgerId))
+    }
+
     /// Booking date: the wrist tap's `createdAt` when present (an overnight-
     /// queued add books on the day it was tapped), else the phone's today.
     /// `AppDate.isoDay` is Gregorian: a bare `DateFormatter` follows the device's
@@ -91,8 +99,17 @@ final class PhoneWatchLink: NSObject, WCSessionDelegate {
               dedupe.firstSeen(req.id) else { return }
         Task { @MainActor in
             let store = FinchStore.shared
-            guard let item = Self.resolvedItem(req.item, accounts: store.accounts,
-                                               categories: store.pickableCategories) else { return }
+            // Against the item's OWN ledger. The watch catalog names the ledger it
+            // was built for, and the phone may have switched since: resolved against
+            // the active ledger's accounts, the add found none, returned nil, and —
+            // already marked seen — was gone for good without a word.
+            guard let item = Self.resolvedItem(req.item, store: store) else {
+                // The ledger itself is gone: say so rather than drop the spend.
+                await NotificationService.shared.notifyRefused(
+                    id: req.id, title: req.item.merchant,
+                    body: String(localized: "Couldn't add it: its ledger no longer exists."))
+                return
+            }
             do {
                 try store.apply(.addTransaction,
                                 Args(Self.quickAddArgs(item, date: Self.bookingDate(req, fallback: store.wallToday))))

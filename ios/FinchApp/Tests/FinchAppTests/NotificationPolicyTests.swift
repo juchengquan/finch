@@ -89,6 +89,25 @@ final class NotificationPolicyTests: XCTestCase {
         XCTAssertEqual(out.map(\.id), ["p0", "p1", "p2", "summary"])
         XCTAssertEqual(out.last?.body, "7 more", "the summary must report what it replaced")
     }
+
+    /// Reminders dated for later go to iOS for their own day; they do not burst and
+    /// do not count against the cap. Four of them and nothing due used to "exceed"
+    /// it and send a summary on every write.
+    func testDatedRemindersDoNotCountAgainstTheCap() {
+        let dated = (0..<4).map { PlannedNotification(id: "d\($0)", kind: .scheduledDue, title: "t", body: "b",
+                                                      tab: nil, focusId: nil, deliverOn: Date(timeIntervalSince1970: 0)) }
+        let out = NotificationPolicy.capImmediate(dated, cap: 3, summarySentToday: false, summary: summary)
+        XCTAssertEqual(out.map(\.id), ["d0", "d1", "d2", "d3"])
+    }
+
+    /// Over the cap a second time on the same day: the overflow is still held, but
+    /// the summary that already went out is not sent again.
+    func testTheSummaryIsSentOnceADay() {
+        XCTAssertEqual(NotificationPolicy.capImmediate(planned(5), cap: 3, summarySentToday: false, summary: summary)
+                        .map(\.id), ["p0", "p1", "p2", "summary"])
+        XCTAssertEqual(NotificationPolicy.capImmediate(planned(5), cap: 3, summarySentToday: true, summary: summary)
+                        .map(\.id), ["p0", "p1", "p2"])
+    }
 }
 
 /// The planner's half of pre-scheduling.
