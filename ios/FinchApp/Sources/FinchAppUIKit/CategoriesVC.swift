@@ -149,9 +149,12 @@ final class CategoriesVC: UIViewController {
                 // the collection view the primary scroll view. The SwiftUI comment
                 // records that a safeAreaInset here made the title disappear.
                 cell.contentConfiguration = UIHostingConfiguration {
+                    // Weak, as every closure the hosted view keeps: the cell lives in
+                    // this screen's collection view (`ScreenLeakTests`).
                     Picker("", selection: Binding(
-                        get: { self.kind },
-                        set: { newKind in
+                        get: { [weak self] in self?.kind ?? .expense },
+                        set: { [weak self] newKind in
+                            guard let self else { return }
                             // Switching kind mid-reorder would strand the pending
                             // arrangement — it belongs to the OTHER kind's rows. Commit
                             // it first, then re-seed for the kind now on screen.

@@ -224,10 +224,14 @@ final class ScheduledListVC: UIViewController {
             switch id {
             case Self.modePickerID:
                 cell.contentConfiguration = UIHostingConfiguration {
+                    // Weak, as every closure the hosted view keeps: the cell lives in
+                    // this screen's collection view (`ScreenLeakTests`).
                     ViewModePickerRow(
-                        selection: Binding(get: { self.mode == .list ? "List" : "Calendar" },
-                                           set: { self.mode = ($0 == "List") ? .list : .calendar
-                                                  self.applySnapshot() }),
+                        selection: Binding(get: { [weak self] in self?.mode == .list ? "List" : "Calendar" },
+                                           set: { [weak self] in
+                                               guard let self else { return }
+                                               self.mode = ($0 == "List") ? .list : .calendar
+                                               self.applySnapshot() }),
                         options: [(value: "Calendar", title: String(localized: "Calendar")),
                                   (value: "List", title: String(localized: "List"))])
                 }
@@ -248,17 +252,18 @@ final class ScheduledListVC: UIViewController {
                 // this migration removes. `MonthCashCalendar` is the genuine leaf
                 // inside it, and is the same view `AccountDetailVC` hosts.
                 let amounts = self.dayAmounts()
+                let anchor = self.monthAnchor, store = self.store
                 cell.contentConfiguration = UIHostingConfiguration {
                     MonthCashCalendar(
-                        monthAnchor: Binding(get: { self.monthAnchor },
-                                             set: { self.monthAnchor = $0; self.applySnapshot() }),
-                        selectedDay: Binding(get: { self.selectedDay },
-                                             set: { self.selectedDay = $0; self.applySnapshot() }),
+                        monthAnchor: Binding(get: { [weak self] in self?.monthAnchor ?? anchor },
+                                             set: { [weak self] in self?.monthAnchor = $0; self?.applySnapshot() }),
+                        selectedDay: Binding(get: { [weak self] in self?.selectedDay },
+                                             set: { [weak self] in self?.selectedDay = $0; self?.applySnapshot() }),
                         wallToday: self.store.wallToday,
                         amountsForRange: { from, through in
                             amounts.filter { $0.key >= from && $0.key <= through }
                         },
-                        format: { self.store.displayExactBase($0) },
+                        format: { [store] in store.displayExactBase($0) },
                         // Privacy mode hides the figures and draws presence dots
                         // instead; AccountDetailVC passes the same flag.
                         masked: self.store.privacyMode)
