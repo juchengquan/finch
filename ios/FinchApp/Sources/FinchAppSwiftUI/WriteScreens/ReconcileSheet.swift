@@ -18,7 +18,10 @@ struct ReconcileSheet: View {
     init(preselect: String? = nil) { self.preselect = preselect }
 
     private var account: AccountRow? { store.accounts.first { $0.id == accountId } }
-    /// Statement + quick-add amounts are in the reconciled account's currency.
+    /// Statement + quick-add amounts are in the reconciled account's currency, so
+    /// every figure beside them is too (`displayNative`), as on iPhone. Converted to
+    /// the display currency, a EUR card's balance read as dollars against a
+    /// statement typed in euros.
     private var reconcileCurrency: String { account?.currency ?? store.baseCurrency }
 
     var body: some View {
@@ -31,7 +34,7 @@ struct ReconcileSheet: View {
                 }
                 if let a = account {
                     Section {
-                        LabeledContent("Current balance", value: store.displayMoney(a.balance, from: a.currency))
+                        LabeledContent("Current balance", value: store.displayNative(a.balance, currency: reconcileCurrency))
                         HStack {
                             Text("Statement balance"); Spacer()
                             TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: reconcileCurrency)), text: $statementBalance).moneyInput($statementBalance, currency: reconcileCurrency).multilineTextAlignment(.trailing)
@@ -74,7 +77,7 @@ struct ReconcileSheet: View {
                             Button { finish(postAdjustment: false) } label: { Text("Done") }.bold()
                         } else {
                             Button { finish(postAdjustment: true) } label: {
-                                Text("Adjust \(store.displayMoney(s.difference, from: a.currency))")
+                                Text("Adjust \(store.displayNative(s.difference, currency: reconcileCurrency))")
                             }
                         }
                     }
@@ -92,9 +95,9 @@ struct ReconcileSheet: View {
         if DecimalInput.parse(statementBalance) != nil {
             let s = recState(a)
             Section {
-                LabeledContent("Cleared", value: store.displayMoney(s.clearedBalance, from: a.currency))
+                LabeledContent("Cleared", value: store.displayNative(s.clearedBalance, currency: reconcileCurrency))
                 LabeledContent("Difference",
-                    value: store.displayMoney(s.difference, from: a.currency))
+                    value: store.displayNative(s.difference, currency: reconcileCurrency))
                     .foregroundStyle(s.balanced ? .green : .orange)
                 ProgressView(value: progress(s, parse(statementBalance)))
                     .tint(s.balanced ? .green : .orange)
@@ -132,7 +135,7 @@ struct ReconcileSheet: View {
                     Text(t.date).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text(store.displayMoney(t.accountCurrencyAmount, from: a.currency)).fontWeight(.medium)
+                Text(store.displayNative(t.accountCurrencyAmount, currency: reconcileCurrency)).fontWeight(.medium)
             }
             .contentShape(Rectangle())
         }
@@ -189,7 +192,7 @@ struct ReconcileSheet: View {
                             Text(t.date).font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Text(store.displayMoney(t.accountCurrencyAmount, from: a.currency)).fontWeight(.medium)
+                        Text(store.displayNative(t.accountCurrencyAmount, currency: reconcileCurrency)).fontWeight(.medium)
                         Button("Confirm & clear") { confirmAndClear(t) }
                             .buttonStyle(.borderless).font(.caption)
                     }
