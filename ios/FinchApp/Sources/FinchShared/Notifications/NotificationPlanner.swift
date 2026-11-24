@@ -84,10 +84,13 @@ public enum NotificationPlanner {
         budgets: [BudgetRow], txns: [Tx], scheduled: [ScheduledTemplate],
         categories: [CategoryNode], today: String, wallToday: String, ledgerId: String,
         enabled: Set<NotificationKind>, money: (Double) -> String, recentLimit: Int = 50,
-        deliveryHour: Int = 9, calendar: Calendar = .current,
+        deliveryHour: Int = 9, calendar: Calendar? = nil,
         accounts: [AccountRow] = [], accountMoney: ((Double, String?) -> String)? = nil,
         fxConvert: ((Double, String, String, String) -> Double?)? = nil
     ) -> [PlannedNotification] {
+        // Gregorian, like the day strings (see `deliverAt`); `AppDate` is internal, so
+        // the default can't be written in this public signature.
+        let calendar = calendar ?? AppDate.civil
         var out: [PlannedNotification] = []
 
         if enabled.contains(.budgetWarning) {
@@ -244,6 +247,11 @@ public enum NotificationPlanner {
     /// An ISO day string plus an hour, as a `Date`. Returns nil-safe fallback `nil` when
     /// the day cannot be parsed, so a malformed `nextRun` degrades to "send now" rather
     /// than crashing or silently vanishing.
+    ///
+    /// `calendar` must be Gregorian, like the day string: read in the device's own
+    /// calendar, "2026-12-01" landed in Buddhist year 2026 (1483 AD) or Reiwa 2026
+    /// (4044 AD), so the reminder never fired — and, recorded as sent,
+    /// was never planned again.
     static func deliverAt(_ day: String, hour: Int, _ calendar: Calendar) -> Date? {
         let parts = day.split(separator: "-").compactMap { Int($0) }
         guard parts.count == 3 else { return nil }
