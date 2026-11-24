@@ -9,10 +9,7 @@ import FinchCore
 final class LedgerDetailLabelTests: XCTestCase {
 
     func test_theCurrencyRowIsLabelledDisplayCurrency() async throws {
-        let packURL = try XCTUnwrap(Bundle(for: Self.self).url(
-            forResource: "sample", withExtension: "finch", subdirectory: "Fixtures/roundtrip"))
-        let store = FinchStore.shared
-        if store.accounts.isEmpty { try await store.loadPack(from: try Data(contentsOf: packURL)) }
+        let store = try await SharedStoreFixture.load()
         let ledger = try XCTUnwrap(store.ledgers.first)
 
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))

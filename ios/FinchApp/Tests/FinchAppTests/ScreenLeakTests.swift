@@ -11,17 +11,11 @@ import FinchCore
 final class ScreenLeakTests: XCTestCase {
 
     override func setUp() async throws {
-        let packURL = try XCTUnwrap(Bundle(for: Self.self).url(
-            forResource: "sample", withExtension: "finch", subdirectory: "Fixtures/roundtrip"))
-        let store = FinchStore.shared
-        if store.accounts.isEmpty {
-            try await store.loadPack(from: try Data(contentsOf: packURL))
-        }
-        if store.budgets.isEmpty {
-            try store.apply(.createBudget, Args([
-                "ledgerId": .string(store.activeLedgerId), "name": .string("Groceries"),
-                "amount": .double(400), "frequency": .string("monthly")]))
-        }
+        let store = try await SharedStoreFixture.load()
+        // The sample pack has no budget, and the budget screen needs one.
+        try store.apply(.createBudget, Args([
+            "ledgerId": .string(store.activeLedgerId), "name": .string("Groceries"),
+            "amount": .double(400), "frequency": .string("monthly")]))
     }
 
     /// Show `make()` in a window long enough to lay out its cells, close it, and

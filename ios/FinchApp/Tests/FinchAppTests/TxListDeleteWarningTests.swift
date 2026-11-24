@@ -9,10 +9,7 @@ import FinchCore
 final class TxListDeleteWarningTests: XCTestCase {
 
     func test_theListsWarnThatTheOtherLegsGoToo() async throws {
-        let packURL = try XCTUnwrap(Bundle(for: Self.self).url(
-            forResource: "sample", withExtension: "finch", subdirectory: "Fixtures/roundtrip"))
-        let store = FinchStore.shared
-        if store.accounts.isEmpty { try await store.loadPack(from: try Data(contentsOf: packURL)) }
+        let store = try await SharedStoreFixture.load()
         let category = try XCTUnwrap(store.categories.first)
         let plain = try XCTUnwrap(store.txns.first { $0.transferGroupId == nil })
         var split = plain; split.accountLegCount = 2

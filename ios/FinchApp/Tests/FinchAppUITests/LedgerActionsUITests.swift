@@ -44,7 +44,7 @@ final class LedgerActionsUITests: XCTestCase {
     func testTheDetailActionsAreInTheMenu() throws {
         try openLedgers()
         try XCTUnwrap(ledgerRow("Personal")).tap()
-        XCTAssertTrue(app.staticTexts["Base currency"].waitForExistence(timeout: 10),
+        XCTAssertTrue(app.staticTexts["Display currency"].waitForExistence(timeout: 10),
                       "ledger detail did not load")
         XCTAssertFalse(app.staticTexts["View all activity"].exists,
                        "View all activity is still on the UIKit detail screen")
@@ -65,7 +65,7 @@ final class LedgerActionsUITests: XCTestCase {
     func testABaseChangeRefusedForWantOfARateOffersToEnterIt() throws {
         try openLedgers()
         try XCTUnwrap(ledgerRow("Business")).tap()
-        XCTAssertTrue(app.staticTexts["Base currency"].waitForExistence(timeout: 10),
+        XCTAssertTrue(app.staticTexts["Display currency"].waitForExistence(timeout: 10),
                       "ledger detail did not load")
         app.buttons["ledgerDetail.more"].firstMatch.tap()
         let edit = app.buttons["Edit"].firstMatch

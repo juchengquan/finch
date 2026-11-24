@@ -8,10 +8,7 @@ import FinchCore
 final class ReconcilePrivacyTests: XCTestCase {
 
     func test_reconcileDoesNotPrefillTheBalanceUnderHideAmounts() async throws {
-        let packURL = try XCTUnwrap(Bundle(for: Self.self).url(
-            forResource: "sample", withExtension: "finch", subdirectory: "Fixtures/roundtrip"))
-        let store = FinchStore.shared
-        if store.accounts.isEmpty { try await store.loadPack(from: try Data(contentsOf: packURL)) }
+        let store = try await SharedStoreFixture.load()
         let account = try XCTUnwrap(store.accounts.first { $0.balance != 0 } ?? store.accounts.first)
         let saved = store.privacyMode
         defer { store.privacyMode = saved }
