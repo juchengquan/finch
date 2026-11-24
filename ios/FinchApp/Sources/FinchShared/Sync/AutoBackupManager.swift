@@ -118,8 +118,11 @@ public final class AutoBackupManager: ObservableObject {
                 pruneLocal()
                 lastBackupAt = Date()
             }
-            if targets.folder {
-                ICloudSync.shared.push(data, name: name)
+            // The folder is marked backed up only when the pack landed there. It was
+            // marked either way, so a failed mirror waited out the whole frequency —
+            // up to a week — before it was even tried again.
+            // (A failed push raises the folder banner itself — `mirrorFailing`.)
+            if targets.folder, ICloudSync.shared.push(data, name: name) {
                 ICloudSync.shared.pruneOwn(deviceId: Self.deviceId, keep: retention)
                 lastFolderBackupAt = Date()
             }
