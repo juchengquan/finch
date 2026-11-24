@@ -41,6 +41,9 @@ final class UIKitAppDelegate: UIResponder, UIApplicationDelegate {
 final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
     private var lockWindow: UIWindow?
+    /// Covers the app while it is inactive, so the app-switcher snapshot iOS takes
+    /// on the way to the background shows no balances. See `sceneWillResignActive`.
+    private var privacyCover: UIWindow?
     private var undoBanner: UndoBannerController?
     private var idleTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
@@ -112,6 +115,26 @@ final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     // MARK: Scene phase — the `.onChange(of: scenePhase)` block
 
+    /// With a lock set, cover the app before iOS takes the app-switcher snapshot.
+    /// The lock itself is only evaluated on return (`didBecomeActive`), so without
+    /// this the switcher showed every balance indefinitely — and briefly on return,
+    /// until the lock window appeared. With the lock off there is nothing to hide
+    /// behind; Hide amounts already masks the figures for anyone who wants that.
+    func sceneWillResignActive(_ scene: UIScene) {
+        guard gate.settings.policy != .off, privacyCover == nil, let scene = scene as? UIWindowScene else { return }
+        let w = UIWindow(windowScene: scene)
+        w.windowLevel = .alert + 2        // above the lock window too: one cover, whatever is showing
+        let vc = UIViewController()
+        let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemThickMaterial))
+        blur.frame = vc.view.bounds
+        blur.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        vc.view.addSubview(blur)
+        w.rootViewController = vc
+        applyWindowPreferences(to: w)
+        w.isHidden = false                // visible, but never key: it must not take input
+        privacyCover = w
+    }
+
     func sceneDidEnterBackground(_ scene: UIScene) {
         gate.didEnterBackground()
         // An undo offer does not outlive the visit: the banner would be gone or
@@ -126,6 +149,12 @@ final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func sceneDidBecomeActive(_ scene: UIScene) {
         gate.didBecomeActive()
+        // After the lock decision, and with the lock window already up when it
+        // locked: the `isLocked` sink presents it a main-queue turn later, and
+        // dropping the cover first would show the content for that frame.
+        if gate.isLocked { presentLockWindow() }
+        privacyCover?.isHidden = true
+        privacyCover = nil
         if !gate.isLocked {
             Task { await RateAutoUpdater.refreshIfDue(store: store) }
             // The app can sit backgrounded across midnight, and `pending_kind` caches a
