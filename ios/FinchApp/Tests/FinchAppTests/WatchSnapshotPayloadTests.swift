@@ -71,6 +71,26 @@ final class WatchSnapshotPayloadTests: XCTestCase {
         XCTAssertEqual(args["status"], .string("pending"))   // wrist entries are provisional (CP3 spec §3)
     }
 
+    /// The amount is in the item's currency; the engine converts it. Without the
+    /// currency, "$12" typed on the wrist booked ¥12 on a JPY account.
+    func test_quickAddArgs_carriesTheItemsCurrency() {
+        let item = WatchQuickAddItem(merchant: "Ramen", amount: 1500, currency: "JPY",
+                                     ledgerId: "l1", accountId: "usdCard", categoryId: nil)
+        XCTAssertEqual(PhoneWatchLink.quickAddArgs(item, date: "2026-07-07")["currency"], .string("JPY"))
+    }
+
+    /// Booking dates and the catalog cutoff are ISO Gregorian days whatever calendar
+    /// the device uses — a bare DateFormatter booked a Buddhist-calendar tap on 2569.
+    func test_watch_dates_are_gregorian() throws {
+        var g = Calendar(identifier: .gregorian); g.timeZone = .current
+        let tap = try XCTUnwrap(g.date(from: DateComponents(year: 2026, month: 11, day: 24, hour: 12)))
+        var req = WatchQuickAddRequest(id: "r9", item: WatchQuickAddItem(
+            merchant: "K", amount: 2, currency: "USD", ledgerId: "l1", accountId: "a1", categoryId: nil))
+        req.createdAt = tap
+        XCTAssertEqual(PhoneWatchLink.bookingDate(req, fallback: "x"), "2026-11-24")
+        XCTAssertEqual(QuickAddCatalogBuilder.sinceDate(daysBack: 90, from: tap), "2026-08-26")
+    }
+
     func test_quickAddArgs_omitsNilCategory() {
         let item = WatchQuickAddItem(merchant: "Kiosk", amount: 2, currency: "USD",
                                      ledgerId: "l1", accountId: "a1", categoryId: nil)

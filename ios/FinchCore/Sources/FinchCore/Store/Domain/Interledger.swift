@@ -112,9 +112,18 @@ public enum Interledger {
             autoBalance: .category(category), notes: a.note, skipRules: true))
     }
 
+    /// The entry an id names. The app addresses a row by its `Tx.id`, which is a
+    /// POSTING id (the projection's grain); the engine's own callers pass entry ids.
+    /// Accepting only the latter made every edit from the Edit sheet fail with "Not a
+    /// cross-ledger transfer", and a delete by posting id silently did nothing.
+    private static func entryId(_ db: Database, _ id: String) throws -> String {
+        try Entries.resolveEntryRef(db, id)?.entryId ?? id
+    }
+
     /// Both halves of the pair an entry belongs to, in a stable order. Returns []
     /// when the id is not part of one.
-    private static func pair(_ db: Database, _ entryId: String) throws -> [String] {
+    private static func pair(_ db: Database, _ id: String) throws -> [String] {
+        let entryId = try entryId(db, id)
         guard let link = try String.fetchOne(db, sql:
             "SELECT interledger_link_id FROM entries WHERE id = ?", arguments: [entryId]) else { return [] }
         return try String.fetchAll(db, sql:
@@ -210,7 +219,7 @@ public enum Interledger {
     static func delete(_ db: Database, _ args: Args) throws {
         let a = try args.to(DeleteArgs.self)
         let ids = try pair(db, a.id)
-        for entryId in (ids.isEmpty ? [a.id] : ids) {
+        for entryId in (ids.isEmpty ? [try entryId(db, a.id)] : ids) {
             try Entries.deleteEntry(db, entryId)
         }
     }

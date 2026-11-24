@@ -36,8 +36,14 @@ enum WatchMoney {
 }
 
 extension WatchSnapshotPayload {
-    /// Compact currency in the snapshot's own currency (CP2 behavior, unchanged).
-    func shortMoney(_ amount: Double) -> String { WatchMoney.short(amount, currency: currency) }
+    /// What a masked figure renders as — the phone's `FinchStore.moneyMask`.
+    static let mask = "••••"
+
+    /// Compact currency in the snapshot's own currency, or the mask when the phone
+    /// hides amounts.
+    func shortMoney(_ amount: Double) -> String {
+        masked == true ? Self.mask : WatchMoney.short(amount, currency: currency)
+    }
 
     /// Older than 24h — complications dim rather than hide stale data.
     var isStale: Bool { Date().timeIntervalSince(generatedAt) > 24 * 3600 }

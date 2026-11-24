@@ -72,9 +72,11 @@ extension Selectors {
 
     // MARK: netWorthByMonth
 
+    /// `toBase` has no default: the chart is a sum across accounts, and without a
+    /// conversion a ¥1,000,000 account added a million to a USD ledger's net worth.
     public static func netWorthByMonth(_ txns: [Tx], _ accounts: [AccountRow], _ ledgerId: String,
                                        _ endMonth: String, _ n: Int,
-                                       _ toBase: ToBase = { a, _ in a }) -> [MonthlyPoint] {
+                                       _ toBase: ToBase) -> [MonthlyPoint] {
         if endMonth.isEmpty { return [] }
         let months = monthsBack(endMonth, n)
         let total = netWorthAccounts(accounts, ledgerId).reduce(0.0) { $0 + toBase($1.balance, $1.currency) }

@@ -10,6 +10,11 @@ private func today() -> String { AppDate.today() }
 /// Biometric gate for Siri/Shortcuts: refuse data actions when the app is locked
 /// so Siri can't read balances or post writes past the lock. Re-evaluates (a
 /// fresh intent process hasn't unlocked), and is a no-op when no lock is set.
+///
+/// It can't see the DEVICE lock: an app unlocked earlier stays unlocked in memory,
+/// and with finch's lock off (the default) there is nothing to check. So every
+/// data intent also declares `authenticationPolicy = .requiresAuthentication` —
+/// without it, anyone holding a locked iPhone could ask Siri for a balance.
 @MainActor enum FinchIntentLock {
     static var unlocked: Bool {
         let gate = BiometricGate.shared
@@ -23,6 +28,7 @@ private func today() -> String { AppDate.today() }
 public struct AddTransactionIntent: AppIntent {
     public static var title: LocalizedStringResource = "Add Transaction"
     public static var description = IntentDescription("Adds a transaction to your active finch ledger.")
+    public static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
     public static var openAppWhenRun = true
 
     @Parameter(title: "Amount") public var amount: Double
@@ -56,6 +62,7 @@ public struct AddTransactionIntent: AppIntent {
 public struct CheckBalanceIntent: AppIntent {
     public static var title: LocalizedStringResource = "Check Balance"
     public static var description = IntentDescription("Tells you an account's balance.")
+    public static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
     @Parameter(title: "Account") public var account: AccountEntity
     public init() {}
 
@@ -74,6 +81,7 @@ public struct CheckBalanceIntent: AppIntent {
 public struct MarkClearedIntent: AppIntent {
     public static var title: LocalizedStringResource = "Mark Cleared"
     public static var description = IntentDescription("Marks your most recent transactions as cleared.")
+    public static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
     @Parameter(title: "How many", default: 5) public var count: Int
     public init() {}
 
@@ -91,6 +99,7 @@ public struct MarkClearedIntent: AppIntent {
 public struct CreateBudgetIntent: AppIntent {
     public static var title: LocalizedStringResource = "Create Budget"
     public static var description = IntentDescription("Creates a monthly budget in your active finch ledger.")
+    public static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
     public static var openAppWhenRun = true
     @Parameter(title: "Name") public var name: String
     @Parameter(title: "Amount") public var amount: Double
@@ -117,6 +126,7 @@ public struct CreateBudgetIntent: AppIntent {
 public struct SwitchLedgerIntent: AppIntent {
     public static var title: LocalizedStringResource = "Switch Ledger"
     public static var description = IntentDescription("Switches your active finch ledger.")
+    public static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
     public static var openAppWhenRun = true
     @Parameter(title: "Ledger") public var ledger: LedgerEntity
     public init() {}

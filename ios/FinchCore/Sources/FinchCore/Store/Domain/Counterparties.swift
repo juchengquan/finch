@@ -67,10 +67,12 @@ public enum Counterparties {
         }
     }
 
-    /// Repoint transactions linked to `source` (by counterparty_id) onto `target`.
-    /// Does NOT validate or delete `source`. Runs inside the caller's transaction.
+    /// Repoint transactions linked to `source` (by counterparty_id), and the rules
+    /// naming it, onto `target`. Does NOT validate or delete `source`. Runs inside
+    /// the caller's transaction.
     private static func mergeOne(_ db: Database, source: String, target: String) throws {
         try db.execute(sql: "UPDATE entries SET counterparty_id = ? WHERE counterparty_id = ?", arguments: [target, source])
+        try RuleRefs.repoint(db, actionKey: "counterpartyId", field: "counterparty_id", source: source, target: target)
     }
 
     /// Guards for a single source→target merge: not-self, both exist. Merchants are

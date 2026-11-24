@@ -38,6 +38,10 @@ struct ImportButton: View {
                 importError = ImportError(message: "Could not read the file."); return
             }
             Task { @MainActor in
+                // Snapshot what is about to be replaced, as restore does. Without it
+                // the only copy was a hidden .bak the next import overwrites, and the
+                // local backup could be a day old: import the wrong file, lose a day.
+                await AutoBackupManager.shared.flush()
                 do { try await store.loadPack(from: data) }
                 catch PackError.auditFailed(let problems) {
                     importError = ImportError(

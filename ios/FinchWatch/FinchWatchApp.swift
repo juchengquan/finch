@@ -74,7 +74,7 @@ struct GlanceView: View {
             if let snap = store.snapshot {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Net worth").font(.caption2).foregroundStyle(.secondary)
-                    Text(money(snap.netWorth, snap.currency)).font(.title3).fontWeight(.semibold).minimumScaleFactor(0.6)
+                    Text(money(snap.netWorth, snap)).font(.title3).fontWeight(.semibold).minimumScaleFactor(0.6)
                     Gauge(value: Double(snap.budgetUsedPct), in: 0...100) {
                         Text("Budget")
                     } currentValueLabel: {
@@ -84,7 +84,7 @@ struct GlanceView: View {
                     HStack {
                         Text("This week").font(.caption2).foregroundStyle(.secondary)
                         Spacer()
-                        Text(money(snap.weeklySpent, snap.currency)).font(.caption)
+                        Text(money(snap.weeklySpent, snap)).font(.caption)
                     }
                     if let recents = snap.recents, !recents.isEmpty {
                         Divider().padding(.vertical, 2)
@@ -120,15 +120,17 @@ struct GlanceView: View {
                 if sentKeys.contains(key) {
                     Image(systemName: "checkmark").font(.caption2)
                 } else {
-                    Text(WatchMoney.short(item.amount, currency: item.currency))
+                    Text(store.snapshot?.masked == true ? WatchSnapshotPayload.mask
+                                                        : WatchMoney.short(item.amount, currency: item.currency))
                         .font(.caption2).foregroundStyle(.secondary)
                 }
             }
         }
     }
 
-    private func money(_ amount: Double, _ currency: String) -> String {
-        let f = NumberFormatter(); f.numberStyle = .currency; f.currencyCode = currency; f.maximumFractionDigits = 0
+    private func money(_ amount: Double, _ snap: WatchSnapshotPayload) -> String {
+        if snap.masked == true { return WatchSnapshotPayload.mask }
+        let f = NumberFormatter(); f.numberStyle = .currency; f.currencyCode = snap.currency; f.maximumFractionDigits = 0
         return f.string(from: NSNumber(value: amount)) ?? "\(Int(amount))"
     }
 }

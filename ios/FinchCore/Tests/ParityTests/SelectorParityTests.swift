@@ -176,7 +176,7 @@ final class SelectorParityTests: XCTestCase {
         struct F: Decodable { let expected: [MonthlyPoint]; let input: I
             struct I: Decodable { let txns: [Tx]; let accounts: [AccountRow]; let ledgerId: String; let endMonth: String; let n: Int } }
         for (name, f) in try load("netWorthByMonth", F.self) {
-            XCTAssertEqual(Selectors.netWorthByMonth(f.input.txns, f.input.accounts, f.input.ledgerId, f.input.endMonth, f.input.n), f.expected, name)
+            XCTAssertEqual(Selectors.netWorthByMonth(f.input.txns, f.input.accounts, f.input.ledgerId, f.input.endMonth, f.input.n, { a, _ in a }), f.expected, name)
         }
     }
 

@@ -56,9 +56,9 @@ enum QuickAddCatalogBuilder {
     }
 
     /// "YYYY-MM-DD" for `days` before now — the builder's `since` cutoff.
+    /// Gregorian (`AppDate`), whatever calendar the device uses.
     static func sinceDate(daysBack days: Int, from now: Date = Date()) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: now.addingTimeInterval(-Double(days) * 86_400))
+        let then = AppDate.civil.date(byAdding: .day, value: -days, to: now) ?? now
+        return AppDate.isoDay.string(from: then)
     }
 }
