@@ -125,6 +125,7 @@ public enum Tags {
             SELECT entry_id, ? FROM entry_tags WHERE tag_id = ?
             """, arguments: [target, source])
         // (Source join rows remain; the caller's DELETE of the tag cascades them away.)
+        try BudgetFilters.repoint(db, column: "tag_ids", source: source, target: target)
 
         // 2) Repoint rule actions that add/remove the source tag.
         for row in try Row.fetchAll(db, sql: "SELECT id, actions FROM rules WHERE actions LIKE ?", arguments: ["%\(source)%"]) {
