@@ -18,12 +18,18 @@ import GRDB
 ///      balance 0 and the triggers rebuild the authoritative balance (audit then
 ///      checks cached == derived).
 public enum DownSync {
-    /// FK-safe insertion order over the canonical tables (parents before
-    /// children). `app_state` is excluded — it's per-device, never synced.
+    /// FK-safe insertion order over every synced table (parents before children)
+    /// — the upload's list too (`CloudKitBootstrap.tables`). `app_state` and
+    /// `db_metadata` are excluded: per-device, never synced.
+    ///
+    /// Wider than the web's 15 canonical tables: budget groups, rules and holdings
+    /// are the user's data as well. Without `budget_groups` a budget in a group
+    /// failed its foreign key and rolled the whole seed back.
     public static let insertOrder = [
         "ledgers",
-        "account_groups", "categories", "counterparties", "tags", "exchange_rates",
-        "accounts",
+        "account_groups", "budget_groups", "categories", "counterparties", "tags", "exchange_rates",
+        "rules",
+        "accounts", "holdings",
         "budgets", "scheduled_templates",
         "scheduled_splits",
         "entries",
