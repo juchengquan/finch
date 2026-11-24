@@ -36,6 +36,10 @@ public enum Categories {
         struct Move: Decodable { let id: String; let parentId: String?; let sortOrder: Int }
         struct A: Decodable { let moves: [Move] }
         for move in try args.to(A.self).moves {
+            // A system category stays where it is, as `updateCategory` already
+            // insists; it can still be reordered among its siblings.
+            let currentParent = try String.fetchOne(db, sql: "SELECT parent_id FROM categories WHERE id = ?", arguments: [move.id])
+            if currentParent != move.parentId { try assertNotSystem(db, move.id) }
             if let pid = move.parentId {
                 if pid == move.id {
                     throw I18nError("error.category.selfParent", [:], "A category cannot be its own parent")

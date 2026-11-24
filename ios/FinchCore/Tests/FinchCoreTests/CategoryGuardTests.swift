@@ -146,4 +146,25 @@ final class CategoryGuardTests: XCTestCase {
         XCTAssertEqual(try q.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM categories WHERE system IS NOT NULL") }, 2)
         try Apply.apply(dbQueue: q, action: "updateCategory", args: Args(["id": .string("sys"), "patch": .object(["name": .string("Starting balances")])]))
     }
+
+    /// The drag-reorder action may move a system category among its siblings but
+    /// not under another category — the same rule `updateCategory` keeps. It used
+    /// to re-parent it.
+    func test_systemCategory_canBeReorderedButNotReparentedByADrag() throws {
+        let q = try seeded()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,system,created_at,updated_at) VALUES ('sys','l1',NULL,'Opening balance','equity',0,'opening',datetime('now'),datetime('now'))")
+        }
+        try mkCat(q, "food")
+        func move(parent: String?, order: Int) throws {
+            var m: [String: JSONValue] = ["id": .string("sys"), "sortOrder": .int(order)]
+            m["parentId"] = parent.map { .string($0) } ?? .null
+            try Apply.apply(dbQueue: q, action: "setCategoryOrder", args: Args(["moves": .array([.object(m)])]))
+        }
+        assertI18n("error.category.system") { try move(parent: "food", order: 0) }
+        try move(parent: nil, order: 5)
+        let row = try XCTUnwrap(try q.read { try Row.fetchOne($0, sql: "SELECT parent_id, sort_order FROM categories WHERE id = 'sys'") })
+        XCTAssertNil(row["parent_id"] as String?)
+        XCTAssertEqual(row["sort_order"] as Int, 5)
+    }
 }
