@@ -35,4 +35,28 @@ final class ReconcileStateTests: XCTestCase {
         XCTAssertEqual(s2.difference, -30, accuracy: 0.001)   // 120 − 150
         XCTAssertFalse(s2.balanced)
     }
+
+    /// ¥3,820 typed on a dollar card moved the card by $24.83. Reconcile took the
+    /// ¥3,820 off the dollar balance, so a statement that matched read off by
+    /// ¥3,795.17 — and the balance history walked the same wrong figure.
+    func test_aRowTypedInAnotherCurrencyCountsWhatItMovedTheAccount() throws {
+        let q = try TestSeed.base()   // l1 / c1 (USD base)
+        try Apply.apply(dbQueue: q, action: "createAccount", args: Args([
+            "id": .string("ra"), "ledgerId": .string("l1"), "name": .string("Card"),
+            "type": .string("cash"), "currency": .string("USD"), "openingBalance": .double(100)]))
+        try q.write { db in try db.execute(sql: "INSERT INTO exchange_rates (date,currency,rate) VALUES ('2026-06-10','JPY',0.0065)") }
+        try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "accountId": .string("ra"), "amount": .double(-3820), "currency": .string("JPY"),
+            "merchant": .string("Yodobashi"), "categoryId": .string("c1"), "date": .string("2026-06-10"), "skipRules": .bool(true)]))
+        let a = try XCTUnwrap(try Projection.accounts(dbQueue: q, ledgerId: "l1").first { $0.id == "ra" })
+        let txns = try Projection.run(dbQueue: q, ledgerId: "l1")
+        XCTAssertEqual(a.balance, 75.17, accuracy: 0.001)
+
+        // Nothing cleared yet: the cleared balance is the opening 100, whatever was typed.
+        let s = Selectors.reconcileState(a, txns, 100)
+        XCTAssertEqual(s.clearedBalance, 100, accuracy: 0.001)
+        XCTAssertTrue(s.balanced)
+        XCTAssertEqual(Selectors.balanceSeries(txns, "ra", a.balance).first ?? -1, 100, accuracy: 0.001,
+                       "the history starts from the opening balance")
+    }
 }

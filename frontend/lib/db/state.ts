@@ -68,6 +68,7 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
       amount,
       currency,
       nativeAmount,
+      accountAmount: Number(r.p_amount),
       account: String(r.p_account),
       date: String(r.date),
       time: r.time == null ? undefined : String(r.time),

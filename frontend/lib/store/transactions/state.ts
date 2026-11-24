@@ -24,6 +24,10 @@ export interface Tx {
   currency?: string;
   /** Signed amount in `currency`; `amount` is always the ledger-base figure that drives balances. */
   nativeAmount?: number;
+  /** Signed amount in the ACCOUNT's currency (`postings.amount`): what this leg moved
+   *  the account's balance by. `nativeAmount` is what was typed, possibly in another
+   *  currency. Per leg, so `byPurchase` clears it when it merges rows. */
+  accountAmount?: number;
   account: string;
   date: string;
   time?: string;

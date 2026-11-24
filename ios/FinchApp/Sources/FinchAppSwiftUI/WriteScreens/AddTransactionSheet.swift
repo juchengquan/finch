@@ -718,9 +718,9 @@ struct AddTransactionSheet: View {
                 // so reproduce the original's EFFECT: apply the same delta again from
                 // wherever the balance sits now.
                 // account.balance and the target field are both in the ACCOUNT's own
-                // currency, so use the native delta rather than the base one.
+                // currency, so use the account-currency delta rather than the base one.
                 let current = store.accounts.first { $0.id == p.account }?.balance ?? 0
-                targetBalance = DecimalInput.text(current + (p.nativeAmount ?? p.amount),
+                targetBalance = DecimalInput.text(current + p.accountCurrencyAmount,
                                                   currency: currency(of: p.account))
             case .expense, .income:
                 break

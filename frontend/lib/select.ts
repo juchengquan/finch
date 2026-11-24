@@ -43,6 +43,7 @@ export function byPurchase(txns: Tx[]): Tx[] {
     const seen = acc.get(key);
     if (!seen) { order.push(key); acc.set(key, { ...t }); continue; }
     seen.amount = r2(seen.amount + t.amount);
+    seen.accountAmount = undefined; // per leg; a merged row is several
     if (seen.currency === t.currency && seen.nativeAmount != null && t.nativeAmount != null) {
       seen.nativeAmount = r2(seen.nativeAmount + t.nativeAmount);
     } else {
@@ -1359,7 +1360,7 @@ export function balanceSeries(txns: Tx[], accountId: string, currentBalance: num
   return runningSeries(
     txns.filter((t) => t.account === accountId && !t.pending),
     currentBalance,
-    (t) => t.nativeAmount ?? t.amount,
+    (t) => t.accountAmount ?? t.nativeAmount ?? t.amount,
   );
 }
 

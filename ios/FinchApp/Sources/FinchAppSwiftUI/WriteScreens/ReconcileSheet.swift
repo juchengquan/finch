@@ -132,7 +132,7 @@ struct ReconcileSheet: View {
                     Text(t.date).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text(store.displayMoney(t.nativeAmount ?? t.amount, from: a.currency)).fontWeight(.medium)
+                Text(store.displayMoney(t.accountCurrencyAmount, from: a.currency)).fontWeight(.medium)
             }
             .contentShape(Rectangle())
         }
@@ -189,7 +189,7 @@ struct ReconcileSheet: View {
                             Text(t.date).font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Text(store.displayMoney(t.nativeAmount ?? t.amount, from: a.currency)).fontWeight(.medium)
+                        Text(store.displayMoney(t.accountCurrencyAmount, from: a.currency)).fontWeight(.medium)
                         Button("Confirm & clear") { confirmAndClear(t) }
                             .buttonStyle(.borderless).font(.caption)
                     }

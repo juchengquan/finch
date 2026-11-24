@@ -363,6 +363,7 @@ public enum Selectors {
                 // `byPurchase` follows when it can no longer trust one.
                 out.nativeAmount = nil
                 out.currency = nil
+                out.accountAmount = nil
                 return out
             }
     }
@@ -742,6 +743,7 @@ public extension Selectors {
                 continue
             }
             seen.amount = r2(seen.amount + t.amount)
+            seen.accountAmount = nil      // per leg; a merged row is several
             if seen.currency == t.currency, let a = seen.nativeAmount, let b = t.nativeAmount {
                 seen.nativeAmount = r2(a + b)
             } else {

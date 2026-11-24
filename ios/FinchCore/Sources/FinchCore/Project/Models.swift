@@ -20,6 +20,12 @@ public struct Tx: Identifiable, Codable, Equatable, Sendable {
     public var ledgerId: String?
     public var currency: String?
     public var nativeAmount: Double?
+    /// Signed amount in the ACCOUNT's currency (`postings.amount`): what this leg
+    /// moved the account's balance by. `nativeAmount` is what was typed, which can be
+    /// another currency (¥ on a dollar card). Optional because the parity fixtures
+    /// were written before it, and cleared wherever rows are merged or narrowed
+    /// (`byPurchase`, `categoryShares`), where it no longer names one leg.
+    public var accountAmount: Double?
     public var time: String?
     public var kind: String?
     public var transferGroupId: String?
@@ -66,7 +72,9 @@ public struct Tx: Identifiable, Codable, Equatable, Sendable {
                 splits: [TxSplit]? = nil, tags: [String]? = nil, note: String? = nil,
                 sourceTemplateId: String? = nil, occurrenceDate: String? = nil,
                 refundedTransactionId: String? = nil,
-                clearedAt: String? = nil, appliedRuleIds: [String]? = nil, reviewedAt: String? = nil) {
+                clearedAt: String? = nil, appliedRuleIds: [String]? = nil, reviewedAt: String? = nil,
+                accountAmount: Double? = nil) {
+        self.accountAmount = accountAmount
         self.id = id; self.merchant = merchant; self.category = category; self.amount = amount
         self.account = account; self.date = date; self.pending = pending
         self.pendingKind = pendingKind; self.ledgerId = ledgerId
@@ -82,6 +90,12 @@ public struct Tx: Identifiable, Codable, Equatable, Sendable {
 }
 
 public extension Tx {
+    /// What this row moved its account's balance by, in the account's currency:
+    /// `accountAmount`, else (a row built without it) the typed figure. Compare it
+    /// with an account balance or a statement — never `nativeAmount`, which is in
+    /// whatever currency was typed.
+    var accountCurrencyAmount: Double { accountAmount ?? nativeAmount ?? amount }
+
     /// Groups this row with every other row of the same purchase.
     ///
     /// Three levels, most-specific first, and the order is load-bearing:

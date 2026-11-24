@@ -464,6 +464,7 @@ extension Selectors {
     /// another — then it is converted the way the posting was, on the row's date.
     private static func amountInAccountCurrency(_ tx: Tx, _ account: AccountRow,
                                                 _ activity: ForecastActivity) -> Double? {
+        if let booked = tx.accountAmount { return booked }
         let native = tx.nativeAmount ?? tx.amount
         guard let ccy = tx.currency, let here = account.currency, ccy != here else { return native }
         return activity.convert(native, ccy, here, tx.date)
