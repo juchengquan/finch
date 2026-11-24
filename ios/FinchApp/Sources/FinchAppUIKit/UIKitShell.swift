@@ -3,6 +3,7 @@ import UIKit
 import SwiftUI
 import CoreSpotlight
 import Combine
+import UserNotifications
 import FinchCore
 
 // MARK: - Phase 1 of the UIKit migration: the app's UIKit root
@@ -28,6 +29,9 @@ final class UIKitAppDelegate: UIResponder, UIApplicationDelegate {
         // in `FinchApp.init()` runs on macOS alone.
         AppDate.force24HourClock()
         TextSize.migrateLegacySystemPreference(systemStep: TextSize.currentSystemStep)
+        // Before this returns, or iOS has no one to hand the tap that launched the
+        // app to (`NotificationService.installDelegate`).
+        NotificationService.shared.installDelegate()
         return true
     }
 

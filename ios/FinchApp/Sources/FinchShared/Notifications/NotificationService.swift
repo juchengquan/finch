@@ -99,9 +99,31 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
     /// (`LedgerNotificationPlans`).
     private var otherLedgerPlans: OtherLedgerPlans?
 
+    /// Whether `configure` has wired the store and router, and the responses that
+    /// arrived before it did.
+    private var isConfigured = false
+    private var configuredWaiters: [CheckedContinuation<Void, Never>] = []
+
+    /// Become the notification centre's delegate. Called from the app delegate's
+    /// `didFinishLaunching`: a tap or button that LAUNCHED the app is delivered right
+    /// after it, and `configure` runs much later in the launch sequence — so the
+    /// delegate was not there yet, and the tap opened the app on the wrong screen and
+    /// "Snooze" or "Confirm now" did nothing. Responses that arrive early wait for
+    /// `configure` (`awaitConfigured`).
+    public func installDelegate() { center.delegate = self }
+
+    private func awaitConfigured() async {
+        if isConfigured { return }
+        await withCheckedContinuation { configuredWaiters.append($0) }
+    }
+
     public func configure(store: FinchStore, router: DeepLinkRouter) {
         self.store = store; self.router = router
         center.delegate = self
+        isConfigured = true
+        let waiters = configuredWaiters
+        configuredWaiters = []
+        for w in waiters { w.resume() }
         registerCategories()
         // Clear any badge left by an earlier build. Removing the code that SETS a
         // badge does not unset one already on the springboard icon — without this,
@@ -123,6 +145,21 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
     /// Re-plan from current state and schedule anything not already pending or
     /// delivered (stable ids → no duplicate fires). Called on launch + writes.
     public func refresh() async {
+        // One at a time. Every write starts one, and a refresh suspends at several
+        // awaits: two interleaved read the same pending set and fired record, both
+        // scheduled, and the later one wrote its stale `fired` over the other's.
+        let previous = refreshTask
+        let task = Task { [weak self] in
+            await previous?.value
+            await self?.performRefresh()
+        }
+        refreshTask = task
+        await task.value
+    }
+
+    private var refreshTask: Task<Void, Never>?
+
+    private func performRefresh() async {
         guard let store else { return }
         let status = await center.notificationSettings().authorizationStatus
         authorizationDenied = (status == .denied)
@@ -354,6 +391,7 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
         let notifId = request.identifier
         let title = request.content.title
         let body = request.content.body
+        await awaitConfigured()   // a response that launched the app arrives before the store is wired
 
         if action == "snooze1h" {
             // A real hour, not a dismissal. The old handler just fell through with
