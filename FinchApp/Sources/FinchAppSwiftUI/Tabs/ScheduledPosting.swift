@@ -58,7 +58,9 @@ enum ScheduledPoster {
                         prefill: Binding<PostPrefill?>, errorMessage: Binding<String?>) {
         let posted = Selectors.scheduledPostedMap(store.txns)
         guard let occ = Selectors.resumeOccurrence(template: t, posted: posted, today: store.wallToday) else {
-            errorMessage.wrappedValue = nothingToPostMessage(t)
+            // A finished plan resolves to nothing; say why rather than "nothing left".
+            errorMessage.wrappedValue = Selectors.planComplete(template: t, posted: posted) && t.installmentTotal != nil
+                ? installmentDoneMessage(t) : nothingToPostMessage(t)
             return
         }
         // A bare "Post now" with no cell in hand that resolves to a FUTURE occurrence
@@ -73,6 +75,13 @@ enum ScheduledPoster {
             return
         }
         postNow(t, occurrence: occ, store: store, prefill: prefill, errorMessage: errorMessage)
+    }
+
+    private static func installmentDoneMessage(_ t: ScheduledTemplate) -> String {
+        let total = t.installmentTotal ?? 0
+        return i18nMessage(I18nError("error.scheduled.installmentDone",
+                                     ["name": t.name, "total": String(total)],
+                                     "\"\(t.name)\" has finished its \(total)-payment plan"))
     }
 
     private static func nothingToPostMessage(_ t: ScheduledTemplate) -> String {
@@ -106,10 +115,10 @@ enum ScheduledPoster {
         // The installment cap lives in `Scheduled.post`, which the sheet path
         // bypasses — re-check it here, with the ENGINE's message key so the copy
         // (and its zh translation) is the same wherever the user hits the cap.
-        if let total = t.installmentTotal, (t.installmentPaid ?? 0) >= total {
-            errorMessage.wrappedValue = i18nMessage(I18nError("error.scheduled.installmentDone",
-                                                 ["name": t.name, "total": String(total)],
-                                                 "\"\(t.name)\" has finished its \(total)-payment plan"))
+        // Booked rows spend the plan, pending ones too, as in the engine.
+        if let total = t.installmentTotal,
+           Selectors.occurrencesBooked(template: t, posted: Selectors.scheduledPostedMap(store.txns)) >= total {
+            errorMessage.wrappedValue = installmentDoneMessage(t)
             return
         }
         // A transfer template with no from-account is malformed. The sheet's

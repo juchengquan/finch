@@ -43,6 +43,14 @@ public enum Entries {
     /// Half away from zero, the same as the web's `r2` (lib/round.ts) and SQLite ROUND.
     static func r2(_ n: Double) -> Double { (n * 100).rounded() / 100 }
 
+    /// Counts an entry's spending-category legs: categorised, and not an equity
+    /// category — not the opening, adjustment or fx rounding leg. The projection's
+    /// rule for a split. Mirrors the web's `SPENDING_CATEGORY_LEGS_SQL`.
+    static let spendingCategoryLegCountSQL = """
+        SELECT COUNT(*) FROM postings WHERE entry_id = ? AND category_id IS NOT NULL
+           AND category_id NOT IN (SELECT id FROM categories WHERE kind = 'equity')
+        """
+
     // MARK: system (equity) categories
 
     public struct SystemCategoryIds: Sendable {
@@ -972,7 +980,10 @@ public enum Entries {
                             return .account(AccountLeg(accountId: acctId, amount: r["amount"], memo: r["memo"], id: r["id"],
                                 origAmount: r["orig_amount"], origCurrency: r["orig_currency"], clearedAt: r["cleared_at"]))
                         }
-                        return .category(CategoryLeg(categoryId: catId, amountBase: r["amount_base"], memo: r["memo"], id: r["id"]))
+                        // A split cell keeps what was typed into it: the date moves its
+                        // base value, not the ¥1,200 the user entered.
+                        return .category(CategoryLeg(categoryId: catId, amountBase: r["amount_base"], memo: r["memo"], id: r["id"],
+                                                     origAmount: r["orig_amount"], origCurrency: r["orig_currency"]))
                     }
                 }
                 try db.execute(sql: "DELETE FROM postings WHERE entry_id = ?", arguments: [entryId])

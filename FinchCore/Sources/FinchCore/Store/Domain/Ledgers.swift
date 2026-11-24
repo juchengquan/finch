@@ -48,7 +48,9 @@ public enum Ledgers {
                     let catId = p["category_id"] as String?
                     if let fx = fxCatId, catId == fx { continue }   // drop fx residue
                     let conv = try Entries.convertToBase(db, p["amount_base"], oldBase, newBase, entryDate)
-                    legs.append(.category(Entries.CategoryLeg(categoryId: catId, amountBase: Entries.r2(conv.amountBase), memo: p["memo"], id: p["id"])))
+                    // A split cell keeps what was typed into it; only its base value moves.
+                    legs.append(.category(Entries.CategoryLeg(categoryId: catId, amountBase: Entries.r2(conv.amountBase), memo: p["memo"], id: p["id"],
+                                                              origAmount: p["orig_amount"], origCurrency: p["orig_currency"])))
                 }
             }
             var ep = Entries.EntryPatch()

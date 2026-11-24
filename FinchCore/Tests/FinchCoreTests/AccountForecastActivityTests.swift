@@ -149,6 +149,36 @@ final class AccountForecastActivityTests: XCTestCase {
         XCTAssertEqual(f.endingBalance, 4100)
     }
 
+    // MARK: a long backlog, and split income
+
+    /// A salary the user records by hand: its template has never been posted, so
+    /// every payday since it started is "missed". Those were never coming. Only the
+    /// ones within the window's own length back (30 days) count, with the next ahead.
+    /// Before, all twelve paydays since June 2025 landed on day 0: +$60,000.
+    func test_aLongUnpostedBacklogIsNotMoneyArrivingToday() {
+        let salary = ScheduledTemplate(id: "pay", name: "Salary", type: "income", amount: 5000, frequency: "monthly",
+                                       dayOfMonth: 1, accountId: "a1", startDate: "2025-06-01", nextRun: "")
+        let f = forecast(1000, [salary], today: "2026-05-20")
+        XCTAssertEqual(f.events.map(\.date), ["2026-05-01", "2026-06-01"])
+        XCTAssertEqual(f.endingBalance, 11000)
+    }
+
+    /// Split income pays each share's account and nothing to the template's own: a
+    /// 5,000 salary, 4,000 to checking and 20% to savings.
+    func test_splitIncomeLandsInEachSharesAccount() {
+        let salary = ScheduledTemplate(id: "pay", name: "Salary", type: "income", amount: 5000, frequency: "monthly",
+                                       dayOfMonth: 25, accountId: "a1", startDate: "2026-05-25", nextRun: "",
+                                       incomeSplits: [ScheduledIncomeSplit(accountId: "chk", amountAbs: 4000),
+                                                      ScheduledIncomeSplit(accountId: "sav", amountPct: 20)])
+        func endOf(_ id: String) -> Double {
+            Selectors.accountForecast(AccountRow(id: id, balance: 0, ledgerId: "l1", currency: "USD"), [salary],
+                                      "2026-05-20", 30, activity: ForecastActivity(txns: [])).endingBalance
+        }
+        XCTAssertEqual(endOf("chk"), 4000)
+        XCTAssertEqual(endOf("sav"), 1000)
+        XCTAssertEqual(endOf("a1"), 0, "the template's own account gets nothing: posting books no leg there")
+    }
+
     // MARK: A4 — a transfer between currencies is converted
 
     private func transfer(_ amount: Double) -> ScheduledTemplate {

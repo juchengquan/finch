@@ -32,7 +32,9 @@ public enum SyncPreferences {
 /// The canonical tables row-level sync mirrors — every shared table except
 /// `app_state` (per-device prefs: display currency, sync flag, …). Pure/derived.
 public enum CloudKitBootstrap {
-    public static let tables: [String] = Projection.canonicalTables.filter { $0 != "app_state" }
+    /// What the seed on a new device inserts, in its order (`DownSync.insertOrder`):
+    /// uploading anything less leaves rows that point at nothing.
+    public static let tables: [String] = DownSync.insertOrder
 }
 
 /// Status surfaced in Settings › Sync (design §4 mockup).

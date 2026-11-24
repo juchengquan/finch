@@ -217,6 +217,14 @@ public enum Migrations {
             if clearsReviewBacklog { try Self.clearReviewBacklog(db) }
         }
 
+        // The entries rebuild above (2026-08-12-entries-interledger-kind) dropped the
+        // two pending_kind triggers on every database it ran on: 6 triggers became 4.
+        // Put them back, and repair the rows written without them. iOS-only, and no
+        // shape change: the triggers are already in the shared schema.
+        migrator.registerMigration("2026-11-24-pending-kind-triggers") { db in
+            try Self.restorePendingKindTriggers(db)
+        }
+
         return migrator
     }
 
@@ -267,6 +275,22 @@ public enum Migrations {
         for ddl in [Self.pendingKindInsertTrigger, Self.pendingKindUpdateTrigger] {
             try db.execute(sql: ddl)
         }
+    }
+
+    /// Recreate the pending_kind triggers if missing, then repair what was written
+    /// while they were: a confirmed row still holding a kind, and a pending row with
+    /// none. A pending row that has a kind is left to the refresh, which keeps
+    /// upcoming/due on the device's own day — `date('now')` here is UTC.
+    static func restorePendingKindTriggers(_ db: Database) throws {
+        for ddl in [Self.pendingKindInsertTrigger, Self.pendingKindUpdateTrigger] {
+            try db.execute(sql: ddl)
+        }
+        try db.execute(sql: "UPDATE entries SET pending_kind = NULL WHERE status <> 'pending' AND pending_kind IS NOT NULL")
+        try db.execute(sql: """
+            UPDATE entries
+               SET pending_kind = CASE WHEN date > date('now') THEN 'upcoming' ELSE 'due' END
+             WHERE status = 'pending' AND pending_kind IS NULL
+            """)
     }
 
     /// Kept in Swift beside the migration AND in `Schema.ddl` for fresh databases; the
@@ -388,7 +412,11 @@ END
         // taken and `Schema.apply`'s CREATE … IF NOT EXISTS would silently skip
         // them — leaving the rebuilt table without its seal check or its search
         // sync. Drop them first; the canonical schema puts them back.
-        for t in ["tr_entry_seal", "tr_entry_fts_insert", "tr_entry_fts_delete", "tr_entry_fts_update"] {
+        // All SIX: the two pending_kind triggers were missing from this list, so
+        // they followed the rename, the schema skipped them as existing, and the
+        // DROP of entries_old took them away (`restorePendingKindTriggers`).
+        for t in ["tr_entry_seal", "tr_entry_fts_insert", "tr_entry_fts_delete", "tr_entry_fts_update",
+                  "tr_entry_pending_kind_insert", "tr_entry_pending_kind_update"] {
             try db.execute(sql: "DROP TRIGGER IF EXISTS \(t)")
         }
         for i in ["idx_entry_ledger_date", "idx_entry_pending", "idx_entry_source",

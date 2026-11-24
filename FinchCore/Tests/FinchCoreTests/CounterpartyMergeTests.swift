@@ -98,4 +98,16 @@ final class CounterpartyMergeTests: XCTestCase {
             XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM counterparties"), 2)
         }
     }
+
+    /// A budget filtered on the merged-away merchant follows it to the target.
+    func test_mergeRepointsBudgetFilters() throws {
+        let q = try seeded()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO budgets (id,ledger_id,kind,amount,frequency,start_date,counterparty_ids,created_at,updated_at) VALUES ('b1','l1','expense',100,'monthly','2026-05-01','[\"cpSource\"]',datetime('now'),datetime('now'))")
+        }
+        try merge(q, "cpSource", "cpTarget")
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT counterparty_ids FROM budgets WHERE id = 'b1'"), "[\"cpTarget\"]")
+        }
+    }
 }

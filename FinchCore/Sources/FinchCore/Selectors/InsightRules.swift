@@ -82,7 +82,9 @@ extension Selectors {
         // to confirm, not two.
         let pend = byPurchase(c.txns.filter { ledgerOf($0) == c.ledgerId && ($0.pending ?? false) })
         guard !pend.isEmpty else { return nil }
-        let total = pend.reduce(0.0) { $0 + abs($1.nativeAmount ?? $1.amount) }
+        // In base, as `fmt` formats it: typed amounts are in whatever currency each
+        // was entered in, and adding ¥ to $ is not a sum in either.
+        let total = pend.reduce(0.0) { $0 + abs($1.amount) }
         return Insight(tone: .neut, icon: "doc",
             title: "\(pend.count) pending to review",
             body: "\(fmt(total)) awaiting confirmation on the Pending screen.")

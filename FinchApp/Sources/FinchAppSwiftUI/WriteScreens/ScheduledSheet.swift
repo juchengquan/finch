@@ -99,7 +99,8 @@ struct ScheduledSheet: View {
         self.template = nil
         _name = State(initialValue: c.merchantName)
         _kind = State(initialValue: .expense)
-        _amount = State(initialValue: DecimalInput.text(c.averageAmount,
+        // A scheduled item posts in its account's currency.
+        _amount = State(initialValue: DecimalInput.text(c.averageAccountAmount ?? c.averageAmount,
                                                         currency: ScheduledSheet.currency(forAccount: c.accountId)))
         _accountId = State(initialValue: c.accountId ?? "")
         _fromAccountId = State(initialValue: "")

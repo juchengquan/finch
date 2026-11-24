@@ -128,10 +128,10 @@ extension Selectors {
 
     // MARK: balanceSeries / netWorthSeries
 
-    /// Balance-over-time for one account (account currency: walks nativeAmount).
+    /// Balance-over-time for one account (account currency: walks `accountAmount`).
     public static func balanceSeries(_ txns: [Tx], _ accountId: String, _ currentBalance: Double) -> [Double] {
         runningSeries(txns.filter { $0.account == accountId && !($0.pending ?? false) },
-                      currentBalance, { $0.nativeAmount ?? $0.amount })
+                      currentBalance, \.accountCurrencyAmount)
     }
 
     /// Net-worth-over-time for a ledger (ends at the current total).

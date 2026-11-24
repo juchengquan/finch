@@ -116,4 +116,19 @@ final class TagMergeTests: XCTestCase {
             "sourceIds": .array([.string("t2"), .string("nope")]), "targetId": .string("t1")])))
         try q.read { db in XCTAssertNotNil(try String.fetchOne(db, sql: "SELECT id FROM tags WHERE id = 't2'")) }
     }
+
+    /// A budget filtered on the merged-away tag follows it to the target, keeping each
+    /// id once. Before, it kept the deleted id and matched nothing.
+    func test_mergeTag_repointsBudgetFilters() throws {
+        let q = try freshDB(); try seed(q)
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO budgets (id,ledger_id,kind,amount,frequency,start_date,tag_ids,created_at,updated_at) VALUES ('b1','l1','expense',100,'monthly','2026-05-01','[\"t2\"]',datetime('now'),datetime('now'))")
+            try db.execute(sql: "INSERT INTO budgets (id,ledger_id,kind,amount,frequency,start_date,tag_ids,created_at,updated_at) VALUES ('b2','l1','expense',100,'monthly','2026-05-01','[\"t1\",\"t2\"]',datetime('now'),datetime('now'))")
+        }
+        try Apply.apply(dbQueue: q, action: "mergeTag", args: Args(["sourceId": .string("t2"), "targetId": .string("t1")]))
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT tag_ids FROM budgets WHERE id = 'b1'"), "[\"t1\"]")
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT tag_ids FROM budgets WHERE id = 'b2'"), "[\"t1\"]")
+        }
+    }
 }

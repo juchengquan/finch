@@ -73,6 +73,7 @@ public enum Counterparties {
     private static func mergeOne(_ db: Database, source: String, target: String) throws {
         try db.execute(sql: "UPDATE entries SET counterparty_id = ? WHERE counterparty_id = ?", arguments: [target, source])
         try RuleRefs.repoint(db, actionKey: "counterpartyId", field: "counterparty_id", source: source, target: target)
+        try BudgetFilters.repoint(db, column: "counterparty_ids", source: source, target: target)
     }
 
     /// Guards for a single source→target merge: not-self, both exist. Merchants are

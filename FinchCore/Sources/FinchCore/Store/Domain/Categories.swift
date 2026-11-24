@@ -36,6 +36,10 @@ public enum Categories {
         struct Move: Decodable { let id: String; let parentId: String?; let sortOrder: Int }
         struct A: Decodable { let moves: [Move] }
         for move in try args.to(A.self).moves {
+            // A system category stays where it is, as `updateCategory` already
+            // insists; it can still be reordered among its siblings.
+            let currentParent = try String.fetchOne(db, sql: "SELECT parent_id FROM categories WHERE id = ?", arguments: [move.id])
+            if currentParent != move.parentId { try assertNotSystem(db, move.id) }
             if let pid = move.parentId {
                 if pid == move.id {
                     throw I18nError("error.category.selfParent", [:], "A category cannot be its own parent")
@@ -174,15 +178,7 @@ public enum Categories {
         // scheduled_splits.category_id is ON DELETE RESTRICT — repointing it here is
         // what lets the caller's later DELETE of `source` succeed.
         try db.execute(sql: "UPDATE scheduled_splits SET category_id = ? WHERE category_id = ?", arguments: [target, source])
-        for row in try Row.fetchAll(db, sql: "SELECT id, category_ids FROM budgets WHERE category_ids LIKE ?", arguments: ["%\(source)%"]) {
-            guard let raw = row["category_ids"] as String?, let data = raw.data(using: .utf8),
-                  let parsed = try? JSONDecoder().decode([String].self, from: data), parsed.contains(source) else { continue }
-            var seen = Set<String>()
-            let rewritten = parsed.map { $0 == source ? target : $0 }.filter { seen.insert($0).inserted }
-            let json = String(data: try JSONEncoder().encode(rewritten), encoding: .utf8)
-            try db.execute(sql: "UPDATE budgets SET category_ids = ?, updated_at = datetime('now') WHERE id = ?",
-                           arguments: [json, row["id"] as String])
-        }
+        try BudgetFilters.repoint(db, column: "category_ids", source: source, target: target)
         let children = try String.fetchAll(db, sql: "SELECT id FROM categories WHERE parent_id = ?", arguments: [source])
         for child in children {
             let fits = try categoryDepth(db, target) + subtreeDepth(db, child) <= maxDepth

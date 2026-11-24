@@ -84,7 +84,8 @@ public enum Projection {
             splits: nil, tags: nil, note: r["notes"],
             sourceTemplateId: r["source_template_id"], occurrenceDate: r["occurrence_date"],
             refundedTransactionId: r["refunded_entry_id"],
-            clearedAt: r["p_cleared"], appliedRuleIds: appliedRuleIds, reviewedAt: r["reviewed_at"])
+            clearedAt: r["p_cleared"], appliedRuleIds: appliedRuleIds, reviewedAt: r["reviewed_at"],
+            accountAmount: pAmount)
     }
 
     // MARK: enrichLegTxs (queries/transactions.ts:99) — category/splits/tags + transfer + refund

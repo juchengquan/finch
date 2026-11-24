@@ -23,7 +23,10 @@ extension Selectors {
         let confirmed = acct.filter { $0.pending != true }
         let uncleared = confirmed.filter { $0.clearedAt == nil }
         let cleared = confirmed.filter { $0.clearedAt != nil }
-        let nativeAmt: (Tx) -> Double = { $0.nativeAmount ?? $0.amount }
+        // What each row moved the account by, in the account's currency. The typed
+        // figure is in whatever currency was typed: ¥ entered on a dollar card took
+        // ¥ off a dollar balance, so a reconciled account read off by the difference.
+        let nativeAmt: (Tx) -> Double = \.accountCurrencyAmount
         let clearedBalance = r2(account.balance - uncleared.reduce(0) { $0 + nativeAmt($1) })
         let difference = r2(statementBalance - clearedBalance)
         return ReconcileState(
