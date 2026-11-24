@@ -5,6 +5,7 @@ import { newId } from '../_shared/ids';
 import { rebuildEntry, type LegInput } from '../../core/entries';
 import { resolveCounterpartyIdByName } from '../counterparties/queries';
 import { applyRules } from '@/lib/rules/engine';
+import { canRekind, pruneRulePatch } from '../../core/rule-refs';
 import {
   createRule as qCreateRule,
   updateRule as qUpdateRule,
@@ -79,6 +80,8 @@ export const handlers = {
       const patch = applyRules(tx, [rule]);
       if (!patch.appliedRuleIds.includes(rule.id)) continue;
       matched++;
+      await pruneRulePatch(exec, patch, rule.ledgerId);
+      if (patch.kind !== undefined && !(await canRekind(exec, tx.id, patch.kind))) delete patch.kind;
 
       const sets: string[] = [];
       const bind: (string | number | null)[] = [];

@@ -169,6 +169,7 @@ public enum Categories {
     /// validate or delete `source`. Runs inside the caller's transaction.
     private static func mergeOne(_ db: Database, source: String, target: String) throws {
         try db.execute(sql: "UPDATE postings SET category_id = ? WHERE category_id = ?", arguments: [target, source])
+        try RuleRefs.repoint(db, actionKey: "categoryId", field: "category_id", source: source, target: target)
         try db.execute(sql: "UPDATE scheduled_templates SET category_id = ? WHERE category_id = ?", arguments: [target, source])
         // scheduled_splits.category_id is ON DELETE RESTRICT — repointing it here is
         // what lets the caller's later DELETE of `source` succeed.

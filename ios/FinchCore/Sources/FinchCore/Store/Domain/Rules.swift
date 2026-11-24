@@ -67,9 +67,11 @@ public enum Rules {
 
         for r in entryRows {
             guard let t = synthTx(r) else { continue }
-            let patch = RulesEngine.applyRules(t, [rule])
+            var patch = RulesEngine.applyRules(t, [rule])
             if !patch.appliedRuleIds.contains(rule.id) { continue }
             let entryId: String = r["id"]
+            try RuleRefs.prune(db, &patch, ledgerId: rule.ledgerId)
+            if let k = patch.kind, try !RuleRefs.canRekind(db, entryId: entryId, to: k) { patch.kind = nil }
 
             var sets: [String] = []
             var bind: [DatabaseValueConvertible?] = []

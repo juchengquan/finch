@@ -88,6 +88,10 @@ struct RulesManagerView: View {
 
 // CP1 kind values a user can target.
 private let kindValues = ["expense", "income", "transfer", "refund", "adjustment"]
+// The kinds a "Set kind" action can give an entry — the engine's `RuleRefs.ruledKinds`.
+// A rule can't turn a purchase into a transfer or an adjustment: those have a
+// different number of legs, and the engine ignores the attempt.
+private let settableKindValues = ["expense", "income", "refund"]
 
 private func opsFor(_ f: LeafForm.Field) -> [String] {
     switch f {
@@ -344,7 +348,7 @@ struct RuleSheet: View {
                 entityPicker("Category", a.categoryId, store.pickableCategories.map { PickItem(id: $0.id, name: $0.name) })
             case .setNote:     TextField("Note", text: a.text)
             case .setMerchant: TextField("Merchant", text: a.text)
-            case .setKind:     Picker("Kind", selection: a.kind) { ForEach(kindValues, id: \.self) { Text($0.capitalized).tag($0) } }
+            case .setKind:     Picker("Kind", selection: a.kind) { ForEach(settableKindValues, id: \.self) { Text($0.capitalized).tag($0) } }
             case .markReviewed: EmptyView()
             case .addTag, .removeTag:
                 entityPicker("Tag", a.tagId, store.tags.map { PickItem(id: $0.id, name: $0.name) })
@@ -415,7 +419,7 @@ struct RuleSheet: View {
                 guard !a.text.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter the merchant."; return }
                 actForms.append(ActionForm(kind: .setMerchant(a.text)))
             case .setKind:
-                actForms.append(ActionForm(kind: .setKind(a.kind.isEmpty ? kindValues[0] : a.kind)))
+                actForms.append(ActionForm(kind: .setKind(a.kind.isEmpty ? settableKindValues[0] : a.kind)))
             case .markReviewed:
                 actForms.append(ActionForm(kind: .markReviewed))
             case .addTag, .removeTag:
