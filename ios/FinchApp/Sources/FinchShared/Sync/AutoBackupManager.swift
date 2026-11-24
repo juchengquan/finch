@@ -1,12 +1,20 @@
 import Foundation
 import FinchCore
 
-/// Pure retention policy (the tested core): given timestamped backup filenames
-/// (sortable `finch-YYYYMMDD-HHmmss.finch`), return the ones to delete to keep
-/// only the newest `keep`. Sorting by name is chronological by construction.
+/// Pure retention policy (the tested core): given timestamped backup filenames,
+/// return the ones to delete to keep only the newest `keep`.
+///
+/// Ordered by the time each name records (`BackupHistory.date(fromName:)`), not by
+/// the name: names written before the UTC stamp are local time, and the two
+/// formats do not sort against each other. A name that does not parse counts as
+/// oldest; the name breaks ties.
 public enum BackupPruner {
     public static func toPrune(_ filenames: [String], keep: Int) -> [String] {
-        let sorted = filenames.sorted(by: >)   // newest first
+        let sorted = filenames.sorted {   // newest first
+            let a = BackupHistory.date(fromName: $0) ?? .distantPast
+            let b = BackupHistory.date(fromName: $1) ?? .distantPast
+            return a != b ? a > b : $0 > $1
+        }
         guard sorted.count > max(0, keep) else { return [] }
         return Array(sorted.dropFirst(max(0, keep)))
     }
@@ -59,8 +67,7 @@ public final class AutoBackupManager: ObservableObject {
     }
 
     public var backupsDir: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Backups", isDirectory: true)
+        FinchStore.dataDirectory.appendingPathComponent("Backups", isDirectory: true)
     }
 
     public func configure(store: FinchStore) {
@@ -169,10 +176,7 @@ public final class AutoBackupManager: ObservableObject {
         }
     }
 
-    private static func stamp() -> String {
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyyMMdd-HHmmss"
-        return f.string(from: Date())
-    }
+    private static func stamp() -> String { BackupHistory.stamp(Date()) }
 
     /// A short, stable per-device id appended to backup filenames so two devices
     /// backing up in the same second never write the SAME filename into a shared

@@ -9,8 +9,7 @@ import FinchCore
 public enum PendingAttachmentImporter {
     /// The live attachments directory (next to the DB), where the pack reads from.
     static var attachmentsRoot: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("attachments", isDirectory: true)
+        FinchStore.dataDirectory.appendingPathComponent("attachments", isDirectory: true)
     }
 
     /// Returns the number of receipts imported.

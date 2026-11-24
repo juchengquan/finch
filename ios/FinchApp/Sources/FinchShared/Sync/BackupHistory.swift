@@ -37,11 +37,22 @@ public struct ICloudBackup: Equatable {
 /// filenames to drop) — both stores prune the same names in lockstep, so a device
 /// only ever removes its own snapshots.
 public enum BackupHistory {
-    // Matches AutoBackupManager.stamp(): "yyyyMMdd-HHmmss", en_US_POSIX.
-    private static let stampFormatter: DateFormatter = {
+    // Names written before 2026-11-24: "yyyyMMdd-HHmmss" in the device's local time.
+    private static let localStampFormatter: DateFormatter = {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyyMMdd-HHmmss"
         return f
     }()
+    // Names written since: "yyyyMMdd'T'HHmmss'Z'", in UTC. Local time made the name
+    // follow the clock's time zone, so after flying west a newer backup could carry
+    // an earlier stamp — and pruning, which kept the "newest", deleted it.
+    private static let utcStampFormatter: DateFormatter = {
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC"); f.dateFormat = "yyyyMMdd'T'HHmmss'Z'"
+        return f
+    }()
+
+    /// The timestamp part of a new backup's name.
+    public static func stamp(_ date: Date) -> String { utcStampFormatter.string(from: date) }
 
     /// Parse the timestamp from a backup filename — "finch-YYYYMMDD-HHmmss.finch"
     /// or "finch-YYYYMMDD-HHmmss-<deviceId>.finch" — or nil if malformed. The
@@ -51,8 +62,10 @@ public enum BackupHistory {
         guard name.hasPrefix("finch-"), name.hasSuffix(".finch") else { return nil }
         let middle = name.dropFirst("finch-".count).dropLast(".finch".count)
         let parts = middle.split(separator: "-")
-        guard parts.count >= 2 else { return nil }   // date + time; a 3rd part is the device id
-        return stampFormatter.date(from: "\(parts[0])-\(parts[1])")
+        guard let first = parts.first else { return nil }
+        if first.contains("T") { return utcStampFormatter.date(from: String(first)) }   // UTC stamp; then the device id
+        guard parts.count >= 2 else { return nil }   // legacy date + time; a 3rd part is the device id
+        return localStampFormatter.date(from: "\(parts[0])-\(parts[1])")
     }
 
     /// The device id embedded in a backup filename ("finch-YYYYMMDD-HHmmss-<id>.finch"),
@@ -61,6 +74,7 @@ public enum BackupHistory {
     public static func deviceId(fromName name: String) -> String? {
         guard name.hasPrefix("finch-"), name.hasSuffix(".finch") else { return nil }
         let parts = name.dropFirst("finch-".count).dropLast(".finch".count).split(separator: "-")
+        if parts.first?.contains("T") == true { return parts.count >= 2 ? String(parts[1]) : nil }
         return parts.count >= 3 ? String(parts[2]) : nil
     }
 
