@@ -921,11 +921,15 @@ struct AddTransactionSheet: View {
                 // separate createCounterparty call is gone — with it goes the
                 // orphan counterparty a failed save used to leave behind.
                 let eid = try store.applyReturningId(.saveTransaction, Args(args))
+                // The receipt is written after the sheet closes, so a failure is
+                // reported app-wide rather than in a sheet that is gone.
                 if let eid, let photo = pickedPhoto {
-                    Task { try? await AttachmentWriter.write(item: photo, entryId: eid, store: store) }
+                    Task { [store] in await AttachmentWriter.attachAfterClose(store: store) {
+                        try await AttachmentWriter.write(item: photo, entryId: eid, store: store) } }
                 }
                 if let eid, let url = pickedFileURL {
-                    Task { try? await AttachmentWriter.writeFile(url: url, entryId: eid, store: store) }
+                    Task { [store] in await AttachmentWriter.attachAfterClose(store: store) {
+                        try await AttachmentWriter.writeFile(url: url, entryId: eid, store: store) } }
                 }
             }
             dismiss()
