@@ -83,4 +83,19 @@ final class DetectRecurringTests: XCTestCase {
         let out = Selectors.detectRecurring(txns, "l1", "2026-06-20", [tmpl])
         XCTAssertTrue(out[0].isScheduled)
     }
+
+    /// A ¥1,490 subscription on a dollar card, in a dollar ledger: steady in yen,
+    /// about $9.69 each month. The list shows base and the scheduled item it makes
+    /// posts in the card's dollars; both used to read 1,490.
+    func test_aForeignCurrencyChargeIsReportedInBase_andPrefillsInTheAccountsCurrency() {
+        let txns = ["2026-03-03", "2026-04-03", "2026-05-03", "2026-06-03"].enumerated().map { i, d in
+            Tx(id: "\(i)", merchant: "Netflix JP", category: "fun", amount: -9.69, account: "a1", date: d,
+               pending: false, ledgerId: "l1", currency: "JPY", nativeAmount: -1490, kind: "expense",
+               accountAmount: -9.69)
+        }
+        let r = Selectors.detectRecurring(txns, "l1", "2026-06-20")[0]
+        XCTAssertEqual(r.averageAmount, 9.69, accuracy: 0.001)
+        XCTAssertEqual(r.monthlyEstimate, 9.69, accuracy: 0.001)
+        XCTAssertEqual(r.averageAccountAmount ?? -1, 9.69, accuracy: 0.001)
+    }
 }

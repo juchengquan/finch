@@ -307,7 +307,11 @@ public struct MerchantSpend: Codable, Equatable, Sendable {
 public struct RecurringCharge: Identifiable, Equatable, Sendable, Codable {
     public let id: String              // = merchantKey
     public let merchantName: String
+    /// The typical charge in the ledger's BASE — what the list shows.
     public let averageAmount: Double
+    /// The typical charge on `accountId`, in that account's currency — what a
+    /// scheduled item made from it should post. nil when no charge was on it.
+    public let averageAccountAmount: Double?
     public let cadence: String         // weekly | biweekly | monthly | quarterly | yearly
     public let monthlyEstimate: Double
     public let occurrences: Int
@@ -319,7 +323,8 @@ public struct RecurringCharge: Identifiable, Equatable, Sendable, Codable {
     public init(id: String, merchantName: String, averageAmount: Double, cadence: String,
                 monthlyEstimate: Double, occurrences: Int, lastDate: String,
                 nextEstimatedDate: String, isScheduled: Bool,
-                accountId: String?, categoryId: String?) {
+                accountId: String?, categoryId: String?, averageAccountAmount: Double? = nil) {
+        self.averageAccountAmount = averageAccountAmount
         self.id = id; self.merchantName = merchantName; self.averageAmount = averageAmount
         self.cadence = cadence; self.monthlyEstimate = monthlyEstimate; self.occurrences = occurrences
         self.lastDate = lastDate; self.nextEstimatedDate = nextEstimatedDate; self.isScheduled = isScheduled
