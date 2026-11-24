@@ -100,8 +100,8 @@ final class CurrenciesVC: UIViewController {
 
         // Rates and the tracked set both arrive through a reprojection.
         store.objectWillChange
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
+            .coalescedOnMain()   // one rebuild per write, after it lands
+            .sink { [weak self] in
                 guard let self else { return }
                 self.fallbackReview = self.store.fallbackRateReview()
                 self.applySnapshot()

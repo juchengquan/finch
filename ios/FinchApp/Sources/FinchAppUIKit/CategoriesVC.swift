@@ -102,8 +102,8 @@ final class CategoriesVC: UIViewController {
         // observing the store as an ObservableObject. This is that same signal, and
         // it also covers the count pills, which depend on txns.
         store.objectWillChange
-            .receive(on: DispatchQueue.main)   // delivered after the mutation lands
-            .sink { [weak self] _ in self?.applySnapshot() }
+            .coalescedOnMain()   // one rebuild per write, after it lands
+            .sink { [weak self] in self?.applySnapshot() }
             .store(in: &cancellables)
     }
 
@@ -839,8 +839,8 @@ extension CategoriesVC: UICollectionViewDropDelegate {
     /// the wrong direction on every drop.
     ///
     /// `applySnapshot()` has to run first, and synchronously. The usual refresh
-    /// arrives via `store.objectWillChange.receive(on: DispatchQueue.main)`, which
-    /// hops a runloop turn even when it is already on main — so at this point
+    /// arrives via `store.objectWillChange.coalescedOnMain()`, which waits out a
+    /// runloop turn even when it is already on main — so at this point
     /// `visible` still describes the PRE-move list, and the index path derived from
     /// it would point at the wrong row.
     private func settle(_ coordinator: UICollectionViewDropCoordinator, on id: String) {

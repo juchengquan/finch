@@ -59,8 +59,8 @@ final class MerchantsVC: UIViewController {
         // reprojection rewrites, not an @Published slice, so a slice-specific sink
         // would miss renames and verify toggles entirely.
         store.objectWillChange
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.applySnapshot() }
+            .coalescedOnMain()   // one rebuild per write, after it lands
+            .sink { [weak self] in self?.applySnapshot() }
             .store(in: &cancellables)
     }
 
