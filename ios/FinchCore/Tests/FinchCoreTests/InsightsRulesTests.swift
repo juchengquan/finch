@@ -144,4 +144,19 @@ final class InsightsRulesTests: XCTestCase {
             XCTAssertLessThan(iSpend, iPend)
         }
     }
+
+    /// Two pending rows, $40 and ¥3,000 (about $19.50). The body is formatted as
+    /// base, so it adds base amounts: it used to add 40 + 3,000.
+    func test_pending_insight_addsBaseAmounts() throws {
+        let q = try TestSeed.base()
+        try q.write { try $0.execute(sql: "INSERT INTO exchange_rates (date,currency,rate) VALUES ('2026-05-01','JPY',0.0065)") }
+        try add(q, -40, "2026-05-10", pending: true)
+        try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "accountId": .string("a1"), "amount": .double(-3000), "currency": .string("JPY"),
+            "merchant": .string("Tokyo"), "categoryId": .string("c1"), "date": .string("2026-05-11"),
+            "status": .string("pending"), "skipRules": .bool(true)]))
+        let ins = Selectors.generateInsights(try ctx(q), fmt: fmt)
+        let body = try XCTUnwrap(ins.first { $0.title.contains("pending to review") }?.body)
+        XCTAssertTrue(body.hasPrefix("$60 "), body)
+    }
 }

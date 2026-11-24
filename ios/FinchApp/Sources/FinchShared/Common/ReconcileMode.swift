@@ -68,7 +68,7 @@ public enum ReconcileMode {
         let eps = 0.005
         if abs(difference) < eps { return .balanced }
         let target = abs(difference)
-        let matches: (Tx) -> Bool = { abs(abs($0.nativeAmount ?? $0.amount) - target) < eps }
+        let matches: (Tx) -> Bool = { abs(abs($0.accountCurrencyAmount) - target) < eps }
         if difference > 0 {
             return .tickedTooMuch(matchId: tickedRows.first(where: matches)?.id)
         }

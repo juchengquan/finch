@@ -176,6 +176,10 @@ enum SaveTransaction {
             // still here keeps its entry, its id, its receipt and its reconcile
             // marks. Minting fresh ids instead would destroy all three on an
             // ordinary edit while every other test here still passed.
+            // What the entries touch before the rewrite: a card, category or date
+            // the edit moves away from leaves its budget's rollover stale otherwise,
+            // and a removed card's entry is deleted below without a word.
+            for e in existingIds { try Budgets.invalidateForEntry(db, e) }
             var entryForAccount: [String: String] = [:]
             for e in existingIds {
                 for acct in try String.fetchAll(db, sql:

@@ -363,6 +363,7 @@ public enum Selectors {
                 // `byPurchase` follows when it can no longer trust one.
                 out.nativeAmount = nil
                 out.currency = nil
+                out.accountAmount = nil
                 return out
             }
     }
@@ -636,6 +637,8 @@ public enum Selectors {
             let items = raw.sorted { ($0.date, $0.time ?? "") < ($1.date, $1.time ?? "") }
             guard items.count >= minOccurrences else { continue }
 
+            // Stability is judged in the currency each charge was made in: a ¥1,490
+            // subscription is steady in yen while its dollar value drifts with the rate.
             let mags = items.map { abs($0.nativeAmount ?? $0.amount) }
             let mean = mags.reduce(0, +) / Double(mags.count)
             guard mean > 0 else { continue }
@@ -658,11 +661,19 @@ public enum Selectors {
 
             let mname = (names[key] ?? key).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             let isScheduled = items.contains { ($0.sourceTemplateId?.isEmpty == false) } || scheduledNames.contains(mname)
+            // What it shows and adds up is in base, like every figure beside it: the
+            // purchase-currency mean printed with the base symbol read ¥1,490 as $1,490.
+            let meanBase = items.reduce(0.0) { $0 + abs($1.amount) } / Double(items.count)
+            let account = mode(items.map { $0.account })
+            let onAccount = items.filter { $0.account == account }
+            let meanOnAccount = onAccount.isEmpty ? nil
+                : onAccount.reduce(0.0) { $0 + abs($1.accountCurrencyAmount) } / Double(onAccount.count)
             out.append(RecurringCharge(
-                id: key, merchantName: names[key] ?? key, averageAmount: r2(mean), cadence: cadence,
-                monthlyEstimate: r2(monthlyFor(mean, cadence)), occurrences: items.count,
+                id: key, merchantName: names[key] ?? key, averageAmount: r2(meanBase), cadence: cadence,
+                monthlyEstimate: r2(monthlyFor(meanBase, cadence)), occurrences: items.count,
                 lastDate: lastDate, nextEstimatedDate: ymd(addDays(date(lastDate), med)), isScheduled: isScheduled,
-                accountId: mode(items.map { $0.account }), categoryId: mode(items.compactMap { $0.category })))
+                accountId: account, categoryId: mode(items.compactMap { $0.category }),
+                averageAccountAmount: meanOnAccount.map(r2)))
         }
         return out.sorted { $0.monthlyEstimate > $1.monthlyEstimate }
     }
@@ -742,6 +753,7 @@ public extension Selectors {
                 continue
             }
             seen.amount = r2(seen.amount + t.amount)
+            seen.accountAmount = nil      // per leg; a merged row is several
             if seen.currency == t.currency, let a = seen.nativeAmount, let b = t.nativeAmount {
                 seen.nativeAmount = r2(a + b)
             } else {

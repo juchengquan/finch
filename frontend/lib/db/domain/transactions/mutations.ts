@@ -24,6 +24,7 @@ import {
   resolveEntryRef,
   recomputeAccountFromPostings,
   type LegInput,
+  SPENDING_CATEGORY_LEGS_SQL,
 } from '../../core/entries';
 import { r2 } from '@/lib/round';
 
@@ -225,7 +226,7 @@ export const handlers = {
       if (d && (!earliest || d < earliest)) earliest = d;
 
       const catLegs = await exec(
-        'SELECT category_id FROM postings WHERE entry_id = ? AND category_id IS NOT NULL',
+        SPENDING_CATEGORY_LEGS_SQL,
         [entryId],
       );
       for (const leg of catLegs) cats.add(String(leg.category_id));

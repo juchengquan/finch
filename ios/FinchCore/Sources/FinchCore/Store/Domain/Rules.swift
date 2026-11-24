@@ -99,7 +99,7 @@ public enum Rules {
             }
 
             if case .set(let catId) = patch.categoryId {
-                let catCount = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM postings WHERE entry_id = ? AND category_id IS NOT NULL", arguments: [entryId]) ?? 0
+                let catCount = try Int.fetchOne(db, sql: Entries.spendingCategoryLegCountSQL, arguments: [entryId]) ?? 0
                 // A purchase paid from several accounts carries exactly one category leg by
                 // design, so catCount stays < 2 — but the rebuild below still reads a single
                 // account leg (LIMIT 1) and would silently drop every other payment. Skip just

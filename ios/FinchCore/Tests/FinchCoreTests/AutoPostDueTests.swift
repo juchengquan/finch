@@ -303,6 +303,22 @@ final class AutoPostDueTests: XCTestCase {
         XCTAssertEqual(try occurrences(q), ["2026-08-15", "2026-09-15"])
     }
 
+    /// Auto-post books each occurrence PENDING. Those rows spend the plan: Post now
+    /// on a plan whose every payment is already waiting in To confirm is refused,
+    /// rather than booking a payment beyond its total.
+    func test_installmentTotal_pendingRowsSpendThePlan() throws {
+        let q = try seeded()
+        try create(q, extra: ["installmentTotal": .int(2)])
+        try run(q, "2026-08-01")
+        try run(q, "2026-12-31")
+        XCTAssertEqual(try q.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM entries WHERE status = 'pending'") }, 2)
+        XCTAssertThrowsError(try Apply.apply(dbQueue: q, action: "postScheduled",
+                                             args: Args(["templateId": .string("s1"), "date": .string("2026-12-15")]))) {
+            XCTAssertEqual(($0 as? I18nError)?.code, "error.scheduled.installmentDone")
+        }
+        XCTAssertEqual(try occurrences(q), ["2026-08-15", "2026-09-15"])
+    }
+
     func test_variableAmountTemplate_isSkipped() throws {
         let q = try seeded()
         try create(q, extra: ["amount": .null])

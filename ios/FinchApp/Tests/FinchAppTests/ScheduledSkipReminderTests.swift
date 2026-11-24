@@ -78,6 +78,15 @@ final class ScheduledSkipReminderTests: XCTestCase {
                                  txns: posted(paidThroughMarch), wallToday: "2026-04-01").count, 1)
     }
 
+    /// A payment auto-post added is waiting in To confirm: it is still one of the
+    /// plan's payments, so a 3-payment plan with two paid and one waiting is done.
+    func test_aPendingPaymentSpendsThePlan() {
+        var txns = posted(["2026-01-15", "2026-02-15"])
+        txns.append(Tx(id: "p", merchant: "Gym", amount: -40, account: "a1", date: "2026-03-15", pending: true,
+                       ledgerId: "l1", currency: "USD", kind: "expense", sourceTemplateId: "gym", occurrenceDate: "2026-03-15"))
+        XCTAssertTrue(reminders(gym(installmentTotal: 3, installmentPaid: 2), txns: txns, wallToday: "2026-04-01").isEmpty)
+    }
+
     // MARK: captions
 
     /// `scheduledPostedMap` over `dates`, posted (or, `pending`, waiting in To confirm).
@@ -98,6 +107,19 @@ final class ScheduledSkipReminderTests: XCTestCase {
         XCTAssertEqual(text(gym(endDate: "2026-12-31")),
                        "Monthly · next \(short("2026-04-15", today)) · ends \(short("2026-12-31", today))")
         XCTAssertEqual(text(gym(endDate: "2026-03-31")), "Monthly · ended \(short("2026-03-31", today))")
+    }
+
+    /// A paid-off plan, months later: its next occurrences were never going to be
+    /// paid, so the row is neither "overdue" nor "next —". Before, it read
+    /// "overdue Apr 15" for good, and Post opened a fourth payment of three.
+    func test_aFinishedPlanSaysSo_andIsNeverOverdue() {
+        let today = "2026-09-01"
+        let t = gym(installmentTotal: 3, installmentPaid: 3)
+        let caption = ScheduledCaption.cadence(t, posted: paidMap, today: today)
+        XCTAssertEqual(caption.text, "Monthly · plan complete")
+        XCTAssertFalse(caption.overdue)
+        XCTAssertNil(Selectors.resumeOccurrence(template: t, posted: paidMap, today: today))
+        XCTAssertFalse(Selectors.isMissed(template: t, date: "2026-04-15", posted: paidMap, today: today))
     }
 
     /// Every occurrence before a future end date is skipped or past: the list files it

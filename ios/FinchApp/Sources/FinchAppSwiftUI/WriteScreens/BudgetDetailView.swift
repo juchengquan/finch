@@ -174,7 +174,7 @@ struct BudgetDetailView: View {
     /// Tapping a past-cycle bar opens that cycle's drill-in section below;
     /// tapping it again (or the current bar) clears it.
     @ViewBuilder private func historySection(_ b: BudgetRow) -> some View {
-        let pts = Selectors.budgetCycleHistory(b, store.txns, store.today, store.categoryNodes)
+        let pts = Selectors.budgetCycleHistory(b, store.txns, store.budgetToday, store.categoryNodes)
         if pts.count >= 2 {
             let selected = pts.first { $0.from == selectedCycleFrom && !$0.isCurrent }
             Section("History") {

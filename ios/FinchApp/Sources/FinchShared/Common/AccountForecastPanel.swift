@@ -51,11 +51,12 @@ struct AccountForecastPanel: Equatable {
 
     /// The forecast's view of the ledger: its rows, each account's currency for the far
     /// side of a transfer, and `convert` — `FxConvert` in the app — to value it.
-    static func activity(txns: [Tx], accounts: [AccountRow],
+    /// `baseCurrency` is for the month forecast, whose figures are in base.
+    static func activity(txns: [Tx], accounts: [AccountRow], baseCurrency: String? = nil,
                          convert: ((Double, String, String, String) -> Double?)?) -> ForecastActivity {
         var currencies: [String: String] = [:]
         for a in accounts { if let c = a.currency { currencies[a.id] = c } }
-        return ForecastActivity(txns: txns, accountCurrencies: currencies,
+        return ForecastActivity(txns: txns, accountCurrencies: currencies, baseCurrency: baseCurrency,
                                 convert: convert ?? { _, _, _, _ in nil })
     }
 

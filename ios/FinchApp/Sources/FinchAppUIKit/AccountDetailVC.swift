@@ -1044,14 +1044,14 @@ final class AccountDetailVC: UIViewController {
         case .tickedTooMuch(let matchId):
             reconcileSession.diagnosisText = String(localized: "Something ticked isn't on the statement.")
             reconcileSession.matchActionLabel = matchId.flatMap { id in
-                txns.first { $0.id == id }.map { String(localized: "Look at \($0.merchant.isEmpty ? recMoney($0.nativeAmount ?? $0.amount) : $0.merchant)") }
+                txns.first { $0.id == id }.map { String(localized: "Look at \($0.merchant.isEmpty ? recMoney($0.accountCurrencyAmount) : $0.merchant)") }
             }
             reconcileSession.addMissingLabel = nil
             diagnosisMatchId = matchId
         case .missingFromFinch(let matchId, let addAmount):
             reconcileSession.diagnosisText = String(localized: "The bank has something finch hasn't accounted for.")
             reconcileSession.matchActionLabel = matchId.flatMap { id in
-                txns.first { $0.id == id }.map { String(localized: "Look at \($0.merchant.isEmpty ? recMoney($0.nativeAmount ?? $0.amount) : $0.merchant)") }
+                txns.first { $0.id == id }.map { String(localized: "Look at \($0.merchant.isEmpty ? recMoney($0.accountCurrencyAmount) : $0.merchant)") }
             }
             reconcileSession.addMissingLabel = reconcileSession.matchActionLabel == nil
                 ? String(localized: "Add missing \(recMoney(addAmount))") : nil

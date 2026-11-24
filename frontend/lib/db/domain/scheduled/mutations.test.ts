@@ -319,6 +319,24 @@ test('installmentPaid counts only CONFIRMED transactions; cancelling a pending l
   expect(await installmentPaidOf(exec, 'sch-plan')).toBe(1);
 });
 
+// Pending rows are payments too: a 2-payment plan whose two occurrences are
+// waiting to be confirmed has nothing left to post. Before, postScheduled read
+// the confirmed count (0) and booked a third payment.
+test('postScheduled counts pending rows against installmentTotal', async () => {
+  const exec = await seededAndAudited();
+  await applyMutation(exec, 'createScheduled', {
+    id: 'sch-two', name: 'Two payments', type: 'expense', frequency: 'monthly',
+    dayOfMonth: 1, accountId: 'chk', amount: 100, installmentTotal: 2,
+    startDate: '2026-01-01',
+  });
+  await applyMutation(exec, 'generateDueScheduled', { today: '2026-03-15' });
+  const rows = await exec("SELECT status FROM entries WHERE source_template_id = 'sch-two'");
+  expect(rows.map((r) => String(r.status))).toEqual(['pending', 'pending']);
+  await expect(
+    applyMutation(exec, 'postScheduled', { templateId: 'sch-two', date: '2026-03-15' }),
+  ).rejects.toThrow('finished its 2-payment plan');
+});
+
 test('generateDueScheduled stops generating once the plan has filled installmentTotal', async () => {
   const exec = await seededAndAudited();
   // 3-month plan starting Jan 2026, daily would over-shoot, monthly is right.

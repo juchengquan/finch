@@ -335,7 +335,7 @@ final class BudgetDetailVC: UIViewController {
 
     private func cycleHistory() -> [Selectors.BudgetCyclePoint] {
         guard let budget else { return [] }
-        return Selectors.budgetCycleHistory(budget, store.txns, store.today, store.categoryNodes)
+        return Selectors.budgetCycleHistory(budget, store.txns, store.budgetToday, store.categoryNodes)
     }
 
     /// The selected past cycle, if the tapped bar still exists after reprojection.

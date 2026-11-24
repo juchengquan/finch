@@ -127,6 +127,14 @@ extension FinchStore {
                 convert: { [weak self] in self?.fxConvert($0, from: $1, to: $2, on: $3) }))
     }
 
+    /// What the month forecast needs to value a bill on a foreign-currency account in
+    /// base, by the rate posting would use.
+    var monthForecastActivity: ForecastActivity {
+        AccountForecastPanel.activity(
+            txns: txns, accounts: accounts, baseCurrency: baseCurrency,
+            convert: { [weak self] in self?.fxConvert($0, from: $1, to: $2, on: $3) })
+    }
+
     public func toBase(_ amount: Double, from currency: String?) -> Double {
         Money.convert(amount, from: currency ?? baseCurrency, to: baseCurrency, rates: rateMap) ?? amount
     }

@@ -106,6 +106,14 @@ async function skipIfOccurrence(exec: Exec, templateId: string, date: string): P
   await saveSkips(exec, skips);
 }
 
+/** How many rows a template has booked, pending or confirmed — what an
+ *  installment plan has spent. Rows, not distinct occurrences: two posts on the
+ *  same day are two payments. */
+async function installmentsBooked(exec: Exec, templateId: string): Promise<number> {
+  const [r] = await exec('SELECT COUNT(*) AS n FROM entries WHERE source_template_id = ?', [templateId]);
+  return Number(r?.n ?? 0);
+}
+
 export const handlers = {
   // Delete a transaction and count the scheduled occurrence it fulfilled as
   // skipped, so the generator doesn't post it again on the next load (it used
@@ -190,7 +198,11 @@ export const handlers = {
     const t = await qGetScheduled(exec, templateId);
     if (!t) throw new I18nError('error.notFound.template', {}, 'Template not found');
     const ledgerId = await resolveTemplateLedger(exec, templateId);
-    if (t.installmentTotal != null && (t.installmentPaid ?? 0) >= t.installmentTotal) {
+    // Every row booked spends the plan, pending ones too: an auto-posted payment
+    // waiting to be confirmed is a payment. `installmentPaid` counts confirmed rows
+    // only (it is the "3 of 12 paid" figure), so a plan of 3 with 3 pending rows
+    // took a fourth. Mirrors FinchCore `Scheduled.installmentsBooked`.
+    if (t.installmentTotal != null && (await installmentsBooked(exec, t.id)) >= t.installmentTotal) {
       throw new I18nError(
         'error.scheduled.installmentDone',
         { name: t.name, total: t.installmentTotal },

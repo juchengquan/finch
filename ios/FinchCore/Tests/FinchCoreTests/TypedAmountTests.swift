@@ -116,4 +116,33 @@ final class TypedAmountTests: XCTestCase {
         }
         XCTAssertEqual(anyOrig, 0)
     }
+
+    private func typedByCategory(_ q: DatabaseQueue) throws -> [String: Double] {
+        try q.read { db in
+            try Row.fetchAll(db, sql: """
+                SELECT category_id, ROUND(orig_amount,2) AS oa FROM postings
+                 WHERE category_id IN ('c1','c2') ORDER BY category_id
+                """).reduce(into: [String: Double]()) { $0[$1["category_id"]] = $1["oa"] }
+        }
+    }
+
+    /// Moving the purchase a day re-values its cells in base; what was typed into
+    /// them stays. It used to come back as nothing, so the grid reopened showing
+    /// back-converted figures.
+    func test_aDateOnlyEditKeepsTheTypedAmounts() throws {
+        let q = try seed()
+        try write(q, currency: "EUR")
+        let pid = try XCTUnwrap(try q.read { try String.fetchOne($0, sql: "SELECT id FROM postings WHERE account_id = 'a1'") })
+        try Apply.apply(dbQueue: q, action: "updateTransaction", args: Args([
+            "id": .string(pid), "patch": .object(["date": .string("2026-06-02")])]))
+        XCTAssertEqual(try typedByCategory(q), ["c1": 70, "c2": 30])
+    }
+
+    /// So does a change of the ledger's base.
+    func test_aBaseChangeKeepsTheTypedAmounts() throws {
+        let q = try seed()
+        try write(q, currency: "EUR")
+        try Apply.apply(dbQueue: q, action: "changeLedgerBase", args: Args(["ledgerId": .string("l1"), "newBase": .string("EUR")]))
+        XCTAssertEqual(try typedByCategory(q), ["c1": 70, "c2": 30])
+    }
 }

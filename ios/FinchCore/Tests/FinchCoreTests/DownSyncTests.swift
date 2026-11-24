@@ -136,4 +136,28 @@ final class DownSyncTests: XCTestCase {
         let n = try db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM counterparties") }
         XCTAssertEqual(n, 0)
     }
+
+    /// A budget in a group, a rule and a holding come across too. The group was not
+    /// synced, so the grouped budget failed its foreign key and the whole seed rolled
+    /// back; rules and holdings were silently left behind.
+    func test_groupedBudgetsRulesAndHoldingsRoundTrip() throws {
+        let live = try TestSeed.base()   // l1 / a1 / c1
+        try live.write { db in
+            try db.execute(sql: "INSERT INTO budget_groups (id,ledger_id,name,sort_order,created_at,updated_at) VALUES ('bg1','l1','Home',0,datetime('now'),datetime('now'))")
+            try db.execute(sql: "INSERT INTO budgets (id,ledger_id,group_id,kind,amount,frequency,start_date,created_at,updated_at) VALUES ('b1','l1','bg1','expense',100,'monthly','2026-01-01',datetime('now'),datetime('now'))")
+            try db.execute(sql: "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('inv','l1','Brokerage','investment','USD',0,1,1,1,datetime('now'),datetime('now'))")
+            try db.execute(sql: "INSERT INTO holdings (id,ledger_id,account_id,symbol,shares,cost_basis,currency,created_at,updated_at) VALUES ('h1','l1','inv','VTI',10,2000,'USD',datetime('now'),datetime('now'))")
+        }
+        try Apply.apply(dbQueue: live, action: "createRule", args: Args([
+            "id": .string("r1"), "ledgerId": .string("l1"), "name": .string("Coffee"),
+            "condition": .object(["field": .string("merchant"), "op": .string("contains"), "value": .string("coffee")]),
+            "actions": .array([.object(["type": .string("set_category"), "categoryId": .string("c1")])])]))
+
+        let fresh = try freshDB()
+        let problems = try DownSync.ingest(into: fresh, tables: try DownSync.extract(from: live))
+        XCTAssertEqual(problems.map(\.code.rawValue), [])
+        for (table, id) in [("budget_groups", "bg1"), ("budgets", "b1"), ("rules", "r1"), ("holdings", "h1")] {
+            XCTAssertEqual(try fresh.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM \(table) WHERE id = ?", arguments: [id]) }, 1, table)
+        }
+    }
 }

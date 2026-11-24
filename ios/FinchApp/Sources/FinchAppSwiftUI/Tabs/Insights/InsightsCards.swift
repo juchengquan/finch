@@ -182,10 +182,14 @@ struct TopMerchantsCard: View {
 struct ForecastCard: View {
     @EnvironmentObject private var store: FinchStore
     var body: some View {
-        let month = String(store.today.prefix(7))
+        // The real month: "the rest of this month" is measured from the wall clock, not
+        // the newest row, which a future-dated payment would push into next month.
+        let today = store.wallToday
+        let month = String(today.prefix(7))
         // MTD + run-rate + remaining scheduled (the upcoming-bills term).
         Card(title: "\(monthLabel(month)) forecast") {
-            if let f = Selectors.monthForecast(store.txns, store.scheduled, store.activeLedgerId, month, store.today) {
+            if let f = Selectors.monthForecast(store.txns, store.scheduled, store.activeLedgerId, month, today,
+                                               activity: store.monthForecastActivity) {
                 VStack(alignment: .leading, spacing: 4) {
                     LabeledContent("Spent so far", value: store.displayMoneyBase(f.mtdSpent))
                     if f.scheduledRest > 0 {

@@ -1,0 +1,104 @@
+{
+  "name": "posted-pending-day31-weekly",
+  "selector": "monthForecast",
+  "input": {
+    "txns": [
+      {
+        "id": "t1",
+        "merchant": "m",
+        "category": "food",
+        "amount": -900,
+        "account": "a1",
+        "date": "2026-06-05",
+        "pending": false,
+        "ledgerId": "personal",
+        "sourceTemplateId": "s1",
+        "occurrenceDate": "2026-06-25"
+      },
+      {
+        "id": "t2",
+        "merchant": "m",
+        "category": "food",
+        "amount": -50,
+        "account": "a1",
+        "date": "2026-06-05",
+        "pending": true,
+        "ledgerId": "personal",
+        "sourceTemplateId": "s2",
+        "occurrenceDate": "2026-06-05"
+      }
+    ],
+    "scheduled": [
+      {
+        "id": "s1",
+        "name": "Sched",
+        "type": "expense",
+        "amount": -900,
+        "frequency": "monthly",
+        "dayOfMonth": 25,
+        "accountId": "a1",
+        "account": "Checking",
+        "autoPost": 0,
+        "nextRun": "2026-01-25",
+        "lastRun": "",
+        "startDate": "2026-01-25"
+      },
+      {
+        "id": "s2",
+        "name": "Sched",
+        "type": "expense",
+        "amount": -50,
+        "frequency": "monthly",
+        "dayOfMonth": 5,
+        "accountId": "a1",
+        "account": "Checking",
+        "autoPost": 0,
+        "nextRun": "2026-01-25",
+        "lastRun": "",
+        "startDate": "2026-01-05"
+      },
+      {
+        "id": "s3",
+        "name": "Sched",
+        "type": "expense",
+        "amount": -30,
+        "frequency": "monthly",
+        "dayOfMonth": 31,
+        "accountId": "a1",
+        "account": "Checking",
+        "autoPost": 0,
+        "nextRun": "2026-01-25",
+        "lastRun": "",
+        "startDate": "2026-01-31"
+      },
+      {
+        "id": "s4",
+        "name": "Sched",
+        "type": "expense",
+        "amount": -10,
+        "frequency": "weekly",
+        "dayOfMonth": 25,
+        "accountId": "a1",
+        "account": "Checking",
+        "autoPost": 0,
+        "nextRun": "2026-01-25",
+        "lastRun": "",
+        "weekDay": 5,
+        "startDate": "2026-01-02"
+      }
+    ],
+    "ledgerId": "personal",
+    "month": "2026-06",
+    "today": "2026-06-10"
+  },
+  "expected": {
+    "mtdSpent": 900,
+    "unscheduledRest": 1800,
+    "scheduledRest": 110,
+    "projected": 2810,
+    "daysElapsed": 10,
+    "daysRemaining": 20,
+    "daysInMonth": 30,
+    "dailyRunRate": 90
+  }
+}

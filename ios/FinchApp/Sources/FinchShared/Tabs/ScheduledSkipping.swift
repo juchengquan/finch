@@ -93,6 +93,12 @@ enum ScheduledCaption {
         // Overdue outranks the end date: it is the thing to act on.
         if let occ, occ.overdue { return (String(localized: "\(freq) · overdue \(day(occ.date))"), true) }
         let next = occ?.date
+        // Every payment the plan allows is booked: nothing is next, and nothing ever
+        // will be, so it says so instead of "next —" (or "overdue" for a payment the
+        // plan never had).
+        if next == nil, Selectors.planComplete(template: t, posted: posted) {
+            return (String(localized: "\(freq) · plan complete"), false)
+        }
         if let end = t.endDate.map({ String($0.prefix(10)) }), !end.isEmpty {
             if let next { return (String(localized: "\(freq) · next \(day(next)) · ends \(day(end))"), false) }
             // Nothing left. Past the end date it has ended; before it, the remaining
