@@ -615,8 +615,8 @@ struct AddTransactionSheet: View {
 
     /// Transfer amount row: fixed currency label from the leg's account (the
     /// account owns the currency — no picker).
-    private func transferAmountRow(_ label: String, text: Binding<String>, currency: String) -> some View {
-        FieldRow(glyph: .amount, title: LocalizedStringKey(label), trailing: {
+    private func transferAmountRow(_ label: LocalizedStringKey, text: Binding<String>, currency: String) -> some View {
+        FieldRow(glyph: .amount, title: label, trailing: {
             Text(currency).foregroundStyle(.secondary)
         }) {
             TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: currency)),
@@ -855,7 +855,9 @@ struct AddTransactionSheet: View {
             } else {
                 let signed = (kind == .income || kind == .refund) ? abs(value) : -abs(value)
                 let sign: Double = signed < 0 ? -1 : 1
-                let fallback = kind == .income ? "Income" : (kind == .refund ? "Refund" : "Untitled")
+                // Saved as the merchant's name, so in the language the user reads.
+                let fallback = kind == .income ? String(localized: "Income")
+                    : (kind == .refund ? String(localized: "Refund") : String(localized: "Untitled"))
 
                 // ONE write, replacing the three this path used to fire
                 // (createCounterparty, addTransaction, setTransactionSplits). A

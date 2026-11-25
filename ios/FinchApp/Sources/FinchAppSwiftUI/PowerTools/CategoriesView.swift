@@ -540,7 +540,7 @@ struct CategoryEditSheet: View {
                     }
                     .pickerStyle(.segmented)
                 } else {
-                    LabeledContent("Type", value: kindSel == "income" ? "Income" : "Expense")
+                    LabeledContent("Type", value: kindSel == "income" ? String(localized: "Income") : String(localized: "Expense"))
                 }
                 TextField("Name", text: $name)
                 // The same swatch+icon tree the transaction Category field uses

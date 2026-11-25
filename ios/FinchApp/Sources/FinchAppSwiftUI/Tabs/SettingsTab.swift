@@ -227,8 +227,8 @@ struct SettingsPowerToolsView: View {
                 }
                 if cloudSync.enabled {
                     LabeledContent("Status", value: cloudSync.status.accountAvailable
-                                   ? "Subscribed to \(cloudSync.status.subscribedLedgers) ledgers"
-                                   : "iCloud account required")
+                                   ? String(localized: "Subscribed to \(cloudSync.status.subscribedLedgers) ledgers")
+                                   : String(localized: "iCloud account required"))
                     LabeledContent("Pending changes", value: "\(cloudSync.status.pendingChanges)")
                     LabeledContent("Last sync", value: cloudSync.status.lastSyncAt?.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppDate.h24Locale)) ?? "—")
                     if let err = cloudSync.status.lastError {

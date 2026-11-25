@@ -226,8 +226,8 @@ struct EditTransactionSheet: View {
 
     /// Transfer amount row: fixed currency label from the leg (accounts own
     /// their currency — no picker).
-    private func transferAmountRow(_ label: String, text: Binding<String>, currency: String) -> some View {
-        FieldRow(glyph: .amount, title: LocalizedStringKey(label), trailing: {
+    private func transferAmountRow(_ label: LocalizedStringKey, text: Binding<String>, currency: String) -> some View {
+        FieldRow(glyph: .amount, title: label, trailing: {
             Text(currency).foregroundStyle(.secondary)
         }) {
             TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: currency)),
@@ -702,7 +702,7 @@ struct EditTransactionSheet: View {
         if isInterledger { saveInterledger(); return }
         errorMessage = nil
         var patch: [String: JSONValue] = [
-            "merchant": .string(merchant.isEmpty ? "Untitled" : merchant),
+            "merchant": .string(merchant.isEmpty ? String(localized: "Untitled") : merchant),
             "note": note.isEmpty ? .null : .string(note),
             "date": .string(Self.day(date)),
             "time": .string(Self.time(date)),
@@ -819,7 +819,7 @@ struct EditTransactionSheet: View {
         var args: [String: JSONValue] = [
             "id": .string(isGrid ? (liveTxn.groupId ?? txn.id) : txn.id),
             "ledgerId": .string(store.activeLedgerId),
-            "merchant": .string(merchant.isEmpty ? "Untitled" : merchant),
+            "merchant": .string(merchant.isEmpty ? String(localized: "Untitled") : merchant),
             "date": .string(Self.day(date)), "time": .string(Self.time(date)),
             "kind": .string(effKind),
             "status": .string(status.rawValue),

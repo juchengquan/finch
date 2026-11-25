@@ -108,29 +108,56 @@ private func opsFor(_ f: LeafForm.Field) -> [String] {
     case .dateDow:        return ["in"]
     }
 }
-private func opLabel(_ o: String) -> String {
+// The rule editor's vocabulary. Plain `String` returns, so each is
+// `String(localized:)`; a bare literal here is never extracted and read in
+// English in every language.
+func opLabel(_ o: String) -> String {
     switch o {
-    case "is": return "is"; case "contains": return "contains"; case "startsWith": return "starts with"
-    case "gt": return "greater than"; case "gte": return "≥"; case "lt": return "less than"; case "lte": return "≤"
-    case "eq": return "equals"; case "between": return "between"
-    case "is_null": return "is not set"; case "has": return "has tag"
-    case "in": return "in"; case "has_any": return "has any of"; case "has_all": return "has all of"; default: return o
+    case "is": String(localized: "is")
+    case "contains": String(localized: "contains")
+    case "startsWith": String(localized: "starts with")
+    case "gt": String(localized: "greater than")
+    case "gte": "≥"
+    case "lt": String(localized: "less than")
+    case "lte": "≤"
+    case "eq": String(localized: "equals")
+    case "between": String(localized: "between")
+    case "is_null": String(localized: "is not set")
+    case "has": String(localized: "has tag")
+    case "in": String(localized: "in")
+    case "has_any": String(localized: "has any of")
+    case "has_all": String(localized: "has all of")
+    default: o
     }
 }
-private func fieldLabel(_ f: LeafForm.Field) -> String {
+func fieldLabel(_ f: LeafForm.Field) -> String {
     switch f {
-    case .merchant: return "Merchant"; case .note: return "Note"; case .amount: return "Amount"; case .kind: return "Kind"
-    case .categoryId: return "Category"; case .accountId: return "Account"; case .counterpartyId: return "Counterparty"
-    case .currency: return "Currency"; case .tagId: return "Tag"; case .dateDom: return "Day of month"; case .dateDow: return "Day of week"
+    case .merchant: String(localized: "Merchant")
+    case .note: String(localized: "Note")
+    case .amount: String(localized: "Amount")
+    case .kind: String(localized: "Kind")
+    case .categoryId: String(localized: "Category")
+    case .accountId: String(localized: "Account")
+    case .counterpartyId: String(localized: "Counterparty")
+    case .currency: String(localized: "Currency")
+    case .tagId: String(localized: "Tag")
+    case .dateDom: String(localized: "Day of month")
+    case .dateDow: String(localized: "Day of week")
     }
 }
-// date_dow weekday indices: 0=Sun … 6=Sat (engine dayOfWeek = Calendar(.weekday, UTC) - 1).
-private let weekdayLabels = ["S", "M", "T", "W", "T", "F", "S"]
+/// date_dow weekday indices: 0=Sun … 6=Sat (engine dayOfWeek = Calendar(.weekday, UTC) - 1),
+/// which is also the order of `Calendar.veryShortWeekdaySymbols`: S M T W T F S in
+/// English, 日 一 二 三 四 五 六 in Chinese.
+func weekdayChipLabels(locale: Locale = .autoupdatingCurrent) -> [String] {
+    var cal = AppDate.civil
+    cal.locale = locale
+    return cal.veryShortStandaloneWeekdaySymbols
+}
 private struct PickItem: Identifiable { let id: String; let name: String }
 
 /// A searchable checkmark list that toggles ids in a `[String]` selection.
 private struct MultiSelectList: View {
-    let title: String
+    let title: LocalizedStringKey
     @Binding var selected: [String]
     let items: [PickItem]
     @State private var query = ""
@@ -173,9 +200,14 @@ struct RuleSheet: View {
         case setCategory, setNote, setMerchant, setKind, markReviewed, addTag, removeTag, setCounterparty
         var id: String { rawValue }
         var label: String { switch self {
-            case .setCategory: "Set category"; case .setNote: "Set note"; case .setMerchant: "Set merchant"
-            case .setKind: "Set kind"; case .markReviewed: "Mark reviewed"
-            case .addTag: "Add tag"; case .removeTag: "Remove tag"; case .setCounterparty: "Set counterparty" } } }
+            case .setCategory: String(localized: "Set category")
+            case .setNote: String(localized: "Set note")
+            case .setMerchant: String(localized: "Set merchant")
+            case .setKind: String(localized: "Set kind")
+            case .markReviewed: String(localized: "Mark reviewed")
+            case .addTag: String(localized: "Add tag")
+            case .removeTag: String(localized: "Remove tag")
+            case .setCounterparty: String(localized: "Set counterparty") } } }
     struct ActRow: Identifiable { let id = UUID(); var type: ActType = .setCategory; var categoryId = ""; var text = ""; var kind = "expense"; var tagId = ""; var counterpartyId = "" }
 
     @State private var name: String
@@ -272,8 +304,8 @@ struct RuleSheet: View {
                 TextField("Amount", text: c.value).numericInput(c.value).keyboardType(.decimalPad)
                 if c.wrappedValue.op == "between" { TextField("and", text: c.value2).numericInput(c.value2).keyboardType(.decimalPad) }
             case .kind:
-                if c.wrappedValue.op == "in" { multiSelect("Kinds", c.values, kindValues.map { PickItem(id: $0, name: $0.capitalized) }) }
-                else { Picker("Kind", selection: c.value) { ForEach(kindValues, id: \.self) { Text($0.capitalized).tag($0) } } }
+                if c.wrappedValue.op == "in" { multiSelect("Kinds", c.values, kindValues.map { PickItem(id: $0, name: KindLabel.label($0)) }) }
+                else { Picker("Kind", selection: c.value) { ForEach(kindValues, id: \.self) { Text(KindLabel.label($0)).tag($0) } } }
             case .categoryId:
                 if c.wrappedValue.op == "is_null" { EmptyView() }
                 else if c.wrappedValue.op == "in" { multiSelect("Categories", c.values, store.pickableCategories.map { PickItem(id: $0.id, name: $0.name) }) }
@@ -299,7 +331,7 @@ struct RuleSheet: View {
     /// Inline menu Picker that displays the first item when nothing is chosen yet
     /// (a fresh row starts empty), so the Picker never shows a blank selection.
     /// `save()` applies the same first-item fallback, so the two stay in sync.
-    @ViewBuilder private func entityPicker(_ title: String, _ sel: Binding<String>, _ items: [PickItem]) -> some View {
+    @ViewBuilder private func entityPicker(_ title: LocalizedStringKey, _ sel: Binding<String>, _ items: [PickItem]) -> some View {
         Picker(title, selection: Binding(
             get: { sel.wrappedValue.isEmpty ? (items.first?.id ?? "") : sel.wrappedValue },
             set: { sel.wrappedValue = $0 })) {
@@ -308,14 +340,14 @@ struct RuleSheet: View {
     }
 
     /// A pushed, searchable multi-select that summarizes the count inline.
-    @ViewBuilder private func multiSelect(_ title: String, _ sel: Binding<[String]>, _ items: [PickItem]) -> some View {
+    @ViewBuilder private func multiSelect(_ title: LocalizedStringKey, _ sel: Binding<[String]>, _ items: [PickItem]) -> some View {
         NavigationLink {
             MultiSelectList(title: title, selected: sel, items: items)
         } label: {
             HStack {
                 Text(title)
                 Spacer()
-                Text(sel.wrappedValue.isEmpty ? "None" : "\(sel.wrappedValue.count) selected").foregroundStyle(.secondary)
+                Text(sel.wrappedValue.isEmpty ? String(localized: "None") : String(localized: "\(sel.wrappedValue.count) selected")).foregroundStyle(.secondary)
             }
         }
     }
@@ -326,7 +358,7 @@ struct RuleSheet: View {
             ForEach(0..<7, id: \.self) { i in
                 let key = String(i)
                 let on = sel.wrappedValue.contains(key)
-                Text(weekdayLabels[i])
+                Text(weekdayChipLabels()[i])
                     .font(.caption).frame(maxWidth: .infinity, minHeight: 32)
                     .background(on ? Color.accentColor : Color.secondary.opacity(0.15))
                     .foregroundStyle(on ? Color.white : Color.primary)
@@ -348,7 +380,7 @@ struct RuleSheet: View {
                 entityPicker("Category", a.categoryId, store.pickableCategories.map { PickItem(id: $0.id, name: $0.name) })
             case .setNote:     TextField("Note", text: a.text)
             case .setMerchant: TextField("Merchant", text: a.text)
-            case .setKind:     Picker("Kind", selection: a.kind) { ForEach(settableKindValues, id: \.self) { Text($0.capitalized).tag($0) } }
+            case .setKind:     Picker("Kind", selection: a.kind) { ForEach(settableKindValues, id: \.self) { Text(KindLabel.label($0)).tag($0) } }
             case .markReviewed: EmptyView()
             case .addTag, .removeTag:
                 entityPicker("Tag", a.tagId, store.tags.map { PickItem(id: $0.id, name: $0.name) })
@@ -475,8 +507,8 @@ struct RuleDetailView: View {
                 Section {
                     LabeledContent("Name", value: rule.name)
                     LabeledContent("Priority", value: "\(rule.priority)")
-                    LabeledContent("Active", value: rule.isActive ? "Yes" : "No")
-                    LabeledContent("Run on edit", value: rule.runOnEdit ? "Yes" : "No")
+                    LabeledContent("Active", value: rule.isActive ? String(localized: "Yes") : String(localized: "No"))
+                    LabeledContent("Run on edit", value: rule.runOnEdit ? String(localized: "Yes") : String(localized: "No"))
                 }
                 Section("Matches") { Text(conditionSummary) }
                 Section("Actions") { Text(actionsSummary) }

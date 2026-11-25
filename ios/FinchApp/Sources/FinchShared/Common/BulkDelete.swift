@@ -23,7 +23,7 @@ public enum BulkDelete {
     /// ticked — even when the delete takes more; the message says so instead.
     /// (Two numbers disagreeing on one dialog reads as a bug.)
     public static func confirmTitle(_ count: Int) -> String {
-        String(localized: "Delete \(count) transaction\(count == 1 ? "" : "s")?")
+        count == 1 ? String(localized: "Delete 1 transaction?") : String(localized: "Delete \(count) transactions?")
     }
 
     private static func entryKey(_ tx: Tx) -> String { tx.entryId ?? tx.id }

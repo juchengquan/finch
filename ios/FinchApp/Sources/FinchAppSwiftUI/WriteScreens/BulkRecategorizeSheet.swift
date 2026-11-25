@@ -20,7 +20,8 @@ struct BulkRecategorizeSheet: View {
                         ForEach(store.pickableCategories) { Text($0.name).tag($0.id) }
                     }
                 } footer: {
-                    Text("Applies to \(ids.count) selected transaction\(ids.count == 1 ? "" : "s").")
+                    Text(ids.count == 1 ? String(localized: "Applies to 1 selected transaction.")
+                                        : String(localized: "Applies to \(ids.count) selected transactions."))
                 }
                 if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
             }

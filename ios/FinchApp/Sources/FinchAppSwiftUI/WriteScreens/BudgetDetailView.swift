@@ -179,7 +179,7 @@ struct BudgetDetailView: View {
             let selected = pts.first { $0.from == selectedCycleFrom && !$0.isCurrent }
             Section("History") {
                 BarChart(data: pts.map { p in
-                    BarChart.DataPoint(label: cycleLabel(p.from, b.frequency),
+                    BarChart.DataPoint(label: AppDate.budgetCycleLabel(p.from, frequency: b.frequency),
                                        value: p.used,
                                        color: (p.over ? Color.red : Color.green)
                                            .opacity(barOpacity(p, selected: selected)))
@@ -244,21 +244,6 @@ struct BudgetDetailView: View {
         }
         if sectioned {
             ForEach(secs) { monthSection($0) }
-        }
-    }
-
-    /// Short x-axis label for a cycle start: month name for monthly, month + year
-    /// for quarterly/yearly (labels must be UNIQUE across the ~6 windows — Swift
-    /// Charts treats equal categorical labels as one x-band and stacks the bars),
-    /// M/d for day-grained frequencies.
-    private func cycleLabel(_ from: String, _ frequency: String) -> String {
-        let parts = from.split(separator: "-")
-        guard parts.count == 3, let m = Int(parts[1]), let d = Int(parts[2]), (1...12).contains(m) else { return from }
-        let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-        switch frequency {
-        case "daily", "weekly", "biweekly": return "\(m)/\(d)"
-        case "quarterly", "yearly": return "\(months[m - 1]) '\(parts[0].suffix(2))"   // e.g. "Jan '26" — year disambiguates repeats
-        default: return months[m - 1]   // monthly — 6 consecutive months never repeat
         }
     }
 

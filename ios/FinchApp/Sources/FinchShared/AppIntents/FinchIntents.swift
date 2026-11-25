@@ -91,7 +91,8 @@ public struct MarkClearedIntent: AppIntent {
         guard FinchIntentLock.unlocked else { return .result(dialog: "Unlock finch first to do that.") }
         let ids = store.txns.prefix(max(1, count)).map(\.id)
         for id in ids { try? store.apply(.setCleared, Args(["id": .string(id), "cleared": .bool(true)])) }
-        return .result(dialog: "Marked \(ids.count) transaction\(ids.count == 1 ? "" : "s") as cleared.")
+        return .result(dialog: ids.count == 1 ? "Marked 1 transaction as cleared."
+                                               : "Marked \(ids.count) transactions as cleared.")
     }
 }
 

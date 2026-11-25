@@ -34,7 +34,7 @@ struct SettingsBackupsView: View {
             // — "Back up now" and the pre-restore safety copy — always refresh it).
             Section {
                 LabeledContent("Latest on this device",
-                               value: backups.lastBackupAt.map(Self.full) ?? "None yet")
+                               value: backups.lastBackupAt.map(Self.full) ?? String(localized: "None yet"))
                 Button("Back up now") { Task { await backups.flush() } }
                     .disabled(store.ledgers.isEmpty)
                 if let err = backups.lastError {
