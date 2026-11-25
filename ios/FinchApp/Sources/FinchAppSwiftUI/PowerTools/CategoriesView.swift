@@ -540,7 +540,7 @@ struct CategoryEditSheet: View {
                     }
                     .pickerStyle(.segmented)
                 } else {
-                    LabeledContent("Type", value: kindSel == "income" ? "Income" : "Expense")
+                    LabeledContent("Type", value: kindSel == "income" ? String(localized: "Income") : String(localized: "Expense"))
                 }
                 TextField("Name", text: $name)
                 // The same swatch+icon tree the transaction Category field uses
@@ -586,7 +586,7 @@ struct CategoryEditSheet: View {
     private func save() {
         errorMessage = nil
         let trimmed = name.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { errorMessage = "Enter a name."; return }
+        guard !trimmed.isEmpty else { errorMessage = String(localized: "Enter a name."); return }
         do {
             if let c = category {
                 var patch: [String: JSONValue] = [

@@ -89,7 +89,7 @@ struct MonthlyReportView: View {
         .environment(\.colorScheme, .light)
     }
 
-    private func stat(_ label: String, _ value: String) -> some View {
+    private func stat(_ label: LocalizedStringKey, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label).font(.caption2).foregroundStyle(.gray)
             Text(value).font(.headline)

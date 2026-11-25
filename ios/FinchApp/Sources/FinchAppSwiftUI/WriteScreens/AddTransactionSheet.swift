@@ -615,8 +615,8 @@ struct AddTransactionSheet: View {
 
     /// Transfer amount row: fixed currency label from the leg's account (the
     /// account owns the currency — no picker).
-    private func transferAmountRow(_ label: String, text: Binding<String>, currency: String) -> some View {
-        FieldRow(glyph: .amount, title: LocalizedStringKey(label), trailing: {
+    private func transferAmountRow(_ label: LocalizedStringKey, text: Binding<String>, currency: String) -> some View {
+        FieldRow(glyph: .amount, title: label, trailing: {
             Text(currency).foregroundStyle(.secondary)
         }) {
             TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: currency)),
@@ -764,7 +764,7 @@ struct AddTransactionSheet: View {
     private func save() {
         errorMessage = nil
         if kind == .adjust {
-            guard let target = DecimalInput.parse(targetBalance) else { errorMessage = "Enter a new balance."; return }
+            guard let target = DecimalInput.parse(targetBalance) else { errorMessage = String(localized: "Enter a new balance."); return }
             do {
                 var args: [String: JSONValue] = [
                     "accountId": .string(accountId), "targetBalance": .double(target),
@@ -781,7 +781,7 @@ struct AddTransactionSheet: View {
         if kind != .transfer, !categoryId.isEmpty, !categories.contains(where: { $0.id == categoryId }) {
             categoryId = ""
         }
-        guard let value = DecimalInput.parse(amount), value != 0 else { errorMessage = "Enter an amount."; return }
+        guard let value = DecimalInput.parse(amount), value != 0 else { errorMessage = String(localized: "Enter an amount."); return }
         // Same rule as the Edit sheet: the amount is the target, the cells must
         // reach it. The grid is the case that could silently under-post — its
         // footer already SAYS "N unaccounted", and nothing stopped the save.
@@ -803,11 +803,11 @@ struct AddTransactionSheet: View {
         }
         do {
             if kind == .transfer {
-                guard fromAccountId != toAccountId else { errorMessage = "Pick two different accounts."; return }
+                guard fromAccountId != toAccountId else { errorMessage = String(localized: "Pick two different accounts."); return }
                 var receivedAmount = abs(value)
                 if transferIsCrossCurrency {
                     guard let recv = DecimalInput.parse(received), recv > 0 else {
-                        errorMessage = "Enter the received amount."; return
+                        errorMessage = String(localized: "Enter the received amount."); return
                     }
                     receivedAmount = recv
                 }
@@ -855,7 +855,9 @@ struct AddTransactionSheet: View {
             } else {
                 let signed = (kind == .income || kind == .refund) ? abs(value) : -abs(value)
                 let sign: Double = signed < 0 ? -1 : 1
-                let fallback = kind == .income ? "Income" : (kind == .refund ? "Refund" : "Untitled")
+                // Saved as the merchant's name, so in the language the user reads.
+                let fallback = kind == .income ? String(localized: "Income")
+                    : (kind == .refund ? String(localized: "Refund") : String(localized: "Untitled"))
 
                 // ONE write, replacing the three this path used to fire
                 // (createCounterparty, addTransaction, setTransactionSplits). A

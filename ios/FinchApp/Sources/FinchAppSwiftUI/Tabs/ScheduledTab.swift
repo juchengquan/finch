@@ -181,7 +181,7 @@ struct ScheduledTab: View {
                                                 HStack {
                                                     VStack(alignment: .leading, spacing: 2) {
                                                         Text(r.merchantName)
-                                                        Text("\(r.cadence.capitalized) · next ~\(r.nextEstimatedDate)")
+                                                        Text(DetectedChargeCaption.text(r, today: store.wallToday))
                                                             .font(.caption).foregroundStyle(.secondary)
                                                     }
                                                     Spacer()

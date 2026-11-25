@@ -103,7 +103,7 @@ struct MonthlySpendingCard: View {
         let endMonth = String(store.today.prefix(7))
         let pts = Selectors.monthlySpending(store.txns, store.activeLedgerId, endMonth, months)
         Card(title: "Monthly spending") {
-            BarChart(data: pts.map { BarChart.DataPoint(label: $0.m, value: $0.v, color: .blue) },
+            BarChart(data: pts.map { BarChart.DataPoint(label: AppDate.chartMonth($0.m), value: $0.v, color: .blue) },
                      xLabel: "Month", yLabel: "Spent", format: store.displayMoneyBase, masked: store.privacyMode)
                 .frame(height: 180)
         }
@@ -119,7 +119,7 @@ struct NetWorthCard: View {
             store.toBase($0, from: $1)
         }
         Card(title: "Net worth") {
-            LineChart(data: pts.map { LineChart.DataPoint(x: $0.m, y: $0.v) },
+            LineChart(data: pts.map { LineChart.DataPoint(x: AppDate.chartMonth($0.m), y: $0.v) },
                       xLabel: "Month", yLabel: "Net worth", format: store.displayMoneyBase, masked: store.privacyMode)
                 .frame(height: 180)
         }
@@ -196,7 +196,7 @@ struct ForecastCard: View {
                         LabeledContent("Upcoming scheduled", value: store.displayMoneyBase(f.scheduledRest))
                     }
                     LabeledContent("Projected", value: store.displayMoneyBase(f.projected))
-                    Text("\(f.daysRemaining) days left").font(.caption).foregroundStyle(.secondary)
+                    Text(f.daysRemaining == 1 ? String(localized: "1 day left") : String(localized: "\(f.daysRemaining) days left")).font(.caption).foregroundStyle(.secondary)
                 }
             } else {
                 Text("No data").font(.caption).foregroundStyle(.secondary)
@@ -205,11 +205,8 @@ struct ForecastCard: View {
     }
 }
 
-private let monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
-func monthLabel(_ ym: String) -> String {
-    guard ym.count >= 7, let mi = Int(ym.suffix(2)), (1...12).contains(mi) else { return ym }
-    return "\(monthNames[mi - 1]) \(ym.prefix(4))"
-}
+/// "2026-07" → "Jul 2026" / "2026年7月".
+func monthLabel(_ ym: String) -> String { AppDate.monthYear(ym) }
 
 /// The former Reports page, ported as the Insights "Breakdown" view: a month
 /// picker (months with data, newest first), the per-category spend list for
@@ -333,7 +330,7 @@ struct CashflowCard: View {
             if pts.isEmpty {
                 Text("No data").font(.caption).foregroundStyle(.secondary)
             } else {
-                LineChart(data: pts.map { LineChart.DataPoint(x: $0.m, y: $0.inc - $0.exp) },
+                LineChart(data: pts.map { LineChart.DataPoint(x: AppDate.chartMonth($0.m), y: $0.inc - $0.exp) },
                           xLabel: "Month", yLabel: "Net", format: store.displayMoneyBase, masked: store.privacyMode)
                     .frame(height: 160)
             }
@@ -393,7 +390,8 @@ struct WhatIfCard: View {
         let monthlySave = b.categories.reduce(0.0) { $0 + $1.avgMonthly * (cuts[$1.categoryId] ?? 0) / 100 }
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Based on your last \(b.months.count) month\(b.months.count == 1 ? "" : "s")")
+                Text(b.months.count == 1 ? String(localized: "Based on your last month")
+                                         : String(localized: "Based on your last \(b.months.count) months"))
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 if monthlySave > 0 {
@@ -556,7 +554,7 @@ struct NetWorthByTypeCard: View {
                     }
                     ForEach(Array(rows.enumerated()), id: \.offset) { _, r in
                         HStack {
-                            Text(AccountSheetTypeLabel.label(r.type))
+                            Text(AccountTypeLabel.label(r.type))
                             Spacer()
                             Text(store.displayMoneyBase(r.balance)).fontWeight(.medium)
                         }

@@ -157,7 +157,7 @@ public final class FinchStore: ObservableObject {
         try? FileManager.default.createDirectory(
             at: liveDBURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         guard let live = try? DatabaseQueue(path: liveDBURL.path) else {
-            dataError = "Couldn't open the finch database."
+            dataError = String(localized: "Couldn't open the finch database.")
             return
         }
         do {
@@ -165,7 +165,7 @@ public final class FinchStore: ObservableObject {
         } catch {
             // A failed migration leaves the schema in an unknown state — don't
             // operate on it. Surface the error instead of silently degrading.
-            dataError = "Database migration failed: \(error.localizedDescription). Restore a backup or reinstall."
+            dataError = String(localized: "Database migration failed: \(error.localizedDescription). Restore a backup or reinstall.")
             return
         }
         self.dbQueue = live
@@ -558,7 +558,7 @@ public final class FinchStore: ObservableObject {
                 self.markTxnsReady()
             }
         } catch {
-            self.dataError = "Couldn't load your data: \(error.localizedDescription)"
+            self.dataError = String(localized: "Couldn't load your data: \(error.localizedDescription)")
         }
     }
 

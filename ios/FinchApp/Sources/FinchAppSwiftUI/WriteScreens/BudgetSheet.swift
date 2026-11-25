@@ -318,9 +318,9 @@ struct BudgetSheet: View {
 
     private func save() {
         errorMessage = nil
-        guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter a name."; return }
+        guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = String(localized: "Enter a name."); return }
         guard let value = DecimalInput.parse(amount), value > 0 else {
-            errorMessage = kind == .income ? "Enter a target greater than 0." : "Enter a limit greater than 0."
+            errorMessage = kind == .income ? String(localized: "Enter a target greater than 0.") : String(localized: "Enter a limit greater than 0.")
             return
         }
         if kind == .income { saveIncome(target: value) } else { saveExpense(limit: value) }
@@ -334,7 +334,7 @@ struct BudgetSheet: View {
     private func saveIncome(target: Double) {
         guard !selectedCategories.isEmpty || !selectedAccounts.isEmpty
             || !selectedTags.isEmpty || !selectedCounterparties.isEmpty else {
-            errorMessage = "Pick at least one category, account, tag, or merchant to match."
+            errorMessage = String(localized: "Pick at least one category, account, tag, or merchant to match.")
             return
         }
         let endDate: JSONValue = hasTargetDate ? .string(AppDate.isoDay.string(from: targetDate)) : .null
@@ -392,7 +392,7 @@ struct BudgetSheet: View {
         // Cap is optional and validated only when rollover is on and it's non-empty.
         let capValue: JSONValue
         if rollover && !rolloverCap.trimmingCharacters(in: .whitespaces).isEmpty {
-            guard let c = DecimalInput.parse(rolloverCap), c >= 0 else { errorMessage = "Enter a valid rollover cap."; return }
+            guard let c = DecimalInput.parse(rolloverCap), c >= 0 else { errorMessage = String(localized: "Enter a valid rollover cap."); return }
             capValue = .double(c)
         } else {
             capValue = .null

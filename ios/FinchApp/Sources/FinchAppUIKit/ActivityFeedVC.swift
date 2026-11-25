@@ -653,7 +653,7 @@ final class ActivityFeedVC: UIViewController {
         navigationController?.setToolbarHidden(true, animated: true)
 
         let sortMenu = UIMenu(title: String(localized: "Sort"), children: TxSort.allCases.map { option in
-            UIAction(title: String(localized: String.LocalizationValue(option.label)),
+            UIAction(title: option.label,
                      state: option == sort ? .on : .off) { [weak self] _ in
                 self?.sort = option
                 self?.applySnapshot()

@@ -51,12 +51,9 @@ enum MonthGrouping {
         return order.map { Section(id: $0, txns: byMonth[$0] ?? []) }
     }
 
-    /// "2026-09" -> "September 2026" (device locale, wide month). Returns the key
-    /// unchanged if it doesn't parse.
-    static func label(_ key: String) -> String {
-        guard let d = AppDate.isoDay.date(from: "\(key)-01") else { return key }
-        return d.formatted(.dateTime.month(.wide).year())
-    }
+    /// "2026-09" -> "September 2026" / "2026年9月". Returns the key unchanged if it
+    /// doesn't parse.
+    static func label(_ key: String) -> String { AppDate.monthYear(key, wide: true) }
 
     /// Net change of a month's transactions, in ledger-base amount (`Tx.amount` is
     /// base). Callers format with `store.displayMoneyBase`.

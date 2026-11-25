@@ -514,19 +514,11 @@ struct BudgetRowView: View {
                     Text(" saved").foregroundStyle(.secondary)
                 } else {
                     // Hours on the final day — "7 hours left" is what you need when
-                    // deciding whether to spend now. Plural suffix inline, matching the
-                    // house pattern (see ActivityTab's "transaction\(…)").
-                    // The cycle stops at the turnover time on `progress.to`, so the
-                    // countdown has to as well — `budget.startTime` IS that moment.
-                    switch store.remaining(until: progress.to, toTime: budget.startTime) {
-                    case .days(let d):
-                        Text(" · \(d) day\(d == 1 ? "" : "s") left").foregroundStyle(.secondary)
-                    case .hours(let h):
-                        Text(" · \(h) hour\(h == 1 ? "" : "s") left").foregroundStyle(.secondary)
-                    case .lessThanAnHour:
-                        Text(" · less than an hour left").foregroundStyle(.secondary)
-                    case .ended:
-                        EmptyView()
+                    // deciding whether to spend now. The cycle stops at the turnover
+                    // time on `progress.to`, so the countdown has to as well —
+                    // `budget.startTime` IS that moment.
+                    if let caption = store.remaining(until: progress.to, toTime: budget.startTime).caption {
+                        Text(caption).foregroundStyle(.secondary)
                     }
                 }
             }
