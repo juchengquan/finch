@@ -114,8 +114,8 @@ final class BudgetsListVC: UIViewController {
         // it also covers the progress bars (which depend on txns), the privacy toggle
         // and `txnsReady`.
         store.objectWillChange
-            .receive(on: DispatchQueue.main)   // delivered after the mutation lands
-            .sink { [weak self] _ in
+            .coalescedOnMain()   // one rebuild per write, after it lands
+            .sink { [weak self] in
                 self?.applySnapshot()
                 // Re-attempt a pending deep link — see `AccountsListVC` for why one
                 // emission is not enough. `budget:` happens to work today at both

@@ -65,7 +65,11 @@ final class NotificationsSettingsVC: UIViewController {
     }
 
     private func configureDataSource() {
-        let cell = UICollectionView.CellRegistration<UICollectionViewListCell, String> { cell, _, id in
+        // `[weak self]`: the registration is held by the data source, which this
+        // screen holds, and the hour picker's action lives in the cell. A strong
+        // capture kept every closed copy alive (`ScreenLeakTests`).
+        let cell = UICollectionView.CellRegistration<UICollectionViewListCell, String> { [weak self] cell, _, id in
+            guard let self else { return }
             // Clear accessories EXCEPT an already-installed switch: removing it from
             // the hierarchy is what destroyed the glass and swallowed taps. See
             // ToggleAccessory.
@@ -102,7 +106,7 @@ final class NotificationsSettingsVC: UIViewController {
                     cfg.text = String(localized: "Delivery time"); hour = NotificationPrefs.deliveryHour
                 }
                 cell.contentConfiguration = cfg
-                cell.accessories = [self.hourAccessory(hour: hour) { picked in
+                cell.accessories = [self.hourAccessory(hour: hour) { [weak self] picked in
                     switch id {
                     case Self.quietStartID:
                         NotificationPrefs.quietHours = QuietHours(startHour: picked, endHour: quiet.endHour)
@@ -111,7 +115,7 @@ final class NotificationsSettingsVC: UIViewController {
                     default:
                         NotificationPrefs.deliveryHour = picked
                     }
-                    self.applySnapshot()
+                    self?.applySnapshot()
                     // The preference alone changes nothing already scheduled — only a
                     // refresh re-triggers what is pending, same as the toggles above.
                     Task { await NotificationService.shared.refresh() }

@@ -69,9 +69,15 @@ struct TransactionFilterSheet: View {
         _maxText = State(initialValue: f.maxAmount.map { DecimalInput.text($0, currency: base) } ?? "")
         _useFrom = State(initialValue: f.from != nil)
         _useTo = State(initialValue: f.to != nil)
-        _fromDate = State(initialValue: f.from ?? Date())
-        _toDate = State(initialValue: f.to ?? Date())
+        _fromDate = State(initialValue: f.from ?? Self.unsetBound())
+        _toDate = State(initialValue: f.to ?? Self.unsetBound())
     }
+
+    /// Where a bound's picker starts when it is switched on: today at midnight,
+    /// which `TxFilter.stamp` sends as a bare date, so the bound takes the whole
+    /// day. It started at the current time, so "From today" hid every row from
+    /// earlier today.
+    static func unsetBound(now: Date = Date()) -> Date { Calendar.current.startOfDay(for: now) }
 
     var body: some View {
         NavigationStack {

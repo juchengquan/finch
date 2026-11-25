@@ -264,9 +264,15 @@ final class ActivityFeedVC: UIViewController {
                 // same reason as the SwiftUI screen: it keeps the collection view
                 // the primary scroll view so the large title behaves.
                 cell.contentConfiguration = UIHostingConfiguration {
+                    // Every closure the hosted view keeps holds the screen WEAKLY: the
+                    // cell lives in this screen's collection view, so a strong one is a
+                    // cycle that kept every closed copy alive (`ScreenLeakTests`).
                     Picker("", selection: Binding(
-                        get: { self.viewMode },
-                        set: { self.viewMode = $0; self.calSelectedDay = nil; self.applySnapshot() })) {
+                        get: { [weak self] in self?.viewMode ?? .list },
+                        set: { [weak self] in
+                            guard let self else { return }
+                            self.viewMode = $0; self.calSelectedDay = nil; self.applySnapshot()
+                        })) {
                         Text(String(localized: "List")).tag(ViewMode.list)
                         Text(String(localized: "Calendar")).tag(ViewMode.calendar)
                     }
@@ -304,18 +310,19 @@ final class ActivityFeedVC: UIViewController {
                 return
             }
             if id == Self.calendarID {
+                let anchor = self.calMonthAnchor, store = self.store
                 cell.contentConfiguration = UIHostingConfiguration {
                     MonthCashCalendar(
-                        monthAnchor: Binding(get: { self.calMonthAnchor },
-                                             set: { self.calMonthAnchor = $0; self.applySnapshot() }),
-                        selectedDay: Binding(get: { self.calSelectedDay },
-                                             set: { self.calSelectedDay = $0; self.applySnapshot() }),
+                        monthAnchor: Binding(get: { [weak self] in self?.calMonthAnchor ?? anchor },
+                                             set: { [weak self] in self?.calMonthAnchor = $0; self?.applySnapshot() }),
+                        selectedDay: Binding(get: { [weak self] in self?.calSelectedDay },
+                                             set: { [weak self] in self?.calSelectedDay = $0; self?.applySnapshot() }),
                         wallToday: self.store.wallToday,
-                        amountsForRange: { from, through in
+                        amountsForRange: { [weak self] from, through in
                             MonthGrouping.dailyIncomeExpense(
-                                self.filteredTxns().filter { $0.date >= from && $0.date <= through })
+                                (self?.filteredTxns() ?? []).filter { $0.date >= from && $0.date <= through })
                         },
-                        format: { self.store.displayExactBase($0) },
+                        format: { [store] in store.displayExactBase($0) },
                         masked: self.store.privacyMode)
                 }
                 cell.accessories = []
@@ -825,14 +832,8 @@ final class ActivityFeedVC: UIViewController {
         // Same multi-leg warning as the SwiftUI feed's delete alert (ActivityTab):
         // a split purchase (or a transfer) renders as one row per account leg, and
         // deleting any one row deletes the whole entry.
-        var message = "\(tx.merchant) · \(store.displayMoneyBase(tx.amount))"
-        if tx.transferGroupId != nil {
-            message += " " + ActivityFeedView.transferDeleteHint
-        } else if (tx.accountLegCount ?? 1) > 1 {
-            message += " " + ActivityFeedView.multiLegDeleteHint
-        }
         let alert = UIAlertController(title: String(localized: "Delete transaction?"),
-                                      message: message,
+                                      message: ActivityFeedView.deleteMessage(tx, store: store),
                                       preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: String(localized: "Delete"), style: .destructive) { [weak self] _ in
             guard let self else { return }

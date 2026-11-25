@@ -60,8 +60,8 @@ final class FallbackRatesReviewVC: UIViewController {
         // one, and an entry saved again at a real rate leaves the total. Memoized
         // in the store, so a write that changes neither costs no query.
         store.objectWillChange
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.applySnapshot() }
+            .coalescedOnMain()   // one rebuild per write, after it lands
+            .sink { [weak self] in self?.applySnapshot() }
             .store(in: &cancellables)
     }
 

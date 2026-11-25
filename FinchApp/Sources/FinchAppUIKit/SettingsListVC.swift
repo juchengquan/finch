@@ -198,7 +198,11 @@ final class SettingsListVC: UIViewController {
     }
 
     private func configureDataSource() {
-        let cell = UICollectionView.CellRegistration<UICollectionViewListCell, Row> { cell, _, row in
+        // `[weak self]`: the registration is held by the data source, which this
+        // screen holds. A strong capture kept every closed copy alive
+        // (`ScreenLeakTests`).
+        let cell = UICollectionView.CellRegistration<UICollectionViewListCell, Row> { [weak self] cell, _, row in
+            guard let self else { return }
             // Hosted rather than a `defaultContentConfiguration`, for two reasons that
             // only a diff against the `-uikitActivity NO` control build surfaces — both
             // of which this migration has been caught by before (`AccountsListVC`'s

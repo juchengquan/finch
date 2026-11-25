@@ -47,8 +47,8 @@ final class RulesManagerVC: UIViewController {
         // `rules` is an @Published slice, but the match counts derive from `txns`, and
         // a backfill changes those without touching the rule rows.
         store.objectWillChange
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.applySnapshot() }
+            .coalescedOnMain()   // one rebuild per write, after it lands
+            .sink { [weak self] in self?.applySnapshot() }
             .store(in: &cancellables)
     }
 

@@ -63,7 +63,9 @@ public final class FinchStore: ObservableObject {
     @Published public internal(set) var auditProblems: [Audit.AuditProblem] = []   // set by core + ImportExport
     @Published public internal(set) var dbInfo: DatabaseInfo = .empty               // set by core + ImportExport
     /// A non-recoverable load/migration/projection failure, surfaced to the user
-    /// instead of silently degrading on a broken DB. Nil when healthy.
+    /// instead of silently degrading on a broken DB. Nil when healthy. Also a
+    /// write that fails after its sheet has closed (a receipt picked in the Add
+    /// sheet), which has nowhere else to be shown.
     @Published public internal(set) var dataError: String?
 
     // Shared with the ImportExport / ViewHelpers extensions (hence internal).

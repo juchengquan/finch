@@ -124,9 +124,11 @@ final class AppearanceSettingsVC: UIViewController {
             switch id {
             case Self.appearancePickerID:
                 cell.contentConfiguration = UIHostingConfiguration {
+                    // Weak, as every closure the hosted view keeps: the cell lives in
+                    // this screen's collection view (`ScreenLeakTests`).
                     Picker("", selection: Binding(
-                        get: { self.appearanceRaw },
-                        set: { self.write(Key.appearance, $0) })) {
+                        get: { [weak self] in self?.appearanceRaw ?? AppearancePreference.system.rawValue },
+                        set: { [weak self] in self?.write(Key.appearance, $0) })) {
                         ForEach(AppearancePreference.allCases) { Text($0.label).tag($0.rawValue) }
                     }
                     .pickerStyle(.segmented)
@@ -136,8 +138,8 @@ final class AppearanceSettingsVC: UIViewController {
                 cell.contentConfiguration = UIHostingConfiguration {
                     HStack(spacing: 12) {
                         Text("A").font(.footnote).foregroundStyle(.secondary)
-                        Slider(value: Binding(get: { Double(self.textSizeStep) },
-                                              set: { self.write(TextSize.stepKey, Int($0.rounded())) }),
+                        Slider(value: Binding(get: { [weak self] in Double(self?.textSizeStep ?? TextSize.defaultStep) },
+                                              set: { [weak self] in self?.write(TextSize.stepKey, Int($0.rounded())) }),
                                in: 0...Double(TextSize.steps.count - 1), step: 1)
                             .accessibilityLabel("Text size")
                         Text("A").font(.title3).foregroundStyle(.secondary)
@@ -202,8 +204,8 @@ final class AppearanceSettingsVC: UIViewController {
             case Self.fabPositionID:
                 cell.contentConfiguration = UIHostingConfiguration {
                     Picker("", selection: Binding(
-                        get: { self.fabPositionRaw },
-                        set: { self.write(Key.fabPosition, $0) })) {
+                        get: { [weak self] in self?.fabPositionRaw ?? FabPosition.right.rawValue },
+                        set: { [weak self] in self?.write(Key.fabPosition, $0) })) {
                         ForEach(FabPosition.allCases) { Text($0.label).tag($0.rawValue) }
                     }
                     .pickerStyle(.segmented)

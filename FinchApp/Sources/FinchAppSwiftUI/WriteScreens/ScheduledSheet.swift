@@ -89,6 +89,15 @@ struct ScheduledSheet: View {
         _endDate = State(initialValue: storedEnd ?? Self.defaultEnd(after: seeded ?? prefillStart ?? Date()))
     }
 
+    /// The start time an edit saves, or nil to leave it as stored. A template with no
+    /// time opens at midnight, since the picker always shows one, so midnight there
+    /// means "not touched", and saving it stamped 00:00 on every such template.
+    static func editedStartTime(stored: String?, picked: Date) -> String? {
+        let time = AppDate.isoTime.string(from: picked)
+        if (stored ?? "").isEmpty, time == "00:00" { return nil }
+        return time
+    }
+
     /// Where the end-date picker starts when the toggle is first turned on: a year
     /// after the start — a plain round figure to adjust from, never before the start.
     private static func defaultEnd(after start: Date) -> Date {
@@ -347,7 +356,9 @@ struct ScheduledSheet: View {
             if let day = savedDayOfMonth { patch["dayOfMonth"] = .int(day) }
             // Moving the start moves the schedule: occurrences are derived from it.
             patch["startDate"] = .string(AppDate.isoDay.string(from: startDate))
-            patch["startTime"] = .string(AppDate.isoTime.string(from: startDate))
+            if let time = Self.editedStartTime(stored: template.startTime, picked: startDate) {
+                patch["startTime"] = .string(time)
+            }
             if kind != .transfer { patch["category"] = categoryId.isEmpty ? .null : .string(categoryId) }
             patch["installmentTotal"] = installmentN.map { JSONValue.int($0) } ?? .null
             patch["autoPost"] = .bool(savesAutoPost)

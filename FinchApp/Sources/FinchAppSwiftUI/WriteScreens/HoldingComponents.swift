@@ -66,7 +66,10 @@ struct AddHoldingSheet: View {
                     .textInputAutocapitalization(.characters).autocorrectionDisabled()
                 HStack { Text("Shares"); Spacer(); TextField("0", text: $shares).numericInput($shares).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
                 HStack { Text("Cost basis"); Spacer(); TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: holdingCurrency)), text: $costBasis).moneyInput($costBasis, currency: holdingCurrency).multilineTextAlignment(.trailing) }
-                HStack { Text("Last price (optional)"); Spacer(); TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: holdingCurrency)), text: $lastPrice).moneyInput($lastPrice, currency: holdingCurrency).multilineTextAlignment(.trailing) }
+                // A per-share price is a quote, not an amount: a fund's NAV runs to four
+                // decimals or more. `moneyInput` cut it to the currency's two while typing
+                // and rounded it on blur, so it stays on plain `numericInput`, as rates do.
+                HStack { Text("Last price (optional)"); Spacer(); TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: holdingCurrency)), text: $lastPrice).numericInput($lastPrice).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
                 if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
             }
             .navigationTitle("Add Holding")
@@ -125,7 +128,8 @@ struct SetHoldingPriceSheet: View {
         NavigationStack {
             Form {
                 LabeledContent("Symbol", value: holding.symbol)
-                HStack { Text("Price"); Spacer(); TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: holding.currency)), text: $price).moneyInput($price, currency: holding.currency).multilineTextAlignment(.trailing) }
+                // Not `moneyInput`: a quote keeps its decimals (see AddHoldingSheet).
+                HStack { Text("Price"); Spacer(); TextField(DecimalInput.zeroPlaceholder(fractionDigits: Currencies.minorUnits(for: holding.currency)), text: $price).numericInput($price).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
                 Text("Leave empty to clear the stored price.").font(.caption).foregroundStyle(.secondary)
                 if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
             }

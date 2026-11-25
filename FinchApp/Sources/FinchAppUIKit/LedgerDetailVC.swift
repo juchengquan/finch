@@ -147,7 +147,11 @@ final class LedgerDetailVC: UIViewController {
                 }
 
             case Self.currencyID:
-                cfg.text = String(localized: "Base currency")
+                // The DISPLAY currency: what this ledger's figures are shown in. The
+                // base is fixed at creation and is changed only by a base change in
+                // Ledgers › Edit, which converts every amount. Labelled "Base
+                // currency", this read as that conversion.
+                cfg.text = String(localized: "Display currency")
                 cell.contentConfiguration = cfg
                 let current = self.store.displayCurrency(forLedger: self.ledgerId)
                 cell.accessories = [self.menuAccessory(

@@ -261,6 +261,17 @@ struct AccountSheet: View {
         Self.currencies.contains(currency) ? Self.currencies : [currency] + Self.currencies
     }
 
+    /// The card fields of an edit. Off a card none is sent, so each keeps its value:
+    /// switching type by mistake must not discard a limit and two days you would
+    /// then have to look up again. The limit used to be sent as null off a card,
+    /// which wiped it while the days survived.
+    static func cardPatch(isCard: Bool, creditLimit: String, statementDay: Int, dueDay: Int) -> [String: JSONValue] {
+        guard isCard else { return [:] }
+        let day: (Int) -> JSONValue = { $0 == 0 ? .null : .int($0) }
+        return ["statementDay": day(statementDay), "dueDay": day(dueDay),
+                "creditLimit": DecimalInput.parse(creditLimit).map { .double($0) } ?? .null]
+    }
+
     private func save() {
         errorMessage = nil
         let trimmed = name.trimmingCharacters(in: .whitespaces)
@@ -276,11 +287,6 @@ struct AccountSheet: View {
         // the type changes — switching type by mistake would silently discard a
         // limit and two days you would then have to look up again.
         let isCard = type == "credit_card"
-        let dayValue: (Int) -> JSONValue = { $0 == 0 ? .null : .int($0) }
-        let limitValue: JSONValue = {
-            guard isCard, let v = DecimalInput.parse(creditLimit) else { return .null }
-            return .double(v)
-        }()
         let textValue: (String) -> JSONValue = { t in
             let s = t.trimmingCharacters(in: .whitespacesAndNewlines)
             return s.isEmpty ? .null : .string(s)
@@ -295,12 +301,9 @@ struct AccountSheet: View {
                 "notes": textValue(notes),
                 "institution": textValue(institution),
                 "accountLast4": textValue(last4),
-                "creditLimit": limitValue,
             ]
-            if isCard {
-                patch["statementDay"] = dayValue(statementDay)
-                patch["dueDay"] = dayValue(dueDay)
-            }
+            patch.merge(Self.cardPatch(isCard: isCard, creditLimit: creditLimit,
+                                       statementDay: statementDay, dueDay: dueDay)) { $1 }
             // Colour clears on explicit null, like every other optional here —
             // without this, deselecting a swatch could never be saved.
             patch["color"] = colorHex.isEmpty ? .null : .string(colorHex)
