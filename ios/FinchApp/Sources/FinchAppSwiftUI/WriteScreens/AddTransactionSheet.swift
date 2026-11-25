@@ -764,7 +764,7 @@ struct AddTransactionSheet: View {
     private func save() {
         errorMessage = nil
         if kind == .adjust {
-            guard let target = DecimalInput.parse(targetBalance) else { errorMessage = "Enter a new balance."; return }
+            guard let target = DecimalInput.parse(targetBalance) else { errorMessage = String(localized: "Enter a new balance."); return }
             do {
                 var args: [String: JSONValue] = [
                     "accountId": .string(accountId), "targetBalance": .double(target),
@@ -781,7 +781,7 @@ struct AddTransactionSheet: View {
         if kind != .transfer, !categoryId.isEmpty, !categories.contains(where: { $0.id == categoryId }) {
             categoryId = ""
         }
-        guard let value = DecimalInput.parse(amount), value != 0 else { errorMessage = "Enter an amount."; return }
+        guard let value = DecimalInput.parse(amount), value != 0 else { errorMessage = String(localized: "Enter an amount."); return }
         // Same rule as the Edit sheet: the amount is the target, the cells must
         // reach it. The grid is the case that could silently under-post — its
         // footer already SAYS "N unaccounted", and nothing stopped the save.
@@ -803,11 +803,11 @@ struct AddTransactionSheet: View {
         }
         do {
             if kind == .transfer {
-                guard fromAccountId != toAccountId else { errorMessage = "Pick two different accounts."; return }
+                guard fromAccountId != toAccountId else { errorMessage = String(localized: "Pick two different accounts."); return }
                 var receivedAmount = abs(value)
                 if transferIsCrossCurrency {
                     guard let recv = DecimalInput.parse(received), recv > 0 else {
-                        errorMessage = "Enter the received amount."; return
+                        errorMessage = String(localized: "Enter the received amount."); return
                     }
                     receivedAmount = recv
                 }

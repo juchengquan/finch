@@ -115,7 +115,7 @@ struct EditTransactionSheet: View {
                            categories: splitAlloc.rows.count) != .notNeeded
     }
     private var refundedSummary: String {
-        guard let id = refundedTxId, let t = store.txns.first(where: { $0.id == id }) else { return "Optional" }
+        guard let id = refundedTxId, let t = store.txns.first(where: { $0.id == id }) else { return String(localized: "Optional") }
         return t.merchant.isEmpty ? t.date : t.merchant
     }
     private var accountCurrency: String {
@@ -673,12 +673,12 @@ struct EditTransactionSheet: View {
     private func saveInterledger() {
         errorMessage = nil
         guard let mine = DecimalInput.parse(amountText), mine > 0 else {
-            errorMessage = "Enter an amount greater than 0."; return
+            errorMessage = String(localized: "Enter an amount greater than 0."); return
         }
         let partner = interledgerPartnerInfo
         let theirs = DecimalInput.parse(partnerAmountText)
         if partner != nil, !(theirs ?? 0 > 0) {
-            errorMessage = "Enter an amount greater than 0."; return
+            errorMessage = String(localized: "Enter an amount greater than 0."); return
         }
         let iAmOutgoing = (liveTxn.nativeAmount ?? liveTxn.amount) < 0
         var args: [String: JSONValue] = [
@@ -693,7 +693,7 @@ struct EditTransactionSheet: View {
             try store.apply(.updateInterledgerTransfer, Args(args))
             dismiss()
         } catch {
-            errorMessage = (error as? I18nError)?.message ?? "\(error)"
+            errorMessage = i18nMessage(error)
         }
     }
 
@@ -710,7 +710,7 @@ struct EditTransactionSheet: View {
         let kindChanged = canReclassify && selectedKind.rawValue != txn.kind
         if !isSplit {
             guard let parsed = DecimalInput.parse(amountText), parsed > 0 else {
-                errorMessage = "Enter an amount greater than 0."; return
+                errorMessage = String(localized: "Enter an amount greater than 0."); return
             }
             // Sign by the (possibly new) kind: expense negative; income/refund positive.
             let sign: Double = canReclassify ? (selectedKind == .expense ? -1.0 : 1.0) : (originalNative < 0 ? -1.0 : 1.0)
@@ -772,7 +772,7 @@ struct EditTransactionSheet: View {
             parsedAmount = abs(splitAlloc.total)
         } else {
             guard let parsed = DecimalInput.parse(amountText), parsed > 0 else {
-                errorMessage = "Enter an amount greater than 0."; return
+                errorMessage = String(localized: "Enter an amount greater than 0."); return
             }
             parsedAmount = parsed
         }
@@ -876,14 +876,14 @@ struct EditTransactionSheet: View {
     /// transfer moves between is not something this sheet offers.
     private func saveTransfer() {
         errorMessage = nil
-        guard let legs = transferLegs else { errorMessage = "Transfer legs not found."; return }
+        guard let legs = transferLegs else { errorMessage = String(localized: "Transfer legs not found."); return }
         guard let from = DecimalInput.parse(fromAmountText), from > 0 else {
-            errorMessage = "Enter an amount greater than 0."; return
+            errorMessage = String(localized: "Enter an amount greater than 0."); return
         }
         var to = from
         if !transferSameCurrency {
             guard let typed = DecimalInput.parse(toAmountText), typed > 0 else {
-                errorMessage = "Enter an amount greater than 0."; return
+                errorMessage = String(localized: "Enter an amount greater than 0."); return
             }
             to = typed
         }

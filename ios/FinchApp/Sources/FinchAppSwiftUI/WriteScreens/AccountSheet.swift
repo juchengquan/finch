@@ -279,7 +279,7 @@ struct AccountSheet: View {
             // Name lives on Basic; surfacing its error while Advanced is showing
             // would put the message on a screen the user cannot see.
             tab = .basic
-            errorMessage = "Enter a name."
+            errorMessage = String(localized: "Enter a name.")
             return
         }
 

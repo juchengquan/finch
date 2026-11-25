@@ -221,13 +221,13 @@ struct SettingsBackupsView: View {
         } else {
             data = await icloud.download(name: e.name)
         }
-        guard let data else { errorMessage = "Couldn't read that backup — it may still be downloading from iCloud."; return }
+        guard let data else { errorMessage = String(localized: "Couldn't read that backup — it may still be downloading from iCloud."); return }
         await backups.flush()   // reversible: snapshot the current state (now safe — bytes are in hand)
         do {
             try await store.loadPack(from: data)
             Haptics.success()
         } catch PackError.auditFailed(let problems) {
-            auditMessage = "\(problems.count) integrity problem(s). Use Settings › About › Force import to override (iOS only)."
+            auditMessage = String(localized: "\(problems.count) integrity problem(s). Use Settings › About › Force import to override (iOS only).")
         } catch {
             errorMessage = i18nMessage(error)
             Haptics.warning()

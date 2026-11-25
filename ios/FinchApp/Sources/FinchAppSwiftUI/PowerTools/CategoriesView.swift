@@ -586,7 +586,7 @@ struct CategoryEditSheet: View {
     private func save() {
         errorMessage = nil
         let trimmed = name.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { errorMessage = "Enter a name."; return }
+        guard !trimmed.isEmpty else { errorMessage = String(localized: "Enter a name."); return }
         do {
             if let c = category {
                 var patch: [String: JSONValue] = [

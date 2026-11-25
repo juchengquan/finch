@@ -150,7 +150,7 @@ struct ReconcileSheet: View {
 
     private func finish(postAdjustment: Bool) {
         errorMessage = nil
-        guard let bal = DecimalInput.parse(statementBalance) else { errorMessage = "Enter the statement balance."; return }
+        guard let bal = DecimalInput.parse(statementBalance) else { errorMessage = String(localized: "Enter the statement balance."); return }
         do {
             try store.apply(.reconcileAccount, Args([
                 "accountId": .string(accountId), "statementBalance": .double(bal),

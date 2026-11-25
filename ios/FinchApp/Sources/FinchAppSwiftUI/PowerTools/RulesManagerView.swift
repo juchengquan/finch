@@ -360,9 +360,9 @@ struct RuleSheet: View {
 
     private func save() {
         errorMessage = nil
-        guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter a name."; return }
-        guard !conditions.isEmpty else { errorMessage = "Add at least one condition."; return }
-        guard !actions.isEmpty else { errorMessage = "Add at least one action."; return }
+        guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = String(localized: "Enter a name."); return }
+        guard !conditions.isEmpty else { errorMessage = String(localized: "Add at least one condition."); return }
+        guard !actions.isEmpty else { errorMessage = String(localized: "Add at least one action."); return }
 
         // Build condition forms, validating/normalizing amounts to plain decimal.
         var condForms: [LeafForm] = []
@@ -370,34 +370,34 @@ struct RuleSheet: View {
             var value = c.value, value2 = c.value2
             // Array-valued ops (CP2b): require a non-empty selection; value/value2 unused.
             if c.op == "in" || c.op == "has_any" || c.op == "has_all" {
-                guard !c.values.isEmpty else { errorMessage = "Select at least one value for every condition."; return }
+                guard !c.values.isEmpty else { errorMessage = String(localized: "Select at least one value for every condition."); return }
                 condForms.append(LeafForm(field: c.field, op: c.op, value: "", values: c.values))
                 continue
             }
             switch c.field {
             case .merchant, .note:
-                guard !value.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter a value for every condition."; return }
+                guard !value.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = String(localized: "Enter a value for every condition."); return }
             case .kind:
                 if value.isEmpty { value = kindValues[0] }
             case .amount:
-                guard let d = DecimalInput.parse(value) else { errorMessage = "Enter a numeric amount."; return }
+                guard let d = DecimalInput.parse(value) else { errorMessage = String(localized: "Enter a numeric amount."); return }
                 value = RuleParse.numStr(d)
                 if c.op == "between" {
-                    guard let hi = DecimalInput.parse(value2) else { errorMessage = "Enter both amounts for 'between'."; return }
+                    guard let hi = DecimalInput.parse(value2) else { errorMessage = String(localized: "Enter both amounts for 'between'."); return }
                     value2 = RuleParse.numStr(hi)
                 }
             case .dateDom:
-                guard let n = Int(value), (1...31).contains(n) else { errorMessage = "Enter a day 1–31."; return }
+                guard let n = Int(value), (1...31).contains(n) else { errorMessage = String(localized: "Enter a day 1–31."); return }
                 value = String(n)
             case .categoryId, .counterpartyId:
                 if c.op == "is_null" { value = "" }
                 else {
                     if value.isEmpty { value = firstId(for: c.field) }
-                    guard !value.isEmpty else { errorMessage = "Pick a value for every condition."; return }
+                    guard !value.isEmpty else { errorMessage = String(localized: "Pick a value for every condition."); return }
                 }
             case .accountId, .currency, .tagId:
                 if value.isEmpty { value = firstId(for: c.field) }
-                guard !value.isEmpty else { errorMessage = "Pick a value for every condition."; return }
+                guard !value.isEmpty else { errorMessage = String(localized: "Pick a value for every condition."); return }
             case .dateDow:
                 break   // date_dow's only op is `in`, handled by the array-op branch above
             }
@@ -410,13 +410,13 @@ struct RuleSheet: View {
             switch a.type {
             case .setCategory:
                 let cid = a.categoryId.isEmpty ? (store.pickableCategories.first?.id ?? "") : a.categoryId
-                guard !cid.isEmpty else { errorMessage = "Pick a category."; return }
+                guard !cid.isEmpty else { errorMessage = String(localized: "Pick a category."); return }
                 actForms.append(ActionForm(kind: .setCategory(cid)))
             case .setNote:
-                guard !a.text.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter the note text."; return }
+                guard !a.text.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = String(localized: "Enter the note text."); return }
                 actForms.append(ActionForm(kind: .setNote(a.text)))
             case .setMerchant:
-                guard !a.text.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter the merchant."; return }
+                guard !a.text.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = String(localized: "Enter the merchant."); return }
                 actForms.append(ActionForm(kind: .setMerchant(a.text)))
             case .setKind:
                 actForms.append(ActionForm(kind: .setKind(a.kind.isEmpty ? settableKindValues[0] : a.kind)))
@@ -424,11 +424,11 @@ struct RuleSheet: View {
                 actForms.append(ActionForm(kind: .markReviewed))
             case .addTag, .removeTag:
                 let tid = a.tagId.isEmpty ? (store.tags.first?.id ?? "") : a.tagId
-                guard !tid.isEmpty else { errorMessage = "Pick a tag."; return }
+                guard !tid.isEmpty else { errorMessage = String(localized: "Pick a tag."); return }
                 actForms.append(ActionForm(kind: a.type == .addTag ? .addTag(tid) : .removeTag(tid)))
             case .setCounterparty:
                 let cid = a.counterpartyId.isEmpty ? (store.counterparties.first?.id ?? "") : a.counterpartyId
-                guard !cid.isEmpty else { errorMessage = "Pick a counterparty."; return }
+                guard !cid.isEmpty else { errorMessage = String(localized: "Pick a counterparty."); return }
                 actForms.append(ActionForm(kind: .setCounterparty(cid)))
             }
         }

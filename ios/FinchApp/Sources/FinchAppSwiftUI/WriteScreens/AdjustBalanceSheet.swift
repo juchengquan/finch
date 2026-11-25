@@ -69,7 +69,7 @@ struct AdjustBalanceSheet: View {
 
     private func save() {
         errorMessage = nil
-        guard let target = DecimalInput.parse(targetBalance) else { errorMessage = "Enter a new balance."; return }
+        guard let target = DecimalInput.parse(targetBalance) else { errorMessage = String(localized: "Enter a new balance."); return }
         do {
             var args: [String: JSONValue] = [
                 "accountId": .string(account.id), "targetBalance": .double(target),

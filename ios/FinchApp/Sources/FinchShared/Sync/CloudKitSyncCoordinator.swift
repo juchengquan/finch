@@ -138,7 +138,7 @@ public final class CloudKitSyncCoordinator: ObservableObject {
     /// the resulting `apply` from re-enqueuing it.
     private func applyRemote(_ m: SyncMutation) {
         guard let action = m.actionName, let args = m.args else {
-            status.lastError = "Skipped an unknown remote mutation (\(m.action))"
+            status.lastError = String(localized: "Skipped an unknown remote mutation (\(m.action))")
             return
         }
         isReplaying = true
@@ -158,7 +158,7 @@ public final class CloudKitSyncCoordinator: ObservableObject {
     private func bootstrap(store: FinchStore) async {
         guard await service.accountAvailable() else {
             status.accountAvailable = false
-            status.lastError = "iCloud account required"
+            status.lastError = String(localized: "iCloud account required")
             return
         }
         status.accountAvailable = true
