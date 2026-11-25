@@ -85,7 +85,6 @@ public final class SyncOutbox {
     }
 
     public var pending: [SyncMutation] { state.pending }
-    public func pendingMutation(id: String) -> SyncMutation? { state.pending.first { $0.id == id } }
 
     /// Append a freshly-authored local mutation (assigns id + seq) and persist.
     @discardableResult
