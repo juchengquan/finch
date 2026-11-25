@@ -98,7 +98,7 @@ struct TransactionDetailView: View {
             if let orig = store.txns.first(where: { $0.id == refundedId }) {
                 LabeledContent("Refunds", value: "\(orig.merchant) · \(orig.date)")
             } else {
-                LabeledContent("Refunds", value: "transaction \(refundedId)")
+                LabeledContent("Refunds", value: String(localized: "transaction \(refundedId)"))
             }
         }
     }

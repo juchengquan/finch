@@ -6,10 +6,10 @@ enum TxSort: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .dateDesc:   return "Newest first"
-        case .dateAsc:    return "Oldest first"
-        case .amountDesc: return "Largest amount"
-        case .amountAsc:  return "Smallest amount"
+        case .dateDesc:   String(localized: "Newest first")
+        case .dateAsc:    String(localized: "Oldest first")
+        case .amountDesc: String(localized: "Largest amount")
+        case .amountAsc:  String(localized: "Smallest amount")
         }
     }
     func sorted(_ txns: [Tx]) -> [Tx] {
@@ -603,7 +603,7 @@ struct ActivityFeedView: View {
                     }
                     // Not for the review queue alone — it has its own chip above.
                     if filterBeyondReview, !saved.contains(where: { $0.filter == filter }) {
-                        Button { newSearchName = ""; showingSaveSearch = true } label: { chipLabel("＋ Save", selected: false) }
+                        Button { newSearchName = ""; showingSaveSearch = true } label: { chipLabel(String(localized: "＋ Save"), selected: false) }
                             .buttonStyle(.plain)
                     }
                 }

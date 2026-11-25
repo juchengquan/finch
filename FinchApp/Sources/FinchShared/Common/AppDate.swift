@@ -63,6 +63,59 @@ enum AppDate {
         return d.formatted(withYear ? style.year() : style)
     }
 
+    /// A day with its weekday, for the calendar's selected-day headline: "Wed, Jul 15"
+    /// in English, "7月15日周三" in Chinese. It was a fixed "EEE, MMM d", which kept
+    /// English order and punctuation in every language ("周三, 7月 15").
+    static func weekdayDay(_ iso: String, locale: Locale = .autoupdatingCurrent) -> String {
+        guard let d = isoDay.date(from: iso) else { return iso }
+        return d.formatted(style(locale).weekday(.abbreviated).month(.abbreviated).day())
+    }
+
+    /// A month and its year: "July 2026" / "2026年7月" (`wide`), "Jul 2026" / "2026年7月".
+    /// Takes `yyyy-MM` (or any `yyyy-MM…` day); anything else comes back as is.
+    static func monthYear(_ ym: String, wide: Bool = false, locale: Locale = .autoupdatingCurrent) -> String {
+        guard ym.count >= 7, let d = isoDay.date(from: "\(ym.prefix(7))-01") else { return ym }
+        return monthYear(d, wide: wide, locale: locale)
+    }
+    static func monthYear(_ date: Date, wide: Bool = false, locale: Locale = .autoupdatingCurrent) -> String {
+        date.formatted(style(locale).month(wide ? .wide : .abbreviated).year())
+    }
+
+    /// A month on its own, 1–12: "Jul" / "7月".
+    static func monthName(_ month: Int, locale: Locale = .autoupdatingCurrent) -> String {
+        guard (1...12).contains(month),
+              let d = civil.date(from: DateComponents(year: 2001, month: month, day: 1)) else { return "\(month)" }
+        return d.formatted(style(locale).month(.abbreviated))
+    }
+
+    /// The engine labels its monthly chart points "Jan"…"Dec" (`MonthlyPoint.m`, kept
+    /// in step with the web's). This is that label in the reader's language.
+    static func chartMonth(_ engineLabel: String, locale: Locale = .autoupdatingCurrent) -> String {
+        let english = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        guard let i = english.firstIndex(of: engineLabel) else { return engineLabel }
+        return monthName(i + 1, locale: locale)
+    }
+
+    /// A budget cycle's start on the history chart's x axis. The labels must be
+    /// unique across the ~6 bars (Swift Charts stacks equal categorical labels into
+    /// one band): a monthly budget's six months never repeat, so the month alone;
+    /// quarterly and yearly ones span years, so month and year; day-grained ones,
+    /// month and day ("7/15").
+    static func budgetCycleLabel(_ from: String, frequency: String, locale: Locale = .autoupdatingCurrent) -> String {
+        guard let d = isoDay.date(from: from) else { return from }
+        switch frequency {
+        case "daily", "weekly", "biweekly": return d.formatted(style(locale).month(.defaultDigits).day())
+        case "quarterly", "yearly": return monthYear(d, locale: locale)
+        default: return d.formatted(style(locale).month(.abbreviated))
+        }
+    }
+
+    /// Always Gregorian, in the device's zone, like the stored days — see `shortDay`.
+    private static func style(_ locale: Locale) -> Date.FormatStyle {
+        let cal = civil
+        return Date.FormatStyle(locale: locale, calendar: cal, timeZone: cal.timeZone)
+    }
+
     /// The calendar for civil-date math on `yyyy-MM-dd` strings — Gregorian in the
     /// **device's** timezone, matching the formatters above (which set no `timeZone`
     /// and so parse/format locally).

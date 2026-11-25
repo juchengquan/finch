@@ -319,7 +319,7 @@ final class ScheduledListVC: UIViewController {
                     // prefilled from the charge, which is how one becomes a template.
                     var cfg = cell.defaultContentConfiguration()
                     cfg.text = charge.merchantName
-                    cfg.secondaryText = String(localized: "\(charge.cadence.capitalized) · next ~\(charge.nextEstimatedDate)")
+                    cfg.secondaryText = DetectedChargeCaption.text(charge, today: self.store.wallToday)
                     cfg.secondaryTextProperties.font = .preferredFont(forTextStyle: .caption1)
                     cfg.secondaryTextProperties.color = .secondaryLabel
                     cell.contentConfiguration = cfg

@@ -262,7 +262,7 @@ struct CounterpartyNameSheet: View {
     private func save() {
         errorMessage = nil
         let trimmed = name.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { errorMessage = "Enter a name."; return }
+        guard !trimmed.isEmpty else { errorMessage = String(localized: "Enter a name."); return }
         do {
             if let counterparty {
                 try store.apply(.updateCounterparty, Args(["id": .string(counterparty.id), "patch": .object(["name": .string(trimmed)])]))

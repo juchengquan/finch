@@ -65,6 +65,15 @@ enum ScheduledSkipping {
     }
 }
 
+/// A detected, not-yet-scheduled charge's caption: "Monthly · next ~Dec 3". It
+/// showed the engine's raw cadence capitalised and an ISO date ("Monthly · next
+/// ~2026-12-03"), both English in every language.
+enum DetectedChargeCaption {
+    static func text(_ charge: RecurringCharge, today: String) -> String {
+        String(localized: "\(FrequencyLabel.label(charge.cadence)) · next ~\(AppDate.shortDay(charge.nextEstimatedDate, today: today))")
+    }
+}
+
 /// What a scheduled row says under its name. Pure — `today` is the wall-clock day.
 enum ScheduledCaption {
     /// The occurrence a scheduled row speaks for: the one a bare "Post" opens

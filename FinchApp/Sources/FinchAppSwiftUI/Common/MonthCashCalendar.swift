@@ -42,30 +42,18 @@ struct MonthCashCalendar: View {
         return AppDate.civil.date(from: c) ?? base
     }
 
-    /// "2026-07-15" → "Wed, Jul 15" (device locale) — the selected-day headline
-    /// both calling tabs use above their day-detail rows. The formatter is
-    /// cached (main-thread only): DateFormatter() costs real milliseconds and
-    /// this runs once per day-section header — allocating per call was a
-    /// measurable slice of the calendar's first-frame cost on tab entry.
-    private static let prettyFormatter: DateFormatter = {
-        let f = DateFormatter(); f.calendar = AppDate.civil; f.timeZone = AppDate.civil.timeZone; f.dateFormat = "EEE, MMM d"; return f
-    }()
-    static func pretty(_ iso: String) -> String {
-        guard let d = AppDate.isoDay.date(from: iso) else { return iso }
-        return prettyFormatter.string(from: d)
-    }
+    /// "2026-07-15" → "Wed, Jul 15" / "7月15日周三" — the selected-day headline both
+    /// calling tabs use above their day-detail rows.
+    static func pretty(_ iso: String) -> String { AppDate.weekdayDay(iso) }
 
     private var year: Int { AppDate.civil.component(.year, from: monthAnchor) }
     private var month: Int { AppDate.civil.component(.month, from: monthAnchor) }
-    private static let monthLabelFormatter: DateFormatter = {
-        let f = DateFormatter(); f.calendar = AppDate.civil; f.timeZone = AppDate.civil.timeZone; f.dateFormat = "LLLL yyyy"; return f
-    }()
     /// Follows the finger: while a drag is in flight this is the month the carousel is
     /// over, not the one committed. The commit still waits for the gesture to end — see
     /// MonthPager — so this label is the ONLY thing that moves early.
     private var monthLabel: String {
         let date = visibleIndex.map(Self.date(fromMonthIndex:)) ?? monthAnchor
-        return Self.monthLabelFormatter.string(from: date)
+        return AppDate.monthYear(date, wide: true)
     }
 
     var body: some View {

@@ -164,7 +164,7 @@ struct AddLedgerSheet: View {
     private func create() {
         errorMessage = nil
         let trimmed = name.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { errorMessage = "Enter a name."; return }
+        guard !trimmed.isEmpty else { errorMessage = String(localized: "Enter a name."); return }
         let id = "ledger_" + UUID().uuidString.prefix(8).lowercased()
         let baseCode = base.trimmingCharacters(in: .whitespaces).uppercased()
         // Snapshot the activation BEFORE any write: createLedger reprojects, and
@@ -268,7 +268,7 @@ struct EditLedgerSheet: View {
     private func save() async {
         errorMessage = nil
         let trimmed = name.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { errorMessage = "Enter a name."; return }
+        guard !trimmed.isEmpty else { errorMessage = String(localized: "Enter a name."); return }
         // Changing the base re-derives every entry — a sensitive action (Phase 6.3).
         if baseChanged, await !gate.confirmSensitive() { return }
         let newBase = base.trimmingCharacters(in: .whitespaces).uppercased()

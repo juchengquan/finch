@@ -42,13 +42,6 @@ struct AccountSheet: View {
     private var isEdit: Bool { account != nil }
 
     private static let types = ["cash", "savings", "credit_card", "investment", "fx", "virtual"]
-    private static func typeLabel(_ t: String) -> String {
-        switch t {
-        case "credit_card": return "Credit Card"
-        case "fx": return "Foreign Currency"
-        default: return t.capitalized
-        }
-    }
     private static let currencies = ["USD", "EUR", "GBP", "JPY", "SGD", "CNY", "AUD", "CAD", "CHF", "HKD", "INR"]
     private static let palette: [(hex: String, color: Color)] = [
         ("#1f3a5f", .blue), ("#2e7d32", .green), ("#c62828", .red),
@@ -115,7 +108,7 @@ struct AccountSheet: View {
             }
             FieldRow(glyph: .icon, title: "Type", showsDefaultTrailing: false) {
                 Picker("Type", selection: $type) {
-                    ForEach(Self.types, id: \.self) { Text(Self.typeLabel($0)).tag($0) }
+                    ForEach(Self.types, id: \.self) { Text(AccountTypeLabel.label($0)).tag($0) }
                 }
                 .labelsHidden()
             }
@@ -243,9 +236,9 @@ struct AccountSheet: View {
     /// the field's identity — which works when each field owns a distinct glyph.
     /// These two are both dates and both read "Not set", so glyph-only made them
     /// literally indistinguishable on screen.
-    @ViewBuilder private func dayRow(title: String, selection: Binding<Int>) -> some View {
-        FieldRow(glyph: .date, title: LocalizedStringKey(title), showsDefaultTrailing: false) {
-            Picker(LocalizedStringKey(title), selection: selection) {
+    @ViewBuilder private func dayRow(title: LocalizedStringKey, selection: Binding<Int>) -> some View {
+        FieldRow(glyph: .date, title: title, showsDefaultTrailing: false) {
+            Picker(title, selection: selection) {
                 Text("Not set").tag(0)
                 ForEach(1...31, id: \.self) { Text(Self.ordinal($0)).tag($0) }
             }
@@ -279,7 +272,7 @@ struct AccountSheet: View {
             // Name lives on Basic; surfacing its error while Advanced is showing
             // would put the message on a screen the user cannot see.
             tab = .basic
-            errorMessage = "Enter a name."
+            errorMessage = String(localized: "Enter a name.")
             return
         }
 

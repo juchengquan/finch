@@ -131,7 +131,7 @@ public enum SpotlightEntity {
     private var title: String {
         switch self {
         case .transaction(_, let merchant, _): return merchant
-        case .account(let a): return a.name ?? "Account"
+        case .account(let a): return a.name ?? String(localized: "Account")
         case .category(let c, let parent): return parent.map { "\(c.name) › \($0)" } ?? c.name
         case .merchant(let m): return m.name
         case .budget(let b): return b.name
@@ -140,10 +140,10 @@ public enum SpotlightEntity {
     private var contentDescription: String {
         switch self {
         case .transaction(let t, _, let amount): return "\(amount) · \(t.date)"
-        case .account(let a): return (a.type ?? "account").capitalized
-        case .category: return "Category"
-        case .merchant: return "Merchant"
-        case .budget(let b): return "Budget · \(b.frequency)"
+        case .account(let a): return a.type.map(AccountTypeLabel.label) ?? String(localized: "Account")
+        case .category: return String(localized: "Category")
+        case .merchant: return String(localized: "Merchant")
+        case .budget(let b): return String(localized: "Budget · \(FrequencyLabel.label(b.frequency))")
         }
     }
     private var keywords: [String] {

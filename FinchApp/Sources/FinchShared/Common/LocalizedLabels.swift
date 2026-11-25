@@ -34,3 +34,21 @@ enum FrequencyLabel {
         }
     }
 }
+
+/// The account types the engine accepts (`cash`, `savings`, `credit_card`,
+/// `investment`, `fx`, `virtual`). The type picker and the Insights account list
+/// both showed `rawValue.capitalized`, so every type read in English.
+enum AccountTypeLabel {
+    static func label(_ raw: String?) -> String {
+        switch raw {
+        case "cash": String(localized: "Cash")
+        case "savings": String(localized: "Savings")
+        case "credit_card": String(localized: "Credit Card")
+        case "investment": String(localized: "Investment")
+        case "fx": String(localized: "Foreign Currency")
+        case "virtual": String(localized: "Virtual")
+        case .some(let s): s.capitalized
+        case .none: "—"
+        }
+    }
+}

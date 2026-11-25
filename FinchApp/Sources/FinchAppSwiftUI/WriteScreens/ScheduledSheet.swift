@@ -317,7 +317,7 @@ struct ScheduledSheet: View {
 
     private func save() {
         errorMessage = nil
-        guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter a name."; return }
+        guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = String(localized: "Enter a name."); return }
 
         // Amount is optional: an empty field means a variable-amount template (the
         // amount is supplied when posting). A non-empty entry must be > 0. Mirrors
@@ -326,7 +326,7 @@ struct ScheduledSheet: View {
         if amount.trimmingCharacters(in: .whitespaces).isEmpty {
             amountValue = nil
         } else {
-            guard let v = DecimalInput.parse(amount), v > 0 else { errorMessage = "Enter an amount greater than 0."; return }
+            guard let v = DecimalInput.parse(amount), v > 0 else { errorMessage = String(localized: "Enter an amount greater than 0."); return }
             amountValue = v
         }
 
@@ -336,9 +336,9 @@ struct ScheduledSheet: View {
         var installmentN: Int?
         if installmentEnabled {
             guard let n = Int(installmentTotal.trimmingCharacters(in: .whitespaces)), n > 0 else {
-                errorMessage = "Enter a whole number of payments greater than 0."; return
+                errorMessage = String(localized: "Enter a whole number of payments greater than 0."); return
             }
-            guard amountValue != nil else { errorMessage = "Installment plans need a fixed amount."; return }
+            guard amountValue != nil else { errorMessage = String(localized: "Installment plans need a fixed amount."); return }
             installmentN = n
         }
 
@@ -372,7 +372,7 @@ struct ScheduledSheet: View {
             return
         }
 
-        if kind == .transfer, fromAccountId == accountId { errorMessage = "Pick two different accounts."; return }
+        if kind == .transfer, fromAccountId == accountId { errorMessage = String(localized: "Pick two different accounts."); return }
         var args: [String: JSONValue] = [
             "ledgerId": .string(store.activeLedgerId), "name": .string(name),
             "type": .string(kind.rawValue), "amount": amountValue.map { JSONValue.double($0) } ?? .null,

@@ -578,6 +578,20 @@ extension FinchStore {
         case hours(Int)         // the final day, 1...23
         case lessThanAnHour     // the last stretch; minutes would go stale unrendered
         case ended
+
+        /// The budget row's countdown, " · 3 days left". One and many are separate
+        /// keys: "day\(d == 1 ? "" : "s")" built the plural in English, so the key
+        /// carried a stray %@ and Chinese had no sensible way to translate it.
+        public var caption: String? {
+            switch self {
+            case .days(1): String(localized: " · 1 day left")
+            case .days(let d): String(localized: " · \(d) days left")
+            case .hours(1): String(localized: " · 1 hour left")
+            case .hours(let h): String(localized: " · \(h) hours left")
+            case .lessThanAnHour: String(localized: " · less than an hour left")
+            case .ended: nil
+            }
+        }
     }
 
     /// - Note: computed at render time, so it does not tick on its own. Fine at hour

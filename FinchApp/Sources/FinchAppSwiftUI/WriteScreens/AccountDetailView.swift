@@ -416,15 +416,3 @@ struct AccountDetailView: View {
         catch { errorMessage = i18nMessage(error) }   // engine rejects if it has transactions
     }
 }
-
-/// Shared account-type label (also used by AccountSheet).
-enum AccountSheetTypeLabel {
-    static func label(_ t: String?) -> String {
-        switch t {
-        case "credit_card": return "Credit Card"
-        case "fx": return "Foreign Currency"
-        case .some(let s): return s.capitalized
-        case .none: return "—"
-        }
-    }
-}

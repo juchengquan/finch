@@ -91,9 +91,9 @@ struct AddHoldingSheet: View {
 
     private func save() {
         errorMessage = nil
-        guard !symbol.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter a symbol."; return }
-        guard let sh = DecimalInput.parse(shares), sh > 0 else { errorMessage = "Enter share count."; return }
-        guard let cb = DecimalInput.parse(costBasis), cb >= 0 else { errorMessage = "Enter the cost basis."; return }
+        guard !symbol.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = String(localized: "Enter a symbol."); return }
+        guard let sh = DecimalInput.parse(shares), sh > 0 else { errorMessage = String(localized: "Enter share count."); return }
+        guard let cb = DecimalInput.parse(costBasis), cb >= 0 else { errorMessage = String(localized: "Enter the cost basis."); return }
         var args: [String: JSONValue] = [
             "ledgerId": .string(store.activeLedgerId), "accountId": .string(accountId),
             "symbol": .string(symbol), "shares": .double(sh), "costBasis": .double(cb),
@@ -101,7 +101,7 @@ struct AddHoldingSheet: View {
         // Last price is optional, but a non-empty entry must be valid (web rejects
         // a negative/garbage price rather than silently dropping it).
         if !lastPrice.trimmingCharacters(in: .whitespaces).isEmpty {
-            guard let p = DecimalInput.parse(lastPrice), p >= 0 else { errorMessage = "Enter a valid price (0 or greater)."; return }
+            guard let p = DecimalInput.parse(lastPrice), p >= 0 else { errorMessage = String(localized: "Enter a valid price (0 or greater)."); return }
             args["lastPrice"] = .double(p)
         }
         do {
@@ -157,7 +157,7 @@ struct SetHoldingPriceSheet: View {
                 // Empty clears the stored price (matches web: setHoldingPrice null).
                 try store.apply(.setHoldingPrice, Args(["id": .string(holding.id), "price": .null]))
             } else {
-                guard let p = DecimalInput.parse(trimmed), p >= 0 else { errorMessage = "Enter a valid price (0 or greater)."; return }
+                guard let p = DecimalInput.parse(trimmed), p >= 0 else { errorMessage = String(localized: "Enter a valid price (0 or greater)."); return }
                 try store.apply(.setHoldingPrice, Args([
                     "id": .string(holding.id), "price": .double(p), "date": .string(Self.today()),
                 ]))
