@@ -776,6 +776,7 @@
   "The file is deleted permanently.",
   "The floating + for quickly adding a transaction on iPhone. The toolbar and ⌘N ways to add are always available.",
   "The other ledger no longer exists. This side is still correct on its own.",
+  "The transaction was saved, but its receipt couldn't be attached. Open the transaction to add it again.",
   "Theme",
   "Then",
   "There's nothing to merge %@ with yet.",

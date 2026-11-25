@@ -8,6 +8,20 @@ import FinchCore
 /// records it via `setEntryAttachment`. Shared by Add + Edit (the in-app
 /// counterpart to the Share Extension flow).
 enum AttachmentWriter {
+
+    /// What the user is told when a receipt picked in the Add sheet could not be
+    /// stored. The transaction itself was saved, so it says how to recover.
+    static var receiptNotAttachedMessage: String {
+        String(localized: "The transaction was saved, but its receipt couldn't be attached. Open the transaction to add it again.")
+    }
+
+    /// Store a receipt for a transaction whose sheet has already closed. With no
+    /// sheet left to show an error in, a failure goes to the app-wide alert
+    /// (`dataError`). It was discarded with `try?`, so the receipt was lost unseen.
+    @MainActor
+    static func attachAfterClose(store: FinchStore, _ write: () async throws -> Void) async {
+        do { try await write() } catch { store.dataError = receiptNotAttachedMessage }
+    }
     @MainActor
     static func write(item: PhotosPickerItem, entryId: String, store: FinchStore) async throws {
         guard let data = try await item.loadTransferable(type: Data.self) else { return }

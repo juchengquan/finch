@@ -92,6 +92,7 @@
   "Couldn't add it automatically: %@": "无法自动添加：%@",
   "Couldn't add it: %@": "无法添加：%@",
   "Couldn't add it: its ledger no longer exists.": "无法添加：它所在的账本已不存在。",
+  "The transaction was saved, but its receipt couldn't be attached. Open the transaction to add it again.": "交易已保存，但未能附加收据。请打开该交易重新添加。",
   "Couldn't complete that": "无法完成该操作",
   "Couldn't create it: %@": "无法创建：%@",
   "Couldn't switch: %@": "无法切换：%@",

@@ -54,8 +54,8 @@ final class AboutSettingsVC: UIViewController {
 
         // dbInfo and auditProblems are both rewritten by a reprojection or an import.
         store.objectWillChange
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.applySnapshot() }
+            .coalescedOnMain()   // one rebuild per write, after it lands
+            .sink { [weak self] in self?.applySnapshot() }
             .store(in: &cancellables)
     }
 
