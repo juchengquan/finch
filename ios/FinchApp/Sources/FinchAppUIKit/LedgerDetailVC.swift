@@ -154,9 +154,9 @@ final class LedgerDetailVC: UIViewController {
                 cfg.text = String(localized: "Display currency")
                 cell.contentConfiguration = cfg
                 let current = self.store.displayCurrency(forLedger: self.ledgerId)
-                cell.accessories = [self.menuAccessory(
+                cell.accessories = [MenuValueButton.accessory(
                     value: current,
-                    options: self.store.availableDisplayCurrencies(forLedger: self.ledgerId),
+                    options: self.store.availableDisplayCurrencies(forLedger: self.ledgerId).map { ($0, $0) },
                     onPick: { [weak self] code in
                         guard let self else { return }
                         self.store.setDisplayCurrency(code, ledgerId: self.ledgerId)
@@ -197,14 +197,6 @@ final class LedgerDetailVC: UIViewController {
     }
 
     /// A pull-down menu button, as SwiftUI's default `Picker` renders inside a form.
-    private func menuAccessory(value: String, options: [String],
-                               onPick: @escaping (String) -> Void) -> UICellAccessory {
-        let button = MenuValueButton.make(value: value)
-        button.menu = UIMenu(children: options.map { code in
-            UIAction(title: code, state: code == value ? .on : .off) { _ in onPick(code) }
-        })
-        return .customView(configuration: .init(customView: button, placement: .trailing()))
-    }
 
     private func applySnapshot() {
         guard ledger != nil else { return }
