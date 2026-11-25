@@ -248,8 +248,10 @@ cd "$REPO/ios" || exit 1
 
 # --- 1. i18n guard 1: catalog reproducible (seconds, no Xcode) ---------------
 step "i18n - catalog is reproducible from its inputs"
-if bun run scripts/build-xcstrings.ts >/dev/null 2>&1 \
-   && git -C "$REPO" diff --quiet -- ios/FinchApp/Sources/FinchShared/Resources/Localizable.xcstrings; then
+if ! bun run scripts/build-xcstrings.ts >/dev/null 2>"$RUN_DIR/xcstrings.err"; then
+  fail "a catalog key has no translation"
+  sed 's/^/    /' "$RUN_DIR/xcstrings.err"
+elif git -C "$REPO" diff --quiet -- ios/FinchApp/Sources/FinchShared/Resources/Localizable.xcstrings; then
   pass "catalog matches its inputs"
 else
   fail "Localizable.xcstrings does not match a fresh build"

@@ -83,3 +83,24 @@ console.log(`  English fallback: ${nFallback}`);
 console.log(`\nEnglish-fallback keys (intentional — numbers/symbols/brand or untranslated):`);
 for (const f of fallbacks) console.log("  " + JSON.stringify(f));
 console.log(`\nwrote ${OUT}`);
+
+// ---- guard: every key a reader sees in words has Chinese --------------------
+// The catalog is written first, so it is always reproducible; then the build fails
+// if a key with English words in it fell back. Untranslated keys used to ship
+// silently: 40 of them (all of reconcile mode, the budget countdown, the split
+// errors) read in English in Chinese while every check stayed green. A key whose
+// only letters are format specifiers ("%lld%%", "%@ · %@") needs no translation.
+const ENGLISH_EVERYWHERE = new Set([
+  "A",        // the text-size slider's small and large glyphs
+  "i", "v",   // Sparkline's chart value names; a sparkline has no axes to read them
+]);
+const specifiers = /%(?:\d+\$)?(?:lld|ld|d|@|%)/g;
+const untranslated = fallbacks.filter(
+  (k) => /[A-Za-z]/.test(k.replace(specifiers, "")) && !ENGLISH_EVERYWHERE.has(k),
+);
+if (untranslated.length > 0) {
+  console.error(`\n${untranslated.length} key(s) have no zh-Hans translation:`);
+  for (const k of untranslated) console.error("  " + JSON.stringify(k));
+  console.error("\nAdd each to ios/scripts/zh-manual.json, then re-run this script.");
+  process.exit(1);
+}
