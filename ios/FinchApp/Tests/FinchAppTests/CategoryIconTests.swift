@@ -44,4 +44,41 @@ final class CategoryIconTests: XCTestCase {
             XCTAssertFalse(CategoryIcon.label(for: n).isEmpty, "missing label for \(n)")
         }
     }
+
+    // MARK: Chinese
+
+    /// The built app's Chinese table; nil when the key is missing or was never
+    /// extracted.
+    private func chinese(_ key: String) throws -> String? {
+        let path = try XCTUnwrap(Bundle.main.path(forResource: "zh-Hans", ofType: "lproj"))
+        let bundle = try XCTUnwrap(Bundle(path: path))
+        let missing = "\u{1}missing"
+        let value = bundle.localizedString(forKey: key, value: missing, table: nil)
+        return value == missing ? nil : value
+    }
+
+    /// The picker's section titles and icon names read in English on a Chinese
+    /// phone: they were plain `String`s, never extracted.
+    func test_everyGroupTitleAndIconNameHasChinese() throws {
+        for g in CategoryIcon.groups {
+            XCTAssertNotNil(try chinese(g.title), "group \"\(g.title)\" has no Chinese")
+        }
+        for n in CategoryIcon.names {
+            let label = CategoryIcon.label(for: n)
+            XCTAssertNotNil(try chinese(label), "\(n) → \"\(label)\" has no Chinese")
+        }
+        XCTAssertNotNil(try chinese("Tap an icon"))
+    }
+
+    /// Two icons that read differently in English read differently in Chinese,
+    /// so the caption under the title still tells them apart.
+    func test_chineseIconNamesStayDistinct() throws {
+        var byChinese: [String: Set<String>] = [:]
+        for n in CategoryIcon.names {
+            let label = CategoryIcon.label(for: n)
+            byChinese[try XCTUnwrap(try chinese(label)), default: []].insert(label)
+        }
+        let merged = byChinese.filter { $0.value.count > 1 }
+        XCTAssertTrue(merged.isEmpty, "\(merged)")
+    }
 }

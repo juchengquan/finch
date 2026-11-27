@@ -58,22 +58,23 @@ enum TxnKindIcon {
 enum CategoryIcon {
     /// One themed section of the icon picker (see `CategoryEditSheet`).
     struct Group: Identifiable {
+        /// Already in the reader's language.
         let title: String
         let names: [String]
         var id: String { title }
     }
 
     static let groups: [Group] = [
-        Group(title: "Food & Drink",      names: ["fork", "cup", "mug", "cart", "wineglass", "takeout", "fish", "carrot", "leaf", "water", "cake"]),
-        Group(title: "Shopping",          names: ["bag", "handbag", "tshirt", "jewelry", "gift", "giftcard", "tag", "sparkles", "creditcard", "laptop", "box"]),
-        Group(title: "Transport",         names: ["car", "fuel", "charging", "plane", "tram", "bus", "ferry", "bike", "scooter", "truck", "parking"]),
-        Group(title: "Travel",            names: ["hotel", "suitcase", "map", "beach", "mountain", "globe", "tent"]),
-        Group(title: "Home & Bills",      names: ["home", "key", "bolt", "drop", "flame", "wifi", "phone", "wrench", "paint", "sofa", "light", "washer", "tree", "trash"]),
-        Group(title: "Health & Fitness",  names: ["heart", "pills", "cross", "bandage", "stethoscope", "checkup", "vision", "dumbbell", "run", "swim", "yoga", "wellness", "mental", "sports"]),
-        Group(title: "Entertainment",     names: ["film", "tv", "streaming", "music", "headphones", "podcast", "game", "book", "school", "camera", "art", "concert", "theater", "ticket"]),
-        Group(title: "Tech & Comms",      names: ["mail", "message", "computer", "device", "cloud", "printer"]),
-        Group(title: "Personal",          names: ["pet", "child", "baby", "couple", "friends", "toy", "balloon", "scissors", "person", "crown"]),
-        Group(title: "Money & Work",      names: ["briefcase", "coins", "cash", "wallet", "chart", "analytics", "growth", "crypto", "bank", "office", "insurance", "doc", "receipt", "calendar", "goal", "sync", "percent", "charity"]),
+        Group(title: String(localized: "Food & Drink"),      names: ["fork", "cup", "mug", "cart", "wineglass", "takeout", "fish", "carrot", "leaf", "water", "cake"]),
+        Group(title: String(localized: "Shopping"),          names: ["bag", "handbag", "tshirt", "jewelry", "gift", "giftcard", "tag", "sparkles", "creditcard", "laptop", "box"]),
+        Group(title: String(localized: "Transport"),         names: ["car", "fuel", "charging", "plane", "tram", "bus", "ferry", "bike", "scooter", "truck", "parking"]),
+        Group(title: String(localized: "Travel"),            names: ["hotel", "suitcase", "map", "beach", "mountain", "globe", "tent"]),
+        Group(title: String(localized: "Home & Bills"),      names: ["home", "key", "bolt", "drop", "flame", "wifi", "phone", "wrench", "paint", "sofa", "light", "washer", "tree", "trash"]),
+        Group(title: String(localized: "Health & Fitness"),  names: ["heart", "pills", "cross", "bandage", "stethoscope", "checkup", "vision", "dumbbell", "run", "swim", "yoga", "wellness", "mental", "sports"]),
+        Group(title: String(localized: "Entertainment"),     names: ["film", "tv", "streaming", "music", "headphones", "podcast", "game", "book", "school", "camera", "art", "concert", "theater", "ticket"]),
+        Group(title: String(localized: "Tech & Comms"),      names: ["mail", "message", "computer", "device", "cloud", "printer"]),
+        Group(title: String(localized: "Personal"),          names: ["pet", "child", "baby", "couple", "friends", "toy", "balloon", "scissors", "person", "crown"]),
+        Group(title: String(localized: "Money & Work"),      names: ["briefcase", "coins", "cash", "wallet", "chart", "analytics", "growth", "crypto", "bank", "office", "insurance", "doc", "receipt", "calendar", "goal", "sync", "percent", "charity"]),
     ]
 
     /// Flat union of every group's names, in display order.
@@ -216,131 +217,131 @@ enum CategoryIcon {
     static func label(for name: String) -> String {
         switch name {
         // Food & Drink
-        case "fork":        "Dining"
-        case "cup":         "Coffee"
-        case "mug":         "Tea"
-        case "cart":        "Groceries"
-        case "wineglass":   "Drinks"
-        case "takeout":     "Takeout"
-        case "fish":        "Seafood"
-        case "carrot":      "Produce"
-        case "leaf":        "Organic"
-        case "water":       "Water"
-        case "cake":        "Celebration"
+        case "fork":        String(localized: "Dining")
+        case "cup":         String(localized: "Coffee")
+        case "mug":         String(localized: "Tea")
+        case "cart":        String(localized: "Groceries")
+        case "wineglass":   String(localized: "Drinks")
+        case "takeout":     String(localized: "Takeout")
+        case "fish":        String(localized: "Seafood")
+        case "carrot":      String(localized: "Produce")
+        case "leaf":        String(localized: "Organic")
+        case "water":       String(localized: "Water")
+        case "cake":        String(localized: "Celebration")
         // Shopping
-        case "bag":         "Shopping"
-        case "handbag":     "Accessories"
-        case "jewelry":     "Jewelry"
-        case "tshirt":      "Clothing"
-        case "gift":        "Gifts"
-        case "giftcard":    "Gift Card"
-        case "tag":         "Sale"
-        case "sparkles":    "Beauty"
-        case "creditcard":  "Card"
-        case "laptop":      "Electronics"
-        case "box":         "Package"
+        case "bag":         String(localized: "Shopping")
+        case "handbag":     String(localized: "Accessories")
+        case "jewelry":     String(localized: "Jewelry")
+        case "tshirt":      String(localized: "Clothing")
+        case "gift":        String(localized: "Gifts")
+        case "giftcard":    String(localized: "Gift Card")
+        case "tag":         String(localized: "Sale")
+        case "sparkles":    String(localized: "Beauty")
+        case "creditcard":  String(localized: "Card")
+        case "laptop":      String(localized: "Electronics")
+        case "box":         String(localized: "Package")
         // Transport
-        case "car":         "Car"
-        case "fuel":        "Fuel"
-        case "charging":    "Charging"
-        case "plane":       "Travel"
-        case "tram":        "Transit"
-        case "bus":         "Bus"
-        case "ferry":       "Ferry"
-        case "bike":        "Cycling"
-        case "scooter":     "Scooter"
-        case "truck":       "Moving"
-        case "parking":     "Parking"
+        case "car":         String(localized: "Car")
+        case "fuel":        String(localized: "Fuel")
+        case "charging":    String(localized: "Charging")
+        case "plane":       String(localized: "Travel")
+        case "tram":        String(localized: "Transit")
+        case "bus":         String(localized: "Bus")
+        case "ferry":       String(localized: "Ferry")
+        case "bike":        String(localized: "Cycling")
+        case "scooter":     String(localized: "Scooter")
+        case "truck":       String(localized: "Moving")
+        case "parking":     String(localized: "Parking")
         // Travel
-        case "hotel":       "Hotel"
-        case "suitcase":    "Luggage"
-        case "map":         "Map"
-        case "beach":       "Beach"
-        case "mountain":    "Outdoors"
-        case "globe":       "Abroad"
-        case "tent":        "Camping"
+        case "hotel":       String(localized: "Hotel")
+        case "suitcase":    String(localized: "Luggage")
+        case "map":         String(localized: "Map")
+        case "beach":       String(localized: "Beach")
+        case "mountain":    String(localized: "Outdoors")
+        case "globe":       String(localized: "Abroad")
+        case "tent":        String(localized: "Camping")
         // Home & Bills
-        case "home":        "Home"
-        case "key":         "Rent"
-        case "bolt":        "Electricity"
-        case "drop":        "Water"
-        case "flame":       "Gas"
-        case "wifi":        "Internet"
-        case "phone":       "Phone"
-        case "wrench":      "Repairs"
-        case "paint":       "Improvement"
-        case "sofa":        "Furniture"
-        case "light":       "Lighting"
-        case "washer":      "Laundry"
-        case "tree":        "Garden"
-        case "trash":       "Waste"
+        case "home":        String(localized: "Home")
+        case "key":         String(localized: "Rent")
+        case "bolt":        String(localized: "Electricity")
+        case "drop":        String(localized: "Water")
+        case "flame":       String(localized: "Gas")
+        case "wifi":        String(localized: "Internet")
+        case "phone":       String(localized: "Phone")
+        case "wrench":      String(localized: "Repairs")
+        case "paint":       String(localized: "Improvement")
+        case "sofa":        String(localized: "Furniture")
+        case "light":       String(localized: "Lighting")
+        case "washer":      String(localized: "Laundry")
+        case "tree":        String(localized: "Garden")
+        case "trash":       String(localized: "Waste")
         // Health & Fitness
-        case "heart":       "Health"
-        case "pills":       "Pharmacy"
-        case "cross":       "Medical"
-        case "bandage":     "First Aid"
-        case "stethoscope": "Doctor"
-        case "checkup":     "Checkup"
-        case "vision":      "Vision"
-        case "mental":      "Mental Health"
-        case "dumbbell":    "Gym"
-        case "run":         "Running"
-        case "swim":        "Swimming"
-        case "yoga":        "Yoga"
-        case "wellness":    "Wellness"
-        case "sports":      "Sports"
+        case "heart":       String(localized: "Health")
+        case "pills":       String(localized: "Pharmacy")
+        case "cross":       String(localized: "Medical")
+        case "bandage":     String(localized: "First Aid")
+        case "stethoscope": String(localized: "Doctor")
+        case "checkup":     String(localized: "Checkup")
+        case "vision":      String(localized: "Vision")
+        case "mental":      String(localized: "Mental Health")
+        case "dumbbell":    String(localized: "Gym")
+        case "run":         String(localized: "Running")
+        case "swim":        String(localized: "Swimming")
+        case "yoga":        String(localized: "Yoga")
+        case "wellness":    String(localized: "Wellness")
+        case "sports":      String(localized: "Sports")
         // Entertainment
-        case "film":        "Movies"
-        case "tv":          "TV"
-        case "streaming":   "Streaming"
-        case "music":       "Music"
-        case "headphones":  "Audio"
-        case "podcast":     "Podcasts"
-        case "game":        "Games"
-        case "book":        "Books"
-        case "school":      "Education"
-        case "camera":      "Photography"
-        case "art":         "Art"
-        case "concert":     "Concerts"
-        case "theater":     "Theater"
-        case "ticket":      "Events"
+        case "film":        String(localized: "Movies")
+        case "tv":          String(localized: "TV")
+        case "streaming":   String(localized: "Streaming")
+        case "music":       String(localized: "Music")
+        case "headphones":  String(localized: "Audio")
+        case "podcast":     String(localized: "Podcasts")
+        case "game":        String(localized: "Games")
+        case "book":        String(localized: "Books")
+        case "school":      String(localized: "Education")
+        case "camera":      String(localized: "Photography")
+        case "art":         String(localized: "Art")
+        case "concert":     String(localized: "Concerts")
+        case "theater":     String(localized: "Theater")
+        case "ticket":      String(localized: "Events")
         // Tech & Comms
-        case "mail":        "Mail"
-        case "message":     "Messages"
-        case "computer":    "Computer"
-        case "device":      "Devices"
-        case "cloud":       "Cloud"
-        case "printer":     "Printing"
+        case "mail":        String(localized: "Mail")
+        case "message":     String(localized: "Messages")
+        case "computer":    String(localized: "Computer")
+        case "device":      String(localized: "Devices")
+        case "cloud":       String(localized: "Cloud")
+        case "printer":     String(localized: "Printing")
         // Personal
-        case "pet":         "Pets"
-        case "child":       "Kids"
-        case "baby":        "Baby"
-        case "couple":      "Family"
-        case "friends":     "Friends"
-        case "toy":         "Toys"
-        case "balloon":     "Party"
-        case "scissors":    "Grooming"
-        case "person":      "Personal"
-        case "crown":       "Luxury"
+        case "pet":         String(localized: "Pets")
+        case "child":       String(localized: "Kids")
+        case "baby":        String(localized: "Baby")
+        case "couple":      String(localized: "Family")
+        case "friends":     String(localized: "Friends")
+        case "toy":         String(localized: "Toys")
+        case "balloon":     String(localized: "Party")
+        case "scissors":    String(localized: "Grooming")
+        case "person":      String(localized: "Personal")
+        case "crown":       String(localized: "Luxury")
         // Money & Work
-        case "briefcase":   "Work"
-        case "coins":       "Money"
-        case "cash":        "Cash"
-        case "wallet":      "Wallet"
-        case "chart":       "Investments"
-        case "analytics":   "Analytics"
-        case "growth":      "Growth"
-        case "crypto":      "Crypto"
-        case "bank":        "Bank"
-        case "office":      "Business"
-        case "insurance":   "Insurance"
-        case "doc":         "Bills"
-        case "receipt":     "Receipts"
-        case "calendar":    "Subscriptions"
-        case "goal":        "Goals"
-        case "sync":        "Recurring"
-        case "percent":     "Interest"
-        case "charity":     "Donations"
+        case "briefcase":   String(localized: "Work")
+        case "coins":       String(localized: "Money")
+        case "cash":        String(localized: "Cash")
+        case "wallet":      String(localized: "Wallet")
+        case "chart":       String(localized: "Investments")
+        case "analytics":   String(localized: "Analytics")
+        case "growth":      String(localized: "Growth")
+        case "crypto":      String(localized: "Crypto")
+        case "bank":        String(localized: "Bank")
+        case "office":      String(localized: "Business")
+        case "insurance":   String(localized: "Insurance")
+        case "doc":         String(localized: "Bills")
+        case "receipt":     String(localized: "Receipts")
+        case "calendar":    String(localized: "Subscriptions")
+        case "goal":        String(localized: "Goals")
+        case "sync":        String(localized: "Recurring")
+        case "percent":     String(localized: "Interest")
+        case "charity":     String(localized: "Donations")
         default:            name.capitalized
         }
     }

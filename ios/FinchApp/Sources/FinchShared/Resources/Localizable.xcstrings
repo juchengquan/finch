@@ -825,6 +825,26 @@
         }
       }
     },
+    "Abroad": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "出境"
+          }
+        }
+      }
+    },
+    "Accessories": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "配饰"
+          }
+        }
+      }
+    },
     "Account": {
       "localizations": {
         "zh-Hans": {
@@ -1515,6 +1535,16 @@
         }
       }
     },
+    "Analytics": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分析"
+          }
+        }
+      }
+    },
     "Any": {
       "localizations": {
         "zh-Hans": {
@@ -1625,12 +1655,32 @@
         }
       }
     },
+    "Art": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "艺术"
+          }
+        }
+      }
+    },
     "As of": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "截至"
+          }
+        }
+      }
+    },
+    "Audio": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音频"
           }
         }
       }
@@ -1681,6 +1731,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "平均"
+          }
+        }
+      }
+    },
+    "Baby": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "婴儿"
           }
         }
       }
@@ -1795,6 +1855,16 @@
         }
       }
     },
+    "Bank": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "银行"
+          }
+        }
+      }
+    },
     "Bank or issuer": {
       "localizations": {
         "zh-Hans": {
@@ -1855,12 +1925,42 @@
         }
       }
     },
+    "Beach": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "海滩"
+          }
+        }
+      }
+    },
+    "Beauty": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "美妆"
+          }
+        }
+      }
+    },
     "Between ledgers": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "跨账本"
+          }
+        }
+      }
+    },
+    "Bills": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "账单"
           }
         }
       }
@@ -1891,6 +1991,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "按 1:1 记账"
+          }
+        }
+      }
+    },
+    "Books": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "书籍"
           }
         }
       }
@@ -1975,12 +2085,42 @@
         }
       }
     },
+    "Bus": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公交"
+          }
+        }
+      }
+    },
+    "Business": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "商务"
+          }
+        }
+      }
+    },
     "Calendar": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "日历"
+          }
+        }
+      }
+    },
+    "Camping": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "露营"
           }
         }
       }
@@ -2015,6 +2155,26 @@
         }
       }
     },
+    "Car": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "汽车"
+          }
+        }
+      }
+    },
+    "Card": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "银行卡"
+          }
+        }
+      }
+    },
     "Cash": {
       "localizations": {
         "zh-Hans": {
@@ -2041,6 +2201,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "类别"
+          }
+        }
+      }
+    },
+    "Celebration": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "庆祝"
           }
         }
       }
@@ -2095,6 +2265,16 @@
         }
       }
     },
+    "Charging": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "充电"
+          }
+        }
+      }
+    },
     "Check Balance": {
       "localizations": {
         "zh-Hans": {
@@ -2111,6 +2291,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "检查并更正"
+          }
+        }
+      }
+    },
+    "Checkup": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "体检"
           }
         }
       }
@@ -2185,6 +2375,36 @@
         }
       }
     },
+    "Clothing": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服装"
+          }
+        }
+      }
+    },
+    "Cloud": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "云服务"
+          }
+        }
+      }
+    },
+    "Coffee": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "咖啡"
+          }
+        }
+      }
+    },
     "Collapsed": {
       "localizations": {
         "zh-Hans": {
@@ -2231,6 +2451,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "命令"
+          }
+        }
+      }
+    },
+    "Computer": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电脑"
+          }
+        }
+      }
+    },
+    "Concerts": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "演唱会"
           }
         }
       }
@@ -2585,6 +2825,16 @@
         }
       }
     },
+    "Crypto": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加密货币"
+          }
+        }
+      }
+    },
     "Currencies": {
       "localizations": {
         "zh-Hans": {
@@ -2671,6 +2921,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "周期"
+          }
+        }
+      }
+    },
+    "Cycling": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "骑行"
           }
         }
       }
@@ -3115,6 +3375,16 @@
         }
       }
     },
+    "Devices": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设备"
+          }
+        }
+      }
+    },
     "Difference": {
       "localizations": {
         "zh-Hans": {
@@ -3125,12 +3395,42 @@
         }
       }
     },
+    "Dining": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "餐厅"
+          }
+        }
+      }
+    },
     "Display currency": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "显示货币"
+          }
+        }
+      }
+    },
+    "Doctor": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "看医生"
+          }
+        }
+      }
+    },
+    "Donations": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "捐赠"
           }
         }
       }
@@ -3171,6 +3471,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "拖动滑块试试削减效果。"
+          }
+        }
+      }
+    },
+    "Drinks": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "酒水"
           }
         }
       }
@@ -3331,6 +3641,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "编辑拆分"
+          }
+        }
+      }
+    },
+    "Education": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "教育"
+          }
+        }
+      }
+    },
+    "Electricity": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电费"
+          }
+        }
+      }
+    },
+    "Electronics": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电子产品"
           }
         }
       }
@@ -3615,6 +3955,26 @@
         }
       }
     },
+    "Entertainment": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "娱乐"
+          }
+        }
+      }
+    },
+    "Events": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "活动"
+          }
+        }
+      }
+    },
     "Every transaction has been reviewed.": {
       "localizations": {
         "zh-Hans": {
@@ -3755,6 +4115,26 @@
         }
       }
     },
+    "Family": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "家庭"
+          }
+        }
+      }
+    },
+    "Ferry": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "轮渡"
+          }
+        }
+      }
+    },
     "Fetches daily reference rates for your currencies from Frankfurter (frankfurter.dev, central-bank data). Only currency codes are sent.": {
       "localizations": {
         "zh-Hans": {
@@ -3825,6 +4205,16 @@
         }
       }
     },
+    "First Aid": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "急救"
+          }
+        }
+      }
+    },
     "Fixed once the account is created.": {
       "localizations": {
         "zh-Hans": {
@@ -3875,6 +4265,16 @@
         }
       }
     },
+    "Food & Drink": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "餐饮"
+          }
+        }
+      }
+    },
     "Force import (skip audit — iOS only)": {
       "localizations": {
         "zh-Hans": {
@@ -3911,6 +4311,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "频率"
+          }
+        }
+      }
+    },
+    "Friends": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "朋友"
           }
         }
       }
@@ -3985,6 +4395,56 @@
         }
       }
     },
+    "Fuel": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加油"
+          }
+        }
+      }
+    },
+    "Furniture": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "家具"
+          }
+        }
+      }
+    },
+    "Games": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "游戏"
+          }
+        }
+      }
+    },
+    "Garden": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "园艺"
+          }
+        }
+      }
+    },
+    "Gas": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "燃气"
+          }
+        }
+      }
+    },
     "General": {
       "localizations": {
         "zh-Hans": {
@@ -4001,6 +4461,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "由 finch 生成 · %@"
+          }
+        }
+      }
+    },
+    "Gift Card": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "礼品卡"
+          }
+        }
+      }
+    },
+    "Gifts": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "礼物"
           }
         }
       }
@@ -4041,6 +4521,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "目标"
+          }
+        }
+      }
+    },
+    "Goals": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目标"
+          }
+        }
+      }
+    },
+    "Groceries": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "买菜"
+          }
+        }
+      }
+    },
+    "Grooming": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "理发"
           }
         }
       }
@@ -4095,12 +4605,52 @@
         }
       }
     },
+    "Growth": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "增长"
+          }
+        }
+      }
+    },
+    "Gym": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "健身房"
+          }
+        }
+      }
+    },
     "Haptic feedback": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "触感反馈"
+          }
+        }
+      }
+    },
+    "Health": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "健康"
+          }
+        }
+      }
+    },
+    "Health & Fitness": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "健康与健身"
           }
         }
       }
@@ -4145,6 +4695,36 @@
         }
       }
     },
+    "Home": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "住房"
+          }
+        }
+      }
+    },
+    "Home & Bills": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "居家与账单"
+          }
+        }
+      }
+    },
+    "Hotel": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "酒店"
+          }
+        }
+      }
+    },
     "Hourly": {
       "localizations": {
         "zh-Hans": {
@@ -4181,16 +4761,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "图标"
-          }
-        }
-      }
-    },
-    "Icon %@": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "图标 %@"
           }
         }
       }
@@ -4301,6 +4871,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "导入中…"
+          }
+        }
+      }
+    },
+    "Improvement": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "装修"
           }
         }
       }
@@ -4465,7 +5045,47 @@
         }
       }
     },
+    "Insurance": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保险"
+          }
+        }
+      }
+    },
+    "Interest": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "利息"
+          }
+        }
+      }
+    },
+    "Internet": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网费"
+          }
+        }
+      }
+    },
     "Investment": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "投资"
+          }
+        }
+      }
+    },
+    "Investments": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
@@ -4491,6 +5111,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "其子类别将上移一级——不会被删除。"
+          }
+        }
+      }
+    },
+    "Jewelry": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "珠宝"
           }
         }
       }
@@ -4551,6 +5181,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "已保留你输入的汇率"
+          }
+        }
+      }
+    },
+    "Kids": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "孩子"
           }
         }
       }
@@ -4695,6 +5335,16 @@
         }
       }
     },
+    "Laundry": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "洗衣"
+          }
+        }
+      }
+    },
     "Leave empty for a variable amount (entered when posting).": {
       "localizations": {
         "zh-Hans": {
@@ -4771,6 +5421,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "负债"
+          }
+        }
+      }
+    },
+    "Lighting": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "照明"
           }
         }
       }
@@ -4875,6 +5535,36 @@
         }
       }
     },
+    "Luggage": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "行李"
+          }
+        }
+      }
+    },
+    "Luxury": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "奢侈品"
+          }
+        }
+      }
+    },
+    "Mail": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "邮件"
+          }
+        }
+      }
+    },
     "Make active": {
       "localizations": {
         "zh-Hans": {
@@ -4911,6 +5601,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "管理账本"
+          }
+        }
+      }
+    },
+    "Map": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地图"
           }
         }
       }
@@ -5035,6 +5735,26 @@
         }
       }
     },
+    "Medical": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "医疗"
+          }
+        }
+      }
+    },
+    "Mental Health": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "心理健康"
+          }
+        }
+      }
+    },
     "Merchant": {
       "localizations": {
         "zh-Hans": {
@@ -5095,12 +5815,42 @@
         }
       }
     },
+    "Messages": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "短信"
+          }
+        }
+      }
+    },
     "Min": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "最小"
+          }
+        }
+      }
+    },
+    "Money": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "钱"
+          }
+        }
+      }
+    },
+    "Money & Work": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "财务与工作"
           }
         }
       }
@@ -5181,6 +5931,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "还有需要处理的"
+          }
+        }
+      }
+    },
+    "Movies": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电影"
+          }
+        }
+      }
+    },
+    "Moving": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搬家"
+          }
+        }
+      }
+    },
+    "Music": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音乐"
           }
         }
       }
@@ -6125,6 +6905,16 @@
         }
       }
     },
+    "Organic": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有机"
+          }
+        }
+      }
+    },
     "Other ledger": {
       "localizations": {
         "zh-Hans": {
@@ -6141,6 +6931,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "另一边"
+          }
+        }
+      }
+    },
+    "Outdoors": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "户外"
           }
         }
       }
@@ -6185,6 +6985,16 @@
         }
       }
     },
+    "Package": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快递"
+          }
+        }
+      }
+    },
     "Parent": {
       "localizations": {
         "zh-Hans": {
@@ -6195,12 +7005,32 @@
         }
       }
     },
+    "Parking": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停车"
+          }
+        }
+      }
+    },
     "Part of one purchase": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "属于同一笔消费"
+          }
+        }
+      }
+    },
+    "Party": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聚会"
           }
         }
       }
@@ -6241,6 +7071,56 @@
           "stringUnit": {
             "state": "translated",
             "value": "下个周期待处理"
+          }
+        }
+      }
+    },
+    "Personal": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "个人"
+          }
+        }
+      }
+    },
+    "Pets": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "宠物"
+          }
+        }
+      }
+    },
+    "Pharmacy": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "药店"
+          }
+        }
+      }
+    },
+    "Phone": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "话费"
+          }
+        }
+      }
+    },
+    "Photography": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "摄影"
           }
         }
       }
@@ -6331,6 +7211,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "选择其中一项将在保存时启用它。"
+          }
+        }
+      }
+    },
+    "Podcasts": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "播客"
           }
         }
       }
@@ -6445,6 +7335,16 @@
         }
       }
     },
+    "Printing": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打印"
+          }
+        }
+      }
+    },
     "Priority": {
       "localizations": {
         "zh-Hans": {
@@ -6471,6 +7371,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "隐私模式"
+          }
+        }
+      }
+    },
+    "Produce": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "果蔬"
           }
         }
       }
@@ -6725,6 +7635,16 @@
         }
       }
     },
+    "Recurring": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "周期"
+          }
+        }
+      }
+    },
     "Refresh now": {
       "localizations": {
         "zh-Hans": {
@@ -6885,12 +7805,32 @@
         }
       }
     },
+    "Rent": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "房租"
+          }
+        }
+      }
+    },
     "Reorder": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "重新排序"
+          }
+        }
+      }
+    },
+    "Repairs": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "维修"
           }
         }
       }
@@ -7085,6 +8025,26 @@
         }
       }
     },
+    "Running": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跑步"
+          }
+        }
+      }
+    },
+    "Sale": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "促销"
+          }
+        }
+      }
+    },
     "Sample — $1,234.56": {
       "localizations": {
         "zh-Hans": {
@@ -7255,12 +8215,32 @@
         }
       }
     },
+    "Scooter": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "滑板车"
+          }
+        }
+      }
+    },
     "Screen": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "页面"
+          }
+        }
+      }
+    },
+    "Seafood": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "海鲜"
           }
         }
       }
@@ -7565,6 +8545,16 @@
         }
       }
     },
+    "Shopping": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "购物"
+          }
+        }
+      }
+    },
     "Show Insights": {
       "localizations": {
         "zh-Hans": {
@@ -7835,6 +8825,16 @@
         }
       }
     },
+    "Sports": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运动"
+          }
+        }
+      }
+    },
     "Start": {
       "localizations": {
         "zh-Hans": {
@@ -7925,6 +8925,16 @@
         }
       }
     },
+    "Streaming": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "流媒体"
+          }
+        }
+      }
+    },
     "Subscribed to %lld ledgers": {
       "localizations": {
         "zh-Hans": {
@@ -7935,12 +8945,32 @@
         }
       }
     },
+    "Subscriptions": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "订阅"
+          }
+        }
+      }
+    },
     "Swap direction": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "切换方向"
+          }
+        }
+      }
+    },
+    "Swimming": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "游泳"
           }
         }
       }
@@ -8055,6 +9085,16 @@
         }
       }
     },
+    "TV": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电视"
+          }
+        }
+      }
+    },
     "Tag": {
       "localizations": {
         "zh-Hans": {
@@ -8071,6 +9111,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "标签"
+          }
+        }
+      }
+    },
+    "Takeout": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外卖"
           }
         }
       }
@@ -8135,6 +9185,16 @@
         }
       }
     },
+    "Tap an icon": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点选一个图标"
+          }
+        }
+      }
+    },
     "Target": {
       "localizations": {
         "zh-Hans": {
@@ -8151,6 +9211,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "目标日期"
+          }
+        }
+      }
+    },
+    "Tea": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "茶饮"
+          }
+        }
+      }
+    },
+    "Tech & Comms": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "科技与通讯"
           }
         }
       }
@@ -8271,6 +9351,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "交易已保存，但未能附加收据。请打开该交易重新添加。"
+          }
+        }
+      }
+    },
+    "Theater": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "戏剧"
           }
         }
       }
@@ -8545,6 +9635,16 @@
         }
       }
     },
+    "Toys": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "玩具"
+          }
+        }
+      }
+    },
     "Track %@": {
       "localizations": {
         "zh-Hans": {
@@ -8661,6 +9761,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "找不到转账的两边。"
+          }
+        }
+      }
+    },
+    "Transit": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公共交通"
+          }
+        }
+      }
+    },
+    "Transport": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "交通"
+          }
+        }
+      }
+    },
+    "Travel": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "旅行"
           }
         }
       }
@@ -9065,6 +10195,46 @@
         }
       }
     },
+    "Vision": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "眼科"
+          }
+        }
+      }
+    },
+    "Wallet": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "钱包"
+          }
+        }
+      }
+    },
+    "Waste": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "垃圾处理"
+          }
+        }
+      }
+    },
+    "Water": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "水"
+          }
+        }
+      }
+    },
     "Weekday": {
       "localizations": {
         "zh-Hans": {
@@ -9091,6 +10261,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "每周摘要"
+          }
+        }
+      }
+    },
+    "Wellness": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "养生"
           }
         }
       }
@@ -9135,6 +10315,16 @@
         }
       }
     },
+    "Work": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作"
+          }
+        }
+      }
+    },
     "Year": {
       "localizations": {
         "zh-Hans": {
@@ -9171,6 +10361,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "昨天"
+          }
+        }
+      }
+    },
+    "Yoga": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "瑜伽"
           }
         }
       }
