@@ -7,14 +7,14 @@ import SwiftUI
 /// selection ("") means "no icon" (inherit at render); tapping the staged icon
 /// again clears it.
 struct IconPickerRow: View {
-    let title: String
+    let title: LocalizedStringKey
     let glyph: FieldGlyph
     @Binding var selection: String
     @State private var presented = false
 
     var body: some View {
         Button { presented = true } label: {
-            FieldRow(glyph: glyph, title: LocalizedStringKey(title), isEmpty: selection.isEmpty) {
+            FieldRow(glyph: glyph, title: title, isEmpty: selection.isEmpty) {
                 Image(systemName: CategoryIcon.symbol(for: selection))
             }
             .contentShape(Rectangle())
@@ -34,7 +34,7 @@ struct IconPickerRow: View {
 /// (tapping it again clears to none); Confirm applies it and dismisses; Cancel
 /// discards.
 private struct IconPickerSheet: View {
-    let title: String
+    let title: LocalizedStringKey
     @Binding var selection: String
     @Environment(\.dismiss) private var dismiss
     @State private var staged: String
@@ -42,21 +42,24 @@ private struct IconPickerSheet: View {
 
     private let columns = Array(repeating: GridItem(.flexible()), count: 6)
 
-    init(title: String, selection: Binding<String>) {
+    init(title: LocalizedStringKey, selection: Binding<String>) {
         self.title = title
         self._selection = selection
         self._staged = State(initialValue: selection.wrappedValue)
     }
 
     /// Groups filtered by the search query, matching each icon's friendly name
-    /// (and the group title, so "travel" surfaces the whole section). Empty
-    /// query returns every group unchanged.
+    /// or short-name (and the group title, so "travel" surfaces the whole
+    /// section). Names and titles are in the reader's language. Empty query
+    /// returns every group unchanged.
     private var filteredGroups: [CategoryIcon.Group] {
         let q = query.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return CategoryIcon.groups }
         return CategoryIcon.groups.compactMap { g in
             if g.title.localizedCaseInsensitiveContains(q) { return g }
-            let names = g.names.filter { CategoryIcon.label(for: $0).localizedCaseInsensitiveContains(q) }
+            let names = g.names.filter {
+                CategoryIcon.label(for: $0).localizedCaseInsensitiveContains(q) || $0.localizedCaseInsensitiveContains(q)
+            }
             return names.isEmpty ? nil : CategoryIcon.Group(title: g.title, names: names)
         }
     }
@@ -75,7 +78,7 @@ private struct IconPickerSheet: View {
                                     .overlay(Circle().stroke(Color.accentColor, lineWidth: staged == n ? 2 : 0))
                                     .contentShape(Circle())
                                     .onTapGesture { staged = (staged == n ? "" : n) }
-                                    .accessibilityLabel("Icon \(n)")
+                                    .accessibilityLabel(CategoryIcon.label(for: n))
                             }
                         }
                         .padding(.vertical, 4)
@@ -94,7 +97,7 @@ private struct IconPickerSheet: View {
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 1) {
                         Text(title).font(.headline)
-                        Text(staged.isEmpty ? "Tap an icon" : CategoryIcon.label(for: staged))
+                        Text(staged.isEmpty ? String(localized: "Tap an icon") : CategoryIcon.label(for: staged))
                             .font(.caption)
                             .foregroundStyle(staged.isEmpty ? Color.secondary : Color.accentColor)
                     }
