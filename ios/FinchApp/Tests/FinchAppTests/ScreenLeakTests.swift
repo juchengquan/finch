@@ -71,4 +71,22 @@ final class ScreenLeakTests: XCTestCase {
         for (name, make) in screens where !isReleased(make) { kept.append(name) }
         XCTAssertEqual(kept, [], "closed screens still alive")
     }
+
+    /// The frequency row exists only once a backup folder is chosen, so the list
+    /// above never builds it — and its menu held the screen.
+    func test_backupsWithAFolderIsFreed() throws {
+        let key = "finch.backupFolder.bookmark"
+        let saved = UserDefaults.standard.data(forKey: key)
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("leak-test-backups-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer {
+            ICloudSync.shared.clearFolder()
+            if let saved { UserDefaults.standard.set(saved, forKey: key); ICloudSync.shared.refresh() }
+            try? FileManager.default.removeItem(at: folder)
+        }
+        ICloudSync.shared.setFolder(folder)
+        XCTAssertNotNil(ICloudSync.shared.designatedFolderName, "the folder rows need a folder")
+        XCTAssertTrue(isReleased { BackupsVC() }, "BackupsVC with a folder still alive")
+    }
 }

@@ -177,12 +177,13 @@ final class BackupsVC: UIViewController {
 
             case Self.retentionWheelID:
                 cell.contentConfiguration = UIHostingConfiguration {
+                    // The Binding is stored in the cell, which the screen owns: weak.
                     Picker("", selection: Binding(
-                        get: { self.retention },
-                        set: {
+                        get: { [weak self] in self?.retention ?? AutoBackupManager.defaultRetention },
+                        set: { [weak self] in
                             UserDefaults.standard.set($0, forKey: AutoBackupManager.retentionKey)
-                            self.backups.pruneNow()      // the SwiftUI onChange
-                            self.applySnapshot()
+                            self?.backups.pruneNow()      // the SwiftUI onChange
+                            self?.applySnapshot()
                         })) {
                         ForEach(AutoBackupManager.retentionRange, id: \.self) { Text(verbatim: "\($0)").tag($0) }
                     }
@@ -194,12 +195,12 @@ final class BackupsVC: UIViewController {
                 let current = BackupFrequency(rawValue: self.frequencyRaw) ?? .daily
                 cfg.text = String(localized: "Frequency")
                 cell.contentConfiguration = cfg
-                cell.accessories = [self.menuAccessory(
+                cell.accessories = [MenuValueButton.accessory(
                     value: current.title,
                     options: BackupFrequency.allCases.map { ($0.title, $0.rawValue) },
-                    onPick: { raw in
+                    onPick: { [weak self] raw in
                         UserDefaults.standard.set(raw, forKey: AutoBackupManager.frequencyKey)
-                        self.applySnapshot()
+                        self?.applySnapshot()
                     })]
 
             case Self.emptyHistoryID:
@@ -275,14 +276,6 @@ final class BackupsVC: UIViewController {
         cell.accessories = [.customView(configuration: .init(customView: trailing, placement: .trailing()))]
     }
 
-    private func menuAccessory(value: String, options: [(String, String)],
-                               onPick: @escaping (String) -> Void) -> UICellAccessory {
-        let button = MenuValueButton.make(value: value)
-        button.menu = UIMenu(children: options.map { title, raw in
-            UIAction(title: title, state: title == value ? .on : .off) { _ in onPick(raw) }
-        })
-        return .customView(configuration: .init(customView: button, placement: .trailing()))
-    }
 
     private func applySnapshot() {
         let list = entries

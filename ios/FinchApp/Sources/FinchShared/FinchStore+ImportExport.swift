@@ -12,9 +12,45 @@ extension FinchStore {
 
     /// Import pipeline. Throws `PackError` on any failure; on `auditFailed` the
     /// live DB is UNTOUCHED (the gate is pre-swap).
+    ///
+    /// Steps 1–4 unzip, hash, migrate and audit the whole pack, which takes real
+    /// time on a large one; they run off the main actor so the app stays
+    /// responsive meanwhile. Only the swap, which replaces the live database the
+    /// screens read, comes back to it.
     public func loadPack(from data: Data) async throws {
         isImporting = true
         defer { isImporting = false }
+        let staged = try await Task.detached(priority: .userInitiated) {
+            try Self.stage(data)
+        }.value
+
+        // 4b. AUDIT GATE — throw BEFORE the swap, but RETAIN the staged DB so
+        //     forceImportCurrentPack (D7) can swap THAT in later.
+        guard staged.problems.isEmpty else {
+            self.pendingRejected = PendingRejected(
+                stagedDB: staged.dbPath,
+                stagedAttachments: staged.attachmentsDir,
+                problems: staged.problems)
+            throw PackError.auditFailed(staged.problems)
+        }
+
+        // 5. atomic swap → re-open → project.
+        self.pendingRejected = nil
+        try swapInAndProject(stagedDB: staged.dbPath,
+                             stagedAttachments: staged.attachmentsDir,
+                             problems: staged.problems)
+    }
+
+    /// A pack unpacked into a staging directory, migrated and audited, and not yet
+    /// in use.
+    struct StagedPack: Sendable {
+        let dbPath: URL
+        let attachmentsDir: URL
+        let problems: [Audit.AuditProblem]
+    }
+
+    /// Import steps 1–4, touching nothing the store owns.
+    nonisolated static func stage(_ data: Data) throws -> StagedPack {
         // 1. parse + 2. extract to a staging dir.
         let parsed = try Pack.parse(data)
         let staging = FileManager.default.temporaryDirectory
@@ -30,22 +66,10 @@ extension FinchStore {
             throw PackError.migrationFailed("open+migrate: \(error)")
         }
 
-        // 4. AUDIT GATE — throw BEFORE the swap, but RETAIN the staged DB so
-        //    forceImportCurrentPack (D7) can swap THAT in later.
+        // 4. audit. The gate itself is the caller's: a rejected pack is kept.
         let problems = try Audit.run(on: stagedQueue)
-        guard problems.isEmpty else {
-            self.pendingRejected = PendingRejected(
-                stagedDB: extracted.dbPath,
-                stagedAttachments: extracted.attachmentsDir,
-                problems: problems)
-            throw PackError.auditFailed(problems)
-        }
-
-        // 5. atomic swap → re-open → project.
-        self.pendingRejected = nil
-        try swapInAndProject(stagedDB: extracted.dbPath,
-                             stagedAttachments: extracted.attachmentsDir,
-                             problems: problems)
+        return StagedPack(dbPath: extracted.dbPath, attachmentsDir: extracted.attachmentsDir,
+                          problems: problems)
     }
 
     /// D7 — iOS-only override: swap the RETAINED rejected pack's staged DB into
@@ -139,47 +163,66 @@ extension FinchStore {
 
     // MARK: - Export (mirrors server.ts exportPackBytes → pack.ts buildPack)
 
+    /// The `.finch` bytes of the live database and its receipts.
+    ///
+    /// The clone is stamped, hashed and zipped — receipts included — off the main
+    /// actor, so an export or a scheduled backup doesn't freeze the app.
     public func buildPack() async throws -> Data {
         guard let live = dbQueue else { throw PackError.exportFailed("no pack loaded") }
+        // 1. VACUUM INTO a temp clone — through GRDB, not the raw sqlite3 C API.
+        let cloneURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("export-\(UUID().uuidString).sqlite3")
+        // The clone is a full copy of the database, and every backup makes one.
+        defer {
+            for sfx in ["", "-wal", "-shm"] {
+                try? FileManager.default.removeItem(atPath: cloneURL.path + sfx)
+            }
+        }
         do {
-            // 1. VACUUM INTO a temp clone — through GRDB, not the raw sqlite3 C API.
-            let cloneURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent("export-\(UUID().uuidString).sqlite3")
             // VACUUM cannot run inside a transaction — writeWithoutTransaction.
             try await live.writeWithoutTransaction { db in
                 try db.execute(sql: "VACUUM INTO ?", arguments: [cloneURL.path])
             }
-
-            // 2. open the clone, stamp export metadata + checkpoint the WAL.
-            let clone = try DatabaseQueue(path: cloneURL.path)
-            let rowCounts = try Projection.rowCounts(dbQueue: clone)   // 15 canonical tables
-            let exportedAt = ISO8601DateFormatter().string(from: Date())
-            let rowCountsJSON = String(
-                data: try JSONSerialization.data(withJSONObject: rowCounts), encoding: .utf8) ?? "{}"
-            // Stamp + checkpoint without a transaction (wal_checkpoint can't run
-            // inside one); each statement auto-commits.
-            try await clone.writeWithoutTransaction { db in
-                try db.execute(sql: """
-                    UPDATE db_metadata SET exported_at = ?, exported_from = ?, row_counts = ?, updated_at = ?
-                     WHERE id = 1
-                    """, arguments: [exportedAt, "ios", rowCountsJSON, exportedAt])
-                try db.execute(sql: "PRAGMA wal_checkpoint(TRUNCATE)")  // self-contained single file
-            }
-            // 3. manifest db.sha256 = sha256 of the now-self-contained clone bytes.
-            let dbBytes = try Data(contentsOf: cloneURL)
-            return try Pack.build(Pack.BuildInput(
-                dbBytes: dbBytes,
-                attachmentFiles: liveAttachmentFiles(),   // bundle receipts so the pack is self-contained
-                meta: Pack.BuildInput.Meta(
-                    appVersion: FinchCore.version, schemaVersion: Schema.version,
-                    exportedAt: exportedAt,
-                    exportedFrom: PackManifest.ExportedFrom(device: "ios", deviceId: nil, deviceName: nil),
-                    rowCounts: rowCounts))).bytes
+            let attachments = try liveAttachmentFiles()   // bundle receipts so the pack is self-contained
+            return try await Task.detached(priority: .userInitiated) {
+                try Self.packClone(at: cloneURL, attachments: attachments)
+            }.value
         } catch let e as PackError {
             throw e
         } catch {
             throw PackError.exportFailed("\(error)")
         }
+    }
+
+    /// Export steps 2–3 on the clone, touching nothing the store owns.
+    nonisolated static func packClone(at cloneURL: URL,
+                                      attachments: [Pack.BuildInput.AttachmentFile]) throws -> Data {
+        // 2. open the clone, stamp export metadata + checkpoint the WAL.
+        let clone = try DatabaseQueue(path: cloneURL.path)
+        let rowCounts = try Projection.rowCounts(dbQueue: clone)   // 15 canonical tables
+        let exportedAt = ISO8601DateFormatter().string(from: Date())
+        let rowCountsJSON = String(
+            data: try JSONSerialization.data(withJSONObject: rowCounts), encoding: .utf8) ?? "{}"
+        // Stamp + checkpoint without a transaction (wal_checkpoint can't run
+        // inside one); each statement auto-commits.
+        try clone.writeWithoutTransaction { db in
+            try db.execute(sql: """
+                UPDATE db_metadata SET exported_at = ?, exported_from = ?, row_counts = ?, updated_at = ?
+                 WHERE id = 1
+                """, arguments: [exportedAt, "ios", rowCountsJSON, exportedAt])
+            try db.execute(sql: "PRAGMA wal_checkpoint(TRUNCATE)")  // self-contained single file
+        }
+        try clone.close()
+        // 3. manifest db.sha256 = sha256 of the now-self-contained clone bytes.
+        let dbBytes = try Data(contentsOf: cloneURL)
+        return try Pack.build(Pack.BuildInput(
+            dbBytes: dbBytes,
+            attachmentFiles: attachments,
+            meta: Pack.BuildInput.Meta(
+                appVersion: FinchCore.version, schemaVersion: Schema.version,
+                exportedAt: exportedAt,
+                exportedFrom: PackManifest.ExportedFrom(device: "ios", deviceId: nil, deviceName: nil),
+                rowCounts: rowCounts))).bytes
     }
 
     /// Every stored receipt as a `Pack.BuildInput.AttachmentFile`, so `buildPack` can bundle

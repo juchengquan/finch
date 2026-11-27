@@ -9,7 +9,8 @@ import UIKit
 ///
 /// Four screens built this button by hand — Appearance, Security, Ledger detail
 /// and Backups — and none drew the chevron, so fixing one screen left three
-/// behind. One helper instead.
+/// behind. One helper instead, and one for the cell accessory around it, which
+/// three screens had also copied.
 enum MenuValueButton {
     static func make(value: String) -> UIButton {
         var conf = UIButton.Configuration.plain()
@@ -29,6 +30,20 @@ enum MenuValueButton {
         button.configuration = conf
         button.showsMenuAsPrimaryAction = true
         return button
+    }
+
+    /// The row's trailing accessory: `value` with a menu of `options` (title shown,
+    /// raw value passed to `onPick`), the current one ticked.
+    ///
+    /// `onPick` is stored in the cell's menu, and the cell lives in the screen's own
+    /// collection view, so it must not hold the screen strongly.
+    static func accessory(value: String, options: [(title: String, raw: String)],
+                          onPick: @escaping (String) -> Void) -> UICellAccessory {
+        let button = make(value: value)
+        button.menu = UIMenu(children: options.map { option in
+            UIAction(title: option.title, state: option.title == value ? .on : .off) { _ in onPick(option.raw) }
+        })
+        return .customView(configuration: .init(customView: button, placement: .trailing()))
     }
 }
 #endif

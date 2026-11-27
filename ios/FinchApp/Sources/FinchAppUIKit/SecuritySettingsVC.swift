@@ -77,7 +77,7 @@ final class SecuritySettingsVC: UIViewController {
                 cfg.text = String(localized: "App lock")
                 cell.contentConfiguration = cfg
                 let current = self.gate.settings.policy
-                cell.accessories = [self.menuAccessory(
+                cell.accessories = [MenuValueButton.accessory(
                     value: current.displayName,
                     options: BiometricPolicy.allCases.map { ($0.displayName, $0.rawValue) },
                     onPick: { [weak self] raw in
@@ -89,7 +89,7 @@ final class SecuritySettingsVC: UIViewController {
                 cfg.text = String(localized: "Lock after")
                 cell.contentConfiguration = cfg
                 let current = self.gate.settings.timeoutSeconds
-                cell.accessories = [self.menuAccessory(
+                cell.accessories = [MenuValueButton.accessory(
                     value: Self.minutesLabel(current),
                     options: Self.timeouts.map { (Self.minutesLabel($0), "\($0)") },
                     onPick: { [weak self] raw in
@@ -131,14 +131,6 @@ final class SecuritySettingsVC: UIViewController {
     }
 
     /// A pull-down menu button, as SwiftUI's default `Picker` renders inside a form.
-    private func menuAccessory(value: String, options: [(String, String)],
-                               onPick: @escaping (String) -> Void) -> UICellAccessory {
-        let button = MenuValueButton.make(value: value)
-        button.menu = UIMenu(children: options.map { title, raw in
-            UIAction(title: title, state: title == value ? .on : .off) { _ in onPick(raw) }
-        })
-        return .customView(configuration: .init(customView: button, placement: .trailing()))
-    }
 
     private func applySnapshot() {
         let policy = gate.settings.policy

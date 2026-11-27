@@ -36,10 +36,6 @@ public final class SpotlightIndexer {
         }
     }
 
-    public func deindex(_ identifiers: [String]) async {
-        try? await index.deleteSearchableItems(withIdentifiers: identifiers)
-    }
-
     /// Drop everything finch indexed (e.g. on reset/import of a different pack,
     /// or when the biometric lock engages). Serialized behind any in-flight
     /// rebuild so a lock-triggered clear can't lose to a slower re-index.

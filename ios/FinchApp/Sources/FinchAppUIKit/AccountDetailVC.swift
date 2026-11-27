@@ -44,7 +44,6 @@ final class AccountDetailVC: UIViewController {
     private var calSelectedDay: String?
 
     private enum SectionID: Hashable {
-        case balance        // account balance + reconcile seal, formerly the titleView
         case modePicker
         case forecast           // where the balance is heading — AccountForecastPanel
         case holdings
@@ -64,7 +63,7 @@ final class AccountDetailVC: UIViewController {
         /// The picker and the grid are bare rows in SwiftUI — no `Section` header.
         var wantsHeader: Bool {
             switch self {
-            case .balance, .modePicker, .calendar, .reconcileHeader: return false
+            case .modePicker, .calendar, .reconcileHeader: return false
             default: return true
             }
         }
@@ -77,7 +76,6 @@ final class AccountDetailVC: UIViewController {
 
     private static let modePickerID = "__mode_picker__"
     private static let calendarID = "__calendar__"
-    private static let balanceID = "__balance__"
     private static let emptyID = "__empty__"
     private static let emptyDayID = "__empty_day__"
     private static let holdingPrefix = "__holding__"
@@ -310,12 +308,6 @@ final class AccountDetailVC: UIViewController {
                         masked: self.store.privacyMode)
                 }
                 cell.accessories = []
-                return
-            }
-
-            if id == Self.balanceID {
-                guard let account = self.account else { return }
-                self.configureBalanceCell(cell, account)
                 return
             }
 
@@ -654,16 +646,8 @@ final class AccountDetailVC: UIViewController {
     /// reconcile seal sits beside the balance with the same glyph and colors as the
     /// Accounts list rows, and the absolute date stays in the Reconcile sheet where
     /// you would act on it.
-    /// The account name, as the (large) navigation title.
-    ///
-    /// No `titleView` any more. It used to carry name-over-balance, ported from the
-    /// SwiftUI screen's `.principal` toolbar item, but a large title and a custom
-    /// `titleView` cannot share the bar: the bar renders the `titleView`, so the name
-    /// would show twice while expanded and the large title would have nowhere to
-    /// collapse into. The balance moved to a content row instead — see
-    /// `configureBalanceCell`. The trade is deliberate: the balance now scrolls away
-    /// rather than staying pinned, which is what the SwiftUI comment
-    /// ("always visible while scrolled") was protecting.
+    /// The bar's title: the account name over its balance and reconcile seal, so the
+    /// balance stays in view while the list scrolls.
     private func updateTitleView() {
         guard let account else { return }
         let name = account.name ?? String(localized: "Account")
@@ -709,30 +693,6 @@ final class AccountDetailVC: UIViewController {
               !Selectors.holdingsForAccount(store.holdings, account.id).isEmpty else { return cash }
         let total = Selectors.investmentAccountTotal(account, store.holdings)
         return String(localized: "\(cash) · \(store.displayMoney(total, from: account.currency)) total")
-    }
-
-    /// The balance row: amount, with the reconcile seal beside it.
-    ///
-    /// Same meaning as the old title subtitle and the Accounts list rows — green fresh,
-    /// orange overdue, nothing if never reconciled — and still privacy-aware, because
-    /// it goes through `displayMoney`.
-    private func configureBalanceCell(_ cell: UICollectionViewListCell, _ account: AccountRow) {
-        var cfg = cell.defaultContentConfiguration()
-        cfg.text = store.displayMoney(account.balance, from: account.currency)
-        cfg.textProperties.font = .preferredFont(forTextStyle: .title2)
-        cfg.secondaryText = String(localized: "Balance")
-        cfg.secondaryTextProperties.font = .preferredFont(forTextStyle: .caption1)
-        cfg.secondaryTextProperties.color = .secondaryLabel
-        cfg.textToSecondaryTextVerticalPadding = 2
-        cell.contentConfiguration = cfg
-        if let seal = titleSeal(account) {
-            let mark = UIImageView(image: UIImage(systemName: "checkmark.seal.fill"))
-            mark.tintColor = seal
-            mark.contentMode = .scaleAspectFit
-            cell.accessories = [.customView(configuration: .init(customView: mark, placement: .trailing()))]
-        } else {
-            cell.accessories = []
-        }
     }
 
     /// Seal color beside the title balance — same meaning as the Accounts list

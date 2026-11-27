@@ -65,8 +65,6 @@ struct EditTransactionSheet: View {
     @State private var fromAmountText = ""   // transfer editor: from-leg native amount
     @State private var toAmountText = ""     // transfer editor: to-leg native amount (cross-currency)
 
-    /// The original native (account-currency) amount, the basis for the edit.
-    private var originalNative: Double { txn.nativeAmount ?? txn.amount }
     /// A split transaction owns its categories via legs — hide amount/category here.
     /// `txn` re-read from the LIVE store projection (not the init-time snapshot), so a
     /// split written elsewhere reflects here instead of leaving the sheet on the stale
@@ -701,42 +699,8 @@ struct EditTransactionSheet: View {
         if txn.kind == "transfer" { saveTransfer(); return }
         if isInterledger { saveInterledger(); return }
         errorMessage = nil
-        var patch: [String: JSONValue] = [
-            "merchant": .string(merchant.isEmpty ? String(localized: "Untitled") : merchant),
-            "note": note.isEmpty ? .null : .string(note),
-            "date": .string(Self.day(date)),
-            "time": .string(Self.time(date)),
-        ]
-        let kindChanged = canReclassify && selectedKind.rawValue != txn.kind
-        if !isSplit {
-            guard let parsed = DecimalInput.parse(amountText), parsed > 0 else {
-                errorMessage = String(localized: "Enter an amount greater than 0."); return
-            }
-            // Sign by the (possibly new) kind: expense negative; income/refund positive.
-            let sign: Double = canReclassify ? (selectedKind == .expense ? -1.0 : 1.0) : (originalNative < 0 ? -1.0 : 1.0)
-            let signed = sign * parsed
-            if abs(signed - originalNative) > 0.001 || kindChanged { patch["amount"] = .double(signed) }
-            // Empty means Uncategorized, and must send an explicit null: omitting the
-            // key leaves the old category leg in place, so picking Uncategorized would
-            // look like it worked and change nothing. The engine reads a null here as
-            // "clear it" (Transactions.swift, `strOrNil(patch["category"])`).
-            if categoryId != (txn.category ?? "") {
-                patch["category"] = categoryId.isEmpty ? .null : .string(categoryId)
-            }
-        }
-        if kindChanged { patch["kind"] = .string(selectedKind.rawValue) }
-        if status != (txn.pending == true ? .pending : .confirmed) { patch["status"] = .string(status.rawValue) }
-        if txn.kind != "transfer", !accountId.isEmpty, accountId != txn.account { patch["account"] = .string(accountId) }
-        if txn.kind != "transfer", !currencyCode.isEmpty, currencyCode != (txn.currency ?? accountCurrency) {
-            patch["currency"] = .string(currencyCode)
-        }
-        // Refund link: set/update when (now) a refund; clear when leaving refund.
-        if effectiveKind == "refund" {
-            if refundedTxId != txn.refundedTransactionId || kindChanged {
-                patch["refundedTransactionId"] = refundedTxId.map(JSONValue.string) ?? .null
-            }
-        } else if txn.kind == "refund" {
-            patch["refundedTransactionId"] = .null
+        if !isSplit, (DecimalInput.parse(amountText) ?? 0) <= 0 {
+            errorMessage = String(localized: "Enter an amount greater than 0."); return
         }
         // ONE write, replacing the four this path used to fire — five when
         // collapsing a split (createCounterparty, updateTransaction,
