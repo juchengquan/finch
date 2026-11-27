@@ -28,7 +28,7 @@ public enum Pack {
         public init(dbBytes: Data, attachmentFiles: [AttachmentFile] = [], meta: Meta) {
             self.dbBytes = dbBytes; self.attachmentFiles = attachmentFiles; self.meta = meta
         }
-        public struct AttachmentFile { public var id: String; public var relPath: String; public var absPath: URL
+        public struct AttachmentFile: Sendable { public var id: String; public var relPath: String; public var absPath: URL
             public init(id: String, relPath: String, absPath: URL) { self.id = id; self.relPath = relPath; self.absPath = absPath } }
         public struct Meta { public var appVersion: String; public var schemaVersion: String; public var exportedAt: String
             public var exportedFrom: PackManifest.ExportedFrom?; public var rowCounts: [String: Int]
