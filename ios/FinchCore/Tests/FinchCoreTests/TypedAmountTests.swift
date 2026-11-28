@@ -145,4 +145,48 @@ final class TypedAmountTests: XCTestCase {
         try Apply.apply(dbQueue: q, action: "changeLedgerBase", args: Args(["ledgerId": .string("l1"), "newBase": .string("EUR")]))
         XCTAssertEqual(try typedByCategory(q), ["c1": 70, "c2": 30])
     }
+
+    private func accountPosting(_ q: DatabaseQueue) throws -> String {
+        try XCTUnwrap(try q.read { try String.fetchOne($0, sql: "SELECT id FROM postings WHERE account_id IS NOT NULL") })
+    }
+
+    /// A new total re-scales what was typed into the cells, in the purchase's
+    /// currency, so they still add up to it. It used to drop them, so the grid
+    /// reopened showing back-converted dollars.
+    func test_aNewTotalScalesTheTypedAmounts() throws {
+        let q = try seed()
+        try write(q, currency: "EUR")
+        try Apply.apply(dbQueue: q, action: "updateTransaction", args: Args([
+            "id": .string(try accountPosting(q)),
+            "patch": .object(["amount": .double(-120), "currency": .string("EUR")])]))
+        XCTAssertEqual(try typedByCategory(q), ["c1": 84, "c2": 36])
+        let currencies = try q.read {
+            try String.fetchAll($0, sql: "SELECT DISTINCT orig_currency FROM postings WHERE category_id IN ('c1','c2')")
+        }
+        XCTAssertEqual(currencies, ["EUR"])
+    }
+
+    /// Moving it to another card in the same currency changes no figure, so the
+    /// typed amounts come through exactly.
+    func test_anotherCardKeepsTheTypedAmounts() throws {
+        let q = try seed()
+        try write(q, currency: "EUR")
+        try Apply.apply(dbQueue: q, action: "updateTransaction", args: Args([
+            "id": .string(try accountPosting(q)), "patch": .object(["account": .string("a2")])]))
+        XCTAssertEqual(try typedByCategory(q), ["c1": 70, "c2": 30])
+    }
+
+    /// A purchase typed in the base still records no typed copy after an edit.
+    func test_aNewTotalInTheBaseRecordsNoTypedCopy() throws {
+        let q = try seed()
+        try write(q, currency: "USD")
+        try Apply.apply(dbQueue: q, action: "updateTransaction", args: Args([
+            "id": .string(try accountPosting(q)), "patch": .object(["amount": .double(-120)])]))
+        XCTAssertEqual(try typedByCategory(q), [:])
+        let bases = try q.read { db in
+            try Row.fetchAll(db, sql: "SELECT category_id, amount_base FROM postings WHERE category_id IN ('c1','c2') ORDER BY category_id")
+                .map { ($0["category_id"] as String, $0["amount_base"] as Double) }
+        }
+        XCTAssertEqual(bases.map(\.1), [84, 36], "\(bases)")
+    }
 }
