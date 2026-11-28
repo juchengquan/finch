@@ -2,19 +2,22 @@ import Foundation
 import FinchCore
 
 /// Phase 6.5 — imports receipts the Share Extension staged into the App Group.
-/// For each pending manifest: move the file into the live attachments tree,
-/// create a pending placeholder transaction, dispatch setEntryAttachment, and
-/// delete the manifest. The user then edits the new transaction's amount.
+/// For each pending manifest: convert the file to its stored shape, create a
+/// pending placeholder transaction, write the file into the live attachments
+/// tree with setEntryAttachment, and delete the staged copy and the manifest.
+/// The user then edits the new transaction's amount.
 @MainActor
 public enum PendingAttachmentImporter {
-    /// The live attachments directory (next to the DB), where the pack reads from.
-    static var attachmentsRoot: URL {
-        FinchStore.dataDirectory.appendingPathComponent("attachments", isDirectory: true)
+    /// Shown when a shared receipt can't be read. It used to be imported anyway,
+    /// as whatever bytes the extension staged under an `image/jpeg` label.
+    static var sharedUnreadable: I18nError {
+        I18nError("error.attachment.sharedUnreadable", [:],
+                  "A receipt shared to finch couldn't be read, so it wasn't added.")
     }
 
     /// Returns the number of receipts imported.
     @discardableResult
-    public static func importPending(into store: FinchStore) -> Int {
+    public static func importPending(into store: FinchStore) async -> Int {
         let fm = FileManager.default
         guard let manifests = try? fm.contentsOfDirectory(at: AppGroup.pendingManifestsDir,
                                                           includingPropertiesForKeys: nil),
@@ -23,8 +26,22 @@ public enum PendingAttachmentImporter {
         for mURL in manifests where mURL.pathExtension == "json" {
             guard let data = try? Data(contentsOf: mURL),
                   let m = try? JSONDecoder().decode(PendingAttachment.self, from: data) else { continue }
+            let staged = AppGroup.containerURL.appendingPathComponent(m.relPath)
+
+            // 1. the receipt in its stored shape (`AttachmentWriter.stored`), worked
+            // out before anything is created. The extension stages what the sharing
+            // app handed it, often a HEIC; this is where it becomes an upright JPEG
+            // with no metadata, as a receipt added in the app does. One that can't be
+            // read is reported and dropped rather than imported as a broken file.
+            guard let bytes = try? Data(contentsOf: staged),
+                  let receipt = try? await AttachmentWriter.storedOffMain(bytes) else {
+                store.dataError = i18nMessage(sharedUnreadable)
+                try? fm.removeItem(at: staged)
+                try? fm.removeItem(at: mURL)
+                continue
+            }
             do {
-                // 1. placeholder pending transaction (user fills in the amount later).
+                // 2. placeholder pending transaction (user fills in the amount later).
                 let merchant = m.originalFilename.map { ($0 as NSString).deletingPathExtension } ?? "Receipt"
                 // The engine says which entry it made. Finding it by comparing the
                 // list before and after went wrong at launch, where this runs: the
@@ -37,21 +54,11 @@ public enum PendingAttachmentImporter {
                     "date": .string(Self.today()), "status": .string("pending"), "skipRules": .bool(true)]))
                 else { continue }
 
-                // 2. move the staged file into attachments/<entryId>/<id>.<ext> — the folder `AttachmentWriter` uses.
-                let ext = (m.relPath as NSString).pathExtension
-                let destDir = attachmentsRoot.appendingPathComponent(entryId, isDirectory: true)
-                try? fm.createDirectory(at: destDir, withIntermediateDirectories: true)
-                let rel = "attachments/\(entryId)/\(m.id).\(ext)"
-                let dest = attachmentsRoot.deletingLastPathComponent().appendingPathComponent(rel)
-                try? fm.removeItem(at: dest)
-                try? fm.moveItem(at: AppGroup.containerURL.appendingPathComponent(m.relPath), to: dest)
-
-                // 3. record the attachment row.
-                try store.apply(.setEntryAttachment, Args([
-                    "entryId": .string(entryId), "kind": .string(m.kind), "relPath": .string(rel),
-                    "mimeType": .string(m.mimeType), "byteSize": .double(Double(m.byteSize)),
-                    "sha256": .string(m.sha256),
-                    "originalFilename": m.originalFilename.map { JSONValue.string($0) } ?? .null]))
+                // 3. write it to attachments/<entryId>/<id>.<ext> — the folder
+                // `AttachmentWriter` uses — and record the row.
+                try AttachmentWriter.record(receipt, entryId: entryId, store: store,
+                                            originalFilename: m.originalFilename, id: m.id)
+                try? fm.removeItem(at: staged)
                 try? fm.removeItem(at: mURL)
                 imported += 1
             } catch { continue }
