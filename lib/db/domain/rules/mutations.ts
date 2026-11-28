@@ -6,6 +6,8 @@ import { rebuildEntry, SPENDING_CATEGORY_LEGS_SQL, type LegInput } from '../../c
 import { resolveCounterpartyIdByName } from '../counterparties/queries';
 import { applyRules } from '@/lib/rules/engine';
 import { canRekind, pruneRulePatch } from '../../core/rule-refs';
+import { txTouches, mergeTouches } from '../_shared/tx-touches';
+import { invalidateRollover } from '@/lib/budgets/rollover';
 import {
   createRule as qCreateRule,
   updateRule as qUpdateRule,
@@ -82,6 +84,13 @@ export const handlers = {
       matched++;
       await pruneRulePatch(exec, patch, rule.ledgerId);
       if (patch.kind !== undefined && !(await canRekind(exec, tx.id, patch.kind))) delete patch.kind;
+
+      // A new category or kind moves this entry's spend from one budget to
+      // another. A cached rollover over its period is stale on both sides, so
+      // capture what it touches before the change and invalidate the union
+      // after, as updateTransaction does. Mirrored in FinchCore Rules.backfill.
+      const movesSpend = patch.kind !== undefined || patch.categoryId !== undefined;
+      const touchedBefore = movesSpend ? await txTouches(exec, tx.id) : null;
 
       const sets: string[] = [];
       const bind: (string | number | null)[] = [];
@@ -165,6 +174,17 @@ export const handlers = {
           await exec(
             'INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?, ?)',
             [tx.id, tagId],
+          );
+        }
+      }
+
+      if (movesSpend) {
+        const merged = mergeTouches(touchedBefore, await txTouches(exec, tx.id));
+        if (merged) {
+          await invalidateRollover(
+            exec,
+            { categoryIds: merged.categoryIds, accountIds: merged.accountIds },
+            merged.earliestDate,
           );
         }
       }

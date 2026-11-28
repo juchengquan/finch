@@ -227,6 +227,54 @@ test('addTransaction in the current period leaves rolled state untouched', async
   expect(Number(row.carry_forward)).toBe(300);
 });
 
+// Applying a rule to past transactions moves their spend between budgets just
+// as an edit does, so it must reset the cached rollover on both sides. It
+// reset neither: Food kept carrying forward April money that had left it.
+async function rolledFoodAndShop(exec: Exec) {
+  await applyMutation(exec, 'addTransaction', {
+    ledgerId: 'personal', accountId: 'chk', amount: -50, currency: 'USD',
+    merchant: 'Zephyr Corner Shop', categoryId: 'food', date: '2026-04-10', skipRules: true,
+  });
+  for (const [id, cat] of [['bgt-food', 'food'], ['bgt-shop', 'shop']] as const) {
+    await applyMutation(exec, 'createBudget', {
+      id, ledgerId: 'personal', name: id, type: 'expense', amount: 700,
+      frequency: 'monthly', startDate: '2026-04-01', categoryIds: [cat], rollover: 1,
+    });
+  }
+  // Rolled after the purchase was entered, as a later launch would.
+  await exec("UPDATE budgets SET last_rolled_period = '2026-04-01', carry_forward = 300 WHERE id IN ('bgt-food', 'bgt-shop')");
+}
+
+async function rolledPeriods(exec: Exec) {
+  const rows = await exec("SELECT id, last_rolled_period FROM budgets WHERE id IN ('bgt-food', 'bgt-shop') ORDER BY id");
+  return Object.fromEntries(rows.map((r) => [String(r.id), r.last_rolled_period]));
+}
+
+test('backfilling a re-categorizing rule invalidates the budgets it moves spend between', async () => {
+  const exec = await seeded();
+  await rolledFoodAndShop(exec);
+  await applyMutation(exec, 'createRule', {
+    id: 'r-shop', ledgerId: 'personal',
+    condition: { field: 'merchant', op: 'contains', value: 'Zephyr' },
+    actions: [{ type: 'set_category', categoryId: 'shop' }],
+  });
+  await applyMutation(exec, 'backfillRule', { id: 'r-shop' });
+  expect(await rolledPeriods(exec)).toEqual({ 'bgt-food': null, 'bgt-shop': null });
+});
+
+test('backfilling a rule that leaves spend alone keeps the rolled state', async () => {
+  const exec = await seeded();
+  await rolledFoodAndShop(exec);
+  await applyMutation(exec, 'createRule', {
+    id: 'r-name', ledgerId: 'personal',
+    condition: { field: 'merchant', op: 'contains', value: 'Zephyr' },
+    actions: [{ type: 'set_merchant', merchant: 'Zephyr Corner Shop Co' }],
+  });
+  await applyMutation(exec, 'backfillRule', { id: 'r-name' });
+  expect(await exec("SELECT description FROM entries WHERE description = 'Zephyr Corner Shop Co'")).toHaveLength(1);
+  expect(await rolledPeriods(exec)).toEqual({ 'bgt-food': '2026-04-01', 'bgt-shop': '2026-04-01' });
+});
+
 test('deleteTransaction backdated into a rolled period invalidates', async () => {
   const exec = await seeded();
   await applyMutation(exec, 'createBudget', {
