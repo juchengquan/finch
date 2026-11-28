@@ -58,6 +58,10 @@ final class SharedReceiptImportTests: XCTestCase {
     /// `image/jpeg` label whatever it was. The importer stores it as the JPEG
     /// the label claims; one it can't read is reported, not imported as a
     /// broken file.
+    ///
+    /// The unreadable one is staged to be read FIRST. Its alert was set at once,
+    /// and the clean import after it, a write whose reprojection clears
+    /// `dataError`, wiped it: the alert never showed.
     func test_aSharedImageIsStoredAsAJPEGAndAnUnreadableOneIsReported() async throws {
         let packURL = try XCTUnwrap(Bundle(for: Self.self).url(
             forResource: "sample", withExtension: "finch", subdirectory: "Fixtures/roundtrip"))
@@ -67,20 +71,20 @@ final class SharedReceiptImportTests: XCTestCase {
         try fm.createDirectory(at: AppGroup.pendingManifestsDir, withIntermediateDirectories: true)
         try fm.createDirectory(at: AppGroup.pendingFilesDir, withIntermediateDirectories: true)
 
-        func stage(_ bytes: Data, name: String) throws -> (tag: String, manifest: URL, file: URL) {
+        func stage(_ bytes: Data, name: String, order: String) throws -> (tag: String, manifest: URL, file: URL) {
             let tag = String(UUID().uuidString.prefix(8))
             let rel = "pending_attachments/files/\(tag).jpg"
             let file = AppGroup.containerURL.appendingPathComponent(rel)
             try bytes.write(to: file)
             let m = PendingAttachment(id: "att-\(tag)", kind: "image", relPath: rel, mimeType: "image/jpeg",
                                       byteSize: bytes.count, sha256: "staged", originalFilename: "\(name) \(tag).jpg")
-            let mURL = AppGroup.pendingManifestsDir.appendingPathComponent("\(tag).json")
+            let mURL = AppGroup.pendingManifestsDir.appendingPathComponent("\(order)-\(tag).json")
             try JSONEncoder().encode(m).write(to: mURL)
             return (tag, mURL, file)
         }
         let png = try XCTUnwrap(try ReceiptFileTypeTests.encode(.png, properties: [:]))
-        let good = try stage(png, name: "Lunch")
-        let bad = try stage(Data("not an image".utf8), name: "Broken")
+        let bad = try stage(Data("not an image".utf8), name: "Broken", order: "0")
+        let good = try stage(png, name: "Lunch", order: "1")
         defer { for u in [good.manifest, good.file, bad.manifest, bad.file] { try? fm.removeItem(at: u) } }
 
         await PendingAttachmentImporter.importPending(into: store)
