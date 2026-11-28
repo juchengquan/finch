@@ -22,13 +22,16 @@ final class ReceiptAfterCloseTests: XCTestCase {
     /// download). That returned quietly: no receipt, and no word about it.
     func test_aPhotoWithNoDataIsReported() async {
         let store = FinchStore()
-        XCTAssertThrowsError(try AttachmentWriter.write(photo: nil, entryId: "e1", store: store)) {
-            XCTAssertEqual(($0 as? I18nError)?.code, "error.attachment.photoUnavailable")
+        do {
+            try await AttachmentWriter.write(photo: nil, entryId: "e1", store: store)
+            XCTFail("a pick with no data must throw")
+        } catch {
+            XCTAssertEqual((error as? I18nError)?.code, "error.attachment.photoUnavailable")
         }
 
         // After the Add sheet has closed, it reaches the app-wide alert.
         await AttachmentWriter.attachAfterClose(store: store) {
-            try AttachmentWriter.write(photo: nil, entryId: "e1", store: store)
+            try await AttachmentWriter.write(photo: nil, entryId: "e1", store: store)
         }
         XCTAssertEqual(store.dataError, AttachmentWriter.receiptNotAttachedMessage)
     }

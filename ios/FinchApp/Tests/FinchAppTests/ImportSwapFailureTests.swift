@@ -29,7 +29,8 @@ final class ImportSwapFailureTests: XCTestCase {
     func test_testsWriteNothingIntoTheRealDataFolder() {
         let tests = FinchStore.dataDirectory.standardizedFileURL.path
         XCTAssertTrue(tests.hasPrefix(FileManager.default.temporaryDirectory.standardizedFileURL.path))
-        for url in [AutoBackupManager.shared.backupsDir, PendingAttachmentImporter.attachmentsRoot,
+        // Shared receipts are written through the store's `attachmentsRoot`.
+        for url in [AutoBackupManager.shared.backupsDir,
                     FinchStore.shared.attachmentsRoot, FinchStore.shared.liveDBURL] {
             XCTAssertTrue(url.standardizedFileURL.path.hasPrefix(tests), url.path)
         }
