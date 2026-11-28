@@ -73,6 +73,17 @@ public enum Rules {
             try RuleRefs.prune(db, &patch, ledgerId: rule.ledgerId)
             if let k = patch.kind, try !RuleRefs.canRekind(db, entryId: entryId, to: k) { patch.kind = nil }
 
+            // A new category or kind moves this entry's spend from one budget to
+            // another. A cached rollover over its period is stale on both sides, so
+            // reset it before the change (the budgets it leaves) and after (the ones
+            // it joins), as an edit does. Mirrored in the web's backfillRule.
+            let movesSpend: Bool = {
+                if patch.kind != nil { return true }
+                if case .set = patch.categoryId { return true }
+                return false
+            }()
+            if movesSpend { try Budgets.invalidateForEntry(db, entryId) }
+
             var sets: [String] = []
             var bind: [DatabaseValueConvertible?] = []
             if case .set(let cp) = patch.counterpartyId { sets.append("counterparty_id = ?"); bind.append(cp) }
@@ -121,6 +132,7 @@ public enum Rules {
             for tagId in patch.tagIdsAdd ?? [] {
                 try db.execute(sql: "INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?, ?)", arguments: [entryId, tagId])
             }
+            if movesSpend { try Budgets.invalidateForEntry(db, entryId) }
         }
         try db.execute(sql: "UPDATE rules SET last_applied_at = datetime('now') WHERE id = ?", arguments: [ruleId])
     }

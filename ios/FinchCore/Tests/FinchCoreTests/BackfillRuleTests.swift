@@ -80,6 +80,54 @@ final class BackfillRuleTests: XCTestCase {
         }
     }
 
+    /// Applying a rule to past transactions moves their spend between budgets
+    /// just as an edit does, so it resets the cached rollover on both sides. It
+    /// reset neither: Food kept carrying forward May money that had left it.
+    /// The rollover is rolled after the purchase is entered, as a web launch would.
+    private func rolledFoodAndFun(_ q: DatabaseQueue) throws {
+        try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "accountId": .string("a1"), "amount": .double(-10),
+            "merchant": .string("Corner Market"), "categoryId": .string("c1"), "date": .string("2026-05-10"), "skipRules": .bool(true)]))
+        try q.write { db in
+            for (id, cat) in [("b1", "c1"), ("b2", "c2")] {
+                try db.execute(sql: """
+                    INSERT INTO budgets (id,ledger_id,name,kind,amount,saved,carry_forward,frequency,start_date,
+                        is_recurring,rollover,last_rolled_period,category_ids,account_ids,warning_pct,created_at,updated_at)
+                    VALUES (?,'l1',?,'expense',100,0,40,'monthly','2026-01-01',1,1,'2026-05-01',?,NULL,80,datetime('now'),datetime('now'))
+                    """, arguments: [id, id, "[\"\(cat)\"]"])
+            }
+        }
+    }
+
+    private func rolledPeriods(_ q: DatabaseQueue) throws -> [String: String?] {
+        try q.read { db in
+            Dictionary(uniqueKeysWithValues: try Row.fetchAll(db, sql: "SELECT id, last_rolled_period FROM budgets").map {
+                ($0["id"] as String, $0["last_rolled_period"] as String?)
+            })
+        }
+    }
+
+    func test_backfillingARecategorizingRuleInvalidatesBothBudgets() throws {
+        let q = try seeded()
+        try rolledFoodAndFun(q)
+        let condition: JSONValue = .object(["field": .string("merchant"), "op": .string("contains"), "value": .string("market")])
+        let actions: JSONValue = .array([.object(["type": .string("set_category"), "categoryId": .string("c2")])])
+        try Apply.apply(dbQueue: q, action: "createRule", args: Args(["id": .string("r1"), "ledgerId": .string("l1"), "condition": condition, "actions": actions]))
+        try Apply.apply(dbQueue: q, action: "backfillRule", args: Args(["id": .string("r1")]))
+        XCTAssertEqual(try rolledPeriods(q), ["b1": nil, "b2": nil])
+    }
+
+    func test_backfillingARuleThatLeavesSpendAloneKeepsTheRollover() throws {
+        let q = try seeded()
+        try rolledFoodAndFun(q)
+        let condition: JSONValue = .object(["field": .string("merchant"), "op": .string("contains"), "value": .string("market")])
+        let actions: JSONValue = .array([.object(["type": .string("set_merchant"), "merchant": .string("Corner Market Co")])])
+        try Apply.apply(dbQueue: q, action: "createRule", args: Args(["id": .string("r1"), "ledgerId": .string("l1"), "condition": condition, "actions": actions]))
+        try Apply.apply(dbQueue: q, action: "backfillRule", args: Args(["id": .string("r1")]))
+        XCTAssertEqual(try q.read { try String.fetchOne($0, sql: "SELECT description FROM entries") }, "Corner Market Co")
+        XCTAssertEqual(try rolledPeriods(q), ["b1": "2026-05-01", "b2": "2026-05-01"])
+    }
+
     /// A budget on a parent category covers its subcategories, so an edit in a
     /// subcategory resets the parent budget's cached rollover too.
     func test_invalidateRollover_coversSubcategories() throws {
