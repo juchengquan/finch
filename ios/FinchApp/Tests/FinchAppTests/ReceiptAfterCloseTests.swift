@@ -17,4 +17,26 @@ final class ReceiptAfterCloseTests: XCTestCase {
         await AttachmentWriter.attachAfterClose(store: quiet) {}
         XCTAssertNil(quiet.dataError, "a write that lands says nothing")
     }
+
+    /// Photos can answer a pick with no data (an iCloud photo it cannot
+    /// download). That returned quietly: no receipt, and no word about it.
+    func test_aPhotoWithNoDataIsReported() async {
+        let store = FinchStore()
+        XCTAssertThrowsError(try AttachmentWriter.write(photo: nil, entryId: "e1", store: store)) {
+            XCTAssertEqual(($0 as? I18nError)?.code, "error.attachment.photoUnavailable")
+        }
+
+        // After the Add sheet has closed, it reaches the app-wide alert.
+        await AttachmentWriter.attachAfterClose(store: store) {
+            try AttachmentWriter.write(photo: nil, entryId: "e1", store: store)
+        }
+        XCTAssertEqual(store.dataError, AttachmentWriter.receiptNotAttachedMessage)
+    }
+
+    /// And it reads in Chinese on a Chinese phone.
+    func test_thePhotoErrorHasChinese() {
+        let zh = i18nMessage(AttachmentWriter.photoUnavailable, zh: true)
+        XCTAssertNotEqual(zh, AttachmentWriter.photoUnavailable.message)
+        XCTAssertTrue(zh.contains("iCloud"), zh)
+    }
 }
