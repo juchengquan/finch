@@ -83,6 +83,8 @@ enum ErrorL10n {
         "error.account.hasTransactions": "账户有交易 —— 请改为归档",
         "error.attachment.kind": "附件类型必须是图片或 PDF",
         "error.attachment.photoUnavailable": "无法载入这张照片。如果它存放在 iCloud 中，请等它下载完成后再试。",
+        "error.attachment.sharedUnreadable": "一张分享到 finch 的收据无法读取，因此没有添加。",
+        "error.attachment.unreadable": "这个文件不是 finch 能读取的照片或 PDF。",
         "error.category.differentLedger": "类别属于其他账本",
         "error.duplicate.txn": "该交易似乎已存在",
         "error.duplicate.budget": "同名预算已存在",
