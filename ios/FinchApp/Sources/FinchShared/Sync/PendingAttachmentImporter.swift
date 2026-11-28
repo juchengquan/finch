@@ -22,8 +22,11 @@ public enum PendingAttachmentImporter {
         guard let manifests = try? fm.contentsOfDirectory(at: AppGroup.pendingManifestsDir,
                                                           includingPropertiesForKeys: nil),
               !store.ledgers.isEmpty, let account = store.accounts.first else { return 0 }
-        var imported = 0
-        for mURL in manifests where mURL.pathExtension == "json" {
+        var imported = 0, unreadable = 0
+        // In a fixed order: the directory lists them in whatever order the file
+        // system keeps.
+        for mURL in manifests.sorted(by: { $0.lastPathComponent < $1.lastPathComponent })
+        where mURL.pathExtension == "json" {
             guard let data = try? Data(contentsOf: mURL),
                   let m = try? JSONDecoder().decode(PendingAttachment.self, from: data) else { continue }
             let staged = AppGroup.containerURL.appendingPathComponent(m.relPath)
@@ -35,7 +38,7 @@ public enum PendingAttachmentImporter {
             // read is reported and dropped rather than imported as a broken file.
             guard let bytes = try? Data(contentsOf: staged),
                   let receipt = try? await AttachmentWriter.storedOffMain(bytes) else {
-                store.dataError = i18nMessage(sharedUnreadable)
+                unreadable += 1
                 try? fm.removeItem(at: staged)
                 try? fm.removeItem(at: mURL)
                 continue
@@ -63,6 +66,10 @@ public enum PendingAttachmentImporter {
                 imported += 1
             } catch { continue }
         }
+        // Reported once every receipt is in. Each import is a write, and a write's
+        // reprojection clears `dataError`, so an alert set mid-loop was wiped by the
+        // next receipt that imported cleanly.
+        if unreadable > 0 { store.dataError = i18nMessage(sharedUnreadable) }
         return imported
     }
 
