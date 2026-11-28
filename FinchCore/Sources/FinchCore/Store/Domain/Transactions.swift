@@ -572,11 +572,19 @@ public enum Transactions {
         // account or date re-scales every category leg in proportion. An
         // amount-only patch used to rebuild it as ONE category leg (food 60 + rent
         // 40, edited to 120, became food 120). Mirrors the web's updateTransaction.
+        //
+        // What was typed into each cell is re-scaled the same way (native-only: the
+        // web's category legs carry no typed figure). It used to be dropped, so a
+        // €70 / €30 split edited to €120 reopened in dollars.
         if plainCatLegs.count >= 2 {
             let catLegs = plainCatLegs
             let scaled = scaleSplitLegs(catLegs.map { $0["amount_base"] as Double }, Entries.r2(-amountBase))
-            ep.legs = .set([.account(acctLeg)] + zip(catLegs, scaled).map { leg, value in
-                .category(Entries.CategoryLeg(categoryId: leg["category_id"], amountBase: value, memo: leg["memo"], id: leg["id"]))
+            let typedCcy = origCurrency ?? newAcctCcy
+            let typed = typedSplitCells(catLegs, typedTotal: origAmount ?? nativeAmount, typedCcy: typedCcy, base: base)
+            ep.legs = .set([.account(acctLeg)] + catLegs.indices.map { i in
+                .category(Entries.CategoryLeg(categoryId: catLegs[i]["category_id"], amountBase: scaled[i],
+                    memo: catLegs[i]["memo"], id: catLegs[i]["id"],
+                    origAmount: typed?[i], origCurrency: typed == nil ? nil : typedCcy))
             })
             try Entries.rebuildEntry(db, entryId, ep)
             return
@@ -590,6 +598,24 @@ public enum Transactions {
                 memo: existingCat?["memo"], id: existingCat?["id"])),
         ])
         try Entries.rebuildEntry(db, entryId, ep)
+    }
+
+    /// What each split cell was typed as, scaled so the cells add up to the
+    /// purchase's typed total (`typedTotal`, signed like its account leg, in
+    /// `typedCcy`). `nil` when the purchase is typed in the ledger base: a
+    /// cell's base figure is then what was typed, and the grid save keeps no
+    /// separate copy (SaveTransaction's category legs).
+    ///
+    /// The proportions come from the typed figures when every cell has one in
+    /// that currency, so an unchanged total keeps them exactly; otherwise from
+    /// the base figures.
+    static func typedSplitCells(_ catLegs: [Row], typedTotal: Double, typedCcy: String, base: String) -> [Double]? {
+        guard typedCcy != base else { return nil }
+        let allTyped = catLegs.allSatisfy {
+            ($0["orig_currency"] as String?) == typedCcy && ($0["orig_amount"] as Double?) != nil
+        }
+        let weights = allTyped ? catLegs.map { $0["orig_amount"] as Double } : catLegs.map { $0["amount_base"] as Double }
+        return scaleSplitLegs(weights, Entries.r2(-typedTotal))
     }
 
     /// Scale split leg amounts so they sum to `target`, keeping their proportions.

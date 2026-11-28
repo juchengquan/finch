@@ -615,10 +615,12 @@ struct EditTransactionSheet: View {
 
     private func addReceipt(_ item: PhotosPickerItem) async {
         errorMessage = nil
+        // Cleared whatever happens: left set after a failure, picking the same
+        // photo again changed nothing, so it could not be retried.
+        defer { pickedPhoto = nil }
         do {
             try await AttachmentWriter.write(item: item, entryId: txn.id, store: store)
             attachments = store.attachments(for: txn.id)
-            pickedPhoto = nil
         } catch { errorMessage = i18nMessage(error) }
     }
 

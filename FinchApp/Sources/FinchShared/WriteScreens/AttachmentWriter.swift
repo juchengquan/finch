@@ -22,9 +22,24 @@ enum AttachmentWriter {
     static func attachAfterClose(store: FinchStore, _ write: () async throws -> Void) async {
         do { try await write() } catch { store.dataError = receiptNotAttachedMessage }
     }
+    /// Raised when the picker hands back no photo data, which Photos does for an
+    /// iCloud photo it cannot download, among others. That returned quietly, so
+    /// the sheet closed or stayed as if the receipt had been attached.
+    static var photoUnavailable: I18nError {
+        I18nError("error.attachment.photoUnavailable", [:],
+                  "This photo couldn't be loaded. If it's stored in iCloud, wait for it to download and try again.")
+    }
+
     @MainActor
     static func write(item: PhotosPickerItem, entryId: String, store: FinchStore) async throws {
-        guard let data = try await item.loadTransferable(type: Data.self) else { return }
+        try write(photo: try await item.loadTransferable(type: Data.self), entryId: entryId, store: store)
+    }
+
+    /// The part of `write(item:)` after Photos has answered, so a test can hand
+    /// it what the picker returned, `nil` included.
+    @MainActor
+    static func write(photo data: Data?, entryId: String, store: FinchStore) throws {
+        guard let data else { throw photoUnavailable }
         let attId = "att-\(UUID().uuidString.prefix(8).lowercased())"
         let dir = store.attachmentsRoot.appendingPathComponent(entryId, isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
